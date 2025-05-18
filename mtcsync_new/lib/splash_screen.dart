@@ -1,8 +1,8 @@
 // splash_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:mtcsync/login.dart';
-import 'package:mtcsync/home.dart';
+import 'login.dart';
+import 'home.dart';
 
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
