@@ -3,9 +3,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'follow.dart';
 import 'presentfollowup.dart';
 
-class LeadsPage extends StatelessWidget {
-  const LeadsPage({super.key});
+class LeadsPage extends StatefulWidget {
+  final String branch;
 
+  const LeadsPage({super.key, required this.branch});
+
+  @override
+  State<LeadsPage> createState() => _LeadsPageState();
+}
+
+class _LeadsPageState extends State<LeadsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -17,8 +24,9 @@ class LeadsPage extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('follow_ups')
+            .where('branch', isEqualTo: widget.branch)
             .orderBy('created_at', descending: true)
-            .snapshots(), // ✅ Fixed: Proper stream type
+            .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
