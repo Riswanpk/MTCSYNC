@@ -164,27 +164,83 @@ class LeadCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
-        title: Text(
-          name,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        subtitle: Text('Status: $status\nDate: $date'),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PresentFollowUp(docId: docId),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PresentFollowUp(docId: docId),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
             ),
-          );
-        },
+          ],
+        ),
+        child: Row(
+          children: [
+            // Circular Avatar
+            CircleAvatar(
+              radius: 25,
+              backgroundImage: NetworkImage(
+                'https://i.pravatar.cc/150?img=5', // Random avatar image from pravatar
+              ),
+            ),
+            const SizedBox(width: 16),
+
+            // Text details
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Name + Status
+                  RichText(
+                    text: TextSpan(
+                      style: DefaultTextStyle.of(context).style.copyWith(fontSize: 16),
+                      children: [
+                        TextSpan(
+                          text: name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const TextSpan(text: ' '),
+                        TextSpan(
+                          text: '($status)',
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Date: $date',
+                    style: const TextStyle(fontSize: 13, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+
+            // Optional Avatar again or Icon
+            CircleAvatar(
+              radius: 20,
+              backgroundImage: NetworkImage(
+                'https://i.pravatar.cc/100?img=12',
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
+
+
