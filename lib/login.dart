@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:mtcsync/homed.dart';
 
 import 'register.dart';
 
@@ -78,7 +79,10 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       // Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomePage()));
 
       // For now, just print success:
-      print('Login successful: ${userCredential.user?.email}');
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const HomePage()),
+      );
     } on FirebaseAuthException catch (e) {
       setState(() {
         _errorMessage = e.message ?? 'Login failed';
