@@ -15,6 +15,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   late AnimationController _controller;
   late Animation<double> _animationTop;
   late Animation<double> _animationBottom;
+  late Animation<double> _swingAnimation;
 
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -36,6 +37,11 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     );
 
     _animationBottom = Tween<double>(begin: 10, end: -10).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+
+    // Swing animation from -0.15 radians (~ -8.6 degrees) to 0.15 radians (~ 8.6 degrees)
+    _swingAnimation = Tween<double>(begin: -0.15, end: 0.15).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
   }
@@ -65,23 +71,15 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     });
 
     try {
-      // Firebase Auth requires email, so if username is not email, 
-      // you need to fetch user email from Firestore by username or
-      // require users to login with email instead.
-      // Here, let's assume username is actually email for simplicity:
       UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: username, // Use email here
+        email: username,
         password: password,
       );
 
-      // Login successful, you can navigate to the home page or main app page
-      // For example:
-      // Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomePage()));
-
-      // For now, just print success:
-      Navigator.pushReplacement(
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => const HomePage()),
+        (route) => false,
       );
     } on FirebaseAuthException catch (e) {
       setState(() {
@@ -173,14 +171,26 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      child: Image.asset(
-                        'assets/images/logo.png',
-                        height: 90,
+                    AnimatedBuilder(
+                      animation: _swingAnimation,
+                      builder: (context, child) {
+                        return Transform.rotate(
+                          angle: _swingAnimation.value,
+                          alignment: Alignment.topCenter,
+                          child: child,
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        child: Image.asset(
+                          'assets/images/logo.png',
+                          height: 90,
+                        ),
                       ),
                     ),
+
                     const SizedBox(height: 30),
+
                     TextField(
                       controller: _usernameController,
                       decoration: InputDecoration(
@@ -199,7 +209,9 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                       style: const TextStyle(color: Colors.black),
                       keyboardType: TextInputType.emailAddress,
                     ),
+
                     const SizedBox(height: 20),
+
                     TextField(
                       controller: _passwordController,
                       obscureText: true,
@@ -218,6 +230,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                       ),
                       style: const TextStyle(color: Colors.black),
                     ),
+
                     if (_errorMessage != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 15),
@@ -227,7 +240,9 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                           textAlign: TextAlign.center,
                         ),
                       ),
+
                     const SizedBox(height: 25),
+
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
@@ -257,7 +272,9 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                               ),
                       ),
                     ),
+
                     const SizedBox(height: 12),
+
                     TextButton(
                       onPressed: () {
                         // TODO: Forgot password logic
@@ -270,7 +287,9 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                         ),
                       ),
                     ),
+
                     const SizedBox(height: 8),
+
                     TextButton(
                       onPressed: () {
                         Navigator.push(
