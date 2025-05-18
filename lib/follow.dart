@@ -42,7 +42,8 @@ class _FollowUpFormState extends State<FollowUpForm> {
       'phone': _phoneController.text.trim(),
       'status': _status,
       'comments': _commentsController.text.trim(),
-      'reminder': _reminderController.text.trim(),
+      'reminder': _reminderController.text.trim(), // Format: "2025-05-30"
+      'acknowledged': false, // NEW FIELD - needed to suppress alert once acknowledged
       'branch': branch,
       'created_by': user.uid,
       'created_at': FieldValue.serverTimestamp(),
