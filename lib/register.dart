@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
 
-import 'package:mtcsync/register.dart';
-
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+class RegisterPage extends StatefulWidget {
+  const RegisterPage({super.key});
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  State<RegisterPage> createState() => _RegisterPageState();
 }
 
-class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMixin {
+class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animationTop;
   late Animation<double> _animationBottom;
@@ -92,7 +90,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
             ),
           ),
 
-          // Login form
+          // Register form
           Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -119,7 +117,24 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                         height: 90,
                       ),
                     ),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 20),
+                    TextField(
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.email, color: Color(0xFF005BAC)),
+                        labelText: 'Email',
+                        labelStyle: const TextStyle(color: Colors.black),
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        focusedBorder: const OutlineInputBorder(
+                          borderSide: BorderSide(color: Color(0xFF8CC63F), width: 2),
+                        ),
+                      ),
+                      style: const TextStyle(color: Colors.black),
+                    ),
+                    const SizedBox(height: 20),
                     TextField(
                       decoration: InputDecoration(
                         prefixIcon: const Icon(Icons.person, color: Color(0xFF005BAC)),
@@ -168,10 +183,10 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                           elevation: 5,
                         ),
                         onPressed: () {
-                          // Handle login
+                          // Handle registration
                         },
                         child: const Text(
-                          'LOGIN',
+                          'REGISTER',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             letterSpacing: 1.2,
@@ -183,29 +198,12 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                     const SizedBox(height: 12),
                     TextButton(
                       onPressed: () {
-                        // Forgot password logic
+                        Navigator.pop(context); // Go back to Login
                       },
                       child: const Text(
-                        'Forgot Password?',
+                        'Already have an account? Login',
                         style: TextStyle(
                           color: Color(0xFF8CC63F),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const RegisterPage()),
-                        );
-                      },
-
-                      child: const Text(
-                        'Don\'t have an account? Register',
-                        style: TextStyle(
-                          color: Color(0xFF005BAC),
                           fontWeight: FontWeight.w600,
                         ),
                       ),

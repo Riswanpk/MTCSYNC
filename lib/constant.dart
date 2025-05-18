@@ -1,21 +1,12 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+// constant.dart
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyAWvRviI_HWf7JnPnYfJbf_FCuiKfutrzk",
-  authDomain: "mtc-sync.firebaseapp.com",
-  projectId: "mtc-sync",
-  storageBucket: "mtc-sync.firebasestorage.app",
-  messagingSenderId: "1502033749",
-  appId: "1:1502033749:web:7013339cc1efe4c10aa1dc",
-  measurementId: "G-LGN5SRFPK3"
-};
+const String firebaseApiKey = "YOUR_API_KEY_HERE";
+const String firebaseAppId = "YOUR_APP_ID_HERE";
+const String firebaseMessagingSenderId = "YOUR_SENDER_ID_HERE";
+const String firebaseProjectId = "YOUR_PROJECT_ID_HERE";
+const String firebaseAuthDomain = "YOUR_AUTH_DOMAIN_HERE";
+const String firebaseStorageBucket = "YOUR_STORAGE_BUCKET_HERE";
+const String firebaseMeasurementId = "YOUR_MEASUREMENT_ID_HERE";
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+// Firestore collection name
+const String firebaseUsersCollection = "users";
