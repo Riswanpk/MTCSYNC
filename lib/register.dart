@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'dart:math';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'constant.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -8,204 +10,154 @@ class RegisterPage extends StatefulWidget {
   State<RegisterPage> createState() => _RegisterPageState();
 }
 
-class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animationTop;
-  late Animation<double> _animationBottom;
+class _RegisterPageState extends State<RegisterPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController();
 
-  @override
-  void initState() {
-    super.initState();
+  bool _isLoading = false;
+  String? _errorMessage;
 
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 4),
-    )..repeat(reverse: true);
+  Future<void> _register() async {
+    if (!_formKey.currentState!.validate()) return;
 
-    _animationTop = Tween<double>(begin: -10, end: 10).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
-    _animationBottom = Tween<double>(begin: 10, end: -10).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    try {
+      UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      await FirebaseFirestore.instance
+          .collection(firebaseUsersCollection)
+          .doc(userCredential.user!.uid)
+          .set({
+        'email': _emailController.text.trim(),
+        'username': _usernameController.text.trim(),
+        'role': 'sales',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) Navigator.pop(context);
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        _errorMessage = e.message;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = "Unexpected error occurred";
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  InputDecoration _inputDecoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, color: Colors.blue.shade700),
+      filled: true,
+      fillColor: Colors.blue.shade50,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.blue.shade700, width: 2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.redAccent, width: 2),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          // Top-right animated bubble
-          AnimatedBuilder(
-            animation: _controller,
-            builder: (context, child) {
-              return Positioned(
-                top: -120 + _animationTop.value,
-                right: -120 + _animationTop.value,
-                child: child!,
-              );
-            },
-            child: Container(
-              width: 260,
-              height: 260,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [Color(0xFF8CC63F), Color(0xFFB2E85F)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-            ),
-          ),
-
-          // Bottom-left animated bubble
-          AnimatedBuilder(
-            animation: _controller,
-            builder: (context, child) {
-              return Positioned(
-                bottom: -120 + _animationBottom.value,
-                left: -120 + _animationBottom.value,
-                child: child!,
-              );
-            },
-            child: Container(
-              width: 260,
-              height: 260,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [Color(0xFF005BAC), Color(0xFF3383C7)],
-                  begin: Alignment.topRight,
-                  end: Alignment.bottomLeft,
-                ),
-              ),
-            ),
-          ),
-
-          // Register form
-          Center(
+      backgroundColor: Colors.grey.shade100,
+      appBar: AppBar(
+        title: const Text('Register'),
+        backgroundColor: const Color(0xFF005BAC),
+        elevation: 2,
+        centerTitle: true,
+      ),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+          child: Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            elevation: 6,
+            shadowColor: Colors.blue.shade100,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Container(
-                padding: const EdgeInsets.all(30),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(25),
-                  color: Colors.white.withOpacity(0.85),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: _formKey,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      child: Image.asset(
-                        'assets/images/logo.png',
-                        height: 90,
-                      ),
+                    TextFormField(
+                      controller: _emailController,
+                      decoration: _inputDecoration('Email', Icons.email),
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return 'Please enter email';
+                        if (!RegExp(r'\S+@\S+\.\S+').hasMatch(v)) return 'Enter a valid email';
+                        return null;
+                      },
                     ),
                     const SizedBox(height: 20),
-                    TextField(
-                      decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.email, color: Color(0xFF005BAC)),
-                        labelText: 'Email',
-                        labelStyle: const TextStyle(color: Colors.black),
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        focusedBorder: const OutlineInputBorder(
-                          borderSide: BorderSide(color: Color(0xFF8CC63F), width: 2),
-                        ),
-                      ),
-                      style: const TextStyle(color: Colors.black),
+                    TextFormField(
+                      controller: _usernameController,
+                      decoration: _inputDecoration('Username', Icons.person),
+                      validator: (v) => (v == null || v.isEmpty) ? 'Please enter username' : null,
                     ),
                     const SizedBox(height: 20),
-                    TextField(
-                      decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.person, color: Color(0xFF005BAC)),
-                        labelText: 'Username',
-                        labelStyle: const TextStyle(color: Colors.black),
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        focusedBorder: const OutlineInputBorder(
-                          borderSide: BorderSide(color: Color(0xFF8CC63F), width: 2),
-                        ),
-                      ),
-                      style: const TextStyle(color: Colors.black),
-                    ),
-                    const SizedBox(height: 20),
-                    TextField(
+                    TextFormField(
+                      controller: _passwordController,
+                      decoration: _inputDecoration('Password', Icons.lock),
                       obscureText: true,
-                      decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.lock, color: Color(0xFF005BAC)),
-                        labelText: 'Password',
-                        labelStyle: const TextStyle(color: Colors.black),
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        focusedBorder: const OutlineInputBorder(
-                          borderSide: BorderSide(color: Color(0xFF8CC63F), width: 2),
-                        ),
-                      ),
-                      style: const TextStyle(color: Colors.black),
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return 'Please enter password';
+                        if (v.length < 6) return 'Password must be at least 6 characters';
+                        return null;
+                      },
                     ),
-                    const SizedBox(height: 25),
+                    const SizedBox(height: 30),
+                    if (_errorMessage != null)
+                      Text(
+                        _errorMessage!,
+                        style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600),
+                        textAlign: TextAlign.center,
+                      ),
+                    const SizedBox(height: 15),
                     SizedBox(
                       width: double.infinity,
+                      height: 52,
                       child: ElevatedButton(
+                        onPressed: _isLoading ? null : _register,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF005BAC),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          elevation: 5,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          elevation: 4,
+                          shadowColor: Colors.blue.shade300,
                         ),
-                        onPressed: () {
-                          // Handle registration
-                        },
-                        child: const Text(
-                          'REGISTER',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.2,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context); // Go back to Login
-                      },
-                      child: const Text(
-                        'Already have an account? Login',
-                        style: TextStyle(
-                          color: Color(0xFF8CC63F),
-                          fontWeight: FontWeight.w600,
-                        ),
+                        child: _isLoading
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : const Text(
+                                'Register',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 1.1),
+                              ),
                       ),
                     ),
                   ],
@@ -213,7 +165,7 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
