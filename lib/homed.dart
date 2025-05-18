@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'leads.dart';
+
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -94,8 +96,11 @@ class HomePage extends StatelessWidget {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: () {
-                          // TODO: Navigate to Leads Follow Up screen
-                        },
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const LeadsPage()),
+                        );
+                      },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryBlue,
                           foregroundColor: Colors.white,
