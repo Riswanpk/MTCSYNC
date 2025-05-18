@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class FollowUpForm extends StatefulWidget {
   const FollowUpForm({super.key});
@@ -9,10 +11,45 @@ class FollowUpForm extends StatefulWidget {
 
 class _FollowUpFormState extends State<FollowUpForm> {
   final _formKey = GlobalKey<FormState>();
-  String _status = 'In Progress';
+
   final TextEditingController _dateController = TextEditingController();
-  final TextEditingController _reminderController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _companyController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _commentsController = TextEditingController();
+  final TextEditingController _reminderController = TextEditingController();
+
+  String _status = 'In Progress';
+
+  Future<void> _saveFollowUp() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User not logged in')));
+      return;
+    }
+
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final branch = userDoc.data()?['branch'] ?? 'Unknown';
+
+    await FirebaseFirestore.instance.collection('follow_ups').add({
+      'date': _dateController.text.trim(),
+      'name': _nameController.text.trim(),
+      'company': _companyController.text.trim(),
+      'address': _addressController.text.trim(),
+      'phone': _phoneController.text.trim(),
+      'status': _status,
+      'comments': _commentsController.text.trim(),
+      'reminder': _reminderController.text.trim(),
+      'branch': branch,
+      'created_by': user.uid,
+      'created_at': FieldValue.serverTimestamp(),
+    });
+
+    Navigator.pop(context);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +65,6 @@ class _FollowUpFormState extends State<FollowUpForm> {
           key: _formKey,
           child: ListView(
             children: [
-              // Follow-up Date
               TextFormField(
                 controller: _dateController,
                 readOnly: true,
@@ -47,20 +83,22 @@ class _FollowUpFormState extends State<FollowUpForm> {
                     _dateController.text = "${picked.year}-${picked.month}-${picked.day}";
                   }
                 },
+                validator: (value) => value!.isEmpty ? 'Select a date' : null,
               ),
               const SizedBox(height: 16),
 
-              // Customer Name
               TextFormField(
+                controller: _nameController,
                 decoration: const InputDecoration(
                   labelText: 'Customer Name',
                   prefixIcon: Icon(Icons.person),
                 ),
+                validator: (value) => value!.isEmpty ? 'Enter name' : null,
               ),
               const SizedBox(height: 16),
 
-              // Company
               TextFormField(
+                controller: _companyController,
                 decoration: const InputDecoration(
                   labelText: 'Company',
                   prefixIcon: Icon(Icons.business),
@@ -68,8 +106,8 @@ class _FollowUpFormState extends State<FollowUpForm> {
               ),
               const SizedBox(height: 16),
 
-              // Address
               TextFormField(
+                controller: _addressController,
                 decoration: const InputDecoration(
                   labelText: 'Address',
                   prefixIcon: Icon(Icons.location_on),
@@ -77,8 +115,8 @@ class _FollowUpFormState extends State<FollowUpForm> {
               ),
               const SizedBox(height: 16),
 
-              // Phone Number
               TextFormField(
+                controller: _phoneController,
                 keyboardType: TextInputType.phone,
                 decoration: const InputDecoration(
                   labelText: 'Phone No.',
@@ -87,7 +125,6 @@ class _FollowUpFormState extends State<FollowUpForm> {
               ),
               const SizedBox(height: 16),
 
-              // Status Dropdown
               DropdownButtonFormField<String>(
                 value: _status,
                 decoration: const InputDecoration(
@@ -98,15 +135,10 @@ class _FollowUpFormState extends State<FollowUpForm> {
                   DropdownMenuItem(value: 'In Progress', child: Text('In Progress')),
                   DropdownMenuItem(value: 'Completed', child: Text('Completed')),
                 ],
-                onChanged: (value) {
-                  setState(() {
-                    _status = value!;
-                  });
-                },
+                onChanged: (value) => setState(() => _status = value!),
               ),
               const SizedBox(height: 16),
 
-              // Comments
               TextFormField(
                 controller: _commentsController,
                 maxLines: 4,
@@ -118,7 +150,6 @@ class _FollowUpFormState extends State<FollowUpForm> {
               ),
               const SizedBox(height: 16),
 
-              // Reminder
               TextFormField(
                 controller: _reminderController,
                 readOnly: true,
@@ -140,14 +171,8 @@ class _FollowUpFormState extends State<FollowUpForm> {
               ),
               const SizedBox(height: 30),
 
-              // Submit
               ElevatedButton(
-                onPressed: () {
-                  if (_formKey.currentState!.validate()) {
-                    // TODO: Save logic
-                    Navigator.pop(context);
-                  }
-                },
+                onPressed: _saveFollowUp,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Color(0xFF005BAC),
                   padding: const EdgeInsets.symmetric(vertical: 16),
@@ -157,14 +182,9 @@ class _FollowUpFormState extends State<FollowUpForm> {
                 ),
                 child: const Text(
                   'Save Follow Up',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white, // <-- Set text color to white
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
               ),
-
             ],
           ),
         ),

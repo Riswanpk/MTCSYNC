@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'follow.dart';
+import 'presentfollowup.dart';
 
 class LeadsPage extends StatelessWidget {
   const LeadsPage({super.key});
@@ -12,16 +14,44 @@ class LeadsPage extends StatelessWidget {
         backgroundColor: Color(0xFF005BAC),
         foregroundColor: Colors.white,
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: const [
-          LeadCard(name: "John Doe", status: "In Progress", date: "May 10"),
-          LeadCard(name: "Jane Smith", status: "Completed", date: "May 12"),
-          LeadCard(name: "Mike Johnson", status: "In Progress", date: "May 14"),
-        ],
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('follow_ups')
+            .orderBy('created_at', descending: true)
+            .snapshots(), // ✅ Fixed: Proper stream type
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(child: Text("No leads available."));
+          }
+
+          final leads = snapshot.data!.docs;
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: leads.length,
+            itemBuilder: (context, index) {
+              final data = leads[index].data() as Map<String, dynamic>;
+              final name = data['name'] ?? 'No Name';
+              final status = data['status'] ?? 'Unknown';
+              final date = data['date'] ?? 'No Date';
+              final docId = leads[index].id;
+
+              return LeadCard(
+                name: name,
+                status: status,
+                date: date,
+                docId: docId,
+              );
+            },
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: Color(0xFF8CC63F),
+        backgroundColor: const Color(0xFF8CC63F),
         child: const Icon(Icons.add),
         onPressed: () {
           Navigator.push(
@@ -38,12 +68,14 @@ class LeadCard extends StatelessWidget {
   final String name;
   final String status;
   final String date;
+  final String docId;
 
   const LeadCard({
     super.key,
     required this.name,
     required this.status,
     required this.date,
+    required this.docId,
   });
 
   @override
@@ -61,7 +93,12 @@ class LeadCard extends StatelessWidget {
         subtitle: Text('Status: $status\nDate: $date'),
         trailing: const Icon(Icons.chevron_right),
         onTap: () {
-          // Optionally handle detailed view
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PresentFollowUp(docId: docId),
+            ),
+          );
         },
       ),
     );
