@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'dart:math';
+import 'package:firebase_auth/firebase_auth.dart';
 
-import 'package:mtcsync/register.dart';
+import 'register.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -14,6 +14,12 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   late AnimationController _controller;
   late Animation<double> _animationTop;
   late Animation<double> _animationBottom;
+
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController();
+
+  bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -36,7 +42,58 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   @override
   void dispose() {
     _controller.dispose();
+    _usernameController.dispose();
+    _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _login() async {
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (username.isEmpty || password.isEmpty) {
+      setState(() {
+        _errorMessage = 'Please enter username and password';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // Firebase Auth requires email, so if username is not email, 
+      // you need to fetch user email from Firestore by username or
+      // require users to login with email instead.
+      // Here, let's assume username is actually email for simplicity:
+      UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: username, // Use email here
+        password: password,
+      );
+
+      // Login successful, you can navigate to the home page or main app page
+      // For example:
+      // Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomePage()));
+
+      // For now, just print success:
+      print('Login successful: ${userCredential.user?.email}');
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        _errorMessage = e.message ?? 'Login failed';
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Unexpected error occurred';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -121,9 +178,10 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                     ),
                     const SizedBox(height: 30),
                     TextField(
+                      controller: _usernameController,
                       decoration: InputDecoration(
                         prefixIcon: const Icon(Icons.person, color: Color(0xFF005BAC)),
-                        labelText: 'Username',
+                        labelText: 'Email',
                         labelStyle: const TextStyle(color: Colors.black),
                         filled: true,
                         fillColor: Colors.white,
@@ -135,9 +193,11 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                         ),
                       ),
                       style: const TextStyle(color: Colors.black),
+                      keyboardType: TextInputType.emailAddress,
                     ),
                     const SizedBox(height: 20),
                     TextField(
+                      controller: _passwordController,
                       obscureText: true,
                       decoration: InputDecoration(
                         prefixIcon: const Icon(Icons.lock, color: Color(0xFF005BAC)),
@@ -154,6 +214,15 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                       ),
                       style: const TextStyle(color: Colors.black),
                     ),
+                    if (_errorMessage != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 15),
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(color: Colors.red),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
                     const SizedBox(height: 25),
                     SizedBox(
                       width: double.infinity,
@@ -167,23 +236,27 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           elevation: 5,
                         ),
-                        onPressed: () {
-                          // Handle login
-                        },
-                        child: const Text(
-                          'LOGIN',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.2,
-                            fontSize: 16,
-                          ),
-                        ),
+                        onPressed: _isLoading ? null : _login,
+                        child: _isLoading
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              )
+                            : const Text(
+                                'LOGIN',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.2,
+                                  fontSize: 16,
+                                ),
+                              ),
                       ),
                     ),
                     const SizedBox(height: 12),
                     TextButton(
                       onPressed: () {
-                        // Forgot password logic
+                        // TODO: Forgot password logic
                       },
                       child: const Text(
                         'Forgot Password?',
@@ -201,7 +274,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                           MaterialPageRoute(builder: (context) => const RegisterPage()),
                         );
                       },
-
                       child: const Text(
                         'Don\'t have an account? Register',
                         style: TextStyle(
