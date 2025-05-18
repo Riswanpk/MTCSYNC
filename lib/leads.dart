@@ -13,50 +13,126 @@ class LeadsPage extends StatefulWidget {
 }
 
 class _LeadsPageState extends State<LeadsPage> {
+  String searchQuery = '';
+  String selectedStatus = 'All';
+
+  final List<String> statusOptions = ['All', 'New', 'In Progress', 'Closed']; // Add as needed
+
   @override
   Widget build(BuildContext context) {
+    print("Fetching leads for branch: ${widget.branch}");
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('CRM - Leads Follow Up'),
-        backgroundColor: Color(0xFF005BAC),
+        backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('follow_ups')
-            .where('branch', isEqualTo: widget.branch)
-            .orderBy('created_at', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: Column(
+        children: [
+          // Search field
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: TextField(
+              onChanged: (val) {
+                setState(() {
+                  searchQuery = val.toLowerCase();
+                });
+              },
+              decoration: InputDecoration(
+                hintText: 'Search by name...',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
 
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text("No leads available."));
-          }
+          // Filter dropdown
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            child: DropdownButtonFormField<String>(
+              value: selectedStatus,
+              items: statusOptions.map((status) {
+                return DropdownMenuItem<String>(
+                  value: status,
+                  child: Text(status),
+                );
+              }).toList(),
+              onChanged: (val) {
+                setState(() {
+                  selectedStatus = val!;
+                });
+              },
+              decoration: InputDecoration(
+                labelText: 'Filter by Status',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
 
-          final leads = snapshot.data!.docs;
+          // Leads list
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('follow_ups')
+                  .where('branch', isEqualTo: widget.branch)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: leads.length,
-            itemBuilder: (context, index) {
-              final data = leads[index].data() as Map<String, dynamic>;
-              final name = data['name'] ?? 'No Name';
-              final status = data['status'] ?? 'Unknown';
-              final date = data['date'] ?? 'No Date';
-              final docId = leads[index].id;
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  print("No leads found for branch: ${widget.branch}");
+                  return const Center(child: Text("No leads available."));
+                }
 
-              return LeadCard(
-                name: name,
-                status: status,
-                date: date,
-                docId: docId,
-              );
-            },
-          );
-        },
+                final allLeads = snapshot.data!.docs;
+
+                // Apply search and filter
+                final filteredLeads = allLeads.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final name = (data['name'] ?? '').toString().toLowerCase();
+                  final status = (data['status'] ?? 'Unknown').toString();
+
+                  final matchesSearch = name.contains(searchQuery);
+                  final matchesStatus = selectedStatus == 'All' || status == selectedStatus;
+
+                  return matchesSearch && matchesStatus;
+                }).toList();
+
+                print("Found ${filteredLeads.length} leads after filter.");
+
+                if (filteredLeads.isEmpty) {
+                  return const Center(child: Text("No leads match your criteria."));
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filteredLeads.length,
+                  itemBuilder: (context, index) {
+                    final data = filteredLeads[index].data() as Map<String, dynamic>;
+                    final name = data['name'] ?? 'No Name';
+                    final status = data['status'] ?? 'Unknown';
+                    final date = data['date'] ?? 'No Date';
+                    final docId = filteredLeads[index].id;
+
+                    return LeadCard(
+                      name: name,
+                      status: status,
+                      date: date,
+                      docId: docId,
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF8CC63F),
