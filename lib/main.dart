@@ -1,3 +1,6 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
@@ -55,18 +58,22 @@ Future<void> main() async {
     },
   );
 
-  // Initialize Android Alarm Manager
-  await AndroidAlarmManager.initialize();
+  // Only initialize AndroidAlarmManager if running on Android and NOT on Web
+  if (!kIsWeb && Platform.isAndroid) {
+    await AndroidAlarmManager.initialize();
 
-  // Schedule periodic background check every 30 minutes
-  await AndroidAlarmManager.periodic(
-    const Duration(minutes: 30),
-    0,
-    checkReminders,
-    wakeup: true,
-    exact: true,
-    rescheduleOnReboot: true,
-  );
+    // Schedule periodic background check every 30 minutes
+    await AndroidAlarmManager.periodic(
+      const Duration(minutes: 30),
+      0,
+      checkReminders,
+      wakeup: true,
+      exact: true,
+      rescheduleOnReboot: true,
+    );
+  } else {
+    print('AndroidAlarmManager not initialized: Not running on Android device.');
+  }
 
   // Run the app
   runApp(const MyApp());
@@ -103,7 +110,6 @@ Future<void> checkReminders() async {
   );
 
   final now = DateTime.now();
-  // Format date as YYYY-MM-DD with leading zeros for month/day
   final todayStr =
       "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
 
@@ -134,7 +140,6 @@ Future<void> showReminderNotification(String docId, String name) async {
     importance: Importance.max,
     priority: Priority.high,
     ongoing: true,
-    // You can add actions here if you want to extend
   );
 
   const NotificationDetails notificationDetails =
