@@ -157,9 +157,14 @@ class _FollowUpFormState extends State<FollowUpForm> {
                 ),
                 child: const Text(
                   'Save Follow Up',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white, // <-- Set text color to white
+                  ),
                 ),
               ),
+
             ],
           ),
         ),

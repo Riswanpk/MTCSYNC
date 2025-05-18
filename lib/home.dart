@@ -1,22 +1,65 @@
 import 'package:flutter/material.dart';
-import 'leads.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
+import 'leads.dart';
+import 'login.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Common colors from your login page
     const Color primaryBlue = Color(0xFF005BAC);
     const Color primaryGreen = Color(0xFF8CC63F);
 
     return WillPopScope(
-      onWillPop: () async => false, // Disables system back button
+      onWillPop: () async => false, // Disable back button
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Home'),
-          automaticallyImplyLeading: false, // This removes the back button
+          automaticallyImplyLeading: false,
+          actions: [
+            Builder(
+              builder: (context) => IconButton(
+                icon: const Icon(Icons.menu),
+                onPressed: () {
+                  Scaffold.of(context).openEndDrawer();
+                },
+              ),
+            ),
+          ],
+        ),
+        endDrawer: Drawer(
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              const DrawerHeader(
+                decoration: BoxDecoration(
+                  color: Color(0xFF005BAC),
+                ),
+                child: Text(
+                  'Menu',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.logout),
+                title: const Text('Log Out'),
+                onTap: () async {
+                  await FirebaseAuth.instance.signOut();
+                  // Navigate to login and clear backstack
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (context) => const LoginPage()),
+                    (Route<dynamic> route) => false,
+                  );
+                },
+              ),
+            ],
+          ),
         ),
         body: Stack(
           children: [
@@ -89,11 +132,11 @@ class HomePage extends StatelessWidget {
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const LeadsPage()),
-                          );
-                        },
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const LeadsPage()),
+                            );
+                          },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: primaryBlue,
                             foregroundColor: Colors.white,

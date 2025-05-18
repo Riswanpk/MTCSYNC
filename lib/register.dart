@@ -18,6 +18,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
   bool _isLoading = false;
   String? _errorMessage;
+  String? _selectedBranch;
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
@@ -34,14 +35,16 @@ class _RegisterPageState extends State<RegisterPage> {
       );
 
       await FirebaseFirestore.instance
-          .collection(firebaseUsersCollection)
-          .doc(userCredential.user!.uid)
-          .set({
-        'email': _emailController.text.trim(),
-        'username': _usernameController.text.trim(),
-        'role': 'sales',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+        .collection(firebaseUsersCollection)
+        .doc(userCredential.user!.uid)
+        .set({
+      'email': _emailController.text.trim(),
+      'username': _usernameController.text.trim(),
+      'role': 'sales',
+      'branch': _selectedBranch,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
 
       if (mounted) Navigator.pop(context);
     } on FirebaseAuthException catch (e) {
@@ -122,7 +125,21 @@ class _RegisterPageState extends State<RegisterPage> {
                       decoration: _inputDecoration('Username', Icons.person),
                       validator: (v) => (v == null || v.isEmpty) ? 'Please enter username' : null,
                     ),
+                    DropdownButtonFormField<String>(
+                      value: _selectedBranch,
+                      decoration: _inputDecoration('Branch', Icons.business),
+                      items: ['BGR', 'CBE', 'CLT', 'TVM']
+                          .map((branch) => DropdownMenuItem(value: branch, child: Text(branch)))
+                          .toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedBranch = value;
+                        });
+                      },
+                      validator: (value) => value == null ? 'Please select a branch' : null,
+                    ),
                     const SizedBox(height: 20),
+                    
                     TextFormField(
                       controller: _passwordController,
                       decoration: _inputDecoration('Password', Icons.lock),
