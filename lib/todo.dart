@@ -68,10 +68,14 @@ class _TodoPageState extends State<TodoPage> {
         children: [
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: _firestore
+              stream: _userEmail == null
+              ? Stream.empty()
+              : _firestore
                   .collection('todo')
-                  .orderBy('timestamp', descending: true)
+                  .where('email', isEqualTo: _userEmail)
+                  //.orderBy('timestamp', descending: true)
                   .snapshots(),
+
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return Center(child: Text('Error loading todos'));
