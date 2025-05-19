@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'todo.dart';
+
 
 import 'leads.dart';
 import 'login.dart';
@@ -183,7 +185,11 @@ class HomePage extends StatelessWidget {
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: () {
-                            // TODO: Navigate to ToDo List screen
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const ToDoPage()),
+                            );
+
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: primaryGreen,

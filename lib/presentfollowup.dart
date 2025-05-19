@@ -64,11 +64,40 @@ class PresentFollowUp extends StatelessWidget {
                 const SizedBox(height: 20),
 
                 // Additional info in cards
-                _buildInfoTile(Icons.flag, 'Status', data['status']),
-                _buildInfoTile(Icons.calendar_today, 'Date', data['date']),
-                _buildInfoTile(Icons.alarm, 'Reminder', data['reminder']),
-                _buildInfoTile(Icons.comment, 'Comments', data['comments']),
-                _buildInfoTile(Icons.location_city, 'Branch', data['branch']),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildInfoTile(
+                        Icons.flag,
+                        'Status',
+                        DropdownButton<String>(
+                          value: data['status'],
+                          items: ['New', 'In Progress', 'Closed', 'Completed'].map((status) {
+                            return DropdownMenuItem<String>(
+                              value: status,
+                              child: Text(status),
+                            );
+                          }).toList(),
+                          onChanged: (newStatus) async {
+                            if (newStatus != null && newStatus != data['status']) {
+                              await FirebaseFirestore.instance
+                                  .collection('follow_ups')
+                                  .doc(docId)
+                                  .update({'status': newStatus});
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Status updated to $newStatus')),
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                _buildInfoTile(Icons.calendar_today, 'Date', Text(data['date'] ?? 'N/A')),
+                _buildInfoTile(Icons.alarm, 'Reminder', Text(data['reminder'] ?? 'N/A')),
+                _buildInfoTile(Icons.comment, 'Comments', Text(data['comments'] ?? 'N/A')),
+                _buildInfoTile(Icons.location_city, 'Branch', Text(data['branch'] ?? 'N/A')),
               ],
             ),
           );
@@ -98,7 +127,7 @@ class PresentFollowUp extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoTile(IconData icon, String title, String? value) {
+  Widget _buildInfoTile(IconData icon, String title, Widget valueWidget) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
@@ -117,7 +146,7 @@ class PresentFollowUp extends StatelessWidget {
               children: [
                 Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
-                Text(value ?? 'N/A', style: const TextStyle(color: Colors.black87)),
+                valueWidget,
               ],
             ),
           ),
