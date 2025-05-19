@@ -2,13 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'todo.dart';
-
-
 import 'leads.dart';
 import 'login.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat(reverse: true);
+
+    _scaleAnimation = Tween<double>(begin: 0.9, end: 1.1).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +78,6 @@ class HomePage extends StatelessWidget {
                 title: const Text('Log Out'),
                 onTap: () async {
                   await FirebaseAuth.instance.signOut();
-                  // Navigate to login and clear backstack
                   Navigator.pushAndRemoveUntil(
                     context,
                     MaterialPageRoute(builder: (context) => const LoginPage()),
@@ -66,43 +90,49 @@ class HomePage extends StatelessWidget {
         ),
         body: Stack(
           children: [
-            // Top-right bubble
+            // Animated top-right bubble
             Positioned(
               top: -120,
               right: -120,
-              child: Container(
-                width: 260,
-                height: 260,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF8CC63F), Color(0xFFB2E85F)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+              child: ScaleTransition(
+                scale: _scaleAnimation,
+                child: Container(
+                  width: 260,
+                  height: 260,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF8CC63F), Color(0xFFB2E85F)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
                   ),
                 ),
               ),
             ),
 
-            // Bottom-left bubble
+            // Animated bottom-left bubble
             Positioned(
               bottom: -120,
               left: -120,
-              child: Container(
-                width: 260,
-                height: 260,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF005BAC), Color(0xFF3383C7)],
-                    begin: Alignment.topRight,
-                    end: Alignment.bottomLeft,
+              child: ScaleTransition(
+                scale: _scaleAnimation,
+                child: Container(
+                  width: 260,
+                  height: 260,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF005BAC), Color(0xFF3383C7)],
+                      begin: Alignment.topRight,
+                      end: Alignment.bottomLeft,
+                    ),
                   ),
                 ),
               ),
             ),
 
-            // Main content
+            // Main content (unchanged)
             Center(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -137,7 +167,6 @@ class HomePage extends StatelessWidget {
                           onPressed: () async {
                             final user = FirebaseAuth.instance.currentUser;
                             if (user != null) {
-                              // Fetch the user's branch from Firestore
                               final userDoc = await FirebaseFirestore.instance
                                   .collection('users')
                                   .doc(user.uid)
@@ -147,17 +176,21 @@ class HomePage extends StatelessWidget {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => LeadsPage(branch: branch),
+                                    builder: (context) =>
+                                        LeadsPage(branch: branch),
                                   ),
                                 );
                               } else {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Branch not found for user')),
+                                  const SnackBar(
+                                      content:
+                                          Text('Branch not found for user')),
                                 );
                               }
                             } else {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('User not logged in')),
+                                const SnackBar(
+                                    content: Text('User not logged in')),
                               );
                             }
                           },
@@ -187,9 +220,9 @@ class HomePage extends StatelessWidget {
                           onPressed: () {
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => const TodoPage()),
+                              MaterialPageRoute(
+                                  builder: (context) => const TodoPage()),
                             );
-
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: primaryGreen,
