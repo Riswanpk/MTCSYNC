@@ -9,25 +9,46 @@ class TodoPage extends StatefulWidget {
   State<TodoPage> createState() => _TodoPageState();
 }
 
-class _TodoPageState extends State<TodoPage> {
+class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final TextEditingController _todoController = TextEditingController();
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
   String? _userEmail;
+
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
     _loadUserEmail();
+    _tabController = TabController(length: 2, vsync: this);
+
+    // Add observer to detect app lifecycle changes
+    WidgetsBinding.instance.addObserver(this);
+
+    // Call the function to delete old tasks when the app starts
+    _deleteOldTasks();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    WidgetsBinding.instance.removeObserver(this); // Remove observer
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // App is active, check for old tasks
+      _deleteOldTasks();
+    }
   }
 
   Future<void> _loadUserEmail() async {
     final user = _auth.currentUser;
-    if (user == null) {
-      setState(() => _userEmail = null);
-      return;
-    }
+    if (user == null) return;
+
     final doc = await _firestore.collection('users').doc(user.uid).get();
     setState(() {
       _userEmail = doc.data()?['email'] ?? 'unknown@example.com';
@@ -49,199 +70,107 @@ class _TodoPageState extends State<TodoPage> {
   }
 
   DateTime _dateOnly(DateTime dateTime) {
-    // Returns DateTime with time set to midnight (00:00:00)
     return DateTime(dateTime.year, dateTime.month, dateTime.day);
   }
 
-  Future<void> _toggleStatus(DocumentSnapshot todoDoc) async {
-    final currentStatus = todoDoc['status'] as String? ?? 'pending';
+  Future<void> _toggleStatus(DocumentSnapshot doc) async {
+    final currentStatus = doc['status'] ?? 'pending';
     final newStatus = currentStatus == 'pending' ? 'done' : 'pending';
 
     if (newStatus == 'done') {
       final confirm = await showDialog<bool>(
         context: context,
-        builder: (context) {
-          return AlertDialog(
-            backgroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+        builder: (context) => AlertDialog(
+          title: const Text('Mark as Done?'),
+          content: const Text('Are you sure you want to mark this todo as done?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.green), // Green for "Yes"
+              child: const Text('Yes'),
             ),
-            title: Center(
-              child: Text(
-                'Mark as Done?',
-                style: TextStyle(
-                  color: Color(0xFF0D47A1), // Blue color (#0D47A1)
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                ),
-              ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              style: TextButton.styleFrom(foregroundColor: Colors.blue), // Blue for "Cancel"
+              child: const Text('Cancel'),
             ),
-            content: Text(
-              'Are you sure you want to mark this todo as done?',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.black87,
-                fontSize: 16,
-              ),
-            ),
-            actionsPadding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            actions: [
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFF0D47A1), // Blue (#0D47A1)
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    padding: EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: Text(
-                    'Yes',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.1,
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFF8BC34A), // Green (#8BC34A)
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    padding: EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: Text(
-                    'Cancel',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.1,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
+          ],
+        ),
       );
+      if (confirm != true) return;
 
-      if (confirm != true) {
-        return;
-      }
-
-      final now = DateTime.now();
-      final dateOnly = _dateOnly(now);
-      await _firestore.collection('todo').doc(todoDoc.id).update({
+      final today = _dateOnly(DateTime.now());
+      await _firestore.collection('todo').doc(doc.id).update({
         'status': newStatus,
-        'timestamp': Timestamp.fromDate(dateOnly),
+        'timestamp': Timestamp.fromDate(today),
       });
     } else {
-      await _firestore.collection('todo').doc(todoDoc.id).update({
+      await _firestore.collection('todo').doc(doc.id).update({
         'status': newStatus,
         'timestamp': FieldValue.serverTimestamp(),
       });
     }
   }
 
+  Widget _buildTodoList(String status) {
+    if (_userEmail == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore
+          .collection('todo')
+          .where('email', isEqualTo: _userEmail)
+          .where('status', isEqualTo: status)
+          .orderBy('timestamp', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return const Center(child: Text('Error loading todos'));
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
+        final todos = snapshot.data?.docs ?? [];
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Todo List'),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: _userEmail == null
-                  ? Stream.empty()
-                  : _firestore
-                      .collection('todo')
-                      .where('email', isEqualTo: _userEmail)
-                      //.orderBy('timestamp', descending: true) // add index if needed
-                      .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Center(child: Text('Error loading todos'));
-                }
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(child: CircularProgressIndicator());
-                }
-
-                final todos = snapshot.data?.docs ?? [];
-
-                // Cleanup: delete todos that are 'done' and timestamp date is before today
-                final today = _dateOnly(DateTime.now());
-                for (var doc in todos) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final status = data['status'] ?? 'pending';
-                  final timestamp = data['timestamp'] as Timestamp?;
-                  if (status == 'done' && timestamp != null) {
-                    final todoDate = _dateOnly(timestamp.toDate());
-                    if (todoDate.isBefore(today)) {
-                      // Delete document
-                      _firestore.collection('todo').doc(doc.id).delete();
-                    }
-                  }
-                }
-
-                if (todos.isEmpty) {
-                  return Center(child: Text('No todos yet'));
-                }
-
-                return ListView.builder(
-                  reverse: true,
-                  itemCount: todos.length,
-                  itemBuilder: (context, index) {
-                    final doc = todos[index];
-                    final data = doc.data() as Map<String, dynamic>;
-                    final status = data['status'] ?? 'pending';
-                    final text = data['text'] ?? '';
-                    final email = data['email'] ?? '';
-                    final timestamp = data['timestamp'] as Timestamp?;
-                    final timeStr = timestamp != null
-                        ? timestamp.toDate().toLocal().toString().split(' ')[0] // Show only date YYYY-MM-DD
-                        : '...';
-
-                    return ListTile(
-                      title: Text(
-                        text,
-                        style: TextStyle(
-                          decoration:
-                              status == 'done' ? TextDecoration.lineThrough : null,
-                          color: status == 'done' ? Colors.grey : Colors.black,
-                        ),
-                      ),
-                      subtitle: Text('$email\n$timeStr'),
-                      isThreeLine: true,
-                      trailing: Icon(
-                        status == 'pending' ? Icons.circle_outlined : Icons.check_circle,
-                        color: status == 'pending' ? Colors.red : Colors.green,
-                      ),
-                      onTap: () => _toggleStatus(doc),
-                    );
-                  },
-                );
-              },
+        if (todos.isEmpty) {
+          return Center(
+            child: Text(
+              status == 'pending' ? 'No pending tasks' : 'No completed tasks',
+              style: const TextStyle(fontSize: 16, color: Color.fromARGB(255, 76, 175, 158)),
             ),
-          ),
-          _buildInputBar(),
-        ],
-      ),
+          );
+        }
+
+        return ListView.builder(
+          itemCount: todos.length,
+          itemBuilder: (context, index) {
+            final doc = todos[index];
+            final data = doc.data() as Map<String, dynamic>;
+            final text = data['text'] ?? 'No text';
+            final timestamp = data['timestamp'] as Timestamp?;
+            final dateStr = timestamp != null
+                ? timestamp.toDate().toLocal().toString().split(' ')[0]
+                : '...';
+
+            return ListTile(
+              title: Text(
+                text,
+                style: TextStyle(
+                  decoration: status == 'done' ? TextDecoration.lineThrough : null,
+                  color: status == 'done' ? Colors.grey : Colors.black,
+                ),
+              ),
+              subtitle: Text('$_userEmail\n$dateStr'),
+              isThreeLine: true,
+              trailing: Icon(
+                status == 'pending' ? Icons.circle_outlined : Icons.check_circle,
+                color: status == 'pending' ? Colors.red : Colors.green,
+              ),
+              onTap: () => _toggleStatus(doc),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -256,7 +185,7 @@ class _TodoPageState extends State<TodoPage> {
               child: TextField(
                 controller: _todoController,
                 decoration: InputDecoration(
-                  hintText: 'Type your todo',
+                  hintText: "Enter Today's Task",
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(20),
                     borderSide: BorderSide.none,
@@ -273,17 +202,66 @@ class _TodoPageState extends State<TodoPage> {
               child: Container(
                 padding: EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.green,
+                  color: const Color.fromARGB(255, 51, 131, 199),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   Icons.send,
-                  color: Colors.white,
+                  color: const Color.fromARGB(255, 76, 175, 80),
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _deleteOldTasks() async {
+    print('Running _deleteOldTasks...');
+    final today = _dateOnly(DateTime.now());
+
+    final querySnapshot = await _firestore
+        .collection('todo')
+        .where('status', isEqualTo: 'done')
+        .get();
+
+    for (var doc in querySnapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final timestamp = data['timestamp'] as Timestamp?;
+      if (timestamp != null) {
+        final todoDate = _dateOnly(timestamp.toDate());
+        if (todoDate.isBefore(today)) {
+          await _firestore.collection('todo').doc(doc.id).delete();
+          print('Deleted task: ${doc.id}');
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('Todo List'),
+          bottom: TabBar(
+            controller: _tabController,
+            tabs: [
+              Tab(text: 'Pending'),
+              Tab(text: 'Completed'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          controller: _tabController,
+          children: [
+            _buildTodoList('pending'),
+            _buildTodoList('done'),
+          ],
+        ),
+        bottomNavigationBar: _buildInputBar(),
       ),
     );
   }
