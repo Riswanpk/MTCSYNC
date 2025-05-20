@@ -41,11 +41,13 @@ class _LeadsPageState extends State<LeadsPage> {
               },
               decoration: InputDecoration(
                 hintText: 'Search by name...',
-                prefixIcon: const Icon(Icons.search),
+                hintStyle: const TextStyle(color: Colors.green), // Green color for hint text
+                prefixIcon: const Icon(Icons.search, color: Colors.green), // Green color for search icon
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
+              style: const TextStyle(color: Colors.green), // Green color for entered text
             ),
           ),
 
@@ -189,13 +191,6 @@ class LeadCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Circular Avatar
-            CircleAvatar(
-              radius: 25,
-              backgroundImage: NetworkImage(
-                'https://i.pravatar.cc/150?img=5', // Random avatar image from pravatar
-              ),
-            ),
             const SizedBox(width: 16),
 
             // Text details
@@ -229,13 +224,7 @@ class LeadCard extends StatelessWidget {
               ),
             ),
 
-            // Optional Avatar again or Icon
-            CircleAvatar(
-              radius: 20,
-              backgroundImage: NetworkImage(
-                'https://i.pravatar.cc/100?img=12',
-              ),
-            ),
+           
           ],
         ),
       ),
