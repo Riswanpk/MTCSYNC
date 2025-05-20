@@ -16,7 +16,7 @@ class _LeadsPageState extends State<LeadsPage> {
   String searchQuery = '';
   String selectedStatus = 'All';
 
-  final List<String> statusOptions = ['All', 'New', 'In Progress', 'Closed']; // Add as needed
+  final List<String> statusOptions = ['All','In Progress', 'Completed']; // Add as needed
 
   @override
   Widget build(BuildContext context) {

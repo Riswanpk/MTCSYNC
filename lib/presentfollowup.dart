@@ -72,7 +72,7 @@ class PresentFollowUp extends StatelessWidget {
                         'Status',
                         DropdownButton<String>(
                           value: data['status'],
-                          items: ['New', 'In Progress', 'Closed', 'Completed'].map((status) {
+                          items: ['In Progress', 'Completed'].map((status) {
                             return DropdownMenuItem<String>(
                               value: status,
                               child: Text(status),
