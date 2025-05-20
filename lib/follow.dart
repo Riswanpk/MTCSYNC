@@ -62,23 +62,37 @@ class _FollowUpFormState extends State<FollowUpForm> {
       _reminderTime!.minute,
     );
 
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'follow_up_alarm_channel',
+      'Follow Up Alarms',
+      channelDescription: 'Channel for follow-up alarm notifications',
+      importance: Importance.max,
+      priority: Priority.high,
+      fullScreenIntent: true,
+      visibility: NotificationVisibility.public,
+      playSound: true,
+      sound: RawResourceAndroidNotificationSound('alarm'), // Add your sound under android/app/src/main/res/raw/alarm.mp3
+      category: AndroidNotificationCategory.alarm,
+    );
+
+    const NotificationDetails platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+    );
+
     await flutterLocalNotificationsPlugin.zonedSchedule(
       0,
-      'Follow-Up Reminder',
-      'You have a follow-up scheduled for today.',
+      '🔔 Follow-Up Alarm',
+      'You have a follow-up scheduled now!',
       scheduledDate,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'follow_up_channel',
-          'Follow Up Notifications',
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-      ),
+      platformChannelSpecifics,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       matchDateTimeComponents: DateTimeComponents.dateAndTime,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
     );
   }
+
 
   String _formatDate(DateTime date) {
     return DateFormat('yyyy-MM-dd').format(date);
