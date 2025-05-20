@@ -15,136 +15,164 @@ class LeadsPage extends StatefulWidget {
 class _LeadsPageState extends State<LeadsPage> {
   String searchQuery = '';
   String selectedStatus = 'All';
+  final ValueNotifier<bool> _isHovering = ValueNotifier(false);
 
-  final List<String> statusOptions = ['All','In Progress', 'Completed']; // Add as needed
+  final List<String> statusOptions = ['All', 'In Progress', 'Completed'];
 
   @override
   Widget build(BuildContext context) {
-    print("Fetching leads for branch: ${widget.branch}");
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('CRM - Leads Follow Up'),
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
       ),
-      body: Column(
+      body: Stack(
         children: [
-          // Search field
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              onChanged: (val) {
-                setState(() {
-                  searchQuery = val.toLowerCase();
-                });
-              },
-              decoration: InputDecoration(
-                hintText: 'Search by name...',
-                hintStyle: const TextStyle(color: Colors.green), // Green color for hint text
-                prefixIcon: const Icon(Icons.search, color: Colors.green), // Green color for search icon
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              style: const TextStyle(color: Colors.green), // Green color for entered text
-            ),
-          ),
-
-          // Filter dropdown
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: DropdownButtonFormField<String>(
-              value: selectedStatus,
-              items: statusOptions.map((status) {
-                return DropdownMenuItem<String>(
-                  value: status,
-                  child: Text(status),
-                );
-              }).toList(),
-              onChanged: (val) {
-                setState(() {
-                  selectedStatus = val!;
-                });
-              },
-              decoration: InputDecoration(
-                labelText: 'Filter by Status',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+          // Background logo
+          Center(
+            child: Opacity(
+              opacity: 0.05,
+              child: Image.asset(
+                'assets/images/logo.png', // Make sure path matches your folder
+                width: 250,
               ),
             ),
           ),
+          Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: TextField(
+                  onChanged: (val) {
+                    setState(() {
+                      searchQuery = val.toLowerCase();
+                    });
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'Search by name...',
+                    hintStyle: const TextStyle(color: Colors.green),
+                    prefixIcon: const Icon(Icons.search, color: Colors.green),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  style: const TextStyle(color: Colors.green),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                child: DropdownButtonFormField<String>(
+                  value: selectedStatus,
+                  items: statusOptions.map((status) {
+                    return DropdownMenuItem<String>(
+                      value: status,
+                      child: Text(status),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    setState(() {
+                      selectedStatus = val!;
+                    });
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'Filter by Status',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('follow_ups')
+                      .where('branch', isEqualTo: widget.branch)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
-          // Leads list
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('follow_ups')
-                  .where('branch', isEqualTo: widget.branch)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return const Center(child: Text("No leads available."));
+                    }
 
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  print("No leads found for branch: ${widget.branch}");
-                  return const Center(child: Text("No leads available."));
-                }
+                    final allLeads = snapshot.data!.docs;
 
-                final allLeads = snapshot.data!.docs;
+                    final filteredLeads = allLeads.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final name = (data['name'] ?? '').toString().toLowerCase();
+                      final status = (data['status'] ?? 'Unknown').toString();
 
-                // Apply search and filter
-                final filteredLeads = allLeads.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final name = (data['name'] ?? '').toString().toLowerCase();
-                  final status = (data['status'] ?? 'Unknown').toString();
+                      final matchesSearch = name.contains(searchQuery);
+                      final matchesStatus =
+                          selectedStatus == 'All' || status == selectedStatus;
 
-                  final matchesSearch = name.contains(searchQuery);
-                  final matchesStatus = selectedStatus == 'All' || status == selectedStatus;
+                      return matchesSearch && matchesStatus;
+                    }).toList();
 
-                  return matchesSearch && matchesStatus;
-                }).toList();
+                    if (filteredLeads.isEmpty) {
+                      return const Center(child: Text("No leads match your criteria."));
+                    }
 
-                print("Found ${filteredLeads.length} leads after filter.");
+                    return ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: filteredLeads.length,
+                      itemBuilder: (context, index) {
+                        final data = filteredLeads[index].data() as Map<String, dynamic>;
+                        final name = data['name'] ?? 'No Name';
+                        final status = data['status'] ?? 'Unknown';
+                        final date = data['date'] ?? 'No Date';
+                        final docId = filteredLeads[index].id;
 
-                if (filteredLeads.isEmpty) {
-                  return const Center(child: Text("No leads match your criteria."));
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: filteredLeads.length,
-                  itemBuilder: (context, index) {
-                    final data = filteredLeads[index].data() as Map<String, dynamic>;
-                    final name = data['name'] ?? 'No Name';
-                    final status = data['status'] ?? 'Unknown';
-                    final date = data['date'] ?? 'No Date';
-                    final docId = filteredLeads[index].id;
-
-                    return LeadCard(
-                      name: name,
-                      status: status,
-                      date: date,
-                      docId: docId,
+                        return LeadCard(
+                          name: name,
+                          status: status,
+                          date: date,
+                          docId: docId,
+                        );
+                      },
                     );
                   },
-                );
-              },
-            ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF8CC63F),
-        child: const Icon(Icons.add),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const FollowUpForm()),
-          );
-        },
+      floatingActionButton: MouseRegion(
+        onEnter: (_) => _isHovering.value = true,
+        onExit: (_) => _isHovering.value = false,
+        cursor: SystemMouseCursors.click,
+        child: ValueListenableBuilder<bool>(
+          valueListenable: _isHovering,
+          builder: (_, isHovered, child) {
+            return Transform.scale(
+              scale: isHovered ? 1.15 : 1.0,
+              child: StatefulBuilder(
+                builder: (context, setState) {
+                  Color buttonColor = isHovered ? const Color(0xFF77B72E) : const Color(0xFF8CC63F);
+
+                  return FloatingActionButton(
+                    backgroundColor: buttonColor,
+                    elevation: isHovered ? 10 : 6, // Add shadow effect
+                    child: const Icon(Icons.add),
+                    onPressed: () {
+                      setState(() {
+                        buttonColor = const Color(0xFF005BAC); // Change to blue when pressed
+                      });
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const FollowUpForm()),
+                      );
+                    },
+                  );
+                },
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -192,13 +220,10 @@ class LeadCard extends StatelessWidget {
         child: Row(
           children: [
             const SizedBox(width: 16),
-
-            // Text details
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Name + Status
                   RichText(
                     text: TextSpan(
                       style: DefaultTextStyle.of(context).style.copyWith(fontSize: 16),
@@ -223,13 +248,9 @@ class LeadCard extends StatelessWidget {
                 ],
               ),
             ),
-
-           
           ],
         ),
       ),
     );
   }
 }
-
-
