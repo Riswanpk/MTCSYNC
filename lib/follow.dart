@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
+import 'package:permission_handler/permission_handler.dart';
 
 class FollowUpForm extends StatefulWidget {
   const FollowUpForm({super.key});
@@ -19,15 +24,81 @@ class _FollowUpFormState extends State<FollowUpForm> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _commentsController = TextEditingController();
   final TextEditingController _reminderController = TextEditingController();
+  TimeOfDay? _reminderTime;
 
   String _status = 'In Progress';
+
+  late FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeNotifications();
+  }
+
+  void _initializeNotifications() async {
+    flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const initializationSettings = InitializationSettings(android: androidSettings);
+
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+    tz.initializeTimeZones();
+
+    if (await Permission.notification.isDenied || await Permission.notification.isRestricted) {
+      await Permission.notification.request();
+    }
+  }
+
+  Future<void> _scheduleReminderNotification(DateTime reminderDate) async {
+    if (_reminderTime == null) return;
+
+    final tz.TZDateTime scheduledDate = tz.TZDateTime(
+      tz.local,
+      reminderDate.year,
+      reminderDate.month,
+      reminderDate.day,
+      _reminderTime!.hour,
+      _reminderTime!.minute,
+    );
+
+    await flutterLocalNotificationsPlugin.zonedSchedule(
+      0,
+      'Follow-Up Reminder',
+      'You have a follow-up scheduled for today.',
+      scheduledDate,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'follow_up_channel',
+          'Follow Up Notifications',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      matchDateTimeComponents: DateTimeComponents.dateAndTime,
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return DateFormat('yyyy-MM-dd').format(date);
+  }
 
   Future<void> _saveFollowUp() async {
     if (!_formKey.currentState!.validate()) return;
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User not logged in')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User not logged in')),
+      );
+      return;
+    }
+
+    if (_reminderController.text.isNotEmpty && _reminderTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a reminder time')),
+      );
       return;
     }
 
@@ -43,10 +114,16 @@ class _FollowUpFormState extends State<FollowUpForm> {
       'status': _status,
       'comments': _commentsController.text.trim(),
       'reminder': _reminderController.text.trim(),
+      'reminder_time': _reminderTime?.format(context) ?? '',
       'branch': branch,
       'created_by': user.uid,
       'created_at': FieldValue.serverTimestamp(),
     });
+
+    if (_reminderController.text.isNotEmpty) {
+      final reminderDate = DateTime.parse(_reminderController.text.trim());
+      await _scheduleReminderNotification(reminderDate);
+    }
 
     Navigator.pop(context);
   }
@@ -56,7 +133,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('New Follow Up'),
-        backgroundColor: Color(0xFF005BAC),
+        backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
       ),
       body: Padding(
@@ -65,71 +142,29 @@ class _FollowUpFormState extends State<FollowUpForm> {
           key: _formKey,
           child: ListView(
             children: [
-              TextFormField(
-                controller: _dateController,
-                readOnly: true,
-                decoration: const InputDecoration(
-                  labelText: 'Date',
-                  prefixIcon: Icon(Icons.calendar_today),
-                ),
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: DateTime.now(),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime(2100),
-                  );
-                  if (picked != null) {
-                    _dateController.text = "${picked.year}-${picked.month}-${picked.day}";
-                  }
-                },
-                validator: (value) => value!.isEmpty ? 'Select a date' : null,
+              _buildDateField(
+                _dateController,
+                'Date',
+                Icons.calendar_today,
+                firstDate: DateTime.now(),
+                lastDate: DateTime(2100),
+                isRequired: true,
               ),
               const SizedBox(height: 16),
-
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Customer Name',
-                  prefixIcon: Icon(Icons.person),
-                ),
-                validator: (value) => value!.isEmpty ? 'Enter name' : null,
-              ),
+              _buildTextField(_nameController, 'Customer Name', Icons.person, isRequired: true),
               const SizedBox(height: 16),
-
-              TextFormField(
-                controller: _companyController,
-                decoration: const InputDecoration(
-                  labelText: 'Company',
-                  prefixIcon: Icon(Icons.business),
-                ),
-              ),
+              _buildTextField(_companyController, 'Company', Icons.business),
               const SizedBox(height: 16),
-
-              TextFormField(
-                controller: _addressController,
-                decoration: const InputDecoration(
-                  labelText: 'Address',
-                  prefixIcon: Icon(Icons.location_on),
-                ),
-              ),
+              _buildTextField(_addressController, 'Address', Icons.location_on),
               const SizedBox(height: 16),
-
-              TextFormField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'Phone No.',
-                  prefixIcon: Icon(Icons.phone),
-                ),
-              ),
+              _buildTextField(_phoneController, 'Phone No.', Icons.phone, inputType: TextInputType.phone),
               const SizedBox(height: 16),
-
               DropdownButtonFormField<String>(
                 value: _status,
                 decoration: const InputDecoration(
                   labelText: 'Status',
                   prefixIcon: Icon(Icons.assignment_turned_in),
+                  border: OutlineInputBorder(),
                 ),
                 items: const [
                   DropdownMenuItem(value: 'In Progress', child: Text('In Progress')),
@@ -138,47 +173,51 @@ class _FollowUpFormState extends State<FollowUpForm> {
                 onChanged: (value) => setState(() => _status = value!),
               ),
               const SizedBox(height: 16),
-
-              TextFormField(
-                controller: _commentsController,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Comments',
-                  alignLabelWithHint: true,
-                  prefixIcon: Icon(Icons.comment),
-                ),
+              _buildMultilineField(_commentsController, 'Comments', Icons.comment),
+              const SizedBox(height: 16),
+              _buildDateField(
+                _reminderController,
+                'Reminder Date (max 15 days)',
+                Icons.alarm,
+                firstDate: DateTime.now(),
+                lastDate: DateTime.now().add(const Duration(days: 15)),
               ),
               const SizedBox(height: 16),
-
               TextFormField(
-                controller: _reminderController,
                 readOnly: true,
                 decoration: const InputDecoration(
-                  labelText: 'Reminder (max 15 days)',
-                  prefixIcon: Icon(Icons.alarm),
+                  labelText: 'Reminder Time',
+                  prefixIcon: Icon(Icons.access_time),
+                  border: OutlineInputBorder(),
+                ),
+                controller: TextEditingController(
+                  text: _reminderTime != null ? _reminderTime!.format(context) : '',
                 ),
                 onTap: () async {
-                  final picked = await showDatePicker(
+                  final pickedTime = await showTimePicker(
                     context: context,
-                    initialDate: DateTime.now(),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 15)),
+                    initialTime: TimeOfDay.now(),
                   );
-                  if (picked != null) {
-                    _reminderController.text = "${picked.year}-${picked.month}-${picked.day}";
+                  if (pickedTime != null) {
+                    setState(() {
+                      _reminderTime = pickedTime;
+                    });
                   }
+                },
+                validator: (value) {
+                  if (_reminderController.text.isNotEmpty && _reminderTime == null) {
+                    return 'Select reminder time';
+                  }
+                  return null;
                 },
               ),
               const SizedBox(height: 30),
-
               ElevatedButton(
                 onPressed: _saveFollowUp,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFF005BAC),
+                  backgroundColor: const Color(0xFF005BAC),
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: const Text(
                   'Save Follow Up',
@@ -189,6 +228,69 @@ class _FollowUpFormState extends State<FollowUpForm> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildTextField(
+    TextEditingController controller,
+    String label,
+    IconData icon, {
+    bool isRequired = false,
+    TextInputType inputType = TextInputType.text,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: inputType,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        border: const OutlineInputBorder(),
+      ),
+      validator: isRequired ? (value) => value!.isEmpty ? 'Enter $label' : null : null,
+    );
+  }
+
+  Widget _buildMultilineField(TextEditingController controller, String label, IconData icon) {
+    return TextFormField(
+      controller: controller,
+      maxLines: 4,
+      decoration: InputDecoration(
+        labelText: label,
+        alignLabelWithHint: true,
+        prefixIcon: Icon(icon),
+        border: const OutlineInputBorder(),
+      ),
+    );
+  }
+
+  Widget _buildDateField(
+    TextEditingController controller,
+    String label,
+    IconData icon, {
+    required DateTime firstDate,
+    required DateTime lastDate,
+    bool isRequired = false,
+  }) {
+    return TextFormField(
+      controller: controller,
+      readOnly: true,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        border: const OutlineInputBorder(),
+      ),
+      onTap: () async {
+        final picked = await showDatePicker(
+          context: context,
+          initialDate: DateTime.now(),
+          firstDate: firstDate,
+          lastDate: lastDate,
+        );
+        if (picked != null) {
+          controller.text = _formatDate(picked);
+        }
+      },
+      validator: isRequired ? (value) => value!.isEmpty ? 'Select $label' : null : null,
     );
   }
 }
