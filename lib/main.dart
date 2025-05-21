@@ -4,19 +4,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'constant.dart';
 import 'login.dart';
-import 'home.dart';
-import 'splash_screen.dart';
-
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/data/latest.dart' as tz;
-import 'package:timezone/timezone.dart' as tz;
-
-final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-    FlutterLocalNotificationsPlugin();
+import 'home.dart'; // HomePage screen after login
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await Firebase.initializeApp(
     options: FirebaseOptions(
       apiKey: firebaseApiKey,
@@ -28,26 +19,9 @@ void main() async {
       measurementId: firebaseMeasurementId,
     ),
   );
-
-  await _initializeNotifications();
-
-  runApp(const MyApp()); // ✅ This should now work!
+  runApp(const MyApp());
 }
 
-Future<void> _initializeNotifications() async {
-  const AndroidInitializationSettings androidSettings =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-
-  final InitializationSettings initSettings = InitializationSettings(
-    android: androidSettings,
-  );
-
-  await flutterLocalNotificationsPlugin.initialize(initSettings);
-
-  tz.initializeTimeZones();
-}
-
-// ✅ Make sure this class exists!
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -55,7 +29,9 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: const SplashScreen(),
+      home: FirebaseAuth.instance.currentUser == null
+          ? const LoginPage()
+          : const HomePage(),
     );
   }
 }
