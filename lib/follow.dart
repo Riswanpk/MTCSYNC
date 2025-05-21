@@ -22,6 +22,8 @@ class _FollowUpFormState extends State<FollowUpForm> {
   final TextEditingController _reminderController = TextEditingController();
 
   String _status = 'In Progress';
+  TimeOfDay? _selectedReminderTime;
+
 
   Future<void> _scheduleNotification(DateTime dateTime) async {
     await AwesomeNotifications().createNotification(
@@ -83,6 +85,41 @@ class _FollowUpFormState extends State<FollowUpForm> {
         notificationLayout: NotificationLayout.Default,
       ),
     );
+    if (_selectedReminderTime != null && _reminderController.text.isNotEmpty) {
+      final reminderParts = _reminderController.text.split(' ');
+      final datePart = reminderParts[0].split('-');
+
+      final scheduledDate = DateTime(
+        int.parse(datePart[0]),
+        int.parse(datePart[1]),
+        int.parse(datePart[2]),
+        _selectedReminderTime!.hour,
+        _selectedReminderTime!.minute,
+      );
+
+      // Schedule notification
+      await AwesomeNotifications().createNotification(
+        content: NotificationContent(
+          id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+          channelKey: 'reminder_channel',
+          title: 'Follow-Up Reminder',
+          body: 'Reminder for ${_nameController.text.trim()} - ${_companyController.text.trim()}',
+          notificationLayout: NotificationLayout.Default,
+        ),
+        schedule: NotificationCalendar(
+          year: scheduledDate.year,
+          month: scheduledDate.month,
+          day: scheduledDate.day,
+          hour: scheduledDate.hour,
+          minute: scheduledDate.minute,
+          second: 0,
+          millisecond: 0,
+          timeZone: await AwesomeNotifications().getLocalTimeZoneIdentifier(),
+          preciseAlarm: true,
+        ),
+      );
+    }
+
 
     Navigator.pop(context);
   }
@@ -201,30 +238,24 @@ class _FollowUpFormState extends State<FollowUpForm> {
                     firstDate: DateTime.now(),
                     lastDate: DateTime.now().add(const Duration(days: 15)),
                   );
-
                   if (pickedDate != null) {
                     final pickedTime = await showTimePicker(
                       context: context,
                       initialTime: TimeOfDay.now(),
                     );
-
                     if (pickedTime != null) {
-                      final reminderDateTime = DateTime(
+                      _selectedReminderTime = pickedTime;
+                      final formatted = DateTime(
                         pickedDate.year,
                         pickedDate.month,
                         pickedDate.day,
                         pickedTime.hour,
                         pickedTime.minute,
                       );
-
-                      _reminderController.text = reminderDateTime.toString(); // or format it nicely
-
-                      // Schedule the notification
-                      _scheduleNotification(reminderDateTime);
+                      _reminderController.text = "${formatted.year}-${formatted.month.toString().padLeft(2, '0')}-${formatted.day.toString().padLeft(2, '0')} ${pickedTime.format(context)}";
                     }
                   }
                 },
-
               ),
               const SizedBox(height: 30),
 
