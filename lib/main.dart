@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'constant.dart';
 import 'login.dart';
 import 'home.dart'; // HomePage screen after login
+import 'splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,9 +30,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: FirebaseAuth.instance.currentUser == null
-          ? const LoginPage()
-          : const HomePage(),
+      home: const SplashScreen(), // Set SplashScreen as the initial page
     );
   }
 }
