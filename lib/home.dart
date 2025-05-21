@@ -41,23 +41,13 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     const Color primaryBlue = Color(0xFF005BAC);
     const Color primaryGreen = Color(0xFF8CC63F);
 
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return WillPopScope(
       onWillPop: () async => false, // Disable back button
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Home'),
-          automaticallyImplyLeading: false,
-          actions: [
-            Builder(
-              builder: (context) => IconButton(
-                icon: const Icon(Icons.menu),
-                onPressed: () {
-                  Scaffold.of(context).openEndDrawer();
-                },
-              ),
-            ),
-          ],
-        ),
+        // Remove the appBar entirely
         endDrawer: Drawer(
           child: ListView(
             padding: EdgeInsets.zero,
@@ -144,6 +134,21 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
               ),
             ),
 
+            // Burger button (top right)
+            Positioned(
+              top: 24,
+              right: 16,
+              child: Builder(
+                builder: (context) => IconButton(
+                  icon: Icon(Icons.menu, color: primaryBlue, size: 32),
+                  onPressed: () {
+                    Scaffold.of(context).openEndDrawer();
+                  },
+                  tooltip: 'Menu',
+                ),
+              ),
+            ),
+
             // Main content (unchanged)
             Center(
               child: Padding(
@@ -152,7 +157,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                   padding: const EdgeInsets.all(30),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(25),
-                    color: Colors.white.withOpacity(0.85),
+                    color: isDark
+                        ? theme.cardColor.withOpacity(0.92)
+                        : Colors.white.withOpacity(0.85),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.08),
@@ -164,12 +171,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text(
+                      Text(
                         'Welcome!',
                         style: TextStyle(
                           fontSize: 26,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF005BAC),
+                          color: primaryBlue,
                         ),
                       ),
                       const SizedBox(height: 40),

@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'todoform.dart';
+import 'package:provider/provider.dart';
+import 'theme_notifier.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -289,7 +291,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
           return Center(
             child: Text(
               status == 'pending' ? 'No pending tasks' : 'No completed tasks',
-              style: const TextStyle(fontSize: 16, color: Color.fromARGB(255, 76, 175, 158)),
+              style: const TextStyle(fontSize: 16, color: Color.fromARGB(255, 70, 164, 57)),
             ),
           );
         }
@@ -326,11 +328,11 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
             return Container(
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Theme.of(context).cardColor, // Use theme card color
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.grey.withOpacity(0.15),
+                    color: Theme.of(context).shadowColor.withOpacity(0.15), // Use theme shadow color
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -354,9 +356,10 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
-                          color: status == 'done' ? Colors.grey : Colors.black,
-                          decoration:
-                              status == 'done' ? TextDecoration.lineThrough : null,
+                          color: status == 'done'
+                              ? Theme.of(context).disabledColor
+                              : Theme.of(context).textTheme.bodyLarge?.color,
+                          decoration: status == 'done' ? TextDecoration.lineThrough : null,
                         ),
                       ),
                     ),
@@ -378,14 +381,17 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                     children: [
                       Text(
                         timeStr,
-                        style: const TextStyle(color: Colors.grey, fontSize: 14),
+                        style: TextStyle(
+                          color: Theme.of(context).hintColor,
+                          fontSize: 14,
+                        ),
                       ),
                       if (description.isNotEmpty)
                         Flexible(
                           child: Text(
                             description,
-                            style: const TextStyle(
-                              color: Colors.black54,
+                            style: TextStyle(
+                              color: Theme.of(context).textTheme.bodySmall?.color,
                               fontSize: 13,
                             ),
                             overflow: TextOverflow.ellipsis,
@@ -395,7 +401,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                   ),
                 ),
                 trailing: IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.redAccent),
+                  icon: Icon(Icons.delete, color: Theme.of(context).iconTheme.color),
                   onPressed: () async {
                     final confirm = await showDialog<bool>(
                       context: context,
@@ -405,7 +411,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.of(context).pop(true),
-                            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                            child: const Text('Delete', style: TextStyle(color: Color.fromARGB(255, 0, 0, 0))),
                           ),
                           TextButton(
                             onPressed: () => Navigator.of(context).pop(false),
@@ -480,30 +486,26 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
 
   @override
   Widget build(BuildContext context) {
+    final theme = Provider.of<ThemeNotifier>(context).currentTheme;
+
     return Theme(
-      data: ThemeData(
-        colorScheme: ColorScheme.light(
-          primary: primaryBlue,
-          secondary: primaryGreen,
-        ),
-        scaffoldBackgroundColor: const Color(0xFFF5F6FA),
+      data: theme.copyWith(
         appBarTheme: const AppBarTheme(
           backgroundColor: primaryBlue,
           foregroundColor: Colors.white,
-          elevation: 4,
+          iconTheme: IconThemeData(color: Colors.white),
           titleTextStyle: TextStyle(
+            color: Colors.white,
             fontSize: 22,
             fontWeight: FontWeight.bold,
-            color: Colors.white,
           ),
+          elevation: 8,
         ),
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: primaryGreen,
-          foregroundColor: Colors.white,
-          elevation: 6,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(16)),
-          ),
+        tabBarTheme: const TabBarTheme(
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicator: BoxDecoration(), // No highlight
+          labelStyle: TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
       child: DefaultTabController(
@@ -514,20 +516,13 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
             title: const Text('Todo List'),
             actions: [
               IconButton(
-                icon: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent),
+                icon: const Icon(Icons.delete_sweep_rounded, color: Colors.white),
                 tooltip: 'Clear All Tasks',
                 onPressed: _clearAllTodos,
               ),
             ],
             bottom: TabBar(
               controller: _tabController,
-              indicator: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                color: Colors.white.withOpacity(0.2),
-              ),
-              labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white70,
               tabs: const [
                 Tab(icon: Icon(Icons.pending_actions), text: 'Pending'),
                 Tab(icon: Icon(Icons.check_circle), text: 'Completed'),
@@ -542,6 +537,8 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
             ],
           ),
           floatingActionButton: FloatingActionButton(
+            backgroundColor: primaryBlue, // Make the + button blue
+            foregroundColor: Colors.white,
             onPressed: () {
               Navigator.push(
                 context,

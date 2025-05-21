@@ -194,6 +194,9 @@ class LeadCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -207,11 +210,11 @@ class LeadCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 16),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: theme.cardColor, // Use theme card color
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: theme.shadowColor.withOpacity(isDark ? 0.2 : 0.05),
               blurRadius: 12,
               offset: const Offset(0, 6),
             ),
@@ -226,7 +229,7 @@ class LeadCard extends StatelessWidget {
                 children: [
                   RichText(
                     text: TextSpan(
-                      style: DefaultTextStyle.of(context).style.copyWith(fontSize: 16),
+                      style: theme.textTheme.bodyLarge?.copyWith(fontSize: 16),
                       children: [
                         TextSpan(
                           text: name,
@@ -235,7 +238,7 @@ class LeadCard extends StatelessWidget {
                         const TextSpan(text: ' '),
                         TextSpan(
                           text: '($status)',
-                          style: const TextStyle(color: Colors.grey),
+                          style: TextStyle(color: theme.hintColor),
                         ),
                       ],
                     ),
@@ -243,13 +246,16 @@ class LeadCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     'Date: $date',
-                    style: const TextStyle(fontSize: 13, color: Colors.grey),
+                    style: theme.textTheme.bodySmall?.copyWith(fontSize: 13, color: theme.hintColor),
                   ),
                 ],
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.delete, color: Colors.red),
+              icon: Icon(
+                Icons.delete,
+                color: isDark ? Colors.white : Colors.black, // Change icon color based on theme
+              ),
               tooltip: 'Delete Lead',
               onPressed: () async {
                 final confirm = await showDialog<bool>(
@@ -260,7 +266,7 @@ class LeadCard extends StatelessWidget {
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.of(context).pop(true),
-                        child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                        child: Text('Delete', style: TextStyle(color: theme.colorScheme.error)),
                       ),
                       TextButton(
                         onPressed: () => Navigator.of(context).pop(false),

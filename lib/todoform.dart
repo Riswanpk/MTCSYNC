@@ -85,24 +85,10 @@ class _TodoFormPageState extends State<TodoFormPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context); // Uses the inherited theme (from ThemeNotifier)
+
     return Theme(
-      data: ThemeData(
-        colorScheme: ColorScheme.light(
-          primary: primaryBlue,
-          secondary: primaryGreen,
-        ),
-        scaffoldBackgroundColor: const Color(0xFFF5F6FA),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: primaryBlue,
-          foregroundColor: Colors.white,
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: primaryGreen,
-            foregroundColor: Colors.white,
-          ),
-        ),
-      ),
+      data: theme,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Add New Task'),
