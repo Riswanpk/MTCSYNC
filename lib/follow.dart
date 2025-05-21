@@ -1,3 +1,4 @@
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -21,6 +22,30 @@ class _FollowUpFormState extends State<FollowUpForm> {
   final TextEditingController _reminderController = TextEditingController();
 
   String _status = 'In Progress';
+
+  Future<void> _scheduleNotification(DateTime dateTime) async {
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: DateTime.now().millisecondsSinceEpoch.remainder(100000), // unique ID
+        channelKey: 'reminder_channel',
+        title: 'Follow-up Reminder',
+        body: 'You have a follow-up scheduled.',
+        notificationLayout: NotificationLayout.Default,
+      ),
+      schedule: NotificationCalendar(
+        year: dateTime.year,
+        month: dateTime.month,
+        day: dateTime.day,
+        hour: dateTime.hour,
+        minute: dateTime.minute,
+        second: 0,
+        millisecond: 0,
+        timeZone: await AwesomeNotifications().getLocalTimeZoneIdentifier(),
+        repeats: false,
+      ),
+    );
+  }
+
 
   Future<void> _saveFollowUp() async {
     if (!_formKey.currentState!.validate()) return;
@@ -48,8 +73,20 @@ class _FollowUpFormState extends State<FollowUpForm> {
       'created_at': FieldValue.serverTimestamp(),
     });
 
+    // ✅ Trigger immediate notification
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: DateTime.now().millisecondsSinceEpoch.remainder(100000), // unique ID
+        channelKey: 'reminder_channel',
+        title: 'Follow-Up Saved',
+        body: 'Reminder for ${_nameController.text.trim()} saved successfully.',
+        notificationLayout: NotificationLayout.Default,
+      ),
+    );
+
     Navigator.pop(context);
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -158,16 +195,36 @@ class _FollowUpFormState extends State<FollowUpForm> {
                   prefixIcon: Icon(Icons.alarm),
                 ),
                 onTap: () async {
-                  final picked = await showDatePicker(
+                  final pickedDate = await showDatePicker(
                     context: context,
                     initialDate: DateTime.now(),
                     firstDate: DateTime.now(),
                     lastDate: DateTime.now().add(const Duration(days: 15)),
                   );
-                  if (picked != null) {
-                    _reminderController.text = "${picked.year}-${picked.month}-${picked.day}";
+
+                  if (pickedDate != null) {
+                    final pickedTime = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay.now(),
+                    );
+
+                    if (pickedTime != null) {
+                      final reminderDateTime = DateTime(
+                        pickedDate.year,
+                        pickedDate.month,
+                        pickedDate.day,
+                        pickedTime.hour,
+                        pickedTime.minute,
+                      );
+
+                      _reminderController.text = reminderDateTime.toString(); // or format it nicely
+
+                      // Schedule the notification
+                      _scheduleNotification(reminderDateTime);
+                    }
                   }
                 },
+
               ),
               const SizedBox(height: 30),
 
