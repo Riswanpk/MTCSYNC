@@ -1,6 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
+
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+
+// This function is called by the alarm
+void showReminderNotification() async {
+  const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    'reminder_channel',
+    'Reminders',
+    importance: Importance.max,
+    priority: Priority.high,
+    icon: '@mipmap/ic_launcher',
+  );
+
+  const NotificationDetails notificationDetails =
+      NotificationDetails(android: androidDetails);
+
+  await flutterLocalNotificationsPlugin.show(
+    0,
+    'Follow-up Reminder',
+    'You have a scheduled follow-up!',
+    notificationDetails,
+  );
+}
 
 class FollowUpForm extends StatefulWidget {
   const FollowUpForm({super.key});
@@ -158,14 +184,44 @@ class _FollowUpFormState extends State<FollowUpForm> {
                   prefixIcon: Icon(Icons.alarm),
                 ),
                 onTap: () async {
-                  final picked = await showDatePicker(
+                  final date = await showDatePicker(
                     context: context,
                     initialDate: DateTime.now(),
                     firstDate: DateTime.now(),
                     lastDate: DateTime.now().add(const Duration(days: 15)),
                   );
-                  if (picked != null) {
-                    _reminderController.text = "${picked.year}-${picked.month}-${picked.day}";
+
+                  if (date != null) {
+                    final time = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay.now(),
+                    );
+
+                    if (time != null) {
+                      final reminderDateTime = DateTime(
+                        date.year,
+                        date.month,
+                        date.day,
+                        time.hour,
+                        time.minute,
+                      );
+
+                      _reminderController.text = reminderDateTime.toString();
+
+                      // Schedule alarm
+                      final int id = reminderDateTime.millisecondsSinceEpoch.remainder(100000);
+                      await AndroidAlarmManager.oneShotAt(
+                        reminderDateTime,
+                        id,
+                        showReminderNotification,
+                        exact: true,
+                        wakeup: true,
+                      );
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Reminder set for $reminderDateTime')),
+                      );
+                    }
                   }
                 },
               ),
