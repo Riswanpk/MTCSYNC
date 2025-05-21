@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'todo.dart';
 import 'leads.dart';
 import 'login.dart';
+import 'settings.dart'; // Import the settings page
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -72,6 +73,17 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                     fontSize: 24,
                   ),
                 ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.settings),
+                title: const Text('Settings'),
+                onTap: () {
+                  Navigator.pop(context); // Close the drawer
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SettingsPage()),
+                  );
+                },
               ),
               ListTile(
                 leading: const Icon(Icons.logout),

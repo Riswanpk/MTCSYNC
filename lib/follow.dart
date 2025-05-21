@@ -177,6 +177,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                   labelText: 'Company',
                   prefixIcon: Icon(Icons.business),
                 ),
+                validator: (value) => value!.isEmpty ? 'Enter company' : null,
               ),
               const SizedBox(height: 16),
 
@@ -186,6 +187,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                   labelText: 'Address',
                   prefixIcon: Icon(Icons.location_on),
                 ),
+                validator: (value) => value!.isEmpty ? 'Enter address' : null,
               ),
               const SizedBox(height: 16),
 
@@ -196,6 +198,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                   labelText: 'Phone No.',
                   prefixIcon: Icon(Icons.phone),
                 ),
+                validator: (value) => value!.isEmpty ? 'Enter phone number' : null,
               ),
               const SizedBox(height: 16),
 
@@ -210,6 +213,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                   DropdownMenuItem(value: 'Completed', child: Text('Completed')),
                 ],
                 onChanged: (value) => setState(() => _status = value!),
+                validator: (value) => value == null || value.isEmpty ? 'Select status' : null,
               ),
               const SizedBox(height: 16),
 
@@ -221,6 +225,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                   alignLabelWithHint: true,
                   prefixIcon: Icon(Icons.comment),
                 ),
+                validator: (value) => value!.isEmpty ? 'Enter comments' : null,
               ),
               const SizedBox(height: 16),
 
@@ -256,6 +261,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                     }
                   }
                 },
+                validator: (value) => value!.isEmpty ? 'Select a reminder date & time' : null,
               ),
               const SizedBox(height: 30),
 

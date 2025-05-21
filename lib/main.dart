@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
+import 'package:provider/provider.dart';
 
 import 'constant.dart';
 import 'login.dart';
 import 'home.dart';
 import 'splash_screen.dart';
+import 'theme_notifier.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,7 +49,12 @@ void main() async {
     await AwesomeNotifications().requestPermissionToSendNotifications();
   }
 
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => ThemeNotifier(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -55,9 +62,15 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: const SplashScreen(), // Your splash screen routes to login/home
+    return Consumer<ThemeNotifier>(
+      builder: (context, themeNotifier, child) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'MTC Sync',
+          theme: themeNotifier.currentTheme,
+          home: const SplashScreen(), // Your splash screen routes to login/home
+        );
+      },
     );
   }
 }
