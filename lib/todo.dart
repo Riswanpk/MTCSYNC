@@ -39,6 +39,11 @@ class TaskDetailPage extends StatelessWidget {
         appBarTheme: const AppBarTheme(
           backgroundColor: primaryBlue,
           foregroundColor: Colors.white,
+          elevation: 4,
+          titleTextStyle: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
       child: Scaffold(
@@ -47,8 +52,11 @@ class TaskDetailPage extends StatelessWidget {
         ),
         body: Center(
           child: Card(
-            elevation: 4,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            elevation: 6,
+            margin: const EdgeInsets.all(20),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
             child: Padding(
               padding: const EdgeInsets.all(24.0),
               child: Column(
@@ -58,38 +66,63 @@ class TaskDetailPage extends StatelessWidget {
                   Row(
                     children: [
                       Container(
-                        width: 14,
-                        height: 14,
+                        width: 16,
+                        height: 16,
                         decoration: BoxDecoration(
                           color: getPriorityColor(priority),
                           shape: BoxShape.circle,
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 10),
                       Text(
                         priority,
                         style: TextStyle(
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
                           color: getPriorityColor(priority),
-                          fontSize: 16,
                         ),
                       ),
                       const Spacer(),
-                      Text(
-                        dateStr,
-                        style: const TextStyle(color: Colors.grey, fontSize: 14),
+                      Row(
+                        children: [
+                          const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          Text(
+                            dateStr,
+                            style: const TextStyle(color: Colors.grey, fontSize: 14),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
                   Text(
                     data['title'] ?? 'No Title',
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
                   ),
                   const SizedBox(height: 12),
+                  const Divider(height: 1, color: Colors.grey),
+                  const SizedBox(height: 12),
                   Text(
-                    data['description'] ?? 'No Description',
-                    style: const TextStyle(fontSize: 16),
+                    "Description",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[700],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    data['description'] ?? 'No Description provided.',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Colors.black87,
+                      height: 1.4,
+                    ),
                   ),
                 ],
               ),
@@ -262,16 +295,17 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
         }
 
         return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           itemCount: todos.length,
           itemBuilder: (context, index) {
             final doc = todos[index];
             final data = doc.data() as Map<String, dynamic>;
-            final title = data['title'] ?? data['text'] ?? 'No title';
+            final title = data['title'] ?? 'No title';
             final description = data['description'] ?? '';
             final priority = data['priority'] ?? 'High';
             final timestamp = data['timestamp'] as Timestamp?;
-            final dateStr = timestamp != null
-                ? timestamp.toDate().toLocal().toString().split(' ')[0]
+            final timeStr = timestamp != null
+                ? TimeOfDay.fromDateTime(timestamp.toDate().toLocal()).format(context)
                 : '...';
 
             Color priorityColor;
@@ -280,7 +314,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                 priorityColor = Colors.red;
                 break;
               case 'Medium':
-                priorityColor = Colors.yellow[700]!;
+                priorityColor = Colors.amber;
                 break;
               case 'Low':
                 priorityColor = Colors.green;
@@ -289,68 +323,123 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                 priorityColor = Colors.grey;
             }
 
-            return ListTile(
-              title: Text(
-                title,
-                style: TextStyle(
-                  decoration: status == 'done' ? TextDecoration.lineThrough : null,
-                  color: status == 'done' ? Colors.grey : Colors.black,
-                ),
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.15),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              subtitle: Text(dateStr),
-              isThreeLine: false,
-              leading: GestureDetector(
-                onTap: () async {
-                  // Only ask to mark as done when the circle is tapped
-                  await _toggleStatus(doc);
-                },
-                child: Icon(
-                  status == 'pending' ? Icons.circle_outlined : Icons.check_circle,
-                  color: status == 'pending'
-                      ? priorityColor
-                      : Colors.green,
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                leading: Container(
+                  width: 5,
+                  height: double.infinity,
+                  decoration: BoxDecoration(
+                    color: priorityColor,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-              ),
-              trailing: IconButton(
-                icon: const Icon(Icons.delete, color: Colors.red),
-                onPressed: () async {
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text('Delete Task?'),
-                      content: const Text('Are you sure you want to delete this task?'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(true),
-                          child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                title: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: status == 'done' ? Colors.grey : Colors.black,
+                          decoration:
+                              status == 'done' ? TextDecoration.lineThrough : null,
                         ),
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(false),
-                          child: const Text('Cancel'),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () async => await _toggleStatus(doc),
+                      child: Icon(
+                        status == 'pending'
+                            ? Icons.radio_button_unchecked
+                            : Icons.check_circle,
+                        color: status == 'pending' ? priorityColor : Colors.green,
+                      ),
+                    ),
+                  ],
+                ),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        timeStr,
+                        style: const TextStyle(color: Colors.grey, fontSize: 14),
+                      ),
+                      if (description.isNotEmpty)
+                        Flexible(
+                          child: Text(
+                            description,
+                            style: const TextStyle(
+                              color: Colors.black54,
+                              fontSize: 13,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ],
+                    ],
+                  ),
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.redAccent),
+                  onPressed: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Delete Task?'),
+                        content: const Text('Are you sure you want to delete this task?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            child: const Text('Cancel'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      await _firestore.collection('todo').doc(doc.id).delete();
+                    }
+                  },
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => TaskDetailPage(
+                        data: data,
+                        dateStr: timestamp != null
+                            ? timestamp.toDate().toLocal().toString().split(' ')[0]
+                            : '',
+                      ),
                     ),
                   );
-                  if (confirm == true) {
-                    await _firestore.collection('todo').doc(doc.id).delete();
-                  }
                 },
               ),
-              onTap: () {
-                // Open detail page when tapping anywhere except the circle
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => TaskDetailPage(data: data, dateStr: dateStr),
-                  ),
-                );
-              },
             );
           },
         );
       },
     );
   }
+
 
   Future<void> _clearAllTodos() async {
     if (_userEmail == null) return;
@@ -401,10 +490,20 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
         appBarTheme: const AppBarTheme(
           backgroundColor: primaryBlue,
           foregroundColor: Colors.white,
+          elevation: 4,
+          titleTextStyle: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
         floatingActionButtonTheme: const FloatingActionButtonThemeData(
           backgroundColor: primaryGreen,
           foregroundColor: Colors.white,
+          elevation: 6,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+          ),
         ),
       ),
       child: DefaultTabController(
@@ -415,16 +514,23 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
             title: const Text('Todo List'),
             actions: [
               IconButton(
-                icon: const Icon(Icons.delete_sweep, color: Colors.red),
+                icon: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent),
                 tooltip: 'Clear All Tasks',
                 onPressed: _clearAllTodos,
               ),
             ],
             bottom: TabBar(
               controller: _tabController,
+              indicator: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                color: Colors.white.withOpacity(0.2),
+              ),
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white70,
               tabs: const [
-                Tab(text: 'Pending'),
-                Tab(text: 'Completed'),
+                Tab(icon: Icon(Icons.pending_actions), text: 'Pending'),
+                Tab(icon: Icon(Icons.check_circle), text: 'Completed'),
               ],
             ),
           ),
@@ -439,10 +545,12 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const TodoFormPage()),
+                MaterialPageRoute(
+                  builder: (context) => const TodoFormPage(),
+                ),
               );
             },
-            child: const Icon(Icons.add),
+            child: const Icon(Icons.add_rounded, size: 28),
             tooltip: 'Add New Task',
           ),
         ),
