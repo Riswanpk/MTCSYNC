@@ -159,9 +159,11 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                     Text(
                       'Welcome!',
                       style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 28,
+                        fontWeight: FontWeight.normal, // Not bold
                         color: primaryBlue,
+                        fontFamily: 'Montserrat', // Modern font
+                        letterSpacing: 1.2,
                       ),
                     ),
                     const SizedBox(height: 40),
@@ -196,6 +198,13 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                       color: primaryBlue, // Blue box
                       textColor: Colors.white, // White text
                       icon: Icons.people_alt_rounded,
+                      textStyle: const TextStyle(
+                        fontFamily: 'Montserrat',
+                        fontWeight: FontWeight.normal, // Not bold
+                        fontSize: 19,
+                        letterSpacing: 1.1,
+                        color: Colors.white,
+                      ),
                     ),
 
                     const SizedBox(height: 25),
@@ -229,6 +238,7 @@ class NeumorphicButton extends StatelessWidget {
   final Color color;
   final Color textColor;
   final IconData? icon;
+  final TextStyle? textStyle;
 
   const NeumorphicButton({
     super.key,
@@ -237,6 +247,7 @@ class NeumorphicButton extends StatelessWidget {
     required this.color,
     required this.textColor,
     this.icon,
+    this.textStyle,
   });
 
   @override
@@ -272,12 +283,14 @@ class NeumorphicButton extends StatelessWidget {
             ],
             Text(
               text,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-                letterSpacing: 1.1,
-                color: textColor,
-              ),
+              style: textStyle ??
+                  TextStyle(
+                    fontWeight: FontWeight.normal, // Not bold
+                    fontSize: 18,
+                    letterSpacing: 1.1,
+                    color: textColor,
+                    fontFamily: 'Montserrat',
+                  ),
             ),
           ],
         ),

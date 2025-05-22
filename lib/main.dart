@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:provider/provider.dart';
+import 'package:permission_handler/permission_handler.dart'; // <-- Add this
 
 import 'constant.dart';
 import 'login.dart';
@@ -43,11 +44,20 @@ void main() async {
     debug: true,
   );
 
-  // Request notification permissions
+  // Request notification permissions (Awesome Notifications)
   bool isAllowed = await AwesomeNotifications().isNotificationAllowed();
   if (!isAllowed) {
     await AwesomeNotifications().requestPermissionToSendNotifications();
   }
+
+  // Request alarm and reminder permissions using permission_handler
+  await Permission.notification.request();
+  await Permission.scheduleExactAlarm.request(); // For alarms (Android 12+)
+  await Permission.reminders.request(); // For reminders (iOS only, safe to call)
+
+  // You can also check the status if needed:
+  // var alarmStatus = await Permission.scheduleExactAlarm.status;
+  // var reminderStatus = await Permission.reminders.status;
 
   runApp(
     ChangeNotifierProvider(

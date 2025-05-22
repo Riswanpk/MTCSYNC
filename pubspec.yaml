@@ -35,8 +35,10 @@ dependencies:
   cloud_firestore: ^5.6.7
   intl: ^0.20.2
   awesome_notifications: ^0.10.1
-  
-
+  provider: ^6.1.5
+  shared_preferences: ^2.5.3
+  audioplayers: ^5.2.1
+  permission_handler: ^11.3.1
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -67,7 +69,7 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
      - assets/images/logo.png
-    
+     - assets/sounds/click.mp3
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
@@ -94,3 +96,8 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+  fonts:
+    - family: Montserrat
+      fonts:
+        - asset: assets/fonts/Montserrat-Regular.ttf
+          weight: 700
