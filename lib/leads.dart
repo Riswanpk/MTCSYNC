@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'follow.dart';
 import 'presentfollowup.dart';
 
@@ -192,13 +193,19 @@ class LeadCard extends StatelessWidget {
     required this.docId,
   });
 
+  Future<void> _playClickSound() async {
+    final player = AudioPlayer();
+    await player.play(AssetSource('sounds/click.mp3'), volume: 0.5);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
+        await _playClickSound(); // Play sound on tap
         Navigator.push(
           context,
           MaterialPageRoute(

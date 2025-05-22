@@ -153,118 +153,130 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             Center(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Container(
-                  padding: const EdgeInsets.all(30),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(25),
-                    color: isDark
-                        ? theme.cardColor.withOpacity(0.92)
-                        : Colors.white.withOpacity(0.85),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Welcome!',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: primaryBlue,
                       ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Welcome!',
-                        style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
-                          color: primaryBlue,
-                        ),
-                      ),
-                      const SizedBox(height: 40),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            final user = FirebaseAuth.instance.currentUser;
-                            if (user != null) {
-                              final userDoc = await FirebaseFirestore.instance
-                                  .collection('users')
-                                  .doc(user.uid)
-                                  .get();
-                              final branch = userDoc.data()?['branch'];
-                              if (branch != null) {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        LeadsPage(branch: branch),
-                                  ),
-                                );
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content:
-                                          Text('Branch not found for user')),
-                                );
-                              }
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text('User not logged in')),
-                              );
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: primaryBlue,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 18),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            elevation: 5,
-                          ),
-                          child: const Text(
-                            'Leads Follow Up',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                              letterSpacing: 1.1,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 25),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () {
+                    ),
+                    const SizedBox(height: 40),
+                    NeumorphicButton(
+                      onTap: () async {
+                        final user = FirebaseAuth.instance.currentUser;
+                        if (user != null) {
+                          final userDoc = await FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(user.uid)
+                              .get();
+                          final branch = userDoc.data()?['branch'];
+                          if (branch != null) {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                  builder: (context) => const TodoPage()),
+                                builder: (context) => LeadsPage(branch: branch),
+                              ),
                             );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: primaryGreen,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 18),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            elevation: 5,
-                          ),
-                          child: const Text(
-                            'ToDo List',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                              letterSpacing: 1.1,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Branch not found for user')),
+                            );
+                          }
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('User not logged in')),
+                          );
+                        }
+                      },
+                      text: 'Leads Follow Up',
+                      color: primaryBlue, // Blue box
+                      textColor: Colors.white, // White text
+                      icon: Icons.people_alt_rounded,
+                    ),
+
+                    const SizedBox(height: 25),
+                    NeumorphicButton(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const TodoPage()),
+                        );
+                      },
+                      text: 'ToDo List',
+                      color: primaryGreen, // Green box
+                      textColor: Colors.white, // White text
+                      icon: Icons.check_circle_outline_rounded,
+                    ),
+                  ],
                 ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Add this widget in your file (above your _HomePageState class or in a separate file)
+class NeumorphicButton extends StatelessWidget {
+  final VoidCallback onTap;
+  final String text;
+  final Color color;
+  final Color textColor;
+  final IconData? icon;
+
+  const NeumorphicButton({
+    super.key,
+    required this.onTap,
+    required this.text,
+    required this.color,
+    required this.textColor,
+    this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.18),
+              offset: const Offset(4, 4),
+              blurRadius: 14,
+            ),
+            BoxShadow(
+              color: Colors.white.withOpacity(0.10),
+              offset: const Offset(-4, -4),
+              blurRadius: 14,
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, color: textColor, size: 22),
+              const SizedBox(width: 10),
+            ],
+            Text(
+              text,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                letterSpacing: 1.1,
+                color: textColor,
               ),
             ),
           ],
