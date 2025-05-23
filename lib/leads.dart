@@ -463,16 +463,29 @@ class LeadCard extends StatelessWidget {
     }
   }
 
-  Color getPriorityBackgroundColor(String priority) {
-    switch (priority) {
-      case 'High':
-        return const Color(0xFFFFEBEE); // Light red
-      case 'Medium':
-        return const Color(0xFFFFF8E1); // Light amber/yellow
-      case 'Low':
-        return const Color(0xFFE8F5E9); // Light green
-      default:
-        return Colors.grey.shade100;
+  Color getPriorityBackgroundColor(String priority, bool isDark) {
+    if (isDark) {
+      switch (priority) {
+        case 'High':
+          return const Color(0xFF3B2323); // Dark red shade
+        case 'Medium':
+          return const Color(0xFF39321A); // Dark amber shade
+        case 'Low':
+          return const Color(0xFF1B3223); // Dark green shade
+        default:
+          return Colors.grey.shade800;
+      }
+    } else {
+      switch (priority) {
+        case 'High':
+          return const Color(0xFFFFEBEE); // Light red
+        case 'Medium':
+          return const Color(0xFFFFF8E1); // Light amber/yellow
+        case 'Low':
+          return const Color(0xFFE8F5E9); // Light green
+        default:
+          return Colors.grey.shade100;
+      }
     }
   }
 
@@ -568,7 +581,7 @@ class LeadCard extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 16),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: getPriorityBackgroundColor(priority),
+            color: getPriorityBackgroundColor(priority, isDark), // <-- Use isDark
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(

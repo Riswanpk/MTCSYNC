@@ -41,9 +41,10 @@ class _TodoFormPageState extends State<TodoFormPage> {
       'title': title,
       'description': desc,
       'priority': _priority,
-      'email': email,
-      'timestamp': FieldValue.serverTimestamp(),
       'status': 'pending',
+      'timestamp': FieldValue.serverTimestamp(),
+      'email': email,
+      'created_by': user.uid,
     });
 
     setState(() => _isSaving = false);
@@ -64,7 +65,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
         color = Colors.red;
         break;
       case 'Medium':
-        color = Colors.yellow[700]!;
+        color = Colors.amber;
         break;
       case 'Low':
         color = Colors.green;
@@ -73,105 +74,130 @@ class _TodoFormPageState extends State<TodoFormPage> {
         color = Colors.grey;
     }
     return Container(
-      width: 12,
-      height: 12,
+      width: 10,
+      height: 10,
+      margin: const EdgeInsets.only(right: 8),
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
       ),
-      margin: const EdgeInsets.only(right: 8),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context); // Uses the inherited theme (from ThemeNotifier)
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final inputFillColor = isDark ? const Color(0xFF23262F) : Colors.white;
+    final inputTextColor = isDark ? Colors.white : Colors.black;
+    final labelColor = isDark ? Colors.white70 : Colors.black87;
 
-    return Theme(
-      data: theme,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Add New Task'),
-        ),
-        body: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              children: [
-                TextField(
-                  controller: _titleController,
-                  decoration: const InputDecoration(
-                    labelText: 'Title',
-                    border: OutlineInputBorder(),
-                  ),
-                  autofocus: true,
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
+      appBar: AppBar(
+        title: const Text('Add Task'),
+        backgroundColor: primaryBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: AbsorbPointer(
+          absorbing: _isSaving,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Title', style: TextStyle(color: labelColor, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _titleController,
+                style: TextStyle(color: inputTextColor),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: inputFillColor,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  hintText: 'Enter task title',
+                  hintStyle: TextStyle(color: isDark ? Colors.white38 : Colors.grey),
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _descController,
-                  decoration: const InputDecoration(
-                    labelText: 'Description',
-                    border: OutlineInputBorder(),
-                  ),
-                  maxLines: 3,
+              ),
+              const SizedBox(height: 18),
+              Text('Description', style: TextStyle(color: labelColor, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _descController,
+                style: TextStyle(color: inputTextColor),
+                maxLines: 3,
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: inputFillColor,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  hintText: 'Enter task description',
+                  hintStyle: TextStyle(color: isDark ? Colors.white38 : Colors.grey),
                 ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  value: _priority,
-                  decoration: const InputDecoration(
-                    labelText: 'Priority',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: [
-                    DropdownMenuItem(
-                      value: 'High',
-                      child: Row(
-                        children: [
-                          _priorityDot('High'),
-                          const Text('High'),
-                        ],
-                      ),
+              ),
+              const SizedBox(height: 18),
+              Text('Priority', style: TextStyle(color: labelColor, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              DropdownButtonFormField<String>(
+                value: _priority,
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: inputFillColor,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                dropdownColor: inputFillColor,
+                style: TextStyle(color: inputTextColor),
+                items: [
+                  DropdownMenuItem(
+                    value: 'High',
+                    child: Row(
+                      children: [
+                        _priorityDot('High'),
+                        const Text('High'),
+                      ],
                     ),
-                    DropdownMenuItem(
-                      value: 'Medium',
-                      child: Row(
-                        children: [
-                          _priorityDot('Medium'),
-                          const Text('Medium'),
-                        ],
-                      ),
-                    ),
-                    DropdownMenuItem(
-                      value: 'Low',
-                      child: Row(
-                        children: [
-                          _priorityDot('Low'),
-                          const Text('Low'),
-                        ],
-                      ),
-                    ),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) setState(() => _priority = val);
-                  },
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.save),
-                    label: _isSaving
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Text('Save'),
-                    onPressed: _isSaving ? null : _saveTodo,
                   ),
+                  DropdownMenuItem(
+                    value: 'Medium',
+                    child: Row(
+                      children: [
+                        _priorityDot('Medium'),
+                        const Text('Medium'),
+                      ],
+                    ),
+                  ),
+                  DropdownMenuItem(
+                    value: 'Low',
+                    child: Row(
+                      children: [
+                        _priorityDot('Low'),
+                        const Text('Low'),
+                      ],
+                    ),
+                  ),
+                ],
+                onChanged: (val) => setState(() => _priority = val!),
+              ),
+              const Spacer(),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isSaving ? null : _saveTodo,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryGreen,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Save Task', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

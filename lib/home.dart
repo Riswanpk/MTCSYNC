@@ -5,6 +5,8 @@ import 'todo.dart';
 import 'leads.dart';
 import 'login.dart';
 import 'settings.dart'; // Import the settings page
+import 'feedback.dart'; // Add this import
+import 'feedback_admin.dart'; // Add this import
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -73,6 +75,33 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                     context,
                     MaterialPageRoute(builder: (context) => const SettingsPage()),
                   );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.feedback),
+                title: const Text('Feedback'),
+                onTap: () async {
+                  Navigator.pop(context); // Close the drawer
+
+                  // Get current user role
+                  final user = FirebaseAuth.instance.currentUser;
+                  String? role;
+                  if (user != null) {
+                    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+                    role = userDoc.data()?['role'];
+                  }
+
+                  if (role == 'admin') {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const FeedbackAdminPage()),
+                    );
+                  } else {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const FeedbackPage()),
+                    );
+                  }
                 },
               ),
               ListTile(

@@ -21,7 +21,7 @@ class TaskDetailPage extends StatelessWidget {
       case 'High':
         return Colors.red;
       case 'Medium':
-        return Colors.yellow[700]!;
+        return Colors.amber;
       case 'Low':
         return Colors.green;
       default:
@@ -29,108 +29,134 @@ class TaskDetailPage extends StatelessWidget {
     }
   }
 
+  Color getPriorityBgColor(String priority, bool isDark) {
+    if (isDark) {
+      switch (priority) {
+        case 'High':
+          return const Color(0xFF3B2323); // Dark red shade
+        case 'Medium':
+          return const Color(0xFF39321A); // Dark amber shade
+        case 'Low':
+          return const Color(0xFF1B3223); // Dark green shade
+        default:
+          return Colors.grey.shade800;
+      }
+    } else {
+      switch (priority) {
+        case 'High':
+          return const Color(0xFFFFEBEE); // Light red
+        case 'Medium':
+          return const Color(0xFFFFF8E1); // Light amber/yellow
+        case 'Low':
+          return const Color(0xFFE8F5E9); // Light green
+        default:
+          return Colors.grey.shade100;
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final priority = data['priority'] ?? 'High';
-    return Theme(
-      data: ThemeData(
-        colorScheme: ColorScheme.light(
-          primary: primaryBlue,
-          secondary: primaryGreen,
-        ),
-        scaffoldBackgroundColor: const Color(0xFFF5F6FA),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: primaryBlue,
-          foregroundColor: Colors.white,
-          elevation: 4,
-          titleTextStyle: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
+      appBar: AppBar(
+        title: const Text('Task Details'),
+        backgroundColor: const Color(0xFF005BAC),
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Task Details'),
-        ),
-        body: Center(
-          child: Card(
-            elevation: 6,
-            margin: const EdgeInsets.all(20),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Title
+            Text(
+              data['title'] ?? '',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black,
+              ),
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
+            const SizedBox(height: 12),
+            // Date
+            Row(
+              children: [
+                Icon(Icons.calendar_today, size: 18, color: isDark ? Colors.white70 : Colors.black54),
+                const SizedBox(width: 8),
+                Text(
+                  dateStr,
+                  style: TextStyle(
+                    color: isDark ? Colors.white70 : Colors.black54,
+                    fontSize: 15,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            // Priority
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: getPriorityBgColor(priority, isDark),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 16,
-                        height: 16,
-                        decoration: BoxDecoration(
-                          color: getPriorityColor(priority),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        priority,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: getPriorityColor(priority),
-                        ),
-                      ),
-                      const Spacer(),
-                      Row(
-                        children: [
-                          const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
-                          const SizedBox(width: 4),
-                          Text(
-                            dateStr,
-                            style: const TextStyle(color: Colors.grey, fontSize: 14),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
+                  Icon(Icons.flag, color: getPriorityColor(priority), size: 18),
+                  const SizedBox(width: 8),
                   Text(
-                    data['title'] ?? 'No Title',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Divider(height: 1, color: Colors.grey),
-                  const SizedBox(height: 12),
-                  Text(
-                    "Description",
+                    priority,
                     style: TextStyle(
-                      fontSize: 16,
+                      color: getPriorityColor(priority),
                       fontWeight: FontWeight.bold,
-                      color: Colors.grey[700],
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    data['description'] ?? 'No Description provided.',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Colors.black87,
-                      height: 1.4,
                     ),
                   ),
                 ],
               ),
             ),
-          ),
+            const SizedBox(height: 24),
+            // Description
+            Text(
+              'Description',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              data['description'] ?? '',
+              style: TextStyle(
+                color: isDark ? Colors.white70 : Colors.black87,
+                fontSize: 15,
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Status
+            Row(
+              children: [
+                Icon(
+                  data['status'] == 'done' ? Icons.check_circle : Icons.radio_button_unchecked,
+                  color: data['status'] == 'done' ? Colors.green : Colors.orange,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  data['status'] == 'done' ? 'Completed' : 'Pending',
+                  style: TextStyle(
+                    color: data['status'] == 'done' ? Colors.green : Colors.orange,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -368,6 +394,8 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
           );
         }
 
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+
         return ListView.builder(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           itemCount: todos.length,
@@ -384,22 +412,42 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
 
             Color priorityColor;
             Color priorityBgColor;
-            switch (priority) {
-              case 'High':
-                priorityColor = Colors.red;
-                priorityBgColor = const Color(0xFFFFEBEE); // Light red
-                break;
-              case 'Medium':
-                priorityColor = Colors.amber;
-                priorityBgColor = const Color(0xFFFFF8E1); // Light amber/yellow
-                break;
-              case 'Low':
-                priorityColor = Colors.green;
-                priorityBgColor = const Color(0xFFE8F5E9); // Light green
-                break;
-              default:
-                priorityColor = Colors.grey;
-                priorityBgColor = Colors.grey.shade100;
+            if (isDark) {
+              switch (priority) {
+                case 'High':
+                  priorityColor = Colors.red;
+                  priorityBgColor = const Color(0xFF3B2323); // Dark red shade
+                  break;
+                case 'Medium':
+                  priorityColor = Colors.amber;
+                  priorityBgColor = const Color(0xFF39321A); // Dark amber shade
+                  break;
+                case 'Low':
+                  priorityColor = Colors.green;
+                  priorityBgColor = const Color(0xFF1B3223); // Dark green shade
+                  break;
+                default:
+                  priorityColor = Colors.grey;
+                  priorityBgColor = Colors.grey.shade800;
+              }
+            } else {
+              switch (priority) {
+                case 'High':
+                  priorityColor = Colors.red;
+                  priorityBgColor = const Color(0xFFFFEBEE); // Light red
+                  break;
+                case 'Medium':
+                  priorityColor = Colors.amber;
+                  priorityBgColor = const Color(0xFFFFF8E1); // Light amber/yellow
+                  break;
+                case 'Low':
+                  priorityColor = Colors.green;
+                  priorityBgColor = const Color(0xFFE8F5E9); // Light green
+                  break;
+                default:
+                  priorityColor = Colors.grey;
+                  priorityBgColor = Colors.grey.shade100;
+              }
             }
 
             return Slidable(
