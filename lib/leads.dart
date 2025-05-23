@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'follow.dart';
 import 'presentfollowup.dart';
+import 'package:flutter_slidable/flutter_slidable.dart'; // Add this import at the top
 
 class LeadsPage extends StatefulWidget {
   final String branch;
@@ -21,7 +22,14 @@ class _LeadsPageState extends State<LeadsPage> {
   List<String> availableBranches = [];
   final ValueNotifier<bool> _isHovering = ValueNotifier(false);
 
-  final List<String> statusOptions = ['All', 'In Progress', 'Completed'];
+  final List<String> statusOptions = [
+    'All',
+    'In Progress',
+    'Completed',
+    'High',
+    'Medium',
+    'Low',
+  ];
 
   late Future<Map<String, dynamic>?> _currentUserData;
 
@@ -188,8 +196,11 @@ class _LeadsPageState extends State<LeadsPage> {
                                     final data = doc.data() as Map<String, dynamic>;
                                     final name = (data['name'] ?? '').toString().toLowerCase();
                                     final status = (data['status'] ?? 'Unknown').toString();
+                                    final priority = (data['priority'] ?? 'High').toString();
                                     final matchesSearch = name.contains(searchQuery);
-                                    final matchesStatus = selectedStatus == 'All' || status == selectedStatus;
+                                    final matchesStatus = selectedStatus == 'All'
+                                        || status == selectedStatus
+                                        || priority == selectedStatus;
                                     return matchesSearch && matchesStatus;
                                   }).toList();
 
@@ -207,6 +218,7 @@ class _LeadsPageState extends State<LeadsPage> {
                                       final date = data['date'] ?? 'No Date';
                                       final docId = filteredLeads[index].id;
                                       final createdById = data['created_by'] ?? '';
+                                      final priority = data['priority'] ?? 'High'; // <-- Add this
 
                                       return FutureBuilder<DocumentSnapshot>(
                                         future: FirebaseFirestore.instance.collection('users').doc(createdById).get(),
@@ -224,6 +236,7 @@ class _LeadsPageState extends State<LeadsPage> {
                                             date: date,
                                             docId: docId,
                                             createdBy: creatorUsername,
+                                            priority: priority, // <-- Pass priority
                                           );
                                         },
                                       );
@@ -257,8 +270,11 @@ class _LeadsPageState extends State<LeadsPage> {
                                     final data = doc.data() as Map<String, dynamic>;
                                     final name = (data['name'] ?? '').toString().toLowerCase();
                                     final status = (data['status'] ?? 'Unknown').toString();
+                                    final priority = (data['priority'] ?? 'High').toString();
                                     final matchesSearch = name.contains(searchQuery);
-                                    final matchesStatus = selectedStatus == 'All' || status == selectedStatus;
+                                    final matchesStatus = selectedStatus == 'All'
+                                        || status == selectedStatus
+                                        || priority == selectedStatus;
                                     return matchesSearch && matchesStatus;
                                   }).toList();
 
@@ -293,6 +309,7 @@ class _LeadsPageState extends State<LeadsPage> {
                                             date: date,
                                             docId: docId,
                                             createdBy: creatorUsername,
+                                            priority: data['priority'] ?? 'High',
                                           );
                                         },
                                       );
@@ -324,8 +341,11 @@ class _LeadsPageState extends State<LeadsPage> {
                                     final data = doc.data() as Map<String, dynamic>;
                                     final name = (data['name'] ?? '').toString().toLowerCase();
                                     final status = (data['status'] ?? 'Unknown').toString();
+                                    final priority = (data['priority'] ?? 'High').toString();
                                     final matchesSearch = name.contains(searchQuery);
-                                    final matchesStatus = selectedStatus == 'All' || status == selectedStatus;
+                                    final matchesStatus = selectedStatus == 'All'
+                                        || status == selectedStatus
+                                        || priority == selectedStatus;
                                     return matchesSearch && matchesStatus;
                                   }).toList();
 
@@ -360,6 +380,7 @@ class _LeadsPageState extends State<LeadsPage> {
                                             date: date,
                                             docId: docId,
                                             createdBy: creatorUsername,
+                                            priority: data['priority'] ?? 'High',
                                           );
                                         },
                                       );
@@ -416,7 +437,8 @@ class LeadCard extends StatelessWidget {
   final String status;
   final String date;
   final String docId;
-  final String createdBy; // <-- Add this field
+  final String createdBy;
+  final String priority;
 
   const LeadCard({
     super.key,
@@ -424,8 +446,35 @@ class LeadCard extends StatelessWidget {
     required this.status,
     required this.date,
     required this.docId,
-    required this.createdBy, // <-- Add this param
+    required this.createdBy,
+    required this.priority,
   });
+
+  Color getPriorityColor(String priority) {
+    switch (priority) {
+      case 'High':
+        return Colors.red;
+      case 'Medium':
+        return Colors.amber;
+      case 'Low':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Color getPriorityBackgroundColor(String priority) {
+    switch (priority) {
+      case 'High':
+        return const Color(0xFFFFEBEE); // Light red
+      case 'Medium':
+        return const Color(0xFFFFF8E1); // Light amber/yellow
+      case 'Low':
+        return const Color(0xFFE8F5E9); // Light green
+      default:
+        return Colors.grey.shade100;
+    }
+  }
 
   Future<void> _playClickSound() async {
     final player = AudioPlayer();
@@ -437,102 +486,161 @@ class LeadCard extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return GestureDetector(
-      onTap: () async {
-        await _playClickSound(); // Play sound on tap
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => PresentFollowUp(docId: docId),
+    return Slidable(
+      key: ValueKey(docId),
+      startActionPane: ActionPane(
+        motion: const DrawerMotion(),
+        extentRatio: 0.28,
+        children: [
+          SlidableAction(
+            onPressed: (context) async {
+              String newStatus = status == 'In Progress' ? 'Completed' : 'In Progress';
+              await FirebaseFirestore.instance
+                  .collection('follow_ups')
+                  .doc(docId)
+                  .update({'status': newStatus});
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Status changed to $newStatus')),
+              );
+            },
+            backgroundColor: status == 'In Progress'
+                ? Colors.green.shade400
+                : Colors.orange.shade400,
+            foregroundColor: Colors.white,
+            icon: status == 'In Progress' ? Icons.check_circle : Icons.refresh,
+            label: status == 'In Progress' ? 'Completed' : 'In Progress',
+            borderRadius: BorderRadius.circular(20),
           ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: theme.cardColor, // Use theme card color
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: theme.shadowColor.withOpacity(isDark ? 0.2 : 0.05),
-              blurRadius: 12,
-              offset: const Offset(0, 6),
+        ],
+      ),
+      endActionPane: ActionPane(
+        motion: const DrawerMotion(),
+        extentRatio: 0.25,
+        children: [
+          SlidableAction(
+            onPressed: (context) async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Delete Lead?'),
+                  content: const Text('Are you sure you want to delete this lead? This action cannot be undone.'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: Text('Delete', style: TextStyle(color: theme.colorScheme.error)),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('Cancel'),
+                    ),
+                  ],
+                ),
+              );
+              if (confirm == true) {
+                await FirebaseFirestore.instance
+                    .collection('follow_ups')
+                    .doc(docId)
+                    .delete();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Lead deleted')),
+                );
+              }
+            },
+            backgroundColor: Colors.red.shade400,
+            foregroundColor: Colors.white,
+            icon: Icons.delete,
+            label: 'Delete',
+            borderRadius: BorderRadius.circular(20),
+          ),
+        ],
+      ),
+      child: GestureDetector(
+        onTap: () async {
+          await _playClickSound();
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PresentFollowUp(docId: docId),
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  RichText(
-                    text: TextSpan(
-                      style: theme.textTheme.bodyLarge?.copyWith(fontSize: 16),
+          );
+        },
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: getPriorityBackgroundColor(priority),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: theme.shadowColor.withOpacity(isDark ? 0.2 : 0.05),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // Priority dot
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: getPriorityColor(priority),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    RichText(
+                      text: TextSpan(
+                        style: theme.textTheme.bodyLarge?.copyWith(fontSize: 16),
+                        children: [
+                          TextSpan(
+                            text: name,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const TextSpan(text: ' '),
+                          TextSpan(
+                            text: '($status)',
+                            style: TextStyle(color: theme.hintColor),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Date: $date',
+                      style: theme.textTheme.bodySmall?.copyWith(fontSize: 13, color: theme.hintColor),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Created by: $createdBy',
+                      style: theme.textTheme.bodySmall?.copyWith(fontSize: 12, color: Colors.grey),
+                    ),
+                    Row(
                       children: [
-                        TextSpan(
-                          text: name,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        Text(
+                          'Priority: ',
+                          style: theme.textTheme.bodySmall?.copyWith(fontSize: 12, color: Colors.grey),
                         ),
-                        const TextSpan(text: ' '),
-                        TextSpan(
-                          text: '($status)',
-                          style: TextStyle(color: theme.hintColor),
+                        Text(
+                          priority,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontSize: 12,
+                            color: getPriorityColor(priority),
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Date: $date',
-                    style: theme.textTheme.bodySmall?.copyWith(fontSize: 13, color: theme.hintColor),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Created by: $createdBy', // <-- Show creator username
-                    style: theme.textTheme.bodySmall?.copyWith(fontSize: 12, color: Colors.grey),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            IconButton(
-              icon: Icon(
-                Icons.delete,
-                color: isDark ? Colors.white : Colors.black, // Change icon color based on theme
-              ),
-              tooltip: 'Delete Lead',
-              onPressed: () async {
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Delete Lead?'),
-                    content: const Text('Are you sure you want to delete this lead? This action cannot be undone.'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(true),
-                        child: Text('Delete', style: TextStyle(color: theme.colorScheme.error)),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(false),
-                        child: const Text('Cancel'),
-                      ),
-                    ],
-                  ),
-                );
-                if (confirm == true) {
-                  await FirebaseFirestore.instance
-                      .collection('follow_ups')
-                      .doc(docId)
-                      .delete();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Lead deleted')),
-                  );
-                }
-              },
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

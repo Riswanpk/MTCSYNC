@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'todoform.dart';
 import 'package:provider/provider.dart';
 import 'theme_notifier.dart';
+import 'package:flutter_slidable/flutter_slidable.dart'; // Add this import at the top
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -150,6 +151,77 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
   String? _userEmail;
 
   late TabController _tabController;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Provider.of<ThemeNotifier>(context).currentTheme;
+
+    return Theme(
+      data: theme.copyWith(
+        appBarTheme: const AppBarTheme(
+          backgroundColor: primaryBlue,
+          foregroundColor: Colors.white,
+          iconTheme: IconThemeData(color: Colors.white),
+          titleTextStyle: TextStyle(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+          ),
+          elevation: 8,
+        ),
+        tabBarTheme: const TabBarTheme(
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicator: BoxDecoration(), // No highlight
+          labelStyle: TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
+      child: DefaultTabController(
+        length: 2,
+        child: Scaffold(
+          resizeToAvoidBottomInset: true,
+          appBar: AppBar(
+            title: const Text('Todo List'),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.delete_sweep_rounded, color: Colors.white),
+                tooltip: 'Clear All Tasks',
+                onPressed: _clearAllTodos,
+              ),
+            ],
+            bottom: TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(icon: Icon(Icons.pending_actions), text: 'Pending'),
+                Tab(icon: Icon(Icons.check_circle), text: 'Completed'),
+              ],
+            ),
+          ),
+          body: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildTodoList('pending'),
+              _buildTodoList('done'),
+            ],
+          ),
+          floatingActionButton: FloatingActionButton(
+            backgroundColor: primaryBlue, // Make the + button blue
+            foregroundColor: Colors.white,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const TodoFormPage(),
+                ),
+              );
+            },
+            child: const Icon(Icons.add_rounded, size: 28),
+            tooltip: 'Add New Task',
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -311,137 +383,166 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                 : '...';
 
             Color priorityColor;
+            Color priorityBgColor;
             switch (priority) {
               case 'High':
                 priorityColor = Colors.red;
+                priorityBgColor = const Color(0xFFFFEBEE); // Light red
                 break;
               case 'Medium':
                 priorityColor = Colors.amber;
+                priorityBgColor = const Color(0xFFFFF8E1); // Light amber/yellow
                 break;
               case 'Low':
                 priorityColor = Colors.green;
+                priorityBgColor = const Color(0xFFE8F5E9); // Light green
                 break;
               default:
                 priorityColor = Colors.grey;
+                priorityBgColor = Colors.grey.shade100;
             }
 
-            return Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardColor, // Use theme card color
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Theme.of(context).shadowColor.withOpacity(0.15), // Use theme shadow color
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+            return Slidable(
+              key: ValueKey(doc.id),
+              startActionPane: ActionPane(
+                motion: const DrawerMotion(),
+                extentRatio: 0.28,
+                children: [
+                  SlidableAction(
+                    onPressed: (context) async {
+                      await _toggleStatus(doc);
+                    },
+                    backgroundColor: data['status'] == 'pending'
+                        ? Colors.green.shade400
+                        : Colors.orange.shade400,
+                    foregroundColor: Colors.white,
+                    icon: data['status'] == 'pending'
+                        ? Icons.check_circle
+                        : Icons.refresh,
+                    label: data['status'] == 'pending'
+                        ? 'Done'
+                        : 'Pending',
+                    borderRadius: BorderRadius.circular(16),
                   ),
                 ],
               ),
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                leading: Container(
-                  width: 5,
-                  height: double.infinity,
-                  decoration: BoxDecoration(
-                    color: priorityColor,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                title: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: status == 'done'
-                              ? Theme.of(context).disabledColor
-                              : Theme.of(context).textTheme.bodyLarge?.color,
-                          decoration: status == 'done' ? TextDecoration.lineThrough : null,
+              endActionPane: ActionPane(
+                motion: const DrawerMotion(),
+                extentRatio: 0.25,
+                children: [
+                  SlidableAction(
+                    onPressed: (context) async {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Delete Task?'),
+                          content: const Text('Are you sure you want to delete this task?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(true),
+                              child: const Text('Delete', style: TextStyle(color: Color.fromARGB(255, 0, 0, 0))),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(false),
+                              child: const Text('Cancel'),
+                            ),
+                          ],
                         ),
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () async => await _toggleStatus(doc),
-                      child: Icon(
-                        status == 'pending'
-                            ? Icons.radio_button_unchecked
-                            : Icons.check_circle,
-                        color: status == 'pending' ? priorityColor : Colors.green,
-                      ),
+                      );
+                      if (confirm == true) {
+                        await _firestore.collection('todo').doc(doc.id).delete();
+                      }
+                    },
+                    backgroundColor: Colors.red.shade400,
+                    foregroundColor: Colors.white,
+                    icon: Icons.delete,
+                    label: 'Delete',
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ],
+              ),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: priorityBgColor, // <-- background color by priority
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Theme.of(context).shadowColor.withOpacity(0.15),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
                   ],
                 ),
-                subtitle: Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        timeStr,
-                        style: TextStyle(
-                          color: Theme.of(context).hintColor,
-                          fontSize: 14,
-                        ),
-                      ),
-                      if (description.isNotEmpty)
-                        Flexible(
-                          child: Text(
-                            description,
-                            style: TextStyle(
-                              color: Theme.of(context).textTheme.bodySmall?.color,
-                              fontSize: 13,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                    ],
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  leading: Container(
+                    width: 5,
+                    height: double.infinity,
+                    decoration: BoxDecoration(
+                      color: priorityColor,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                ),
-                trailing: IconButton(
-                  icon: Icon(Icons.delete, color: Theme.of(context).iconTheme.color),
-                  onPressed: () async {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Delete Task?'),
-                        content: const Text('Are you sure you want to delete this task?'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            child: const Text('Delete', style: TextStyle(color: Color.fromARGB(255, 0, 0, 0))),
+                  title: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: data['status'] == 'done'
+                          ? Theme.of(context).disabledColor
+                          : Theme.of(context).textTheme.bodyLarge?.color,
+                      decoration: data['status'] == 'done' ? TextDecoration.lineThrough : null,
+                    ),
+                  ),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          timeStr,
+                          style: TextStyle(
+                            color: Theme.of(context).hintColor,
+                            fontSize: 14,
                           ),
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(false),
-                            child: const Text('Cancel'),
+                        ),
+                        if (description.isNotEmpty)
+                          Flexible(
+                            child: Text(
+                              description,
+                              style: TextStyle(
+                                color: Theme.of(context).textTheme.bodySmall?.color,
+                                fontSize: 13,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ],
+                      ],
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => TaskDetailPage(
+                          data: data,
+                          dateStr: timestamp != null
+                              ? timestamp.toDate().toLocal().toString().split(' ')[0]
+                              : '',
+                        ),
                       ),
                     );
-                    if (confirm == true) {
-                      await _firestore.collection('todo').doc(doc.id).delete();
-                    }
                   },
                 ),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => TaskDetailPage(
-                        data: data,
-                        dateStr: timestamp != null
-                            ? timestamp.toDate().toLocal().toString().split(' ')[0]
-                            : '',
-                      ),
-                    ),
-                  );
-                },
               ),
             );
           },
         );
+        // Ensure a widget is always returned
+        // (This line is technically unreachable, but required for Dart's analysis)
+        // ignore: dead_code
+        // return SizedBox.shrink();
       },
     );
   }
@@ -484,74 +585,4 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
     return const SizedBox.shrink();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Provider.of<ThemeNotifier>(context).currentTheme;
-
-    return Theme(
-      data: theme.copyWith(
-        appBarTheme: const AppBarTheme(
-          backgroundColor: primaryBlue,
-          foregroundColor: Colors.white,
-          iconTheme: IconThemeData(color: Colors.white),
-          titleTextStyle: TextStyle(
-            color: Colors.white,
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-          ),
-          elevation: 8,
-        ),
-        tabBarTheme: const TabBarTheme(
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          indicator: BoxDecoration(), // No highlight
-          labelStyle: TextStyle(fontWeight: FontWeight.bold),
-        ),
-      ),
-      child: DefaultTabController(
-        length: 2,
-        child: Scaffold(
-          resizeToAvoidBottomInset: true,
-          appBar: AppBar(
-            title: const Text('Todo List'),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.delete_sweep_rounded, color: Colors.white),
-                tooltip: 'Clear All Tasks',
-                onPressed: _clearAllTodos,
-              ),
-            ],
-            bottom: TabBar(
-              controller: _tabController,
-              tabs: const [
-                Tab(icon: Icon(Icons.pending_actions), text: 'Pending'),
-                Tab(icon: Icon(Icons.check_circle), text: 'Completed'),
-              ],
-            ),
-          ),
-          body: TabBarView(
-            controller: _tabController,
-            children: [
-              _buildTodoList('pending'),
-              _buildTodoList('done'),
-            ],
-          ),
-          floatingActionButton: FloatingActionButton(
-            backgroundColor: primaryBlue, // Make the + button blue
-            foregroundColor: Colors.white,
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const TodoFormPage(),
-                ),
-              );
-            },
-            child: const Icon(Icons.add_rounded, size: 28),
-            tooltip: 'Add New Task',
-          ),
-        ),
-      ),
-    );
-  }
 }

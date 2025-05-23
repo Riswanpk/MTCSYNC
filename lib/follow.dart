@@ -22,6 +22,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
   final TextEditingController _reminderController = TextEditingController();
 
   String _status = 'In Progress';
+  String _priority = 'High'; // <-- Add this
   TimeOfDay? _selectedReminderTime;
 
 
@@ -68,6 +69,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
       'address': _addressController.text.trim(),
       'phone': _phoneController.text.trim(),
       'status': _status,
+      'priority': _priority, // <-- Save priority
       'comments': _commentsController.text.trim(),
       'reminder': _reminderController.text.trim(),
       'branch': branch,
@@ -214,6 +216,22 @@ class _FollowUpFormState extends State<FollowUpForm> {
                 ],
                 onChanged: (value) => setState(() => _status = value!),
                 validator: (value) => value == null || value.isEmpty ? 'Select status' : null,
+              ),
+              const SizedBox(height: 16),
+
+              DropdownButtonFormField<String>(
+                value: _priority,
+                decoration: const InputDecoration(
+                  labelText: 'Priority',
+                  prefixIcon: Icon(Icons.flag),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'High', child: Text('High')),
+                  DropdownMenuItem(value: 'Medium', child: Text('Medium')),
+                  DropdownMenuItem(value: 'Low', child: Text('Low')),
+                ],
+                onChanged: (value) => setState(() => _priority = value!),
+                validator: (value) => value == null || value.isEmpty ? 'Select priority' : null,
               ),
               const SizedBox(height: 16),
 

@@ -156,14 +156,14 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      'Welcome!',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.normal, // Not bold
-                        color: primaryBlue,
-                        fontFamily: 'Montserrat', // Modern font
-                        letterSpacing: 1.2,
+                    // Replace Welcome! text with logo
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16.0),
+                      child: Image.asset(
+                        'assets/images/logo.png', // Update path if needed
+                        width: 200,
+                        height: 200,
+                        fit: BoxFit.contain,
                       ),
                     ),
                     const SizedBox(height: 40),
