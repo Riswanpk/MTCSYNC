@@ -8,6 +8,7 @@ import 'settings.dart'; // Import the settings page
 import 'feedback.dart'; // Add this import
 import 'feedback_admin.dart'; // Add this import
 import 'dashboard.dart'; // Import the dashboard page
+import 'manageusers.dart'; // Add this import
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -112,6 +113,19 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                       }
                     },
                   ),
+                  // Add Manage Users option for admin
+                  if (role == 'admin')
+                    ListTile(
+                      leading: const Icon(Icons.manage_accounts),
+                      title: const Text('Manage Users'),
+                      onTap: () {
+                        Navigator.pop(context); // Close the drawer
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const ManageUsersPage()),
+                        );
+                      },
+                    ),
                   ListTile(
                     leading: const Icon(Icons.logout),
                     title: const Text('Log Out'),

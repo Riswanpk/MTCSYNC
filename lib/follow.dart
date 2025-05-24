@@ -126,6 +126,14 @@ class _FollowUpFormState extends State<FollowUpForm> {
     Navigator.pop(context);
   }
 
+  @override
+  void initState() {
+    super.initState();
+    // Set the date field to today's date in yyyy-mm-dd format
+    final now = DateTime.now();
+    _dateController.text = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -148,18 +156,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                   labelText: 'Date',
                   prefixIcon: Icon(Icons.calendar_today),
                 ),
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: DateTime.now(),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime(2100),
-                  );
-                  if (picked != null) {
-                    _dateController.text = "${picked.year}-${picked.month}-${picked.day}";
-                  }
-                },
-                validator: (value) => value!.isEmpty ? 'Select a date' : null,
+                // Remove the onTap and validator for date selection
               ),
               const SizedBox(height: 16),
 
