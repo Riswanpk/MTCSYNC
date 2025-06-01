@@ -370,227 +370,303 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
       return const Center(child: CircularProgressIndicator());
     }
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('todo')
-          .where('email', isEqualTo: _userEmail)
-          .where('status', isEqualTo: status)
-          .orderBy('timestamp', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) return const Center(child: Text('Error loading todos'));
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    final user = _auth.currentUser;
+    if (user == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-        final todos = snapshot.data?.docs ?? [];
+    // For manager, show both assigned and created
+    return FutureBuilder<DocumentSnapshot>(
+      future: _firestore.collection('users').doc(user.uid).get(),
+      builder: (context, userSnapshot) {
+        if (!userSnapshot.hasData) return const Center(child: CircularProgressIndicator());
+        final role = userSnapshot.data!.get('role');
+        final uid = user.uid;
 
-        if (todos.isEmpty) {
-          return Center(
-            child: Text(
-              status == 'pending' ? 'No pending tasks' : 'No completed tasks',
-              style: const TextStyle(fontSize: 16, color: Color.fromARGB(255, 70, 164, 57)),
-            ),
+        if (role == 'manager') {
+          // Merge both queries for manager
+          return StreamBuilder<QuerySnapshot>(
+            stream: _firestore
+                .collection('todo')
+                .where('status', isEqualTo: status)
+                .where('created_by', isEqualTo: uid)
+                .orderBy('timestamp', descending: true)
+                .snapshots(),
+            builder: (context, createdSnapshot) {
+              return StreamBuilder<QuerySnapshot>(
+                stream: _firestore
+                    .collection('todo')
+                    .where('status', isEqualTo: status)
+                    .where('assigned_by', isEqualTo: uid)
+                    .orderBy('timestamp', descending: true)
+                    .snapshots(),
+                builder: (context, assignedSnapshot) {
+                  if (createdSnapshot.connectionState == ConnectionState.waiting ||
+                      assignedSnapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final createdDocs = createdSnapshot.data?.docs ?? [];
+                  final assignedDocs = assignedSnapshot.data?.docs ?? [];
+                  // Merge and remove duplicates
+                  final allDocs = {...createdDocs, ...assignedDocs}.toList();
+                  // ...render your list as before, using allDocs...
+                  // For now, just show a placeholder if not implemented
+                  return Center(
+                    child: Text(
+                      allDocs.isEmpty
+                          ? (status == 'pending' ? 'No pending tasks' : 'No completed tasks')
+                          : 'Manager view not implemented',
+                      style: const TextStyle(fontSize: 16, color: Color.fromARGB(255, 70, 164, 57)),
+                    ),
+                  );
+                },
+              );
+            },
           );
-        }
-
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-
-        return ListView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          itemCount: todos.length,
-          itemBuilder: (context, index) {
-            final doc = todos[index];
-            final data = doc.data() as Map<String, dynamic>;
-            final title = data['title'] ?? 'No title';
-            final description = data['description'] ?? '';
-            final priority = data['priority'] ?? 'High';
-            final timestamp = data['timestamp'] as Timestamp?;
-            final timeStr = timestamp != null
-                ? TimeOfDay.fromDateTime(timestamp.toDate().toLocal()).format(context)
-                : '...';
-
-            Color priorityColor;
-            Color priorityBgColor;
-            if (isDark) {
-              switch (priority) {
-                case 'High':
-                  priorityColor = Colors.red;
-                  priorityBgColor = const Color(0xFF3B2323); // Dark red shade
-                  break;
-                case 'Medium':
-                  priorityColor = Colors.amber;
-                  priorityBgColor = const Color(0xFF39321A); // Dark amber shade
-                  break;
-                case 'Low':
-                  priorityColor = Colors.green;
-                  priorityBgColor = const Color(0xFF1B3223); // Dark green shade
-                  break;
-                default:
-                  priorityColor = Colors.grey;
-                  priorityBgColor = Colors.grey.shade800;
+        } else {
+          // Sales user: show as before
+          return StreamBuilder<QuerySnapshot>(
+            stream: _firestore
+                .collection('todo')
+                .where('email', isEqualTo: _userEmail)
+                .where('status', isEqualTo: status)
+                .orderBy('timestamp', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) return const Center(child: Text('Error loading todos'));
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
               }
-            } else {
-              switch (priority) {
-                case 'High':
-                  priorityColor = Colors.red;
-                  priorityBgColor = const Color(0xFFFFEBEE); // Light red
-                  break;
-                case 'Medium':
-                  priorityColor = Colors.amber;
-                  priorityBgColor = const Color(0xFFFFF8E1); // Light amber/yellow
-                  break;
-                case 'Low':
-                  priorityColor = Colors.green;
-                  priorityBgColor = const Color(0xFFE8F5E9); // Light green
-                  break;
-                default:
-                  priorityColor = Colors.grey;
-                  priorityBgColor = Colors.grey.shade100;
-              }
-            }
 
-            return Slidable(
-              key: ValueKey(doc.id),
-              startActionPane: ActionPane(
-                motion: const DrawerMotion(),
-                extentRatio: 0.28,
-                children: [
-                  SlidableAction(
-                    onPressed: (context) async {
-                      await _toggleStatus(doc);
-                    },
-                    backgroundColor: data['status'] == 'pending'
-                        ? Colors.green.shade400
-                        : Colors.orange.shade400,
-                    foregroundColor: Colors.white,
-                    icon: data['status'] == 'pending'
-                        ? Icons.check_circle
-                        : Icons.refresh,
-                    label: data['status'] == 'pending'
-                        ? 'Done'
-                        : 'Pending',
-                    borderRadius: BorderRadius.circular(16),
+              final todos = snapshot.data?.docs ?? [];
+
+              if (todos.isEmpty) {
+                return Center(
+                  child: Text(
+                    status == 'pending' ? 'No pending tasks' : 'No completed tasks',
+                    style: const TextStyle(fontSize: 16, color: Color.fromARGB(255, 70, 164, 57)),
                   ),
-                ],
-              ),
-              endActionPane: ActionPane(
-                motion: const DrawerMotion(),
-                extentRatio: 0.25,
-                children: [
-                  SlidableAction(
-                    onPressed: (context) async {
-                      final confirm = await showDialog<bool>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Delete Task?'),
-                          content: const Text('Are you sure you want to delete this task?'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(true),
-                              child: const Text('Delete', style: TextStyle(color: Color.fromARGB(255, 0, 0, 0))),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(false),
-                              child: const Text('Cancel'),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (confirm == true) {
-                        await _firestore.collection('todo').doc(doc.id).delete();
-                      }
-                    },
-                    backgroundColor: Colors.red.shade400,
-                    foregroundColor: Colors.white,
-                    icon: Icons.delete,
-                    label: 'Delete',
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ],
-              ),
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: priorityBgColor, // <-- background color by priority
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Theme.of(context).shadowColor.withOpacity(0.15),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  leading: Container(
-                    width: 5,
-                    height: double.infinity,
-                    decoration: BoxDecoration(
-                      color: priorityColor,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  title: Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: data['status'] == 'done'
-                          ? Theme.of(context).disabledColor
-                          : Theme.of(context).textTheme.bodyLarge?.color,
-                      decoration: data['status'] == 'done' ? TextDecoration.lineThrough : null,
-                    ),
-                  ),
-                  subtitle: Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                );
+              }
+
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+
+              return ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                itemCount: todos.length,
+                itemBuilder: (context, index) {
+                  final doc = todos[index];
+                  final data = doc.data() as Map<String, dynamic>;
+                  final title = data['title'] ?? 'No title';
+                  final description = data['description'] ?? '';
+                  final priority = data['priority'] ?? 'High';
+                  final timestamp = data['timestamp'] as Timestamp?;
+                  final timeStr = timestamp != null
+                      ? TimeOfDay.fromDateTime(timestamp.toDate().toLocal()).format(context)
+                      : '...';
+
+                  Color priorityColor;
+                  Color priorityBgColor;
+                  if (isDark) {
+                    switch (priority) {
+                      case 'High':
+                        priorityColor = Colors.red;
+                        priorityBgColor = const Color(0xFF3B2323); // Dark red shade
+                        break;
+                      case 'Medium':
+                        priorityColor = Colors.amber;
+                        priorityBgColor = const Color(0xFF39321A); // Dark amber shade
+                        break;
+                      case 'Low':
+                        priorityColor = Colors.green;
+                        priorityBgColor = const Color(0xFF1B3223); // Dark green shade
+                        break;
+                      default:
+                        priorityColor = Colors.grey;
+                        priorityBgColor = Colors.grey.shade800;
+                    }
+                  } else {
+                    switch (priority) {
+                      case 'High':
+                        priorityColor = Colors.red;
+                        priorityBgColor = const Color(0xFFFFEBEE); // Light red
+                        break;
+                      case 'Medium':
+                        priorityColor = Colors.amber;
+                        priorityBgColor = const Color(0xFFFFF8E1); // Light amber/yellow
+                        break;
+                      case 'Low':
+                        priorityColor = Colors.green;
+                        priorityBgColor = const Color(0xFFE8F5E9); // Light green
+                        break;
+                      default:
+                        priorityColor = Colors.grey;
+                        priorityBgColor = Colors.grey.shade100;
+                    }
+                  }
+
+                  return Slidable(
+                    key: ValueKey(doc.id),
+                    startActionPane: ActionPane(
+                      motion: const DrawerMotion(),
+                      extentRatio: 0.28,
                       children: [
-                        Text(
-                          timeStr,
-                          style: TextStyle(
-                            color: Theme.of(context).hintColor,
-                            fontSize: 14,
-                          ),
+                        SlidableAction(
+                          onPressed: (context) async {
+                            await _toggleStatus(doc);
+                          },
+                          backgroundColor: data['status'] == 'pending'
+                              ? Colors.green.shade400
+                              : Colors.orange.shade400,
+                          foregroundColor: Colors.white,
+                          icon: data['status'] == 'pending'
+                              ? Icons.check_circle
+                              : Icons.refresh,
+                          label: data['status'] == 'pending'
+                              ? 'Done'
+                              : 'Pending',
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        if (description.isNotEmpty)
-                          Flexible(
-                            child: Text(
-                              description,
-                              style: TextStyle(
-                                color: Theme.of(context).textTheme.bodySmall?.color,
-                                fontSize: 13,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
                       ],
                     ),
-                  ),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => TaskDetailPage(
-                          data: data,
-                          dateStr: timestamp != null
-                              ? timestamp.toDate().toLocal().toString().split(' ')[0]
-                              : '',
+                    endActionPane: ActionPane(
+                      motion: const DrawerMotion(),
+                      extentRatio: 0.25,
+                      children: [
+                        SlidableAction(
+                          onPressed: (context) async {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Delete Task?'),
+                                content: const Text('Are you sure you want to delete this task?'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.of(context).pop(true),
+                                    child: const Text('Delete', style: TextStyle(color: Color.fromARGB(255, 0, 0, 0))),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => Navigator.of(context).pop(false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirm == true) {
+                              await _firestore.collection('todo').doc(doc.id).delete();
+                            }
+                          },
+                          backgroundColor: Colors.red.shade400,
+                          foregroundColor: Colors.white,
+                          icon: Icons.delete,
+                          label: 'Delete',
+                          borderRadius: BorderRadius.circular(16),
                         ),
+                      ],
+                    ),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: priorityBgColor, // <-- background color by priority
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Theme.of(context).shadowColor.withOpacity(0.15),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                    );
-                  },
-                ),
-              ),
-            );
-          },
-        );
-        // Ensure a widget is always returned
-        // (This line is technically unreachable, but required for Dart's analysis)
-        // ignore: dead_code
-        // return SizedBox.shrink();
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        leading: Container(
+                          width: 5,
+                          height: double.infinity,
+                          decoration: BoxDecoration(
+                            color: priorityColor,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        title: Text(
+                          title,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: data['status'] == 'done'
+                                ? Theme.of(context).disabledColor
+                                : Theme.of(context).textTheme.bodyLarge?.color,
+                            decoration: data['status'] == 'done' ? TextDecoration.lineThrough : null,
+                          ),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    timeStr,
+                                    style: TextStyle(
+                                      color: Theme.of(context).hintColor,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  if (description.isNotEmpty)
+                                    Flexible(
+                                      child: Text(
+                                        description,
+                                        style: TextStyle(
+                                          color: Theme.of(context).textTheme.bodySmall?.color,
+                                          fontSize: 13,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            // Assignment info
+                            if (data['assigned_to_name'] != null && data['assigned_by_name'] == null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  'Assigned to: ${data['assigned_to_name']}',
+                                  style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
+                                ),
+                              ),
+                            if (data['assigned_by_name'] != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  'Assigned by: ${data['assigned_by_name']}',
+                                  style: const TextStyle(fontSize: 12, color: Colors.deepPurple),
+                                ),
+                              ),
+                          ],
+                        ),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => TaskDetailPage(
+                                data: data,
+                                dateStr: timestamp != null
+                                    ? timestamp.toDate().toLocal().toString().split(' ')[0]
+                                    : '',
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        }
       },
     );
   }

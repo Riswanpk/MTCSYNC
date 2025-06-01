@@ -81,6 +81,10 @@ class _TodoFormPageState extends State<TodoFormPage> {
 
     String email = '';
     String createdBy = user.uid;
+    String? assignedBy;
+    String? assignedTo;
+    String? assignedToName;
+    String? assignedByName;
 
     if (_currentUserRole == 'manager' && _selectedSalesUserId != null) {
       // Assign to selected sales user
@@ -89,7 +93,11 @@ class _TodoFormPageState extends State<TodoFormPage> {
         orElse: () => {},
       );
       email = salesUser['email'] ?? '';
-      createdBy = _selectedSalesUserId!;
+      createdBy = user.uid; // Manager is creator
+      assignedBy = user.uid;
+      assignedByName = (await FirebaseFirestore.instance.collection('users').doc(user.uid).get()).data()?['name'] ?? '';
+      assignedTo = salesUser['uid'];
+      assignedToName = salesUser['name'];
     } else {
       // Normal user or manager not assigning
       final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
@@ -105,6 +113,10 @@ class _TodoFormPageState extends State<TodoFormPage> {
       'timestamp': FieldValue.serverTimestamp(),
       'email': email,
       'created_by': createdBy,
+      if (assignedBy != null) 'assigned_by': assignedBy,
+      if (assignedByName != null) 'assigned_by_name': assignedByName,
+      if (assignedTo != null) 'assigned_to': assignedTo,
+      if (assignedToName != null) 'assigned_to_name': assignedToName,
     });
 
     setState(() => _isSaving = false);
