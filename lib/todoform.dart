@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'dart:async';
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -18,6 +19,50 @@ class _TodoFormPageState extends State<TodoFormPage> {
   String _priority = 'High';
   bool _isSaving = false;
 
+  // For manager assignment
+  String? _currentUserRole;
+  String? _currentUserBranch;
+  List<Map<String, dynamic>> _salesUsers = [];
+  String? _selectedSalesUserId;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCurrentUserRoleAndBranch();
+  }
+
+  Future<void> _fetchCurrentUserRoleAndBranch() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    setState(() {
+      _currentUserRole = userDoc.data()?['role'];
+      _currentUserBranch = userDoc.data()?['branch'];
+    });
+    if (_currentUserRole == 'manager') {
+      _fetchSalesUsers();
+    }
+  }
+
+  Future<void> _fetchSalesUsers() async {
+    if (_currentUserBranch == null) return;
+    final query = await FirebaseFirestore.instance
+        .collection('users')
+        .where('role', isEqualTo: 'sales')
+        .where('branch', isEqualTo: _currentUserBranch)
+        .get();
+    setState(() {
+      _salesUsers = query.docs.map((doc) {
+        final data = doc.data();
+        return {
+          'uid': doc.id,
+          'name': data['name'] ?? data['email'] ?? 'Unknown',
+          'email': data['email'] ?? 'unknown@example.com',
+        };
+      }).toList();
+    });
+  }
+
   Future<void> _saveTodo() async {
     final title = _titleController.text.trim();
     final desc = _descController.text.trim();
@@ -34,8 +79,18 @@ class _TodoFormPageState extends State<TodoFormPage> {
       return;
     }
 
-    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    final email = userDoc.data()?['email'] ?? user.email ?? 'unknown@example.com';
+    // If manager, assign to selected sales user
+    String createdBy = user.uid;
+    String email = '';
+    if (_currentUserRole == 'manager' && _selectedSalesUserId != null) {
+      createdBy = _selectedSalesUserId!;
+      // Get the email of the assigned sales user
+      final salesUser = _salesUsers.firstWhere((u) => u['uid'] == _selectedSalesUserId, orElse: () => {});
+      email = salesUser['email'] ?? '';
+    } else {
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      email = userDoc.data()?['email'] ?? user.email ?? 'unknown@example.com';
+    }
 
     await FirebaseFirestore.instance.collection('todo').add({
       'title': title,
@@ -44,7 +99,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
       'status': 'pending',
       'timestamp': FieldValue.serverTimestamp(),
       'email': email,
-      'created_by': user.uid,
+      'created_by': createdBy,
     });
 
     setState(() => _isSaving = false);
@@ -134,6 +189,29 @@ class _TodoFormPageState extends State<TodoFormPage> {
                   hintStyle: TextStyle(color: isDark ? Colors.white38 : Colors.grey),
                 ),
               ),
+              if (_currentUserRole == 'manager')
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 18),
+                    const Text('Assign To', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      value: _selectedSalesUserId,
+                      items: _salesUsers
+                          .map<DropdownMenuItem<String>>((user) => DropdownMenuItem<String>(
+                                value: user['uid'] as String,
+                                child: Text(user['name'] as String),
+                              ))
+                          .toList(),
+                      onChanged: (val) => setState(() => _selectedSalesUserId = val),
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        hintText: 'Select Sales User',
+                      ),
+                    ),
+                  ],
+                ),
               const SizedBox(height: 18),
               Text('Priority', style: TextStyle(color: labelColor, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),

@@ -366,14 +366,15 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
   }
 
   Widget _buildTodoList(String status) {
-    if (_userEmail == null) {
+    final user = _auth.currentUser;
+    if (user == null) {
       return const Center(child: CircularProgressIndicator());
     }
 
     return StreamBuilder<QuerySnapshot>(
       stream: _firestore
           .collection('todo')
-          .where('email', isEqualTo: _userEmail)
+          .where('created_by', isEqualTo: user.uid)
           .where('status', isEqualTo: status)
           .orderBy('timestamp', descending: true)
           .snapshots(),
