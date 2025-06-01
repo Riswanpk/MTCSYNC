@@ -407,17 +407,253 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                   }
                   final createdDocs = createdSnapshot.data?.docs ?? [];
                   final assignedDocs = assignedSnapshot.data?.docs ?? [];
-                  // Merge and remove duplicates
-                  final allDocs = {...createdDocs, ...assignedDocs}.toList();
-                  // ...render your list as before, using allDocs...
-                  // For now, just show a placeholder if not implemented
-                  return Center(
-                    child: Text(
-                      allDocs.isEmpty
-                          ? (status == 'pending' ? 'No pending tasks' : 'No completed tasks')
-                          : 'Manager view not implemented',
-                      style: const TextStyle(fontSize: 16, color: Color.fromARGB(255, 70, 164, 57)),
-                    ),
+                  // Merge and remove duplicates by doc.id
+                  final Map<String, DocumentSnapshot> docMap = {};
+                  for (var d in createdDocs) {
+                    docMap[d.id] = d;
+                  }
+                  for (var d in assignedDocs) {
+                    docMap[d.id] = d;
+                  }
+                  final allDocs = docMap.values.toList()
+                    ..sort((a, b) {
+                      final ta = a['timestamp'];
+                      final tb = b['timestamp'];
+                      if (ta is Timestamp && tb is Timestamp) {
+                        return tb.compareTo(ta);
+                      }
+                      return 0;
+                    });
+
+                  if (allDocs.isEmpty) {
+                    return Center(
+                      child: Text(
+                        status == 'pending' ? 'No pending tasks' : 'No completed tasks',
+                        style: const TextStyle(fontSize: 16, color: Color.fromARGB(255, 70, 164, 57)),
+                      ),
+                    );
+                  }
+
+                  final isDark = Theme.of(context).brightness == Brightness.dark;
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    itemCount: allDocs.length,
+                    itemBuilder: (context, index) {
+                      final doc = allDocs[index];
+                      final data = doc.data() as Map<String, dynamic>;
+                      final title = data['title'] ?? 'No title';
+                      final description = data['description'] ?? '';
+                      final priority = data['priority'] ?? 'High';
+                      final timestamp = data['timestamp'] as Timestamp?;
+                      final timeStr = timestamp != null
+                          ? TimeOfDay.fromDateTime(timestamp.toDate().toLocal()).format(context)
+                          : '...';
+
+                      Color priorityColor;
+                      Color priorityBgColor;
+                      if (isDark) {
+                        switch (priority) {
+                          case 'High':
+                            priorityColor = Colors.red;
+                            priorityBgColor = const Color(0xFF3B2323);
+                            break;
+                          case 'Medium':
+                            priorityColor = Colors.amber;
+                            priorityBgColor = const Color(0xFF39321A);
+                            break;
+                          case 'Low':
+                            priorityColor = Colors.green;
+                            priorityBgColor = const Color(0xFF1B3223);
+                            break;
+                          default:
+                            priorityColor = Colors.grey;
+                            priorityBgColor = Colors.grey.shade800;
+                        }
+                      } else {
+                        switch (priority) {
+                          case 'High':
+                            priorityColor = Colors.red;
+                            priorityBgColor = const Color(0xFFFFEBEE);
+                            break;
+                          case 'Medium':
+                            priorityColor = Colors.amber;
+                            priorityBgColor = const Color(0xFFFFF8E1);
+                            break;
+                          case 'Low':
+                            priorityColor = Colors.green;
+                            priorityBgColor = const Color(0xFFE8F5E9);
+                            break;
+                          default:
+                            priorityColor = Colors.grey;
+                            priorityBgColor = Colors.grey.shade100;
+                        }
+                      }
+
+                      return Slidable(
+                        key: ValueKey(doc.id),
+                        startActionPane: ActionPane(
+                          motion: const DrawerMotion(),
+                          extentRatio: 0.28,
+                          children: [
+                            SlidableAction(
+                              onPressed: (context) async {
+                                await _toggleStatus(doc);
+                              },
+                              backgroundColor: data['status'] == 'pending'
+                                  ? Colors.green.shade400
+                                  : Colors.orange.shade400,
+                              foregroundColor: Colors.white,
+                              icon: data['status'] == 'pending'
+                                  ? Icons.check_circle
+                                  : Icons.refresh,
+                              label: data['status'] == 'pending'
+                                  ? 'Done'
+                                  : 'Pending',
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ],
+                        ),
+                        endActionPane: ActionPane(
+                          motion: const DrawerMotion(),
+                          extentRatio: 0.25,
+                          children: [
+                            SlidableAction(
+                              onPressed: (context) async {
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Delete Task?'),
+                                    content: const Text('Are you sure you want to delete this task?'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.of(context).pop(true),
+                                        child: const Text('Delete', style: TextStyle(color: Color.fromARGB(255, 0, 0, 0))),
+                                      ),
+                                      TextButton(
+                                        onPressed: () => Navigator.of(context).pop(false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirm == true) {
+                                  await _firestore.collection('todo').doc(doc.id).delete();
+                                }
+                              },
+                              backgroundColor: Colors.red.shade400,
+                              foregroundColor: Colors.white,
+                              icon: Icons.delete,
+                              label: 'Delete',
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ],
+                        ),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: priorityBgColor,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Theme.of(context).shadowColor.withOpacity(0.15),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            leading: Container(
+                              width: 5,
+                              height: double.infinity,
+                              decoration: BoxDecoration(
+                                color: priorityColor,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            title: Text(
+                              title,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: data['status'] == 'done'
+                                    ? Theme.of(context).disabledColor
+                                    : Theme.of(context).textTheme.bodyLarge?.color,
+                                decoration: data['status'] == 'done' ? TextDecoration.lineThrough : null,
+                              ),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        timeStr,
+                                        style: TextStyle(
+                                          color: Theme.of(context).hintColor,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      if (description.isNotEmpty)
+                                        Flexible(
+                                          child: Text(
+                                            description,
+                                            style: TextStyle(
+                                              color: Theme.of(context).textTheme.bodySmall?.color,
+                                              fontSize: 13,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                // Assignment info for manager
+                                if (data['assigned_to_name'] != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Text(
+                                      'Assigned to: ${data['assigned_to_name']}',
+                                      style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
+                                    ),
+                                  )
+                                else if (data['email'] != null)
+                                  FutureBuilder<String>(
+                                    future: _getUsernameByEmail(data['email']),
+                                    builder: (context, snapshot) {
+                                      if (!snapshot.hasData) return const SizedBox.shrink();
+                                      return Padding(
+                                        padding: const EdgeInsets.only(top: 2),
+                                        child: Text(
+                                          'Assigned to: ${snapshot.data}',
+                                          style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                              ],
+                            ),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => TaskDetailPage(
+                                    data: data,
+                                    dateStr: timestamp != null
+                                        ? timestamp.toDate().toLocal().toString().split(' ')[0]
+                                        : '',
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      );
+                    },
                   );
                 },
               );
@@ -635,12 +871,12 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                                   'Assigned to: ${data['assigned_to_name']}',
                                   style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
                                 ),
-                              ),
-                            if (data['assigned_by_name'] != null)
+                              )
+                            else if (data['assigned_by_name'] != null)
                               Padding(
                                 padding: const EdgeInsets.only(top: 2),
                                 child: Text(
-                                  'Assigned by: ${data['assigned_by_name']}',
+                                  'Assigned by: Manager',
                                   style: const TextStyle(fontSize: 12, color: Colors.deepPurple),
                                 ),
                               ),
@@ -670,7 +906,6 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
       },
     );
   }
-
 
   Future<void> _clearAllTodos() async {
     if (_userEmail == null) return;
@@ -709,4 +944,15 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
     return const SizedBox.shrink();
   }
 
+  Future<String> _getUsernameByEmail(String email) async {
+    final userSnap = await _firestore
+        .collection('users')
+        .where('email', isEqualTo: email)
+        .limit(1)
+        .get();
+    if (userSnap.docs.isNotEmpty) {
+      return userSnap.docs.first.data()['name'] ?? email;
+    }
+    return email;
+  }
 }
