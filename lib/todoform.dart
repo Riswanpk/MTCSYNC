@@ -99,10 +99,14 @@ class _TodoFormPageState extends State<TodoFormPage> {
       assignedTo = salesUser['uid'];
       assignedToName = salesUser['name'];
     } else {
-      // Normal user or manager not assigning
+      // Assign to self (manager)
       final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       email = userDoc.data()?['email'] ?? user.email ?? 'unknown@example.com';
       createdBy = user.uid;
+      assignedBy = null;
+      assignedByName = null;
+      assignedTo = null;
+      assignedToName = null;
     }
 
     await FirebaseFirestore.instance.collection('todo').add({
@@ -214,12 +218,16 @@ class _TodoFormPageState extends State<TodoFormPage> {
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
                       value: _selectedSalesUserId,
-                      items: _salesUsers
-                          .map<DropdownMenuItem<String>>((user) => DropdownMenuItem<String>(
-                                value: user['uid'] as String,
-                                child: Text(user['name'] as String),
-                              ))
-                          .toList(),
+                      items: [
+                        DropdownMenuItem<String>(
+                          value: null,
+                          child: const Text('None (Assign to Myself)'),
+                        ),
+                        ..._salesUsers.map<DropdownMenuItem<String>>((user) => DropdownMenuItem<String>(
+                              value: user['uid'] as String,
+                              child: Text(user['name'] as String),
+                            )),
+                      ],
                       onChanged: (val) => setState(() => _selectedSalesUserId = val),
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
