@@ -623,18 +623,18 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                                   )
                                 else if (data['email'] != null)
                                   FutureBuilder<String>(
-                                    future: _getUsernameByEmail(data['email'] ?? ''),
-                                    builder: (context, snapshot) {
-                                      if (!snapshot.hasData) return const SizedBox.shrink();
-                                      return Padding(
-                                        padding: const EdgeInsets.only(top: 2),
-                                        child: Text(
-                                          'Assigned to: ${snapshot.data}',
-                                          style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
-                                        ),
-                                      );
-                                    },
-                                  ),
+  future: _getUsernameByEmail(data['email'] ?? ''),
+  builder: (context, snapshot) {
+    if (!snapshot.hasData) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Text(
+        'Assigned to: ${snapshot.data}',
+        style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
+      ),
+    );
+  },
+),
                               ],
                             ),
                             onTap: () {
