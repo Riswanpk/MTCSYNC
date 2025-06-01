@@ -18,49 +18,6 @@ class _TodoFormPageState extends State<TodoFormPage> {
   String _priority = 'High';
   bool _isSaving = false;
 
-  // Add these for user assignment
-  List<Map<String, dynamic>> _salesUsers = [];
-  String? _selectedSalesUserId;
-  String? _currentUserRole;
-  String? _currentUserBranch;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchCurrentUserRoleAndBranch();
-  }
-
-  Future<void> _fetchCurrentUserRoleAndBranch() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    setState(() {
-      _currentUserRole = userDoc.data()?['role'];
-      _currentUserBranch = userDoc.data()?['branch'];
-    });
-    if (_currentUserRole == 'manager') {
-      _fetchSalesUsers();
-    }
-  }
-
-  Future<void> _fetchSalesUsers() async {
-    if (_currentUserBranch == null) return;
-    final query = await FirebaseFirestore.instance
-        .collection('users')
-        .where('role', isEqualTo: 'sales')
-        .where('branch', isEqualTo: _currentUserBranch)
-        .get();
-    setState(() {
-      _salesUsers = query.docs.map((doc) {
-        final data = doc.data();
-        return {
-          'uid': doc.id,
-          'name': data['name'] ?? data['email'] ?? 'Unknown',
-        };
-      }).toList();
-    });
-  }
-
   Future<void> _saveTodo() async {
     final title = _titleController.text.trim();
     final desc = _descController.text.trim();
@@ -80,11 +37,6 @@ class _TodoFormPageState extends State<TodoFormPage> {
     final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
     final email = userDoc.data()?['email'] ?? user.email ?? 'unknown@example.com';
 
-    // Save assigned user if manager, else assign to self
-    final assignedUserId = _currentUserRole == 'manager' && _selectedSalesUserId != null
-        ? _selectedSalesUserId
-        : user.uid;
-
     await FirebaseFirestore.instance.collection('todo').add({
       'title': title,
       'description': desc,
@@ -93,7 +45,6 @@ class _TodoFormPageState extends State<TodoFormPage> {
       'timestamp': FieldValue.serverTimestamp(),
       'email': email,
       'created_by': user.uid,
-      'assigned_to': assignedUserId,
     });
 
     setState(() => _isSaving = false);
@@ -226,29 +177,6 @@ class _TodoFormPageState extends State<TodoFormPage> {
                 ],
                 onChanged: (val) => setState(() => _priority = val!),
               ),
-              if (_currentUserRole == 'manager')
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 18),
-                    const Text('Assign To', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<String>(
-                      value: _selectedSalesUserId,
-                      items: _salesUsers
-                          .map((user) => DropdownMenuItem<String>(
-                                value: user['uid'] as String,
-                                child: Text(user['name'] as String),
-                              ))
-                          .toList(),
-                      onChanged: (val) => setState(() => _selectedSalesUserId = val),
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        hintText: 'Select Sales User',
-                      ),
-                    ),
-                  ],
-                ),
               const Spacer(),
               SizedBox(
                 width: double.infinity,
