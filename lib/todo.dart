@@ -156,6 +156,26 @@ class TaskDetailPage extends StatelessWidget {
                 ),
               ],
             ),
+            // Assigned To
+            if (data['assigned_to'] != null)
+              FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance.collection('users').doc(data['assigned_to']).get(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return const SizedBox();
+                  final userData = snapshot.data!.data() as Map<String, dynamic>?;
+                  final name = userData?['name'] ?? userData?['email'] ?? data['assigned_to'];
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.person, size: 18),
+                        const SizedBox(width: 8),
+                        Text('Assigned to: $name'),
+                      ],
+                    ),
+                  );
+                },
+              ),
           ],
         ),
       ),
@@ -195,7 +215,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
           ),
           elevation: 8,
         ),
-        tabBarTheme: const TabBarTheme(
+        tabBarTheme: const TabBarThemeData(
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           indicator: BoxDecoration(), // No highlight
@@ -373,8 +393,11 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
     return StreamBuilder<QuerySnapshot>(
       stream: _firestore
           .collection('todo')
-          .where('email', isEqualTo: _userEmail)
           .where('status', isEqualTo: status)
+          .where(Filter.or(
+            Filter('assigned_to', isEqualTo: _auth.currentUser?.uid),
+            Filter('created_by', isEqualTo: _auth.currentUser?.uid),
+          ))
           .orderBy('timestamp', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
