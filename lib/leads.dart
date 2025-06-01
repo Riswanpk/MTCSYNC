@@ -18,7 +18,7 @@ class LeadsPage extends StatefulWidget {
 class _LeadsPageState extends State<LeadsPage> {
   String searchQuery = '';
   String selectedStatus = 'All';
-  String? selectedBranch; // For admin branch selection
+  String? selectedBranch;
   List<String> availableBranches = [];
   final ValueNotifier<bool> _isHovering = ValueNotifier(false);
 
@@ -30,6 +30,9 @@ class _LeadsPageState extends State<LeadsPage> {
     'Medium',
     'Low',
   ];
+
+  // Add this for sort order
+  bool sortAscending = false;
 
   late Future<Map<String, dynamic>?> _currentUserData;
 
@@ -159,6 +162,34 @@ class _LeadsPageState extends State<LeadsPage> {
                       ),
                     ),
                   ),
+                  // Add sort order dropdown/toggle here:
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4),
+                    child: Row(
+                      children: [
+                        const Text('Sort by Date:'),
+                        const SizedBox(width: 8),
+                        DropdownButton<bool>(
+                          value: sortAscending,
+                          items: const [
+                            DropdownMenuItem(
+                              value: false,
+                              child: Text('Newest First'),
+                            ),
+                            DropdownMenuItem(
+                              value: true,
+                              child: Text('Oldest First'),
+                            ),
+                          ],
+                          onChanged: (val) {
+                            setState(() {
+                              sortAscending = val!;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
                   Expanded(
                     child: role == 'manager'
                         ? FutureBuilder<QuerySnapshot>(
@@ -203,6 +234,17 @@ class _LeadsPageState extends State<LeadsPage> {
                                         || priority == selectedStatus;
                                     return matchesSearch && matchesStatus;
                                   }).toList();
+
+                                  // Add sorting here
+                                  filteredLeads.sort((a, b) {
+                                    final aData = a.data() as Map<String, dynamic>;
+                                    final bData = b.data() as Map<String, dynamic>;
+                                    final aDate = DateTime.tryParse(aData['date'] ?? '') ?? DateTime(2000);
+                                    final bDate = DateTime.tryParse(bData['date'] ?? '') ?? DateTime(2000);
+                                    return sortAscending
+                                        ? aDate.compareTo(bDate)
+                                        : bDate.compareTo(aDate);
+                                  });
 
                                   if (filteredLeads.isEmpty) {
                                     return const Center(child: Text("No leads match your criteria."));
@@ -278,6 +320,17 @@ class _LeadsPageState extends State<LeadsPage> {
                                     return matchesSearch && matchesStatus;
                                   }).toList();
 
+                                  // Add sorting here
+                                  filteredLeads.sort((a, b) {
+                                    final aData = a.data() as Map<String, dynamic>;
+                                    final bData = b.data() as Map<String, dynamic>;
+                                    final aDate = DateTime.tryParse(aData['date'] ?? '') ?? DateTime(2000);
+                                    final bDate = DateTime.tryParse(bData['date'] ?? '') ?? DateTime(2000);
+                                    return sortAscending
+                                        ? aDate.compareTo(bDate)
+                                        : bDate.compareTo(aDate);
+                                  });
+
                                   if (filteredLeads.isEmpty) {
                                     return const Center(child: Text("No leads match your criteria."));
                                   }
@@ -348,6 +401,17 @@ class _LeadsPageState extends State<LeadsPage> {
                                         || priority == selectedStatus;
                                     return matchesSearch && matchesStatus;
                                   }).toList();
+
+                                  // Add sorting here
+                                  filteredLeads.sort((a, b) {
+                                    final aData = a.data() as Map<String, dynamic>;
+                                    final bData = b.data() as Map<String, dynamic>;
+                                    final aDate = DateTime.tryParse(aData['date'] ?? '') ?? DateTime(2000);
+                                    final bDate = DateTime.tryParse(bData['date'] ?? '') ?? DateTime(2000);
+                                    return sortAscending
+                                        ? aDate.compareTo(bDate)
+                                        : bDate.compareTo(aDate);
+                                  });
 
                                   if (filteredLeads.isEmpty) {
                                     return const Center(child: Text("No leads match your criteria."));
