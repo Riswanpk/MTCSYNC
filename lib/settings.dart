@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'theme_notifier.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({Key? key}) : super(key: key);
+
+  void _openNotificationSettings() {
+    AwesomeNotifications().showNotificationConfigPage();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,6 +42,18 @@ class SettingsPage extends StatelessWidget {
                   themeNotifier.isDarkMode ? Icons.dark_mode : Icons.light_mode,
                   color: theme.colorScheme.primary,
                 ),
+              ),
+              const SizedBox(height: 32),
+              const Text(
+                'Notifications',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              ListTile(
+                leading: const Icon(Icons.music_note),
+                title: const Text('Notification Tone'),
+                subtitle: const Text('Change your notification sound'),
+                onTap: _openNotificationSettings,
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
               ),
             ],
           ),
