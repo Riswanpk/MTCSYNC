@@ -66,7 +66,7 @@ class _LeadsPageState extends State<LeadsPage> {
   }
 
   // Add this method for Excel export
-  Future<void> _downloadLeadsExcel(BuildContext context) async {
+  Future<void> _downloadLeadsExcel(BuildContext context, {String? branch}) async {
     try {
       // Request MANAGE_EXTERNAL_STORAGE permission if needed (Android 11+)
       if (Platform.isAndroid) {
@@ -82,15 +82,23 @@ class _LeadsPageState extends State<LeadsPage> {
       final excel = Excel.createExcel();
       excel.delete('Sheet1'); // Remove default sheet
 
-      // Fetch all leads from all branches
-      final query = await FirebaseFirestore.instance.collection('follow_ups').get();
+      // Fetch all leads (or only for a specific branch)
+      QuerySnapshot query;
+      if (branch != null) {
+        query = await FirebaseFirestore.instance
+            .collection('follow_ups')
+            .where('branch', isEqualTo: branch)
+            .get();
+      } else {
+        query = await FirebaseFirestore.instance.collection('follow_ups').get();
+      }
 
       // Group leads by branch
       final Map<String, List<Map<String, dynamic>>> branchLeads = {};
       for (final doc in query.docs) {
-        final data = doc.data();
-        final branch = (data['branch'] ?? 'Unknown') as String;
-        branchLeads.putIfAbsent(branch, () => []).add(data);
+        final data = doc.data() as Map<String, dynamic>;
+        final branchName = (data['branch'] ?? 'Unknown') as String;
+        branchLeads.putIfAbsent(branchName, () => []).add(data);
       }
 
       // For each branch, create a sheet and add leads
@@ -173,7 +181,7 @@ class _LeadsPageState extends State<LeadsPage> {
             backgroundColor: const Color(0xFF005BAC),
             foregroundColor: Colors.white,
             actions: [
-              if (role == 'admin')
+              if (role == 'admin' || role == 'manager')
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.menu),
                   onSelected: (value) async {
@@ -198,7 +206,7 @@ class _LeadsPageState extends State<LeadsPage> {
                         ),
                       );
                       if (confirm == true) {
-                        final branch = selectedBranch ?? '';
+                        final branch = role == 'admin' ? (selectedBranch ?? '') : managerBranch;
                         final query = await FirebaseFirestore.instance
                             .collection('follow_ups')
                             .where('branch', isEqualTo: branch)
@@ -214,7 +222,10 @@ class _LeadsPageState extends State<LeadsPage> {
                         );
                       }
                     } else if (value == 'download_excel') {
-                      await _downloadLeadsExcel(context);
+                      await _downloadLeadsExcel(
+                        context,
+                        branch: role == 'admin' ? null : managerBranch,
+                      );
                     }
                   },
                   itemBuilder: (context) => [
