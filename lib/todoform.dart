@@ -79,17 +79,22 @@ class _TodoFormPageState extends State<TodoFormPage> {
       return;
     }
 
-    // If manager, assign to selected sales user
-    String createdBy = user.uid;
     String email = '';
+    String createdBy = user.uid;
+
     if (_currentUserRole == 'manager' && _selectedSalesUserId != null) {
-      createdBy = _selectedSalesUserId!;
-      // Get the email of the assigned sales user
-      final salesUser = _salesUsers.firstWhere((u) => u['uid'] == _selectedSalesUserId, orElse: () => {});
+      // Assign to selected sales user
+      final salesUser = _salesUsers.firstWhere(
+        (u) => u['uid'] == _selectedSalesUserId,
+        orElse: () => {},
+      );
       email = salesUser['email'] ?? '';
+      createdBy = _selectedSalesUserId!;
     } else {
+      // Normal user or manager not assigning
       final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       email = userDoc.data()?['email'] ?? user.email ?? 'unknown@example.com';
+      createdBy = user.uid;
     }
 
     await FirebaseFirestore.instance.collection('todo').add({
@@ -131,7 +136,6 @@ class _TodoFormPageState extends State<TodoFormPage> {
     return Container(
       width: 10,
       height: 10,
-      margin: const EdgeInsets.only(right: 8),
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
