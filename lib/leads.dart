@@ -80,44 +80,60 @@ class _LeadsPageState extends State<LeadsPage> {
       }
 
       final excel = Excel.createExcel();
-      final Sheet sheet = excel['Leads'];
-
-      // Add header row (adjust fields as per your follow_ups db)
-      sheet.appendRow([
-        'Name',
-        'Company',
-        'Address',
-        'Phone',
-        'Status',
-        'Priority',
-        'Comments',
-        'Reminder',
-        'Branch',
-        'Created By',
-        'Date',
-        'Created At',
-      ]);
+      excel.delete('Sheet1'); // Remove default sheet
 
       // Fetch all leads from all branches
       final query = await FirebaseFirestore.instance.collection('follow_ups').get();
+
+      // Group leads by branch
+      final Map<String, List<Map<String, dynamic>>> branchLeads = {};
       for (final doc in query.docs) {
         final data = doc.data();
+        final branch = (data['branch'] ?? 'Unknown') as String;
+        branchLeads.putIfAbsent(branch, () => []).add(data);
+      }
+
+      // For each branch, create a sheet and add leads
+      for (final entry in branchLeads.entries) {
+        final branchName = entry.key;
+        final leads = entry.value;
+        final sheet = excel[branchName];
+
+        // Add header row
         sheet.appendRow([
-          data['name'] ?? '',
-          data['company'] ?? '',
-          data['address'] ?? '',
-          data['phone'] ?? '',
-          data['status'] ?? '',
-          data['priority'] ?? '',
-          data['comments'] ?? '',
-          data['reminder'] ?? '',
-          data['branch'] ?? '',
-          data['created_by'] ?? '',
-          data['date'] ?? '',
-          data['created_at'] != null && data['created_at'] is Timestamp
-              ? (data['created_at'] as Timestamp).toDate().toString()
-              : '',
+          'Name',
+          'Company',
+          'Address',
+          'Phone',
+          'Status',
+          'Priority',
+          'Comments',
+          'Reminder',
+          'Branch',
+          'Created By',
+          'Date',
+          'Created At',
         ]);
+
+        // Add data rows
+        for (final data in leads) {
+          sheet.appendRow([
+            data['name'] ?? '',
+            data['company'] ?? '',
+            data['address'] ?? '',
+            data['phone'] ?? '',
+            data['status'] ?? '',
+            data['priority'] ?? '',
+            data['comments'] ?? '',
+            data['reminder'] ?? '',
+            data['branch'] ?? '',
+            data['created_by'] ?? '',
+            data['date'] ?? '',
+            data['created_at'] != null && data['created_at'] is Timestamp
+                ? (data['created_at'] as Timestamp).toDate().toString()
+                : '',
+          ]);
+        }
       }
 
       // Save file to Downloads directory (works with MANAGE_EXTERNAL_STORAGE)
