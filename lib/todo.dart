@@ -171,95 +171,133 @@ class TodoPage extends StatefulWidget {
 }
 
 class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  final TextEditingController _todoController = TextEditingController();
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final TextEditingController _todoController = TextEditingController();
   String? _userEmail;
+  String? _userRole;
+  late Future<void> _userInfoFuture;
 
-  late TabController _tabController;
+  TabController? _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _userInfoFuture = _loadUserInfo();
+    WidgetsBinding.instance.addObserver(this);
+    _deleteOldTasks();
+  }
+
+  Future<void> _loadUserInfo() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    final doc = await _firestore.collection('users').doc(user.uid).get();
+    _userEmail = doc.data()?['email'] ?? 'unknown@example.com';
+    _userRole = doc.data()?['role'] ?? 'sales';
+  }
+  @override
+  void dispose() {
+    _tabController?.dispose();
+    _todoController.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Provider.of<ThemeNotifier>(context).currentTheme;
 
-    return Theme(
-      data: theme.copyWith(
-        appBarTheme: const AppBarTheme(
-          backgroundColor: primaryBlue,
-          foregroundColor: Colors.white,
-          iconTheme: IconThemeData(color: Colors.white),
-          titleTextStyle: TextStyle(
-            color: Colors.white,
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-          ),
-          elevation: 8,
-        ),
-        tabBarTheme: const TabBarThemeData(
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          indicator: BoxDecoration(), // No highlight
-          labelStyle: TextStyle(fontWeight: FontWeight.bold),
-        ),
-      ),
-      child: DefaultTabController(
-        length: 2,
-        child: Scaffold(
-          resizeToAvoidBottomInset: true,
-          appBar: AppBar(
-            title: const Text('Todo List'),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.delete_sweep_rounded, color: Colors.white),
-                tooltip: 'Clear All Tasks',
-                onPressed: _clearAllTodos,
+    return FutureBuilder<void>(
+      future: _userInfoFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+
+        final isManager = _userRole == 'manager';
+        final tabCount = isManager ? 3 : 2;
+
+        _tabController ??= TabController(length: tabCount, vsync: this);
+
+        return Theme(
+          data: theme.copyWith(
+            appBarTheme: const AppBarTheme(
+              backgroundColor: primaryBlue,
+              foregroundColor: Colors.white,
+              iconTheme: IconThemeData(color: Colors.white),
+              titleTextStyle: TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
               ),
-            ],
-            bottom: TabBar(
-              controller: _tabController,
-              tabs: const [
-                Tab(icon: Icon(Icons.pending_actions), text: 'Pending'),
-                Tab(icon: Icon(Icons.check_circle), text: 'Completed'),
-              ],
+              elevation: 8,
+            ),
+            tabBarTheme: const TabBarThemeData(
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white70,
+              indicator: BoxDecoration(),
+              labelStyle: TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
-          body: TabBarView(
-            controller: _tabController,
-            children: [
-              _buildTodoList('pending'),
-              _buildTodoList('done'),
-            ],
-          ),
-          floatingActionButton: FloatingActionButton(
-            backgroundColor: primaryBlue, // Make the + button blue
-            foregroundColor: Colors.white,
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const TodoFormPage(),
+          child: DefaultTabController(
+            length: tabCount,
+            child: Scaffold(
+              resizeToAvoidBottomInset: true,
+              appBar: AppBar(
+                title: const Text('Todo List'),
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.delete_sweep_rounded, color: Colors.white),
+                    tooltip: 'Clear All Tasks',
+                    onPressed: _clearAllTodos,
+                  ),
+                ],
+                bottom: TabBar(
+                  controller: _tabController,
+                  tabs: isManager
+                      ? const [
+                          Tab(icon: Icon(Icons.pending_actions), text: 'Pending'),
+                          Tab(icon: Icon(Icons.check_circle), text: 'Completed'),
+                          Tab(icon: Icon(Icons.group), text: 'Others'),
+                        ]
+                      : const [
+                          Tab(icon: Icon(Icons.pending_actions), text: 'Pending'),
+                          Tab(icon: Icon(Icons.check_circle), text: 'Completed'),
+                        ],
                 ),
-              );
-            },
-            child: const Icon(Icons.add_rounded, size: 28),
-            tooltip: 'Add New Task',
+              ),
+              body: TabBarView(
+                controller: _tabController,
+                children: isManager
+                    ? [
+                        _buildTodoList('pending', onlySelf: true),
+                        _buildTodoList('done', onlySelf: true),
+                        _buildSalesTodosForManagerTab(),
+                      ]
+                    : [
+                        _buildTodoList('pending'),
+                        _buildTodoList('done'),
+                      ],
+              ),
+              floatingActionButton: FloatingActionButton(
+                backgroundColor: primaryBlue,
+                foregroundColor: Colors.white,
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const TodoFormPage(),
+                    ),
+                  );
+                },
+                child: const Icon(Icons.add_rounded, size: 28),
+                tooltip: 'Add New Task',
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _loadUserEmail();
-    _tabController = TabController(length: 2, vsync: this);
-
-    // Add observer to detect app lifecycle changes
-    WidgetsBinding.instance.addObserver(this);
-
-    // Call the function to delete old tasks when the app starts
-    _deleteOldTasks();
   }
 
   Future<void> _deleteOldTasks() async {
@@ -284,28 +322,11 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
   }
 
   @override
-  void dispose() {
-    _tabController.dispose();
-    WidgetsBinding.instance.removeObserver(this); // Remove observer
-    super.dispose();
-  }
-
-  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       // App is active, check for old tasks
       _deleteOldTasks();
     }
-  }
-
-  Future<void> _loadUserEmail() async {
-    final user = _auth.currentUser;
-    if (user == null) return;
-
-    final doc = await _firestore.collection('users').doc(user.uid).get();
-    setState(() {
-      _userEmail = doc.data()?['email'] ?? 'unknown@example.com';
-    });
   }
 
   Future<void> _sendTodo() async {
@@ -365,7 +386,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
     }
   }
 
-  Widget _buildTodoList(String status) {
+  Widget _buildTodoList(String status, {bool onlySelf = false}) {
     if (_userEmail == null) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -375,7 +396,6 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
       return const Center(child: CircularProgressIndicator());
     }
 
-    // For manager, show both assigned and created
     return FutureBuilder<DocumentSnapshot>(
       future: _firestore.collection('users').doc(user.uid).get(),
       builder: (context, userSnapshot) {
@@ -383,277 +403,241 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
         final role = userSnapshot.data!.get('role');
         final uid = user.uid;
 
-        if (role == 'manager') {
-          // Merge both queries for manager
+        // For manager, show only their own todos in Pending/Completed tabs
+        if (role == 'manager' && onlySelf) {
           return StreamBuilder<QuerySnapshot>(
             stream: _firestore
                 .collection('todo')
+                .where('email', isEqualTo: _userEmail)
                 .where('status', isEqualTo: status)
-                .where('created_by', isEqualTo: uid)
                 .orderBy('timestamp', descending: true)
                 .snapshots(),
-            builder: (context, createdSnapshot) {
-              return StreamBuilder<QuerySnapshot>(
-                stream: _firestore
-                    .collection('todo')
-                    .where('status', isEqualTo: status)
-                    .where('assigned_by', isEqualTo: uid)
-                    .orderBy('timestamp', descending: true)
-                    .snapshots(),
-                builder: (context, assignedSnapshot) {
-                  if (createdSnapshot.connectionState == ConnectionState.waiting ||
-                      assignedSnapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
+            builder: (context, snapshot) {
+              if (snapshot.hasError) return const Center(child: Text('Error loading todos'));
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final todos = snapshot.data?.docs ?? [];
+
+              if (todos.isEmpty) {
+                return Center(
+                  child: Text(
+                    status == 'pending' ? 'No pending tasks' : 'No completed tasks',
+                    style: const TextStyle(fontSize: 16, color: Color.fromARGB(255, 70, 164, 57)),
+                  ),
+                );
+              }
+
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+
+              return ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                itemCount: todos.length,
+                itemBuilder: (context, index) {
+                  final doc = todos[index];
+                  final data = doc.data() as Map<String, dynamic>;
+                  final title = data['title'] ?? 'No title';
+                  final description = data['description'] ?? '';
+                  final priority = data['priority'] ?? 'High';
+                  final timestamp = data['timestamp'] as Timestamp?;
+                  final timeStr = timestamp != null
+                      ? TimeOfDay.fromDateTime(timestamp.toDate().toLocal()).format(context)
+                      : '...';
+
+                  Color priorityColor;
+                  Color priorityBgColor;
+                  if (isDark) {
+                    switch (priority) {
+                      case 'High':
+                        priorityColor = Colors.red;
+                        priorityBgColor = const Color(0xFF3B2323); // Dark red shade
+                        break;
+                      case 'Medium':
+                        priorityColor = Colors.amber;
+                        priorityBgColor = const Color(0xFF39321A); // Dark amber shade
+                        break;
+                      case 'Low':
+                        priorityColor = Colors.green;
+                        priorityBgColor = const Color(0xFF1B3223); // Dark green shade
+                        break;
+                      default:
+                        priorityColor = Colors.grey;
+                        priorityBgColor = Colors.grey.shade800;
+                    }
+                  } else {
+                    switch (priority) {
+                      case 'High':
+                        priorityColor = Colors.red;
+                        priorityBgColor = const Color(0xFFFFEBEE); // Light red
+                        break;
+                      case 'Medium':
+                        priorityColor = Colors.amber;
+                        priorityBgColor = const Color(0xFFFFF8E1); // Light amber/yellow
+                        break;
+                      case 'Low':
+                        priorityColor = Colors.green;
+                        priorityBgColor = const Color(0xFFE8F5E9); // Light green
+                        break;
+                      default:
+                        priorityColor = Colors.grey;
+                        priorityBgColor = Colors.grey.shade100;
+                    }
                   }
-                  final createdDocs = createdSnapshot.data?.docs ?? [];
-                  final assignedDocs = assignedSnapshot.data?.docs ?? [];
-                  // Merge and remove duplicates by doc.id
-                  final Map<String, DocumentSnapshot> docMap = {};
-                  for (var d in createdDocs) {
-                    docMap[d.id] = d;
-                  }
-                  for (var d in assignedDocs) {
-                    docMap[d.id] = d;
-                  }
-                  final allDocs = docMap.values.toList()
-                    ..sort((a, b) {
-                      final ta = a['timestamp'];
-                      final tb = b['timestamp'];
-                      if (ta is Timestamp && tb is Timestamp) {
-                        return tb.compareTo(ta);
-                      }
-                      return 0;
-                    });
 
-                  if (allDocs.isEmpty) {
-                    return Center(
-                      child: Text(
-                        status == 'pending' ? 'No pending tasks' : 'No completed tasks',
-                        style: const TextStyle(fontSize: 16, color: Color.fromARGB(255, 70, 164, 57)),
-                      ),
-                    );
-                  }
-
-                  final isDark = Theme.of(context).brightness == Brightness.dark;
-
-                  return ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    itemCount: allDocs.length,
-                    itemBuilder: (context, index) {
-                      final doc = allDocs[index];
-                      final data = doc.data() as Map<String, dynamic>;
-                      final title = data['title'] ?? 'No title';
-                      final description = data['description'] ?? '';
-                      final priority = data['priority'] ?? 'High';
-                      final timestamp = data['timestamp'] as Timestamp?;
-                      final timeStr = timestamp != null
-                          ? TimeOfDay.fromDateTime(timestamp.toDate().toLocal()).format(context)
-                          : '...';
-
-                      Color priorityColor;
-                      Color priorityBgColor;
-                      if (isDark) {
-                        switch (priority) {
-                          case 'High':
-                            priorityColor = Colors.red;
-                            priorityBgColor = const Color(0xFF3B2323);
-                            break;
-                          case 'Medium':
-                            priorityColor = Colors.amber;
-                            priorityBgColor = const Color(0xFF39321A);
-                            break;
-                          case 'Low':
-                            priorityColor = Colors.green;
-                            priorityBgColor = const Color(0xFF1B3223);
-                            break;
-                          default:
-                            priorityColor = Colors.grey;
-                            priorityBgColor = Colors.grey.shade800;
-                        }
-                      } else {
-                        switch (priority) {
-                          case 'High':
-                            priorityColor = Colors.red;
-                            priorityBgColor = const Color(0xFFFFEBEE);
-                            break;
-                          case 'Medium':
-                            priorityColor = Colors.amber;
-                            priorityBgColor = const Color(0xFFFFF8E1);
-                            break;
-                          case 'Low':
-                            priorityColor = Colors.green;
-                            priorityBgColor = const Color(0xFFE8F5E9);
-                            break;
-                          default:
-                            priorityColor = Colors.grey;
-                            priorityBgColor = Colors.grey.shade100;
-                        }
-                      }
-
-                      return Slidable(
-                        key: ValueKey(doc.id),
-                        startActionPane: ActionPane(
-                          motion: const DrawerMotion(),
-                          extentRatio: 0.28,
-                          children: [
-                            SlidableAction(
-                              onPressed: (context) async {
-                                await _toggleStatus(doc);
-                              },
-                              backgroundColor: data['status'] == 'pending'
-                                  ? Colors.green.shade400
-                                  : Colors.orange.shade400,
-                              foregroundColor: Colors.white,
-                              icon: data['status'] == 'pending'
-                                  ? Icons.check_circle
-                                  : Icons.refresh,
-                              label: data['status'] == 'pending'
-                                  ? 'Done'
-                                  : 'Pending',
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ],
+                  return Slidable(
+                    key: ValueKey(doc.id),
+                    startActionPane: ActionPane(
+                      motion: const DrawerMotion(),
+                      extentRatio: 0.28,
+                      children: [
+                        SlidableAction(
+                          onPressed: (context) async {
+                            await _toggleStatus(doc);
+                          },
+                          backgroundColor: data['status'] == 'pending'
+                              ? Colors.green.shade400
+                              : Colors.orange.shade400,
+                          foregroundColor: Colors.white,
+                          icon: data['status'] == 'pending'
+                              ? Icons.check_circle
+                              : Icons.refresh,
+                          label: data['status'] == 'pending'
+                              ? 'Done'
+                              : 'Pending',
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        endActionPane: ActionPane(
-                          motion: const DrawerMotion(),
-                          extentRatio: 0.25,
-                          children: [
-                            SlidableAction(
-                              onPressed: (context) async {
-                                final confirm = await showDialog<bool>(
-                                  context: context,
-                                  builder: (context) => AlertDialog(
-                                    title: const Text('Delete Task?'),
-                                    content: const Text('Are you sure you want to delete this task?'),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () => Navigator.of(context).pop(true),
-                                        child: const Text('Delete', style: TextStyle(color: Color.fromARGB(255, 0, 0, 0))),
-                                      ),
-                                      TextButton(
-                                        onPressed: () => Navigator.of(context).pop(false),
-                                        child: const Text('Cancel'),
-                                      ),
-                                    ],
+                      ],
+                    ),
+                    endActionPane: ActionPane(
+                      motion: const DrawerMotion(),
+                      extentRatio: 0.25,
+                      children: [
+                        SlidableAction(
+                          onPressed: (context) async {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Delete Task?'),
+                                content: const Text('Are you sure you want to delete this task?'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.of(context).pop(true),
+                                    child: const Text('Delete', style: TextStyle(color: Color.fromARGB(255, 0, 0, 0))),
                                   ),
-                                );
-                                if (confirm == true) {
-                                  await _firestore.collection('todo').doc(doc.id).delete();
-                                }
-                              },
-                              backgroundColor: Colors.red.shade400,
-                              foregroundColor: Colors.white,
-                              icon: Icons.delete,
-                              label: 'Delete',
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ],
-                        ),
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: priorityBgColor,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Theme.of(context).shadowColor.withOpacity(0.15),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
+                                  TextButton(
+                                    onPressed: () => Navigator.of(context).pop(false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                ],
                               ),
-                            ],
+                            );
+                            if (confirm == true) {
+                              await _firestore.collection('todo').doc(doc.id).delete();
+                            }
+                          },
+                          backgroundColor: Colors.red.shade400,
+                          foregroundColor: Colors.white,
+                          icon: Icons.delete,
+                          label: 'Delete',
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ],
+                    ),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: priorityBgColor,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Theme.of(context).shadowColor.withOpacity(0.15),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
                           ),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            leading: Container(
-                              width: 5,
-                              height: double.infinity,
-                              decoration: BoxDecoration(
-                                color: priorityColor,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            title: Text(
-                              title,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: data['status'] == 'done'
-                                    ? Theme.of(context).disabledColor
-                                    : Theme.of(context).textTheme.bodyLarge?.color,
-                                decoration: data['status'] == 'done' ? TextDecoration.lineThrough : null,
-                              ),
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        timeStr,
-                                        style: TextStyle(
-                                          color: Theme.of(context).hintColor,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                      if (description.isNotEmpty)
-                                        Flexible(
-                                          child: Text(
-                                            description,
-                                            style: TextStyle(
-                                              color: Theme.of(context).textTheme.bodySmall?.color,
-                                              fontSize: 13,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                    ],
+                        ],
+                      ),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        leading: Container(
+                          width: 5,
+                          height: double.infinity,
+                          decoration: BoxDecoration(
+                            color: priorityColor,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        title: Text(
+                          title,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: data['status'] == 'done'
+                                ? Theme.of(context).disabledColor
+                                : Theme.of(context).textTheme.bodyLarge?.color,
+                            decoration: data['status'] == 'done' ? TextDecoration.lineThrough : null,
+                          ),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    timeStr,
+                                    style: TextStyle(
+                                      color: Theme.of(context).hintColor,
+                                      fontSize: 14,
+                                    ),
                                   ),
-                                ),
-                                // Assignment info for manager
-                                if (data['assigned_to_name'] != null)
-                                  Padding(
+                                  if (description.isNotEmpty)
+                                    Flexible(
+                                      child: Text(
+                                        description,
+                                        style: TextStyle(
+                                          color: Theme.of(context).textTheme.bodySmall?.color,
+                                          fontSize: 13,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            if (data['email'] != null)
+                              FutureBuilder<String>(
+                                future: _getUsernameByEmail(data['email'] ?? ''),
+                                builder: (context, snapshot) {
+                                  if (!snapshot.hasData) return const SizedBox.shrink();
+                                  return Padding(
                                     padding: const EdgeInsets.only(top: 2),
                                     child: Text(
-                                      'Assigned to: ${data['assigned_to_name']}',
+                                      'Assigned to: ${snapshot.data}',
                                       style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
                                     ),
-                                  )
-                                else if (data['email'] != null)
-                                  FutureBuilder<String>(
-                                    future: _getUsernameByEmail(data['email'] ?? ''),
-                                    builder: (context, snapshot) {
-                                      if (!snapshot.hasData) return const SizedBox.shrink();
-                                      return Padding(
-                                        padding: const EdgeInsets.only(top: 2),
-                                        child: Text(
-                                          'Assigned to: ${snapshot.data}',
-                                          style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                              ],
-                            ),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => TaskDetailPage(
-                                    data: data,
-                                    dateStr: timestamp != null
-                                        ? timestamp.toDate().toLocal().toString().split(' ')[0]
-                                        : '',
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                                  );
+                                },
+                              ),
+                          ],
                         ),
-                      );
-                    },
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => TaskDetailPage(
+                                data: data,
+                                dateStr: timestamp != null
+                                    ? timestamp.toDate().toLocal().toString().split(' ')[0]
+                                    : '',
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                   );
                 },
               );
@@ -939,11 +923,6 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
     }
   }
 
-  Widget _buildInputBar() {
-    // Remove the input bar entirely, as per your request
-    return const SizedBox.shrink();
-  }
-
   Future<String> _getUsernameByEmail(String email) async {
     final userSnap = await _firestore
         .collection('users')
@@ -954,5 +933,296 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
       return userSnap.docs.first.data()['username'] ?? email;
     }
     return email;
+  }
+
+  // This method builds the "Others" tab for managers, showing todos not assigned to the current user
+  Widget _buildSalesTodosForManagerTab() {
+    if (_userEmail == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return FutureBuilder<DocumentSnapshot>(
+      future: _firestore.collection('users').doc(_auth.currentUser!.uid).get(),
+      builder: (context, userSnapshot) {
+        if (!userSnapshot.hasData) return const Center(child: CircularProgressIndicator());
+        final managerBranch = userSnapshot.data!.get('branch');
+        final managerEmail = userSnapshot.data!.get('email');
+
+        return FutureBuilder<QuerySnapshot>(
+          future: _firestore
+              .collection('users')
+              .where('role', isEqualTo: 'sales')
+              .where('branch', isEqualTo: managerBranch)
+              .get(),
+          builder: (context, usersSnapshot) {
+            if (!usersSnapshot.hasData) return const Center(child: CircularProgressIndicator());
+            final salesUsers = usersSnapshot.data!.docs
+                .map((doc) => {
+                      'email': doc['email'] as String?,
+                      'username': doc['username'] as String? ?? doc['email'] as String?,
+                    })
+                .where((user) => user['email'] != managerEmail)
+                .toList();
+
+            if (salesUsers.isEmpty) {
+              return const Center(child: Text('No sales users found.'));
+            }
+
+            // Pagination variables
+            const int pageSize = 10;
+            int _currentPage = 0;
+            String? _selectedUsername;
+
+            return StatefulBuilder(
+              builder: (context, setState) {
+                // Filtering logic
+                List<Map<String, String?>> filteredUsers = salesUsers;
+                if (_selectedUsername != null && _selectedUsername != 'All') {
+                  filteredUsers = salesUsers
+                      .where((user) => user['username'] == _selectedUsername)
+                      .toList();
+                }
+
+                // Get the emails for the current page
+                final int start = _currentPage * pageSize;
+                final int end = ((start + pageSize) > filteredUsers.length) ? filteredUsers.length : (start + pageSize);
+                final List<String> pageEmails = filteredUsers.sublist(start, end).map((u) => u['email']!).toList();
+
+                // Username dropdown options
+                final usernames = ['All', ...{for (var u in salesUsers) u['username'] ?? u['email']}];
+
+                return Column(
+                  children: [
+                    // Username filter dropdown
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Row(
+                        children: [
+                          const Text('Filter by user:', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: DropdownButton<String>(
+                              value: _selectedUsername ?? 'All',
+                              isExpanded: true,
+                              items: usernames
+                                  .map((username) => DropdownMenuItem(
+                                        value: username,
+                                        child: Text(username ?? ''),
+                                      ))
+                                  .toList(),
+                              onChanged: (value) {
+                                setState(() {
+                                  _selectedUsername = value;
+                                  _currentPage = 0; // Reset to first page on filter change
+                                });
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: StreamBuilder<QuerySnapshot>(
+                        stream: _firestore
+                            .collection('todo')
+                            .where('email', whereIn: pageEmails.isEmpty ? ['dummy'] : pageEmails)
+                            .orderBy('timestamp', descending: true)
+                            .snapshots(),
+                        builder: (context, todosSnapshot) {
+                          if (todosSnapshot.hasError) return const Center(child: Text('Error loading todos'));
+                          if (todosSnapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+                          final todos = todosSnapshot.data?.docs ?? [];
+                          if (todos.isEmpty) {
+                            return const Center(
+                              child: Text('No tasks from others', style: TextStyle(fontSize: 16, color: Color.fromARGB(255, 70, 164, 57))),
+                            );
+                          }
+                          final isDark = Theme.of(context).brightness == Brightness.dark;
+                          return ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            itemCount: todos.length,
+                            itemBuilder: (context, index) {
+                              final doc = todos[index];
+                              final data = doc.data() as Map<String, dynamic>;
+                              final title = data['title'] ?? 'No title';
+                              final description = data['description'] ?? '';
+                              final priority = data['priority'] ?? 'High';
+                              final timestamp = data['timestamp'] as Timestamp?;
+                              final timeStr = timestamp != null
+                                  ? TimeOfDay.fromDateTime(timestamp.toDate().toLocal()).format(context)
+                                  : '...';
+
+                              Color priorityColor;
+                              Color priorityBgColor;
+                              if (isDark) {
+                                switch (priority) {
+                                  case 'High':
+                                    priorityColor = Colors.red;
+                                    priorityBgColor = const Color(0xFF3B2323);
+                                    break;
+                                  case 'Medium':
+                                    priorityColor = Colors.amber;
+                                    priorityBgColor = const Color(0xFF39321A);
+                                    break;
+                                  case 'Low':
+                                    priorityColor = Colors.green;
+                                    priorityBgColor = const Color(0xFF1B3223);
+                                    break;
+                                  default:
+                                    priorityColor = Colors.grey;
+                                    priorityBgColor = Colors.grey.shade800;
+                                }
+                              } else {
+                                switch (priority) {
+                                  case 'High':
+                                    priorityColor = Colors.red;
+                                    priorityBgColor = const Color(0xFFFFEBEE);
+                                    break;
+                                  case 'Medium':
+                                    priorityColor = Colors.amber;
+                                    priorityBgColor = const Color(0xFFFFF8E1);
+                                    break;
+                                  case 'Low':
+                                    priorityColor = Colors.green;
+                                    priorityBgColor = const Color(0xFFE8F5E9);
+                                    break;
+                                  default:
+                                    priorityColor = Colors.grey;
+                                    priorityBgColor = Colors.grey.shade100;
+                                }
+                              }
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 16),
+                                decoration: BoxDecoration(
+                                  color: priorityBgColor,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Theme.of(context).shadowColor.withOpacity(0.15),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: ListTile(
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  leading: Container(
+                                    width: 5,
+                                    height: double.infinity,
+                                    decoration: BoxDecoration(
+                                      color: priorityColor,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  title: Text(
+                                    title,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: data['status'] == 'done'
+                                          ? Theme.of(context).disabledColor
+                                          : Theme.of(context).textTheme.bodyLarge?.color,
+                                      decoration: data['status'] == 'done' ? TextDecoration.lineThrough : null,
+                                    ),
+                                  ),
+                                  subtitle: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 4),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              timeStr,
+                                              style: TextStyle(
+                                                color: Theme.of(context).hintColor,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                            if (description.isNotEmpty)
+                                              Flexible(
+                                                child: Text(
+                                                  description,
+                                                  style: TextStyle(
+                                                    color: Theme.of(context).textTheme.bodySmall?.color,
+                                                    fontSize: 13,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (data['email'] != null)
+                                        FutureBuilder<String>(
+                                          future: _getUsernameByEmail(data['email'] ?? ''),
+                                          builder: (context, snapshot) {
+                                            if (!snapshot.hasData) return const SizedBox.shrink();
+                                            return Padding(
+                                              padding: const EdgeInsets.only(top: 2),
+                                              child: Text(
+                                                'Assigned to: ${snapshot.data}',
+                                                style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                    ],
+                                  ),
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => TaskDetailPage(
+                                          data: data,
+                                          dateStr: timestamp != null
+                                              ? timestamp.toDate().toLocal().toString().split(' ')[0]
+                                              : '',
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                    // Pagination controls
+                    if (filteredUsers.length > pageSize)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.arrow_back),
+                              onPressed: _currentPage > 0
+                                  ? () => setState(() => _currentPage--)
+                                  : null,
+                            ),
+                            Text('Page ${_currentPage + 1} of ${((filteredUsers.length - 1) ~/ pageSize) + 1}'),
+                            IconButton(
+                              icon: const Icon(Icons.arrow_forward),
+                              onPressed: end < filteredUsers.length
+                                  ? () => setState(() => _currentPage++)
+                                  : null,
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
   }
 }

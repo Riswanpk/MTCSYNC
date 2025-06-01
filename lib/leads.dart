@@ -4,7 +4,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'follow.dart';
 import 'presentfollowup.dart';
-import 'package:flutter_slidable/flutter_slidable.dart'; // Add this import at the top
+import 'package:flutter_slidable/flutter_slidable.dart';
+// Add these imports for Excel export
+import 'package:excel/excel.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'package:permission_handler/permission_handler.dart';
 
 class LeadsPage extends StatefulWidget {
   final String branch;
@@ -60,6 +65,76 @@ class _LeadsPageState extends State<LeadsPage> {
     });
   }
 
+  // Add this method for Excel export
+  Future<void> _downloadLeadsExcel(BuildContext context) async {
+    try {
+      // Request MANAGE_EXTERNAL_STORAGE permission if needed (Android 11+)
+      if (Platform.isAndroid) {
+        var status = await Permission.manageExternalStorage.request();
+        if (!status.isGranted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Manage External Storage permission denied')),
+          );
+          return;
+        }
+      }
+
+      final excel = Excel.createExcel();
+      final Sheet sheet = excel['Leads'];
+
+      // Add header row (adjust fields as per your follow_ups db)
+      sheet.appendRow([
+        'Name',
+        'Company',
+        'Address',
+        'Phone',
+        'Status',
+        'Priority',
+        'Comments',
+        'Reminder',
+        'Branch',
+        'Created By',
+        'Date',
+        'Created At',
+      ]);
+
+      // Fetch all leads from all branches
+      final query = await FirebaseFirestore.instance.collection('follow_ups').get();
+      for (final doc in query.docs) {
+        final data = doc.data();
+        sheet.appendRow([
+          data['name'] ?? '',
+          data['company'] ?? '',
+          data['address'] ?? '',
+          data['phone'] ?? '',
+          data['status'] ?? '',
+          data['priority'] ?? '',
+          data['comments'] ?? '',
+          data['reminder'] ?? '',
+          data['branch'] ?? '',
+          data['created_by'] ?? '',
+          data['date'] ?? '',
+          data['created_at'] != null && data['created_at'] is Timestamp
+              ? (data['created_at'] as Timestamp).toDate().toString()
+              : '',
+        ]);
+      }
+
+      // Save file to Downloads directory (works with MANAGE_EXTERNAL_STORAGE)
+      Directory downloadsDir = Directory('/storage/emulated/0/Download');
+      final file = File('${downloadsDir.path}/leads_${DateTime.now().millisecondsSinceEpoch}.xlsx');
+      await file.writeAsBytes(excel.encode()!);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Excel file downloaded to ${file.path}')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to download Excel: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Map<String, dynamic>?>(
@@ -81,6 +156,69 @@ class _LeadsPageState extends State<LeadsPage> {
             title: const Text('CRM - Leads Follow Up'),
             backgroundColor: const Color(0xFF005BAC),
             foregroundColor: Colors.white,
+            actions: [
+              if (role == 'admin')
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.menu),
+                  onSelected: (value) async {
+                    if (value == 'delete_completed') {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Delete All Completed Leads?'),
+                          content: const Text(
+                            'Are you sure you want to delete all completed leads for this branch? This action cannot be undone.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(true),
+                              child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(false),
+                              child: const Text('Cancel'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirm == true) {
+                        final branch = selectedBranch ?? '';
+                        final query = await FirebaseFirestore.instance
+                            .collection('follow_ups')
+                            .where('branch', isEqualTo: branch)
+                            .where('status', isEqualTo: 'Completed')
+                            .get();
+
+                        for (final doc in query.docs) {
+                          await doc.reference.delete();
+                        }
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('All completed leads deleted')),
+                        );
+                      }
+                    } else if (value == 'download_excel') {
+                      await _downloadLeadsExcel(context);
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'delete_completed',
+                      child: ListTile(
+                        leading: Icon(Icons.delete_forever, color: Colors.red),
+                        title: Text('Delete All Completed Leads'),
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'download_excel',
+                      child: ListTile(
+                        leading: Icon(Icons.download, color: Colors.green),
+                        title: Text('Excel'),
+                      ),
+                    ),
+                  ],
+                ),
+            ],
           ),
           body: Stack(
             children: [

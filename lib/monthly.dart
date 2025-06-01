@@ -159,14 +159,24 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
       final date = monthStart.add(Duration(days: i));
       final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
       missed[dateStr] = {'todo': false, 'lead': false};
-    }
 
-    final todosSnapshot = await FirebaseFirestore.instance
-        .collection('todo')
-        .where('email', isEqualTo: email)
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
-        .where('timestamp', isLessThan: Timestamp.fromDate(today.add(const Duration(days: 1))))
-        .get();
+      final windowStart = date.subtract(const Duration(days: 1)).add(const Duration(hours: 19)); // 7pm previous day
+      final windowEnd = DateTime(date.year, date.month, date.day, 12, 0, 0); // 12pm current day
+
+      // Query todos for this user in the window
+      final todosSnapshot = await FirebaseFirestore.instance
+          .collection('todo')
+          .where('email', isEqualTo: email)
+          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(windowStart))
+          .where('timestamp', isLessThan: Timestamp.fromDate(windowEnd))
+          .get();
+
+      if (todosSnapshot.docs.isNotEmpty) {
+        missed[dateStr]!['todo'] = true;
+      }
+
+      // Query leads as before (or adjust window if needed)
+    }
 
     final leadsSnapshot = await FirebaseFirestore.instance
         .collection('follow_ups')
@@ -175,16 +185,6 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
         .where('created_at', isLessThan: Timestamp.fromDate(today.add(const Duration(days: 1))))
         .get();
 
-    for (var doc in todosSnapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
-      final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
-      if (timestamp != null) {
-        final dateStr = "${timestamp.year}-${timestamp.month.toString().padLeft(2, '0')}-${timestamp.day.toString().padLeft(2, '0')}";
-        if (missed[dateStr] != null) {
-          missed[dateStr]!['todo'] = true;
-        }
-      }
-    }
     for (var doc in leadsSnapshot.docs) {
       final data = doc.data() as Map<String, dynamic>;
       final timestamp = (data['created_at'] as Timestamp?)?.toDate();

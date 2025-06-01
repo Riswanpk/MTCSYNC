@@ -50,14 +50,16 @@ void main() async {
     await AwesomeNotifications().requestPermissionToSendNotifications();
   }
 
-  // Request alarm and reminder permissions using permission_handler
   await Permission.notification.request();
-  await Permission.scheduleExactAlarm.request(); // For alarms (Android 12+)
-  await Permission.reminders.request(); // For reminders (iOS only, safe to call)
+  await Permission.manageExternalStorage.request();
+  await Permission.scheduleExactAlarm.request();
+  await Permission.reminders.request();
+  
 
-  // You can also check the status if needed:
-  // var alarmStatus = await Permission.scheduleExactAlarm.status;
-  // var reminderStatus = await Permission.reminders.status;
+  // Request storage permission at startup (Android only)
+  if (await Permission.storage.isDenied) {
+    await Permission.storage.request();
+  }
 
   runApp(
     ChangeNotifierProvider(

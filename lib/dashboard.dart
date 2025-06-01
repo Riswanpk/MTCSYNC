@@ -76,32 +76,36 @@ class _DashboardPageState extends State<DashboardPage> {
     }
 
     final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day);
     final todayNoon = DateTime(now.year, now.month, now.day, 12, 0, 0);
-    final todayEnd = todayStart.add(const Duration(days: 1));
+    final yesterday7pm = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 1)).add(const Duration(hours: 19));
+
+    // For today, if before noon, use todayNoon, else use next day's noon
+    final windowEnd = now.isBefore(todayNoon)
+        ? todayNoon
+        : todayNoon.add(const Duration(days: 1));
 
     final todosSnapshot = await FirebaseFirestore.instance
         .collection('todo')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
-        .where('timestamp', isLessThan: Timestamp.fromDate(todayNoon))
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(yesterday7pm))
+        .where('timestamp', isLessThan: Timestamp.fromDate(windowEnd))
         .get();
 
     final deletedTodosSnapshot = await FirebaseFirestore.instance
         .collection('deleted_todos')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
-        .where('timestamp', isLessThan: Timestamp.fromDate(todayNoon))
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(yesterday7pm))
+        .where('timestamp', isLessThan: Timestamp.fromDate(windowEnd))
         .get();
 
     final leadsSnapshot = await FirebaseFirestore.instance
         .collection('follow_ups')
-        .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
-        .where('created_at', isLessThan: Timestamp.fromDate(todayEnd))
+        .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(yesterday7pm))
+        .where('created_at', isLessThan: Timestamp.fromDate(windowEnd))
         .get();
 
     final deletedLeadsSnapshot = await FirebaseFirestore.instance
         .collection('deleted_leads')
-        .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
-        .where('created_at', isLessThan: Timestamp.fromDate(todayEnd))
+        .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(yesterday7pm))
+        .where('created_at', isLessThan: Timestamp.fromDate(windowEnd))
         .get();
 
     final Map<String, int> userTodoCount = {};
