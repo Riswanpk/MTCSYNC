@@ -2,12 +2,33 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'theme_notifier.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
+import 'package:android_intent_plus/android_intent.dart';
+import 'dart:io';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({Key? key}) : super(key: key);
 
   void _openNotificationSettings() {
     AwesomeNotifications().showNotificationConfigPage();
+  }
+
+  void _openNotificationToneSettings(BuildContext context) async {
+    if (Platform.isAndroid) {
+      const channelId = 'reminder_channel'; // Use your actual channelKey
+      final intent = AndroidIntent(
+        action: 'android.settings.CHANNEL_NOTIFICATION_SETTINGS',
+        arguments: <String, dynamic>{
+          'android.provider.extra.APP_PACKAGE': 'com.example.mtcsync', // <-- Replace with your app's package name
+          'android.provider.extra.CHANNEL_ID': channelId,
+        },
+      );
+      await intent.launch();
+    } else {
+      // For iOS, show a dialog or guide user to system settings manually
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please change notification sound from iOS Settings.')),
+      );
+    }
   }
 
   @override
@@ -52,7 +73,7 @@ class SettingsPage extends StatelessWidget {
                 leading: const Icon(Icons.music_note),
                 title: const Text('Notification Tone'),
                 subtitle: const Text('Change your notification sound'),
-                onTap: _openNotificationSettings,
+                onTap: () => _openNotificationToneSettings(context),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
               ),
             ],
