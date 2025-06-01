@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'monthly.dart'; // Add this import
+import 'monthly.dart' as monthly; // Add this import with a prefix
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -188,7 +188,7 @@ class _DashboardPageState extends State<DashboardPage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => MonthlyReportPage(
+        builder: (_) => monthly.MonthlyReportPage(
           branch: _currentUserRole == 'manager' ? _currentUserBranch : _selectedBranch,
           users: users,
         ),
