@@ -56,7 +56,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
         final data = doc.data();
         return {
           'uid': doc.id,
-          'name': data['name'] ?? data['email'] ?? 'Unknown',
+          'username': data['username'] ?? data['email'] ?? 'Unknown',
           'email': data['email'] ?? 'unknown@example.com',
         };
       }).toList();
@@ -95,9 +95,9 @@ class _TodoFormPageState extends State<TodoFormPage> {
       email = salesUser['email'] ?? '';
       createdBy = user.uid; // Manager is creator
       assignedBy = user.uid;
-      assignedByName = (await FirebaseFirestore.instance.collection('users').doc(user.uid).get()).data()?['name'] ?? '';
+      assignedByName = (await FirebaseFirestore.instance.collection('users').doc(user.uid).get()).data()?['username'] ?? '';
       assignedTo = salesUser['uid'];
-      assignedToName = salesUser['name'];
+      assignedToName = salesUser['username'];
     } else {
       // Assign to self (manager)
       final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
@@ -225,7 +225,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
                         ),
                         ..._salesUsers.map<DropdownMenuItem<String>>((user) => DropdownMenuItem<String>(
                               value: user['uid'] as String,
-                              child: Text(user['name'] as String),
+                              child: Text(user['username'] as String), // <-- changed here
                             )),
                       ],
                       onChanged: (val) => setState(() => _selectedSalesUserId = val),
