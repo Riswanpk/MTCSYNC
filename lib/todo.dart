@@ -623,7 +623,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                                   )
                                 else if (data['email'] != null)
                                   FutureBuilder<String>(
-                                    future: _getUsernameByEmail(data['email']),
+                                    future: _getUsernameByEmail(data['email'] ?? ''),
                                     builder: (context, snapshot) {
                                       if (!snapshot.hasData) return const SizedBox.shrink();
                                       return Padding(
