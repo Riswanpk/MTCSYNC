@@ -3,6 +3,20 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+// Update fetchCustomerSuggestions to search by name OR phone:
+Future<List<Map<String, dynamic>>> fetchCustomerSuggestions(String query, String branch) async {
+  final snap = await FirebaseFirestore.instance
+      .collection('customer')
+      .where('branch', isEqualTo: branch)
+      .get();
+  return snap.docs
+      .map((doc) => doc.data())
+      .where((data) =>
+          (data['name'] ?? '').toString().toLowerCase().contains(query.toLowerCase()) ||
+          (data['phone'] ?? '').toString().toLowerCase().contains(query.toLowerCase()))
+      .toList();
+}
+
 class FollowUpForm extends StatefulWidget {
   const FollowUpForm({super.key});
 
@@ -77,6 +91,18 @@ class _FollowUpFormState extends State<FollowUpForm> {
       'created_at': FieldValue.serverTimestamp(),
     });
 
+    // Upsert customer profile
+    await FirebaseFirestore.instance
+        .collection('customer')
+        .doc(_phoneController.text)
+        .set({
+      'name': _nameController.text,
+      'company': _companyController.text,
+      'address': _addressController.text,
+      'phone': _phoneController.text,
+      'branch': branch,
+    }, SetOptions(merge: true));
+
     // ✅ Trigger immediate notification
     await AwesomeNotifications().createNotification(
       content: NotificationContent(
@@ -126,6 +152,23 @@ class _FollowUpFormState extends State<FollowUpForm> {
     Navigator.pop(context);
   }
 
+  Future<void> _autoFillFromCustomer(String phone) async {
+    final snap = await FirebaseFirestore.instance
+        .collection('customer')
+        .where('phone', isEqualTo: phone)
+        .limit(1)
+        .get();
+    if (snap.docs.isNotEmpty) {
+      final data = snap.docs.first.data();
+      setState(() {
+        _nameController.text = data['name'] ?? '';
+        _companyController.text = data['company'] ?? '';
+        _addressController.text = data['address'] ?? '';
+        // You can add more fields if needed
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -160,13 +203,65 @@ class _FollowUpFormState extends State<FollowUpForm> {
               ),
               const SizedBox(height: 16),
 
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Customer Name',
-                  prefixIcon: Icon(Icons.person),
-                ),
-                validator: (value) => value!.isEmpty ? 'Enter name' : null,
+              FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid).get(),
+                builder: (context, userSnap) {
+                  if (!userSnap.hasData) return const SizedBox();
+                  final branch = userSnap.data!.get('branch') ?? '';
+                  return RawAutocomplete<Map<String, dynamic>>(
+                    textEditingController: _nameController,
+                    focusNode: FocusNode(),
+                    optionsBuilder: (TextEditingValue textEditingValue) async {
+                      if (textEditingValue.text.isEmpty) return const Iterable<Map<String, dynamic>>.empty();
+                      return await fetchCustomerSuggestions(textEditingValue.text, branch);
+                    },
+                    displayStringForOption: (option) => option['name'] ?? '',
+                    fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                      return TextFormField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        decoration: const InputDecoration(
+                          labelText: 'Customer Name',
+                          prefixIcon: Icon(Icons.person),
+                        ),
+                        validator: (value) => value!.isEmpty ? 'Enter name' : null,
+                      );
+                    },
+                    optionsViewBuilder: (context, onSelected, options) {
+                      return Align(
+                        alignment: Alignment.topLeft,
+                        child: Material(
+                          elevation: 4.0,
+                          child: SizedBox(
+                            height: 200,
+                            child: ListView.builder(
+                              padding: EdgeInsets.zero,
+                              itemCount: options.length,
+                              itemBuilder: (context, index) {
+                                final option = options.elementAt(index);
+                                return ListTile(
+                                  title: Text(option['name'] ?? ''),
+                                  subtitle: Text(option['phone'] ?? ''),
+                                  onTap: () {
+                                    onSelected(option);
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                    onSelected: (selectedCustomer) {
+                      setState(() {
+                        _nameController.text = selectedCustomer['name'] ?? '';
+                        _companyController.text = selectedCustomer['company'] ?? '';
+                        _addressController.text = selectedCustomer['address'] ?? '';
+                        _phoneController.text = selectedCustomer['phone'] ?? '';
+                      });
+                    },
+                  );
+                },
               ),
               const SizedBox(height: 16),
 
@@ -190,14 +285,64 @@ class _FollowUpFormState extends State<FollowUpForm> {
               ),
               const SizedBox(height: 16),
 
-              TextFormField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'Phone No.',
-                  prefixIcon: Icon(Icons.phone),
-                ),
-                validator: (value) => value!.isEmpty ? 'Enter phone number' : null,
+              RawAutocomplete<Map<String, dynamic>>(
+                textEditingController: _phoneController,
+                focusNode: FocusNode(),
+                optionsBuilder: (TextEditingValue textEditingValue) async {
+                  if (textEditingValue.text.isEmpty) return const Iterable<Map<String, dynamic>>.empty();
+                  // Use the same branch logic as before
+                  final user = FirebaseAuth.instance.currentUser;
+                  if (user == null) return const Iterable<Map<String, dynamic>>.empty();
+                  final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+                  final branch = userDoc.data()?['branch'] ?? '';
+                  return await fetchCustomerSuggestions(textEditingValue.text, branch);
+                },
+                displayStringForOption: (option) => option['phone'] ?? '',
+                fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                  return TextFormField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    decoration: const InputDecoration(
+                      labelText: 'Phone',
+                      prefixIcon: Icon(Icons.phone),
+                    ),
+                    keyboardType: TextInputType.phone,
+                    validator: (value) => value!.isEmpty ? 'Enter phone number' : null,
+                  );
+                },
+                optionsViewBuilder: (context, onSelected, options) {
+                  return Align(
+                    alignment: Alignment.topLeft,
+                    child: Material(
+                      elevation: 4.0,
+                      child: SizedBox(
+                        height: 200,
+                        child: ListView.builder(
+                          padding: EdgeInsets.zero,
+                          itemCount: options.length,
+                          itemBuilder: (context, index) {
+                            final option = options.elementAt(index);
+                            return ListTile(
+                              title: Text(option['phone'] ?? ''),
+                              subtitle: Text(option['name'] ?? ''),
+                              onTap: () {
+                                onSelected(option);
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  );
+                },
+                onSelected: (selectedCustomer) {
+                  setState(() {
+                    _nameController.text = selectedCustomer['name'] ?? '';
+                    _companyController.text = selectedCustomer['company'] ?? '';
+                    _addressController.text = selectedCustomer['address'] ?? '';
+                    _phoneController.text = selectedCustomer['phone'] ?? '';
+                  });
+                },
               ),
               const SizedBox(height: 16),
 

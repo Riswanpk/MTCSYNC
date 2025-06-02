@@ -9,6 +9,7 @@ import 'feedback.dart'; // Add this import
 import 'feedback_admin.dart'; // Add this import
 import 'dashboard.dart'; // Import the dashboard page
 import 'manageusers.dart'; // Add this import
+import 'customer_list.dart'; // Import the customer list page
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -288,6 +289,21 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                             icon: Icons.dashboard_rounded,
                           ),
                         ],
+
+                        // Add Customer List button (newly added)
+                        const SizedBox(height: 25),
+                        NeumorphicButton(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const CustomerListPage()),
+                            );
+                          },
+                          text: 'Customer List',
+                          color: Colors.teal, // Or any color you like
+                          textColor: Colors.white,
+                          icon: Icons.people_outline,
+                        ),
                       ],
                     ),
                   ),
