@@ -10,6 +10,9 @@ import 'package:excel/excel.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:pdf/pdf.dart';
 
 class LeadsPage extends StatefulWidget {
   final String branch;
@@ -47,6 +50,13 @@ class _LeadsPageState extends State<LeadsPage> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     _currentUserData = FirebaseFirestore.instance.collection('users').doc(uid).get().then((doc) => doc.data());
     _fetchBranches();
+    // Auto delete completed leads at end of month
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final userData = await _currentUserData;
+      if (userData != null) {
+        await autoDeleteCompletedLeads(userData['branch'] ?? '');
+      }
+    });
   }
 
   Future<void> _fetchBranches() async {
@@ -114,13 +124,7 @@ class _LeadsPageState extends State<LeadsPage> {
           'Address',
           'Phone',
           'Status',
-          'Priority',
           'Comments',
-          'Reminder',
-          'Branch',
-          'Created By',
-          'Date',
-          'Created At',
         ]);
 
         // Add data rows
@@ -131,15 +135,7 @@ class _LeadsPageState extends State<LeadsPage> {
             data['address'] ?? '',
             data['phone'] ?? '',
             data['status'] ?? '',
-            data['priority'] ?? '',
             data['comments'] ?? '',
-            data['reminder'] ?? '',
-            data['branch'] ?? '',
-            data['created_by'] ?? '',
-            data['date'] ?? '',
-            data['created_at'] != null && data['created_at'] is Timestamp
-                ? (data['created_at'] as Timestamp).toDate().toString()
-                : '',
           ]);
         }
       }
@@ -156,6 +152,98 @@ class _LeadsPageState extends State<LeadsPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to download Excel: $e')),
       );
+    }
+  }
+
+  Future<void> autoDeleteCompletedLeads(String branch) async {
+    final now = DateTime.now();
+    final lastDay = DateTime(now.year, now.month + 1, 0).day;
+    if (now.day == lastDay) {
+      final query = await FirebaseFirestore.instance
+          .collection('follow_ups')
+          .where('branch', isEqualTo: branch)
+          .where('status', isEqualTo: 'Completed')
+          .get();
+      for (final doc in query.docs) {
+        await doc.reference.delete();
+      }
+    }
+  }
+
+  Future<String?> _downloadLeadsPdf(BuildContext context, {String? branch}) async {
+    try {
+      final pdf = pw.Document();
+
+      // Use built-in Helvetica font (works for English and basic symbols)
+      final regularFont = pw.Font.helvetica();
+      final boldFont = pw.Font.helveticaBold();
+
+      // Fetch all leads (or only for a specific branch)
+      QuerySnapshot query;
+      if (branch != null && branch.isNotEmpty) {
+        query = await FirebaseFirestore.instance
+            .collection('follow_ups')
+            .where('branch', isEqualTo: branch)
+            .get();
+      } else {
+        query = await FirebaseFirestore.instance.collection('follow_ups').get();
+      }
+
+      // Group leads by branch
+      final Map<String, List<Map<String, dynamic>>> branchLeads = {};
+      for (final doc in query.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final branchName = (data['branch'] ?? 'Unknown') as String;
+        branchLeads.putIfAbsent(branchName, () => []).add(data);
+      }
+
+      // Add a single PDF page with all branches, each with a title and table
+      pdf.addPage(
+        pw.MultiPage(
+          build: (pw.Context context) {
+            final List<pw.Widget> widgets = [];
+            branchLeads.forEach((branchName, leads) {
+              if (leads.isNotEmpty) {
+                final safeBranchName = branchName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+                widgets.add(
+                  pw.Text(
+                    'Branch: $safeBranchName',
+                    style: pw.TextStyle(font: boldFont, fontWeight: pw.FontWeight.bold, fontSize: 18),
+                  ),
+                );
+                widgets.add(pw.SizedBox(height: 8));
+                widgets.add(
+                  pw.Table.fromTextArray(
+                    headers: ['Name', 'Company', 'Address', 'Phone', 'Status', 'Comments'],
+                    data: leads.map((data) => [
+                      (data['name'] ?? '-').toString(),
+                      (data['company'] ?? '-').toString(),
+                      (data['address'] ?? '-').toString(),
+                      (data['phone'] ?? '-').toString(),
+                      (data['status'] ?? '-').toString(),
+                      (data['comments'] ?? '-').toString(),
+                    ]).toList(),
+                    cellStyle: pw.TextStyle(font: regularFont),
+                    headerStyle: pw.TextStyle(font: boldFont, fontWeight: pw.FontWeight.bold),
+                  ),
+                );
+                widgets.add(pw.SizedBox(height: 20));
+              }
+            });
+            return widgets;
+          },
+        ),
+      );
+
+      Directory downloadsDir = Directory('/storage/emulated/0/Download');
+      final file = File('${downloadsDir.path}/leads_${DateTime.now().millisecondsSinceEpoch}.pdf');
+      await file.writeAsBytes(await pdf.save());
+      return file.path;
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to generate PDF: $e')),
+      );
+      return null;
     }
   }
 
@@ -226,6 +314,12 @@ class _LeadsPageState extends State<LeadsPage> {
                         context,
                         branch: role == 'admin' ? null : managerBranch,
                       );
+                    } else if (value == 'share_pdf') {
+                      // Always pass branch: null for admin to fetch all leads, regardless of selectedBranch
+                      final pdfPath = await _downloadLeadsPdf(context, branch: role == 'admin' ? null : managerBranch);
+                      if (pdfPath != null) {
+                        Share.shareXFiles([XFile(pdfPath)], text: 'Leads PDF Report');
+                      }
                     }
                   },
                   itemBuilder: (context) => [
@@ -241,6 +335,13 @@ class _LeadsPageState extends State<LeadsPage> {
                       child: ListTile(
                         leading: Icon(Icons.download, color: Colors.green),
                         title: Text('Excel'),
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'share_pdf',
+                      child: ListTile(
+                        leading: Icon(Icons.share, color: Colors.blue),
+                        title: Text('Share PDF'),
                       ),
                     ),
                   ],
