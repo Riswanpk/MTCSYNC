@@ -76,88 +76,46 @@ class _DashboardPageState extends State<DashboardPage> {
     }
 
     final now = DateTime.now();
-    final todayNoon = DateTime(now.year, now.month, now.day, 12, 0, 0);
-    final yesterday7pm = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 1)).add(const Duration(hours: 19));
+    final today = DateTime(now.year, now.month, now.day);
+    final windowStart = today.subtract(const Duration(days: 1)).add(const Duration(hours: 19)); // 7pm previous day
+    final windowEnd = DateTime(now.year, now.month, now.day, 12, 0, 0); // 12pm today
 
-    // For today, if before noon, use todayNoon, else use next day's noon
-    final windowEnd = now.isBefore(todayNoon)
-        ? todayNoon
-        : todayNoon.add(const Duration(days: 1));
-
+    // Fetch todos and leads in the window
     final todosSnapshot = await FirebaseFirestore.instance
         .collection('todo')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(yesterday7pm))
-        .where('timestamp', isLessThan: Timestamp.fromDate(windowEnd))
-        .get();
-
-    final deletedTodosSnapshot = await FirebaseFirestore.instance
-        .collection('deleted_todos')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(yesterday7pm))
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(windowStart))
         .where('timestamp', isLessThan: Timestamp.fromDate(windowEnd))
         .get();
 
     final leadsSnapshot = await FirebaseFirestore.instance
         .collection('follow_ups')
-        .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(yesterday7pm))
+        .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(windowStart))
         .where('created_at', isLessThan: Timestamp.fromDate(windowEnd))
         .get();
 
-    final deletedLeadsSnapshot = await FirebaseFirestore.instance
-        .collection('deleted_leads')
-        .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(yesterday7pm))
-        .where('created_at', isLessThan: Timestamp.fromDate(windowEnd))
-        .get();
+    final Set<String> emailsWithTodo = todosSnapshot.docs
+        .map((doc) => (doc.data() as Map<String, dynamic>)['email'] as String?)
+        .whereType<String>()
+        .toSet();
 
-    final Map<String, int> userTodoCount = {};
-    final Map<String, int> userDeletedTodoCount = {};
-    final Map<String, int> userLeadCount = {};
-    final Map<String, int> userDeletedLeadCount = {};
+    final Set<String> uidsWithLead = leadsSnapshot.docs
+        .map((doc) => (doc.data() as Map<String, dynamic>)['created_by'] as String?)
+        .whereType<String>()
+        .toSet();
 
-    for (var doc in todosSnapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
-      final email = data['email'];
-      if (email != null) {
-        userTodoCount[email] = (userTodoCount[email] ?? 0) + 1;
-      }
-    }
-    for (var doc in deletedTodosSnapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
-      final email = data['email'];
-      if (email != null) {
-        userDeletedTodoCount[email] = (userDeletedTodoCount[email] ?? 0) + 1;
-      }
-    }
-    for (var doc in leadsSnapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
-      final uid = data['created_by'];
-      if (uid != null) {
-        userLeadCount[uid] = (userLeadCount[uid] ?? 0) + 1;
-      }
-    }
-    for (var doc in deletedLeadsSnapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
-      final uid = data['created_by'];
-      if (uid != null) {
-        userDeletedLeadCount[uid] = (userDeletedLeadCount[uid] ?? 0) + 1;
-      }
-    }
-
-    // Build report
     final List<Map<String, dynamic>> report = [];
     for (var user in users) {
       final uid = user['uid'];
       final email = user['email'] ?? '';
-      final todoCreated = userTodoCount[email] ?? 0;
-      final todoDeleted = userDeletedTodoCount[email] ?? 0;
-      final leadCreated = userLeadCount[uid] ?? 0;
-      final leadDeleted = userDeletedLeadCount[uid] ?? 0;
+      final hasTodo = emailsWithTodo.contains(email);
+      final hasLead = uidsWithLead.contains(uid);
 
       report.add({
         'username': user['username'],
         'role': user['role'],
         'branch': user['branch'],
-        'hasTodo': (todoCreated - todoDeleted) > 0,
-        'hasLead': (leadCreated - leadDeleted) > 0,
+        'hasTodo': hasTodo,
+        'hasLead': hasLead,
       });
     }
     return report;

@@ -18,6 +18,8 @@ class MonthlyReportPage extends StatefulWidget {
 
 class _MonthlyReportPageState extends State<MonthlyReportPage> {
   Map<String, dynamic>? _selectedUser;
+  int _selectedMonth = DateTime.now().month;
+  int _selectedYear = DateTime.now().year;
 
   @override
   void initState() {
@@ -140,9 +142,45 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
                       hint: const Text("Select User"),
                     ),
                   ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      DropdownButton<int>(
+                        value: _selectedMonth,
+                        items: List.generate(12, (i) => i + 1)
+                            .map((m) => DropdownMenuItem(
+                                  value: m,
+                                  child: Text(
+                                    [
+                                      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+                                    ][m - 1],
+                                  ),
+                                ))
+                            .toList(),
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedMonth = val!;
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 16),
+                      DropdownButton<int>(
+                        value: _selectedYear,
+                        items: List.generate(5, (i) => DateTime.now().year - i)
+                            .map((y) => DropdownMenuItem(value: y, child: Text('$y')))
+                            .toList(),
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedYear = val!;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
                   if (_selectedUser != null)
                     FutureBuilder<List<Map<String, dynamic>>>(
-                      future: _generateUserMonthlyReport(_selectedUser!['uid'], _selectedUser!['email']),
+                      future: _generateUserMonthlyReport(_selectedUser!['uid'], _selectedUser!['email'], _selectedMonth, _selectedYear),
                       builder: (context, snap) {
                         if (snap.connectionState == ConnectionState.waiting) {
                           return const Center(child: CircularProgressIndicator());
@@ -156,7 +194,7 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
                         final missed = snap.data!;
                         return SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
-                          child: DataTable(
+                            child: DataTable(
                             columns: const [
                               DataColumn(label: Text('Date')),
                               DataColumn(label: Text('Todo')),
@@ -186,14 +224,15 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
     );
   }
 
-  Future<List<Map<String, dynamic>>> _generateUserMonthlyReport(String uid, String email) async {
-    final now = DateTime.now();
-    final monthStart = DateTime(now.year, now.month, 1);
-    final today = DateTime(now.year, now.month, now.day);
+  Future<List<Map<String, dynamic>>> _generateUserMonthlyReport(String uid, String email, int month, int year) async {
+    final monthStart = DateTime(year, month, 1);
+    final nextMonth = month == 12 ? DateTime(year + 1, 1, 1) : DateTime(year, month + 1, 1);
+    final today = DateTime.now();
+    final lastDay = (nextMonth.isAfter(today) ? today : nextMonth.subtract(const Duration(days: 1))).day;
 
     Map<String, Map<String, bool>> missed = {};
 
-    for (int i = 0; i < today.day; i++) {
+    for (int i = 0; i < lastDay; i++) {
       final date = monthStart.add(Duration(days: i));
       final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
       missed[dateStr] = {'todo': false, 'lead': false};
@@ -212,15 +251,13 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
       if (todosSnapshot.docs.isNotEmpty) {
         missed[dateStr]!['todo'] = true;
       }
-
-      // Query leads as before (or adjust window if needed)
     }
 
     final leadsSnapshot = await FirebaseFirestore.instance
         .collection('follow_ups')
         .where('created_by', isEqualTo: uid)
         .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
-        .where('created_at', isLessThan: Timestamp.fromDate(today.add(const Duration(days: 1))))
+        .where('created_at', isLessThan: Timestamp.fromDate(nextMonth))
         .get();
 
     for (var doc in leadsSnapshot.docs) {
@@ -266,7 +303,12 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
       }
 
       for (final user in usersToExport) {
-        final report = await _generateUserMonthlyReport(user['uid'], user['email']);
+        final report = await _generateUserMonthlyReport(
+          user['uid'],
+          user['email'],
+          _selectedMonth,
+          _selectedYear,
+        );
         pdf.addPage(
           pw.Page(
             pageFormat: PdfPageFormat.a4,
