@@ -21,65 +21,101 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
   Map<String, dynamic>? _selectedUser;
   int _selectedMonth = DateTime.now().month;
   int _selectedYear = DateTime.now().year;
+  String? _selectedBranch;
+  String? _currentUserRole;
+  List<String> _branches = [];
+  List<Map<String, dynamic>> _usersForBranch = [];
 
   @override
   void initState() {
     super.initState();
-    // Filter out admin users from the dropdown
-    final nonAdminUsers = widget.users.where((u) => u['role'] != 'admin').toList();
-    if (nonAdminUsers.isNotEmpty) {
-      _selectedUser = nonAdminUsers.first;
-    }
-    _showTodoWarningIfNeeded();
+    _initDropdowns();
   }
 
-  void _showTodoWarningIfNeeded() async {
-    final now = DateTime.now();
-    if (now.hour < 11) return; // Only show after 11 AM
+  Future<void> _initDropdowns() async {
+    // Get current user role and branch list
+    final user = FirebaseAuth.instance.currentUser;
+    String? userRole;
+    String? userBranch;
+    if (user != null) {
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      userRole = userDoc['role'];
+      userBranch = userDoc['branch'];
+      _currentUserRole = userRole;
+    }
 
-    final nonAdminUsers = widget.users.where((u) =>
-        u['role'] == 'sales' || u['role'] == 'manager').toList();
+    // If users and branch are provided (from dashboard/daily), use them
+    if (widget.users.isNotEmpty && widget.branch != null) {
+      setState(() {
+        _selectedBranch = widget.branch;
+        _usersForBranch = widget.users;
+        _selectedUser = widget.users.isNotEmpty ? widget.users.first : null;
+        _branches = [widget.branch!];
+      });
+      return;
+    }
 
-    final todayStart = DateTime(now.year, now.month, now.day);
-    final elevenAM = DateTime(now.year, now.month, now.day, 11, 0, 0);
-
-    // Fetch todos created before 11 AM today
-    final todosSnapshot = await FirebaseFirestore.instance
-        .collection('todo')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
-        .where('timestamp', isLessThan: Timestamp.fromDate(elevenAM))
-        .get();
-
-    final Set<String> emailsWithTodo = todosSnapshot.docs
-        .map((doc) => (doc.data() as Map<String, dynamic>)['email'] as String?)
-        .whereType<String>()
-        .toSet();
-
-    final usersMissingTodo = nonAdminUsers
-        .where((u) => !emailsWithTodo.contains(u['email']))
+    // Fetch all branches from users collection (for admin)
+    final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
+    final branches = usersSnapshot.docs
+        .map((doc) => doc['branch'] ?? '')
+        .where((b) => b != null && b.toString().isNotEmpty)
+        .toSet()
+        .cast<String>()
         .toList();
 
-    if (usersMissingTodo.isNotEmpty && mounted) {
-      final names = usersMissingTodo.map((u) => u['username']).join(', ');
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Warning: The following users have not added a todo by 11 AM: $names',
-              style: const TextStyle(color: Colors.white),
-            ),
-            backgroundColor: Colors.orange[800],
-            duration: const Duration(seconds: 6),
-          ),
-        );
+    setState(() {
+      _branches = branches;
+      if (_branches.isNotEmpty && _selectedBranch == null) {
+        _selectedBranch = _branches.first;
+      }
+    });
+
+    // For manager, auto-select their branch and users
+    if (userRole == 'manager' && userBranch != null) {
+      await _fetchUsersForBranch(userBranch);
+      setState(() {
+        _selectedBranch = userBranch;
       });
+    } else {
+      // For admin or others, use selected branch
+      await _fetchUsersForBranch(_selectedBranch);
     }
+  }
+
+  Future<void> _fetchUsersForBranch(String? branch) async {
+    if (branch == null) {
+      setState(() {
+        _usersForBranch = [];
+        _selectedUser = null;
+      });
+      return;
+    }
+    final usersSnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .where('branch', isEqualTo: branch)
+        .where('role', isNotEqualTo: 'admin')
+        .get();
+
+    final users = usersSnapshot.docs
+        .map((doc) => {
+              'uid': doc.id,
+              'username': doc['username'] ?? '',
+              'role': doc['role'] ?? '',
+              'email': doc['email'] ?? '',
+              'branch': doc['branch'] ?? '',
+            })
+        .toList();
+
+    setState(() {
+      _usersForBranch = users;
+      _selectedUser = users.isNotEmpty ? users.first : null;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final nonAdminUsers = widget.users.where((u) => u['role'] != 'admin').toList();
 
     return FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid).get(),
@@ -134,11 +170,29 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
               padding: const EdgeInsets.only(bottom: 24),
               child: Column(
                 children: [
+                  // Only show branch dropdown for admin
+                  if (role == 'admin' && _branches.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: DropdownButton<String>(
+                        value: _selectedBranch,
+                        items: _branches
+                            .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                            .toList(),
+                        onChanged: (val) async {
+                          setState(() {
+                            _selectedBranch = val;
+                          });
+                          await _fetchUsersForBranch(val);
+                        },
+                        hint: const Text("Select Branch"),
+                      ),
+                    ),
                   Padding(
                     padding: const EdgeInsets.all(12),
                     child: DropdownButton<Map<String, dynamic>>(
                       value: _selectedUser,
-                      items: nonAdminUsers
+                      items: _usersForBranch
                           .map((u) => DropdownMenuItem(
                                 value: u,
                                 child: Text(u['username']),
@@ -204,7 +258,7 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
                         final missed = snap.data!;
                         return SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
-                            child: DataTable(
+                          child: DataTable(
                             columns: const [
                               DataColumn(label: Text('Date')),
                               DataColumn(label: Text('Todo')),
@@ -306,10 +360,11 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
       }
 
       final pdf = pw.Document();
-      // Filter users for admin/manager
-      List<Map<String, dynamic>> usersToExport = widget.users.where((u) => u['role'] != 'admin').toList();
-      if (role == 'manager') {
-        usersToExport = usersToExport.where((u) => u['branch'] == branch).toList();
+
+      // Use branch filtering from monthly.dart UI
+      List<Map<String, dynamic>> usersToExport = _usersForBranch;
+      if (role == 'admin' && _selectedBranch == null) {
+        usersToExport = widget.users.where((u) => u['role'] != 'admin').toList();
       }
 
       for (final user in usersToExport) {
@@ -371,9 +426,11 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
   Future<void> _downloadLeadsSummaryPdf(BuildContext context, String role, String? branch) async {
     try {
       final pdf = pw.Document();
-      List<Map<String, dynamic>> usersToExport = widget.users.where((u) => u['role'] != 'admin').toList();
-      if (role == 'manager') {
-        usersToExport = usersToExport.where((u) => u['branch'] == branch).toList();
+
+      // Use branch filtering from monthly.dart UI
+      List<Map<String, dynamic>> usersToExport = _usersForBranch;
+      if (role == 'admin' && _selectedBranch == null) {
+        usersToExport = widget.users.where((u) => u['role'] != 'admin').toList();
       }
 
       List<List<String>> tableData = [];
