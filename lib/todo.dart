@@ -312,9 +312,9 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
       final data = doc.data();
       final timestamp = data['timestamp'];
       if (timestamp is Timestamp) {
-        final taskDate = timestamp.toDate();
-        final difference = now.difference(taskDate).inDays;
-        if (difference >= 1) {
+        final doneDate = timestamp.toDate();
+        final difference = now.difference(doneDate);
+        if (difference.inHours >= 24) {
           await _firestore.collection('todo').doc(doc.id).delete();
         }
       }

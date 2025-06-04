@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:share_plus/share_plus.dart';
 
 class MonthlyReportPage extends StatefulWidget {
   final String? branch;
@@ -369,37 +370,23 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
 
   Future<void> _downloadLeadsSummaryPdf(BuildContext context, String role, String? branch) async {
     try {
-      if (Platform.isAndroid) {
-        var status = await Permission.manageExternalStorage.request();
-        if (!status.isGranted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Storage permission denied')),
-          );
-          return;
-        }
-      }
-
       final pdf = pw.Document();
-      // Filter users for admin/manager
       List<Map<String, dynamic>> usersToExport = widget.users.where((u) => u['role'] != 'admin').toList();
       if (role == 'manager') {
         usersToExport = usersToExport.where((u) => u['branch'] == branch).toList();
       }
 
-      // Prepare data for each user
       List<List<String>> tableData = [];
       for (final user in usersToExport) {
         final uid = user['uid'];
         final username = user['username'] ?? '';
         final userBranch = user['branch'] ?? '';
 
-        // Date range for the selected month
         final monthStart = DateTime(_selectedYear, _selectedMonth, 1);
         final nextMonth = _selectedMonth == 12
             ? DateTime(_selectedYear + 1, 1, 1)
             : DateTime(_selectedYear, _selectedMonth + 1, 1);
 
-        // Count created leads
         final createdSnapshot = await FirebaseFirestore.instance
             .collection('follow_ups')
             .where('created_by', isEqualTo: uid)
@@ -408,7 +395,6 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
             .get();
         final createdCount = createdSnapshot.docs.length;
 
-        // Count completed leads
         final completedSnapshot = await FirebaseFirestore.instance
             .collection('follow_ups')
             .where('created_by', isEqualTo: uid)
@@ -453,22 +439,17 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
         ),
       );
 
-      final bytes = await pdf.save();
-      Directory? downloadsDir;
-      if (Platform.isAndroid) {
-        downloadsDir = Directory('/storage/emulated/0/Download');
-      } else {
-        downloadsDir = await getApplicationDocumentsDirectory();
-      }
-      final file = File('${downloadsDir.path}/leads_report_${DateTime.now().millisecondsSinceEpoch}.pdf');
-      await file.writeAsBytes(bytes);
+      // Save PDF to a temporary file
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/leads_report_${DateTime.now().millisecondsSinceEpoch}.pdf');
+      await file.writeAsBytes(await pdf.save());
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Leads report PDF downloaded to ${file.path}')),
-      );
+      // Share the PDF file
+      await Share.shareXFiles([XFile(file.path)], text: 'Leads Report');
+
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to download leads report: $e')),
+        SnackBar(content: Text('Failed to generate leads report: $e')),
       );
     }
   }
