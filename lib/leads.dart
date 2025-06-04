@@ -226,36 +226,41 @@ class _LeadsPageState extends State<LeadsPage> {
                 widgets.add(
                   pw.Text(
                     'Branch: $safeBranchName',
-                    style: pw.TextStyle(font: boldFont, fontWeight: pw.FontWeight.bold, fontSize: 18),
+                    style: pw.TextStyle(font: boldFont, fontWeight: pw.FontWeight.bold, fontSize: 16),
+                    textAlign: pw.TextAlign.center,
                   ),
                 );
                 widgets.add(pw.SizedBox(height: 8));
                 widgets.add(
-                  pw.Table.fromTextArray(
-                    headers: [
-                      'Username',
-                      'Name',
-                      'Company',
-                      'Address',
-                      'Phone',
-                      'Status',
-                      'Comments'
-                    ],
-                    data: leads.map((data) {
-                      final createdBy = data['created_by'] ?? '';
-                      final username = userIdToUsername[createdBy] ?? 'Unknown';
-                      return [
-                        username,
-                        (data['name'] ?? '-').toString(),
-                        (data['company'] ?? '-').toString(),
-                        (data['address'] ?? '-').toString(),
-                        (data['phone'] ?? '-').toString(),
-                        (data['status'] ?? '-').toString(),
-                        (data['comments'] ?? '-').toString(),
-                      ];
-                    }).toList(),
-                    cellStyle: pw.TextStyle(font: regularFont),
-                    headerStyle: pw.TextStyle(font: boldFont, fontWeight: pw.FontWeight.bold),
+                  pw.Center(
+                    child: pw.Table.fromTextArray(
+                      headers: [
+                        'Rep', // Username column
+                        'Name',
+                        'Company',
+                        'Address',
+                        'Phone',
+                        'Status',
+                        'Comments'
+                      ],
+                      data: leads.map((data) {
+                        final createdBy = data['created_by'] ?? '';
+                        final username = userIdToUsername[createdBy] ?? 'Unknown';
+                        return [
+                          username,
+                          (data['name'] ?? '-').toString(),
+                          (data['company'] ?? '-').toString(),
+                          (data['address'] ?? '-').toString(),
+                          (data['phone'] ?? '-').toString(),
+                          (data['status'] ?? '-').toString(),
+                          (data['comments'] ?? '-').toString(),
+                        ];
+                      }).toList(),
+                      cellStyle: pw.TextStyle(font: regularFont, fontSize: 8), // Reduced font size
+                      headerStyle: pw.TextStyle(font: boldFont, fontWeight: pw.FontWeight.bold, fontSize: 9),
+                      cellAlignment: pw.Alignment.center, // Center align cells
+                      headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+                    ),
                   ),
                 );
                 widgets.add(pw.SizedBox(height: 20));

@@ -303,7 +303,6 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
   Future<void> _deleteOldTasks() async {
     if (_userEmail == null) return;
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
     final snapshot = await _firestore
         .collection('todo')
         .where('email', isEqualTo: _userEmail)
@@ -313,8 +312,9 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
       final data = doc.data();
       final timestamp = data['timestamp'];
       if (timestamp is Timestamp) {
-        final taskDate = DateTime(timestamp.toDate().year, timestamp.toDate().month, timestamp.toDate().day);
-        if (taskDate.isBefore(today)) {
+        final taskDate = timestamp.toDate();
+        final difference = now.difference(taskDate).inDays;
+        if (difference >= 1) {
           await _firestore.collection('todo').doc(doc.id).delete();
         }
       }
@@ -376,7 +376,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
       final today = _dateOnly(DateTime.now());
       await _firestore.collection('todo').doc(doc.id).update({
         'status': newStatus,
-        'timestamp': Timestamp.fromDate(today),
+        'timestamp': Timestamp.now(), // Use full timestamp
       });
     } else {
       await _firestore.collection('todo').doc(doc.id).update({
