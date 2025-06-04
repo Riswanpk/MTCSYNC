@@ -103,6 +103,13 @@ class _LeadsPageState extends State<LeadsPage> {
         query = await FirebaseFirestore.instance.collection('follow_ups').get();
       }
 
+      // Fetch all users to map userId -> username
+      final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
+      final userIdToUsername = {
+        for (var doc in usersSnapshot.docs)
+          doc.id: (doc.data() as Map<String, dynamic>)['username'] ?? 'Unknown'
+      };
+
       // Group leads by branch
       final Map<String, List<Map<String, dynamic>>> branchLeads = {};
       for (final doc in query.docs) {
@@ -117,8 +124,9 @@ class _LeadsPageState extends State<LeadsPage> {
         final leads = entry.value;
         final sheet = excel[branchName];
 
-        // Add header row
+        // Add header row (Username first)
         sheet.appendRow([
+          'Username',
           'Name',
           'Company',
           'Address',
@@ -129,7 +137,10 @@ class _LeadsPageState extends State<LeadsPage> {
 
         // Add data rows
         for (final data in leads) {
+          final createdBy = data['created_by'] ?? '';
+          final username = userIdToUsername[createdBy] ?? 'Unknown';
           sheet.appendRow([
+            username,
             data['name'] ?? '',
             data['company'] ?? '',
             data['address'] ?? '',
@@ -189,6 +200,13 @@ class _LeadsPageState extends State<LeadsPage> {
         query = await FirebaseFirestore.instance.collection('follow_ups').get();
       }
 
+      // Fetch all users to map userId -> username
+      final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
+      final userIdToUsername = {
+        for (var doc in usersSnapshot.docs)
+          doc.id: (doc.data() as Map<String, dynamic>)['username'] ?? 'Unknown'
+      };
+
       // Group leads by branch
       final Map<String, List<Map<String, dynamic>>> branchLeads = {};
       for (final doc in query.docs) {
@@ -214,15 +232,28 @@ class _LeadsPageState extends State<LeadsPage> {
                 widgets.add(pw.SizedBox(height: 8));
                 widgets.add(
                   pw.Table.fromTextArray(
-                    headers: ['Name', 'Company', 'Address', 'Phone', 'Status', 'Comments'],
-                    data: leads.map((data) => [
-                      (data['name'] ?? '-').toString(),
-                      (data['company'] ?? '-').toString(),
-                      (data['address'] ?? '-').toString(),
-                      (data['phone'] ?? '-').toString(),
-                      (data['status'] ?? '-').toString(),
-                      (data['comments'] ?? '-').toString(),
-                    ]).toList(),
+                    headers: [
+                      'Username',
+                      'Name',
+                      'Company',
+                      'Address',
+                      'Phone',
+                      'Status',
+                      'Comments'
+                    ],
+                    data: leads.map((data) {
+                      final createdBy = data['created_by'] ?? '';
+                      final username = userIdToUsername[createdBy] ?? 'Unknown';
+                      return [
+                        username,
+                        (data['name'] ?? '-').toString(),
+                        (data['company'] ?? '-').toString(),
+                        (data['address'] ?? '-').toString(),
+                        (data['phone'] ?? '-').toString(),
+                        (data['status'] ?? '-').toString(),
+                        (data['comments'] ?? '-').toString(),
+                      ];
+                    }).toList(),
                     cellStyle: pw.TextStyle(font: regularFont),
                     headerStyle: pw.TextStyle(font: boldFont, fontWeight: pw.FontWeight.bold),
                   ),
