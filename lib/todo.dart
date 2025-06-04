@@ -183,9 +183,10 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
   @override
   void initState() {
     super.initState();
-    _userInfoFuture = _loadUserInfo();
+    _userInfoFuture = _loadUserInfo().then((_) {
+      _deleteOldTasks();
+    });
     WidgetsBinding.instance.addObserver(this);
-    _deleteOldTasks();
   }
 
   Future<void> _loadUserInfo() async {
@@ -303,22 +304,28 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
   Future<void> _deleteOldTasks() async {
     if (_userEmail == null) return;
     final now = DateTime.now();
+
+    // Get all todos for this user (regardless of status)
     final snapshot = await _firestore
         .collection('todo')
         .where('email', isEqualTo: _userEmail)
-        .where('status', isEqualTo: 'done')
         .get();
+
+    final batch = _firestore.batch();
+
     for (var doc in snapshot.docs) {
       final data = doc.data();
       final timestamp = data['timestamp'];
       if (timestamp is Timestamp) {
-        final doneDate = timestamp.toDate();
-        final difference = now.difference(doneDate);
+        final todoTime = timestamp.toDate();
+        final difference = now.difference(todoTime);
         if (difference.inHours >= 24) {
-          await _firestore.collection('todo').doc(doc.id).delete();
+          batch.delete(doc.reference);
         }
       }
     }
+
+    await batch.commit();
   }
 
   @override
@@ -787,7 +794,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                     child: Container(
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: priorityBgColor, // <-- background color by priority
+                        color: priorityBgColor,
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
