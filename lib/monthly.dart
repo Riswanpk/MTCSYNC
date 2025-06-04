@@ -150,7 +150,7 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
                       value: 'download_pdf',
                       child: ListTile(
                         leading: Icon(Icons.picture_as_pdf, color: Colors.red),
-                        title: Text('Download PDF'),
+                        title: Text('Missed Report'),
                       ),
                     ),
                     const PopupMenuItem(
@@ -348,17 +348,6 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
 
   Future<void> _downloadMonthlyReportPdf(BuildContext context, String role, String? branch) async {
     try {
-      // Request storage permission if needed
-      if (Platform.isAndroid) {
-        var status = await Permission.manageExternalStorage.request();
-        if (!status.isGranted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Storage permission denied')),
-          );
-          return;
-        }
-      }
-
       final pdf = pw.Document();
 
       // Use branch filtering from monthly.dart UI
@@ -403,22 +392,16 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
         );
       }
 
-      final bytes = await pdf.save();
-      Directory? downloadsDir;
-      if (Platform.isAndroid) {
-        downloadsDir = Directory('/storage/emulated/0/Download');
-      } else {
-        downloadsDir = await getApplicationDocumentsDirectory();
-      }
-      final file = File('${downloadsDir.path}/monthly_report_${DateTime.now().millisecondsSinceEpoch}.pdf');
-      await file.writeAsBytes(bytes);
+      // Save PDF to a temporary file
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/monthly_report_${DateTime.now().millisecondsSinceEpoch}.pdf');
+      await file.writeAsBytes(await pdf.save());
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('PDF downloaded to ${file.path}')),
-      );
+      // Share the PDF file
+      await Share.shareXFiles([XFile(file.path)], text: 'Monthly Missed Report');
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to download PDF: $e')),
+        SnackBar(content: Text('Failed to share PDF: $e')),
       );
     }
   }

@@ -17,10 +17,20 @@ class DashboardPage extends StatelessWidget {
     Query followUps = FirebaseFirestore.instance.collection('follow_ups');
     Query todos = FirebaseFirestore.instance.collection('todo');
 
-    // If branch is provided, filter by branch
+    List<String> branchEmails = [];
     if (branch != null && branch.isNotEmpty) {
       followUps = followUps.where('branch', isEqualTo: branch);
-      todos = todos.where('branch', isEqualTo: branch);
+
+      // Get all sales users in this branch
+      final usersSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('branch', isEqualTo: branch)
+          .where('role', isEqualTo: 'sales')
+          .get();
+      branchEmails = usersSnapshot.docs
+          .map((doc) => doc['email'] as String)
+          .where((e) => e.isNotEmpty)
+          .toList();
     }
 
     // Total leads
@@ -33,17 +43,32 @@ class DashboardPage extends StatelessWidget {
     final todayLeadsSnap = await followUps
         .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
         .get();
-    // Pending todos
-    final pendingTodosSnap = await todos
-        .where('status', isEqualTo: 'pending')
-        .get();
 
-    return {
-      'totalLeads': totalLeadsSnap.size,
-      'monthLeads': monthLeadsSnap.size,
-      'todayLeads': todayLeadsSnap.size,
-      'pendingTodos': pendingTodosSnap.size,
-    };
+    // Pending todos (filtered by branch emails if manager)
+    Query pendingTodosQuery = todos.where('status', isEqualTo: 'pending');
+    if (branchEmails.isNotEmpty) {
+      // Firestore 'whereIn' supports up to 10 items, so batch if needed
+      int pendingCount = 0;
+      for (var i = 0; i < branchEmails.length; i += 10) {
+        final batch = branchEmails.sublist(i, i + 10 > branchEmails.length ? branchEmails.length : i + 10);
+        final snap = await pendingTodosQuery.where('email', whereIn: batch).get();
+        pendingCount += snap.size;
+      }
+      return {
+        'totalLeads': totalLeadsSnap.size,
+        'monthLeads': monthLeadsSnap.size,
+        'todayLeads': todayLeadsSnap.size,
+        'pendingTodos': pendingCount,
+      };
+    } else {
+      final pendingTodosSnap = await pendingTodosQuery.get();
+      return {
+        'totalLeads': totalLeadsSnap.size,
+        'monthLeads': monthLeadsSnap.size,
+        'todayLeads': todayLeadsSnap.size,
+        'pendingTodos': pendingTodosSnap.size,
+      };
+    }
   }
 
   @override
@@ -62,11 +87,11 @@ class DashboardPage extends StatelessWidget {
         final branch = userData['branch'] ?? '';
 
         return Scaffold(
-          backgroundColor: const Color(0xFFF6F6F6),
+          backgroundColor: Theme.of(context).colorScheme.background,
           appBar: AppBar(
             title: const Text('Dashboard'),
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.black,
+            backgroundColor: Theme.of(context).colorScheme.background,
+            foregroundColor: Theme.of(context).colorScheme.onBackground,
             elevation: 0,
           ),
           body: SingleChildScrollView(
@@ -488,111 +513,138 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return DraggableScrollableSheet(
-      initialChildSize: 0.7,
-      minChildSize: 0.4,
-      maxChildSize: 0.95,
-      builder: (context, scrollController) => Container(
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF181A20) : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 12)],
-        ),
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : Column(
-                children: [
-                  const SizedBox(height: 16),
-                  Container(
-                    width: 40,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    "Pending Todos by Sales",
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  if (_branches.isNotEmpty && widget.role != 'manager')
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: DropdownButton<String>(
-                        value: _selectedBranch,
-                        items: _branches
-                            .map((b) => DropdownMenuItem(value: b, child: Text(b)))
-                            .toList(),
-                        onChanged: (val) async {
-                          setState(() {
-                            _selectedBranch = val;
-                            _loading = true;
-                          });
-                          await _fetchUsersAndTodos();
-                          setState(() {
-                            _loading = false;
-                          });
-                        },
-                        hint: const Text("Select Branch"),
-                        isExpanded: true,
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final bgColor = theme.colorScheme.background;
+    final cardColor = isDark ? const Color(0xFF23242B) : Colors.grey[50];
+    final textColor = theme.colorScheme.onBackground;
+
+    return SafeArea(
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.8,
+        minChildSize: 0.4,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 12)],
+          ),
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 5,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[400],
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                     ),
-                  Expanded(
-                    child: _users.isEmpty
-                        ? const Center(child: Text('No sales users found.'))
-                        : ListView.separated(
-                            controller: scrollController,
-                            padding: const EdgeInsets.all(16),
-                            itemCount: _users.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 10),
-                            itemBuilder: (context, idx) {
-                              final user = _users[idx];
-                              final count = _pendingCounts[user['email']] ?? 0;
-                              return Container(
-                                decoration: BoxDecoration(
-                                  color: isDark ? const Color(0xFF23242B) : Colors.grey[50],
-                                  borderRadius: BorderRadius.circular(14),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black12,
-                                      blurRadius: 8,
-                                      offset: Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: ListTile(
-                                  leading: CircleAvatar(
-                                    backgroundColor: Colors.purple.withOpacity(0.15),
-                                    child: Icon(Icons.person, color: Colors.purple),
-                                  ),
-                                  title: Text(
-                                    user['username'],
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                  subtitle: Text(user['branch']),
-                                  trailing: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: count > 0 ? Colors.red.withOpacity(0.1) : Colors.green.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      '$count Pending',
-                                      style: TextStyle(
-                                        color: count > 0 ? Colors.red : Colors.green,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
+                    Center(
+                      child: Text(
+                        "Pending Todos by Sales",
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
+                      ),
+                    ),
+                    if (_branches.isNotEmpty && widget.role != 'manager')
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: DropdownButton<String>(
+                          value: _selectedBranch,
+                          items: _branches
+                              .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                              .toList(),
+                          onChanged: (val) async {
+                            setState(() {
+                              _selectedBranch = val;
+                              _loading = true;
+                            });
+                            await _fetchUsersAndTodos();
+                            setState(() {
+                              _loading = false;
+                            });
+                          },
+                          hint: const Text("Select Branch"),
+                          isExpanded: true,
+                          dropdownColor: bgColor,
+                          style: TextStyle(color: textColor),
+                        ),
+                      ),
+                    if (_users.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 32),
+                        child: Center(
+                          child: Text(
+                            'No sales users found.',
+                            style: TextStyle(color: textColor),
                           ),
-                  ),
-                ],
-              ),
+                        ),
+                      )
+                    else
+                      ..._users.map((user) {
+                        final count = _pendingCounts[user['email']] ?? 0;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: cardColor,
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 8,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: Colors.purple.withOpacity(0.15),
+                              child: Icon(Icons.person, color: Colors.purple),
+                            ),
+                            title: Text(
+                              user['username'],
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: textColor,
+                              ),
+                            ),
+                            subtitle: Text(
+                              user['branch'],
+                              style: TextStyle(color: textColor.withOpacity(0.7)),
+                            ),
+                            trailing: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: count > 0
+                                    ? Colors.red.withOpacity(0.1)
+                                    : Colors.green.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '$count Pending',
+                                style: TextStyle(
+                                  color: count > 0 ? Colors.red : Colors.green,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                  ],
+                ),
+        ),
       ),
     );
   }

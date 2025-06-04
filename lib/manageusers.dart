@@ -12,11 +12,19 @@ class ManageUsersPage extends StatefulWidget {
 class _ManageUsersPageState extends State<ManageUsersPage> {
   final List<String> _roles = ['sales', 'manager', 'admin'];
   String? _currentUserId;
+  String _searchQuery = ''; // <-- Add this line
+  final TextEditingController _searchController = TextEditingController(); // <-- Add this line
 
   @override
   void initState() {
     super.initState();
     _currentUserId = FirebaseAuth.instance.currentUser?.uid;
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _updateUserRole(String uid, String newRole) async {
@@ -44,98 +52,132 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
       backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('users').snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-              return const Center(child: Text('No users found.'));
-            }
-            // Filter out the current user
-            final users = snapshot.data!.docs
-                .where((doc) => doc.id != _currentUserId)
-                .toList();
-            if (users.isEmpty) {
-              return const Center(child: Text('No other users found.'));
-            }
-            return Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: users.length,
-                separatorBuilder: (_, __) => const Divider(height: 24),
-                itemBuilder: (context, index) {
-                  final user = users[index];
-                  final username = user['username'] ?? '';
-                  final email = user['email'] ?? '';
-                  final role = user['role'] ?? 'sales';
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: const Color(0xFF005BAC),
-                      child: Text(
-                        username.isNotEmpty ? username[0].toUpperCase() : '?',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    title: Text(
-                      username,
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
-                    ),
-                    subtitle: Text(
-                      email,
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                    trailing: DropdownButton<String>(
-                      value: role,
-                      borderRadius: BorderRadius.circular(12),
-                      dropdownColor: isDark ? const Color(0xFF23272F) : Colors.white,
-                      style: TextStyle(
-                        color: isDark ? Colors.white : Colors.black,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 16,
-                      ),
-                      underline: Container(),
-                      items: _roles
-                          .map((r) => DropdownMenuItem(
-                                value: r,
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      r == 'admin'
-                                          ? Icons.security
-                                          : r == 'manager'
-                                              ? Icons.supervisor_account
-                                              : Icons.person,
-                                      color: r == 'admin'
-                                          ? Colors.deepPurple
-                                          : r == 'manager'
-                                              ? Colors.orange
-                                              : Colors.green,
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(r[0].toUpperCase() + r.substring(1)),
-                                  ],
-                                ),
-                              ))
-                          .toList(),
-                      onChanged: (newRole) {
-                        if (newRole != null && newRole != role) {
-                          _updateUserRole(user.id, newRole);
-                        }
+        child: Column(
+          children: [
+            // Search Bar
+            TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search by name or email',
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: isDark ? const Color(0xFF23272F) : Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value.trim().toLowerCase();
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance.collection('users').snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return const Center(child: Text('No users found.'));
+                  }
+                  // Filter out the current user
+                  final users = snapshot.data!.docs
+                      .where((doc) => doc.id != _currentUserId)
+                      .where((doc) {
+                        final username = (doc['username'] ?? '').toString().toLowerCase();
+                        final email = (doc['email'] ?? '').toString().toLowerCase();
+                        return _searchQuery.isEmpty ||
+                            username.contains(_searchQuery) ||
+                            email.contains(_searchQuery);
+                      })
+                      .toList();
+                  if (users.isEmpty) {
+                    return const Center(child: Text('No users match your search.'));
+                  }
+                  return Card(
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    child: ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: users.length,
+                      separatorBuilder: (_, __) => const Divider(height: 24),
+                      itemBuilder: (context, index) {
+                        final user = users[index];
+                        final username = user['username'] ?? '';
+                        final email = user['email'] ?? '';
+                        final role = user['role'] ?? 'sales';
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: const Color(0xFF005BAC),
+                            child: Text(
+                              username.isNotEmpty ? username[0].toUpperCase() : '?',
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          title: Text(
+                            username,
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+                          ),
+                          subtitle: Text(
+                            email,
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                          trailing: DropdownButton<String>(
+                            value: role,
+                            borderRadius: BorderRadius.circular(12),
+                            dropdownColor: isDark ? const Color(0xFF23272F) : Colors.white,
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 16,
+                            ),
+                            underline: Container(),
+                            items: _roles
+                                .map((r) => DropdownMenuItem(
+                                      value: r,
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            r == 'admin'
+                                                ? Icons.security
+                                                : r == 'manager'
+                                                    ? Icons.supervisor_account
+                                                    : Icons.person,
+                                            color: r == 'admin'
+                                                ? Colors.deepPurple
+                                                : r == 'manager'
+                                                    ? Colors.orange
+                                                    : Colors.green,
+                                            size: 20,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(r[0].toUpperCase() + r.substring(1)),
+                                        ],
+                                      ),
+                                    ))
+                                .toList(),
+                            onChanged: (newRole) {
+                              if (newRole != null && newRole != role) {
+                                _updateUserRole(user.id, newRole);
+                              }
+                            },
+                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          tileColor: isDark ? const Color(0xFF23272F) : Colors.grey[100],
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        );
                       },
                     ),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    tileColor: isDark ? const Color(0xFF23272F) : Colors.grey[100],
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   );
                 },
               ),
-            );
-          },
+            ),
+          ],
         ),
       ),
     );

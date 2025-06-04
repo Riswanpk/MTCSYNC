@@ -39,3 +39,12 @@ class ThemeNotifier extends ChangeNotifier {
     notifyListeners();
   }
 }
+
+final ThemeData lightTheme = ThemeData.light();
+final ThemeData darkTheme = ThemeData.dark().copyWith(
+      colorScheme: ColorScheme.dark(
+        background: Color(0xFF181A20),
+        onBackground: Colors.white,
+      ),
+    );
+final ThemeMode themeMode = ThemeMode.system;

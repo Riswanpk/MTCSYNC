@@ -113,6 +113,7 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
       final hasLead = uidsWithLead.contains(uid);
 
       report.add({
+        'uid': uid,
         'username': user['username'],
         'role': user['role'],
         'branch': user['branch'],
@@ -186,17 +187,41 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
                           DataColumn(label: Text('Todo')),
                           DataColumn(label: Text('Lead')),
                         ],
-                        rows: sales.map((u) => DataRow(cells: [
-                          DataCell(Text(u['username'])),
-                          DataCell(Icon(
-                            u['hasTodo'] ? Icons.check_circle : Icons.cancel,
-                            color: u['hasTodo'] ? Colors.green : Colors.red,
-                          )),
-                          DataCell(Icon(
-                            u['hasLead'] ? Icons.check_circle : Icons.cancel,
-                            color: u['hasLead'] ? Colors.green : Colors.red,
-                          )),
-                        ])).toList(),
+                        rows: sales.map((u) => DataRow(
+                          cells: [
+                            DataCell(
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => SalesUserDashboardPage(
+                                        userId: u['uid'],
+                                        username: u['username'],
+                                      ),
+                                    ),
+                                  );
+                                },
+                                child: Text(
+                                  u['username'],
+                                  style: const TextStyle(
+                                    color: Colors.blue,
+                                    decoration: TextDecoration.underline,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            DataCell(Icon(
+                              u['hasTodo'] ? Icons.check_circle : Icons.cancel,
+                              color: u['hasTodo'] ? Colors.green : Colors.red,
+                            )),
+                            DataCell(Icon(
+                              u['hasLead'] ? Icons.check_circle : Icons.cancel,
+                              color: u['hasLead'] ? Colors.green : Colors.red,
+                            )),
+                          ],
+                        )).toList(),
                       ),
                       if (_currentUserRole != 'manager') ...[
                         const SizedBox(height: 32),
@@ -245,3 +270,169 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
 //   'deleted_at': FieldValue.serverTimestamp(),
 // });
 // await FirebaseFirestore.instance.collection('follow_ups').doc(doc.id).delete();
+
+// Add this new page at the end of the file or in a new file
+
+class SalesUserDashboardPage extends StatefulWidget {
+  final String userId;
+  final String username;
+  const SalesUserDashboardPage({super.key, required this.userId, required this.username});
+
+  @override
+  State<SalesUserDashboardPage> createState() => _SalesUserDashboardPageState();
+}
+
+class _SalesUserDashboardPageState extends State<SalesUserDashboardPage> {
+  int _monthLeads = 0;
+  int _completedLeads = 0;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchStats();
+  }
+
+  Future<void> _fetchStats() async {
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month, 1, 0, 0, 0);
+    final monthEnd = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+
+    // Leads created this month
+    final leadsSnapshot = await FirebaseFirestore.instance
+        .collection('follow_ups')
+        .where('created_by', isEqualTo: widget.userId)
+        .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
+        .where('created_at', isLessThanOrEqualTo: Timestamp.fromDate(monthEnd))
+        .get();
+
+    // Leads completed (assuming a field 'status' == 'completed')
+    final completedSnapshot = await FirebaseFirestore.instance
+        .collection('follow_ups')
+        .where('created_by', isEqualTo: widget.userId)
+        .where('status', isEqualTo: 'completed')
+        .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
+        .where('created_at', isLessThanOrEqualTo: Timestamp.fromDate(monthEnd))
+        .get();
+
+    setState(() {
+      _monthLeads = leadsSnapshot.size;
+      _completedLeads = completedSnapshot.size;
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('${widget.username} - Dashboard'),
+        backgroundColor: isDark ? const Color(0xFF181A20) : Colors.white,
+        foregroundColor: isDark ? Colors.white : Colors.black,
+        elevation: 0,
+      ),
+      backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "This Month's Stats",
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: _StatCard(
+                      title: "Leads Created",
+                      value: _monthLeads.toString(),
+                      color: Colors.blue,
+                      icon: Icons.leaderboard,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: _StatCard(
+                      title: "Leads Completed",
+                      value: _completedLeads.toString(),
+                      color: Colors.green,
+                      icon: Icons.check_circle,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  // You can add more stats or charts here if needed
+                ],
+              ),
+            ),
+    );
+  }
+}
+
+// Simple stat card widget for dashboard
+class _StatCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final Color color;
+  final IconData icon;
+  const _StatCard({
+    required this.title,
+    required this.value,
+    required this.color,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      height: 150,
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isDark ? color.withOpacity(0.18) : color.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 48),
+          const SizedBox(width: 24),
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
