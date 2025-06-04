@@ -104,6 +104,8 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
                   onSelected: (value) async {
                     if (value == 'download_pdf') {
                       await _downloadMonthlyReportPdf(context, role, branch);
+                    } else if (value == 'leads_report') {
+                      await _downloadLeadsSummaryPdf(context, role, branch);
                     }
                   },
                   itemBuilder: (context) => [
@@ -112,6 +114,13 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
                       child: ListTile(
                         leading: Icon(Icons.picture_as_pdf, color: Colors.red),
                         title: Text('Download PDF'),
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'leads_report',
+                      child: ListTile(
+                        leading: Icon(Icons.assignment, color: Colors.blue),
+                        title: Text('Leads Report'),
                       ),
                     ),
                   ],
@@ -354,6 +363,112 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to download PDF: $e')),
+      );
+    }
+  }
+
+  Future<void> _downloadLeadsSummaryPdf(BuildContext context, String role, String? branch) async {
+    try {
+      if (Platform.isAndroid) {
+        var status = await Permission.manageExternalStorage.request();
+        if (!status.isGranted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Storage permission denied')),
+          );
+          return;
+        }
+      }
+
+      final pdf = pw.Document();
+      // Filter users for admin/manager
+      List<Map<String, dynamic>> usersToExport = widget.users.where((u) => u['role'] != 'admin').toList();
+      if (role == 'manager') {
+        usersToExport = usersToExport.where((u) => u['branch'] == branch).toList();
+      }
+
+      // Prepare data for each user
+      List<List<String>> tableData = [];
+      for (final user in usersToExport) {
+        final uid = user['uid'];
+        final username = user['username'] ?? '';
+        final userBranch = user['branch'] ?? '';
+
+        // Date range for the selected month
+        final monthStart = DateTime(_selectedYear, _selectedMonth, 1);
+        final nextMonth = _selectedMonth == 12
+            ? DateTime(_selectedYear + 1, 1, 1)
+            : DateTime(_selectedYear, _selectedMonth + 1, 1);
+
+        // Count created leads
+        final createdSnapshot = await FirebaseFirestore.instance
+            .collection('follow_ups')
+            .where('created_by', isEqualTo: uid)
+            .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
+            .where('created_at', isLessThan: Timestamp.fromDate(nextMonth))
+            .get();
+        final createdCount = createdSnapshot.docs.length;
+
+        // Count completed leads
+        final completedSnapshot = await FirebaseFirestore.instance
+            .collection('follow_ups')
+            .where('created_by', isEqualTo: uid)
+            .where('status', isEqualTo: 'Completed')
+            .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
+            .where('created_at', isLessThan: Timestamp.fromDate(nextMonth))
+            .get();
+        final completedCount = completedSnapshot.docs.length;
+
+        tableData.add([
+          username,
+          createdCount.toString(),
+          completedCount.toString(),
+          userBranch,
+        ]);
+      }
+
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          build: (pw.Context context) {
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text('Leads Report', style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
+                pw.SizedBox(height: 8),
+                pw.Text(
+                  'Month: ${_selectedMonth.toString().padLeft(2, '0')}-${_selectedYear}',
+                  style: pw.TextStyle(fontSize: 16),
+                ),
+                pw.SizedBox(height: 12),
+                pw.Table.fromTextArray(
+                  headers: ['Username', 'Created', 'Completed', 'Branch'],
+                  data: tableData,
+                  cellAlignment: pw.Alignment.center,
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  cellStyle: const pw.TextStyle(fontSize: 12),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+
+      final bytes = await pdf.save();
+      Directory? downloadsDir;
+      if (Platform.isAndroid) {
+        downloadsDir = Directory('/storage/emulated/0/Download');
+      } else {
+        downloadsDir = await getApplicationDocumentsDirectory();
+      }
+      final file = File('${downloadsDir.path}/leads_report_${DateTime.now().millisecondsSinceEpoch}.pdf');
+      await file.writeAsBytes(bytes);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Leads report PDF downloaded to ${file.path}')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to download leads report: $e')),
       );
     }
   }
