@@ -64,7 +64,12 @@ void main() async {
   runApp(
     ChangeNotifierProvider(
       create: (_) => ThemeNotifier(),
-      child: const MyApp(),
+      child: Builder(
+        builder: (context) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
+          child: const MyApp(),
+        ),
+      ),
     ),
   );
 }
