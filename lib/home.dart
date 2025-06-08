@@ -204,105 +204,162 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 // Main content (unchanged)
                 Center(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Replace Welcome! text with logo
+                        // Logo
                         Padding(
                           padding: const EdgeInsets.only(bottom: 16.0),
                           child: Image.asset(
-                            'assets/images/logo.png', // Update path if needed
-                            width: 200,
-                            height: 200,
+                            'assets/images/logo.png',
+                            width: 160,
+                            height: 160,
                             fit: BoxFit.contain,
                           ),
                         ),
-                        const SizedBox(height: 40),
-                        NeumorphicButton(
-                          onTap: () async {
-                            final user = FirebaseAuth.instance.currentUser;
-                            if (user != null) {
-                              final userDoc = await FirebaseFirestore.instance
-                                  .collection('users')
-                                  .doc(user.uid)
-                                  .get();
-                              final branch = userDoc.data()?['branch'];
-                              if (branch != null) {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => LeadsPage(branch: branch),
+                        const SizedBox(height: 24),
+                        // Responsive grid of buttons
+                        Wrap(
+                          spacing: 16,
+                          runSpacing: 16,
+                          alignment: WrapAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 140,
+                              height: 56, // Set a fixed height for all cards
+                              child: NeumorphicButton(
+                                onTap: () async {
+                                  final user = FirebaseAuth.instance.currentUser;
+                                  if (user != null) {
+                                    final userDoc = await FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(user.uid)
+                                        .get();
+                                    final branch = userDoc.data()?['branch'];
+                                    if (branch != null) {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => LeadsPage(branch: branch),
+                                        ),
+                                      );
+                                    } else {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Branch not found for user')),
+                                      );
+                                    }
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('User not logged in')),
+                                    );
+                                  }
+                                },
+                                text: 'Leads',
+                                color: primaryBlue,
+                                textColor: Colors.white,
+                                icon: Icons.people_alt_rounded,
+                                textStyle: const TextStyle(
+                                  fontFamily: 'Montserrat',
+                                  fontWeight: FontWeight.normal,
+                                  fontSize: 17,
+                                  letterSpacing: 1.1,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            SizedBox(
+                              width: 140,
+                              height: 56, // Set a fixed height for all cards
+                              child: NeumorphicButton(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (context) => const TodoPage()),
+                                  );
+                                },
+                                text: 'ToDo List',
+                                color: primaryGreen,
+                                textColor: Colors.white,
+                                icon: Icons.check_circle_outline_rounded,
+                                textStyle: const TextStyle(
+                                  fontFamily: 'Montserrat',
+                                  fontWeight: FontWeight.normal,
+                                  fontSize: 17, // Match Leads button font size
+                                  letterSpacing: 1.1,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            // Only show Dashboard button for admin or manager, not for sales
+                            if (role == 'admin' || role == 'manager')
+                              SizedBox(
+                                width: 80,
+                                height: 56, // Set a fixed height for all cards
+                                child: NeumorphicButton(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (context) => const DashboardPage()),
+                                    );
+                                  },
+                                  text: '',
+                                  color: Colors.deepPurple,
+                                  textColor: Colors.white,
+                                  icon: Icons.dashboard_rounded,
+                                ),
+                              ),
+                            // For sales, make the Customer List button take the full row
+                            if (role == 'sales')
+                              SizedBox(
+                                width: 290,
+                                height: 56,
+                                child: NeumorphicButton(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (context) => const CustomerListPage()),
+                                    );
+                                  },
+                                  text: 'Customer List',
+                                  color: Colors.teal,
+                                  textColor: Colors.white,
+                                  icon: Icons.people_outline,
+                                  textStyle: const TextStyle(
+                                    fontFamily: 'Montserrat',
+                                    fontWeight: FontWeight.normal,
+                                    fontSize: 17, // Match Leads button font size
+                                    letterSpacing: 1.1,
+                                    color: Colors.white,
                                   ),
-                                );
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Branch not found for user')),
-                                );
-                              }
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('User not logged in')),
-                              );
-                            }
-                          },
-                          text: 'Leads Follow Up',
-                          color: primaryBlue, // Blue box
-                          textColor: Colors.white, // White text
-                          icon: Icons.people_alt_rounded,
-                          textStyle: const TextStyle(
-                            fontFamily: 'Montserrat',
-                            fontWeight: FontWeight.normal, // Not bold
-                            fontSize: 19,
-                            letterSpacing: 1.1,
-                            color: Colors.white,
-                          ),
-                        ),
-
-                        const SizedBox(height: 25),
-                        NeumorphicButton(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => const TodoPage()),
-                            );
-                          },
-                          text: 'ToDo List',
-                          color: primaryGreen, // Green box
-                          textColor: Colors.white, // White text
-                          icon: Icons.check_circle_outline_rounded,
-                        ),
-
-                        // Show Dashboard button if role is "admin" or "manager"
-                        if (role == 'admin' || role == 'manager') ...[
-                          const SizedBox(height: 25),
-                          NeumorphicButton(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (context) => const DashboardPage()),
-                              );
-                            },
-                            text: 'Dashboard',
-                            color: Colors.deepPurple,
-                            textColor: Colors.white,
-                            icon: Icons.dashboard_rounded,
-                          ),
-                        ],
-
-                        // Add Customer List button (newly added)
-                        const SizedBox(height: 25),
-                        NeumorphicButton(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => const CustomerListPage()),
-                            );
-                          },
-                          text: 'Customer List',
-                          color: Colors.teal, // Or any color you like
-                          textColor: Colors.white,
-                          icon: Icons.people_outline,
+                                ),
+                              ),
+                            // For admin/manager, keep the original width
+                            if (role == 'admin' || role == 'manager')
+                              SizedBox(
+                                width: 200,
+                                height: 56,
+                                child: NeumorphicButton(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (context) => const CustomerListPage()),
+                                    );
+                                  },
+                                  text: 'Customer List',
+                                  color: Colors.teal,
+                                  textColor: Colors.white,
+                                  icon: Icons.people_outline,
+                                  textStyle: const TextStyle(
+                                    fontFamily: 'Montserrat',
+                                    fontWeight: FontWeight.normal,
+                                    fontSize: 17, // Match Leads button font size
+                                    letterSpacing: 1.1,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       ],
                     ),
@@ -342,8 +399,7 @@ class NeumorphicButton extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        margin: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 14), // Slightly reduced padding
         decoration: BoxDecoration(
           color: color,
           borderRadius: BorderRadius.circular(14),
@@ -364,19 +420,23 @@ class NeumorphicButton extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (icon != null) ...[
-              Icon(icon, color: textColor, size: 22),
-              const SizedBox(width: 10),
+              Icon(icon, color: textColor, size: 20), // Slightly smaller icon
+              const SizedBox(width: 8),
             ],
-            Text(
-              text,
-              style: textStyle ??
-                  TextStyle(
-                    fontWeight: FontWeight.normal, // Not bold
-                    fontSize: 18,
-                    letterSpacing: 1.1,
-                    color: textColor,
-                    fontFamily: 'Montserrat',
-                  ),
+            Flexible(
+              child: Text(
+                text,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                style: textStyle ??
+                    TextStyle(
+                      fontWeight: FontWeight.normal,
+                      fontSize: 15, // Reduced font size
+                      letterSpacing: 1.1,
+                      color: textColor,
+                      fontFamily: 'Montserrat',
+                    ),
+              ),
             ),
           ],
         ),
