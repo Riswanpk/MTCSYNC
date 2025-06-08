@@ -18,7 +18,7 @@ class SettingsPage extends StatelessWidget {
       final intent = AndroidIntent(
         action: 'android.settings.CHANNEL_NOTIFICATION_SETTINGS',
         arguments: <String, dynamic>{
-          'android.provider.extra.APP_PACKAGE': 'com.example.mtcsync', // <-- Replace with your app's package name
+          'android.provider.extra.APP_PACKAGE': 'com.mtc.mtcsync', // <-- Replace with your app's package name
           'android.provider.extra.CHANNEL_ID': channelId,
         },
       );
