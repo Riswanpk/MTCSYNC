@@ -1,3 +1,4 @@
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ class TodoFormPage extends StatefulWidget {
 class _TodoFormPageState extends State<TodoFormPage> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
+  final TextEditingController _reminderController = TextEditingController();
   String _priority = 'High';
   bool _isSaving = false;
 
@@ -24,6 +26,8 @@ class _TodoFormPageState extends State<TodoFormPage> {
   String? _currentUserBranch;
   List<Map<String, dynamic>> _salesUsers = [];
   String? _selectedSalesUserId;
+  TimeOfDay? _selectedReminderTime;
+  DateTime? _selectedReminderDate;
 
   @override
   void initState() {
@@ -61,6 +65,29 @@ class _TodoFormPageState extends State<TodoFormPage> {
         };
       }).toList();
     });
+  }
+
+  Future<void> _scheduleNotification(DateTime dateTime, String title) async {
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+        channelKey: 'reminder_channel',
+        title: 'Task Reminder',
+        body: 'Reminder for: $title',
+        notificationLayout: NotificationLayout.Default,
+      ),
+      schedule: NotificationCalendar(
+        year: dateTime.year,
+        month: dateTime.month,
+        day: dateTime.day,
+        hour: dateTime.hour,
+        minute: dateTime.minute,
+        second: 0,
+        millisecond: 0,
+        timeZone: await AwesomeNotifications().getLocalTimeZoneIdentifier(),
+        repeats: false,
+      ),
+    );
   }
 
   Future<void> _saveTodo() async {
@@ -109,6 +136,9 @@ class _TodoFormPageState extends State<TodoFormPage> {
       assignedToName = null;
     }
 
+    // Prepare reminder
+    String? reminderText = _reminderController.text.trim().isEmpty ? null : _reminderController.text.trim();
+
     await FirebaseFirestore.instance.collection('todo').add({
       'title': title,
       'description': desc,
@@ -121,7 +151,20 @@ class _TodoFormPageState extends State<TodoFormPage> {
       if (assignedByName != null) 'assigned_by_name': assignedByName,
       if (assignedTo != null) 'assigned_to': assignedTo,
       if (assignedToName != null) 'assigned_to_name': assignedToName,
+      if (reminderText != null) 'reminder': reminderText,
     });
+
+    // Schedule notification if reminder is set
+    if (_selectedReminderDate != null && _selectedReminderTime != null && reminderText != null) {
+      final scheduledDate = DateTime(
+        _selectedReminderDate!.year,
+        _selectedReminderDate!.month,
+        _selectedReminderDate!.day,
+        _selectedReminderTime!.hour,
+        _selectedReminderTime!.minute,
+      );
+      await _scheduleNotification(scheduledDate, title);
+    }
 
     setState(() => _isSaving = false);
     Navigator.pop(context);
@@ -131,6 +174,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
   void dispose() {
     _titleController.dispose();
     _descController.dispose();
+    _reminderController.dispose();
     super.dispose();
   }
 
@@ -225,7 +269,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
                         ),
                         ..._salesUsers.map<DropdownMenuItem<String>>((user) => DropdownMenuItem<String>(
                               value: user['uid'] as String,
-                              child: Text(user['username'] as String), // <-- changed here
+                              child: Text(user['username'] as String),
                             )),
                       ],
                       onChanged: (val) => setState(() => _selectedSalesUserId = val),
@@ -278,6 +322,49 @@ class _TodoFormPageState extends State<TodoFormPage> {
                   ),
                 ],
                 onChanged: (val) => setState(() => _priority = val!),
+              ),
+              const SizedBox(height: 18),
+              Text('Reminder (optional)', style: TextStyle(color: labelColor, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _reminderController,
+                readOnly: true,
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: inputFillColor,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  hintText: 'Pick reminder date & time',
+                  hintStyle: TextStyle(color: isDark ? Colors.white38 : Colors.grey),
+                  prefixIcon: const Icon(Icons.alarm),
+                ),
+                onTap: () async {
+                  final pickedDate = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 30)),
+                  );
+                  if (pickedDate != null) {
+                    final pickedTime = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay.now(),
+                    );
+                    if (pickedTime != null) {
+                      _selectedReminderDate = pickedDate;
+                      _selectedReminderTime = pickedTime;
+                      final formatted = DateTime(
+                        pickedDate.year,
+                        pickedDate.month,
+                        pickedDate.day,
+                        pickedTime.hour,
+                        pickedTime.minute,
+                      );
+                      _reminderController.text =
+                          "${formatted.year}-${formatted.month.toString().padLeft(2, '0')}-${formatted.day.toString().padLeft(2, '0')} ${pickedTime.format(context)}";
+                      setState(() {});
+                    }
+                  }
+                },
               ),
               const Spacer(),
               SizedBox(
