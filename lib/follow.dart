@@ -31,7 +31,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _companyController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController(text: '+91 ');
   final TextEditingController _commentsController = TextEditingController();
   final TextEditingController _reminderController = TextEditingController();
 
@@ -175,6 +175,10 @@ class _FollowUpFormState extends State<FollowUpForm> {
     // Set the date field to today's date in yyyy-mm-dd format
     final now = DateTime.now();
     _dateController.text = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    // Ensure "+91 " is present at the start of the phone field
+    if (!_phoneController.text.startsWith('+91 ')) {
+      _phoneController.text = '+91 ';
+    }
   }
 
 
@@ -307,7 +311,46 @@ class _FollowUpFormState extends State<FollowUpForm> {
                       prefixIcon: Icon(Icons.phone),
                     ),
                     keyboardType: TextInputType.phone,
-                    validator: (value) => value!.isEmpty ? 'Enter phone number' : null,
+                    validator: (value) {
+                      if (value == null || value.isEmpty || !value.startsWith('+91 ')) {
+                        return 'Phone must start with +91 ';
+                      }
+                      if (value.trim() == '+91') {
+                        return 'Enter phone number';
+                      }
+                      // Check for 10 digits after +91 (excluding spaces)
+                      final digits = value.replaceAll(RegExp(r'\D'), '');
+                      if (digits.length != 12) {
+                        return 'Enter a valid 10-digit number after +91';
+                      }
+                      return null;
+                    },
+                    onChanged: (val) {
+                      // Always start with "+91 "
+                      if (!val.startsWith('+91 ')) {
+                        controller.text = '+91 ';
+                        controller.selection = TextSelection.fromPosition(
+                          TextPosition(offset: controller.text.length),
+                        );
+                        return;
+                      }
+                      // Remove "+91 " and spaces to get only digits
+                      String raw = val.replaceAll('+91 ', '').replaceAll(' ', '');
+                      // Limit to 10 digits max
+                      if (raw.length > 10) {
+                        raw = raw.substring(0, 10);
+                      }
+                      // Add space after first 5 digits if applicable
+                      String formatted = raw.length > 5
+                          ? '+91 ${raw.substring(0, 5)} ${raw.substring(5)}'
+                          : '+91 $raw';
+                      if (controller.text != formatted) {
+                        controller.text = formatted;
+                        controller.selection = TextSelection.fromPosition(
+                          TextPosition(offset: formatted.length),
+                        );
+                      }
+                    },
                   );
                 },
                 optionsViewBuilder: (context, onSelected, options) {

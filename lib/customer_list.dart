@@ -105,6 +105,24 @@ class _CustomerListPageState extends State<CustomerListPage> {
     }
   }
 
+  Future<void> _deleteEntry(Map<String, dynamic> data) async {
+    String? phone = data['phone'];
+    if (phone == null) return;
+    // Find the document by phone (assuming phone is unique)
+    Query query = FirebaseFirestore.instance
+        .collection('customer')
+        .where('phone', isEqualTo: phone);
+    // Only filter by branch if not admin
+    if (userRole != 'admin') {
+      query = query.where('branch', isEqualTo: userBranch);
+    }
+    final snap = await query.get();
+    for (var doc in snap.docs) {
+      await doc.reference.delete();
+    }
+    setState(() {}); // Refresh list
+  }
+
   @override
   Widget build(BuildContext context) {
     if (userBranch == null) {
@@ -113,29 +131,40 @@ class _CustomerListPageState extends State<CustomerListPage> {
       );
     }
 
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Customer & Leads List'),
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
+        elevation: 2,
       ),
       body: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
-            TextField(
-              decoration: const InputDecoration(
-                hintText: 'Search by phone or name...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
+            Container(
+              decoration: BoxDecoration(
+                color: theme.cardColor,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2))],
               ),
-              onChanged: (val) {
-                setState(() {
-                  searchQuery = val.trim().toLowerCase();
-                });
-              },
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: 'Search by phone or name...',
+                  prefixIcon: Icon(Icons.search, color: Colors.blueGrey),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                ),
+                onChanged: (val) {
+                  setState(() {
+                    searchQuery = val.trim().toLowerCase();
+                  });
+                },
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Expanded(
               child: FutureBuilder<List<Map<String, dynamic>>>(
                 future: _fetchCombinedData(),
@@ -150,19 +179,24 @@ class _CustomerListPageState extends State<CustomerListPage> {
                   return Column(
                     children: [
                       Container(
-                        color: Colors.blue.shade100,
-                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
                         child: Row(
-                          children: const [
+                          children: [
                             Expanded(
                               flex: 2,
-                              child: Text('Phone', style: TextStyle(fontWeight: FontWeight.bold)),
+                              child: Text('Phone', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey[800], fontFamily: 'Montserrat')),
                             ),
                             Expanded(
                               flex: 3,
-                              child: Text('Name', style: TextStyle(fontWeight: FontWeight.bold)),
+                              child: Text('Name', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey[800], fontFamily: 'Montserrat')),
                             ),
-                            SizedBox(width: 32), // For arrow icon
+                            if (userRole == 'admin')
+                              const SizedBox(width: 40), // For delete button
+                            const SizedBox(width: 24), // For arrow icon
                           ],
                         ),
                       ),
@@ -170,32 +204,81 @@ class _CustomerListPageState extends State<CustomerListPage> {
                       Expanded(
                         child: ListView.separated(
                           itemCount: docs.length,
-                          separatorBuilder: (_, __) => const Divider(height: 0),
+                          separatorBuilder: (_, __) => const SizedBox(height: 8),
                           itemBuilder: (context, idx) {
                             final data = docs[idx];
-                            return InkWell(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => CustomerProfilePage(customer: data),
+                            return Card(
+                              elevation: 2,
+                              color: Colors.green.shade100, // Light green card color
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => CustomerProfilePage(customer: data),
+                                    ),
+                                  );
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          data['phone'] ?? '-',
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontFamily: 'Montserrat',
+                                            color: Colors.black, // Hard black text
+                                          ),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 3,
+                                        child: Text(
+                                          data['name'] ?? '-',
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w500,
+                                            fontFamily: 'Montserrat',
+                                            color: Colors.black, // Hard black text
+                                          ),
+                                        ),
+                                      ),
+                                      if (userRole == 'admin')
+                                        IconButton(
+                                          icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                          tooltip: 'Delete',
+                                          onPressed: () async {
+                                            final confirm = await showDialog<bool>(
+                                              context: context,
+                                              builder: (ctx) => AlertDialog(
+                                                title: const Text('Delete Entry'),
+                                                content: Text('Are you sure you want to delete this Customer?'),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () => Navigator.pop(ctx, false),
+                                                    child: const Text('Cancel'),
+                                                  ),
+                                                  ElevatedButton(
+                                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                                    onPressed: () => Navigator.pop(ctx, true),
+                                                    child: const Text('Delete'),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                            if (confirm == true) {
+                                              await _deleteEntry(data);
+                                            }
+                                          },
+                                        ),
+                                      const Icon(Icons.arrow_forward_ios, size: 18, color: Colors.blueGrey),
+                                    ],
                                   ),
-                                );
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(data['phone'] ?? '-', style: const TextStyle(fontSize: 16)),
-                                    ),
-                                    Expanded(
-                                      flex: 3,
-                                      child: Text(data['name'] ?? '-', style: const TextStyle(fontSize: 16)),
-                                    ),
-                                    const Icon(Icons.arrow_forward_ios, size: 18, color: Colors.blueGrey),
-                                  ],
                                 ),
                               ),
                             );
@@ -214,35 +297,37 @@ class _CustomerListPageState extends State<CustomerListPage> {
   }
 
   Future<List<Map<String, dynamic>>> _fetchCombinedData() async {
-    final customerSnap = await FirebaseFirestore.instance
-        .collection('customer')
-        .where('branch', isEqualTo: userBranch)
-        .get();
-    final followUpSnap = await FirebaseFirestore.instance
-        .collection('follow_ups')
-        .where('branch', isEqualTo: userBranch)
-        .get();
+    Query customerQuery = FirebaseFirestore.instance.collection('customer');
+    // If not admin, filter by branch
+    if (userRole != 'admin') {
+      customerQuery = customerQuery.where('branch', isEqualTo: userBranch);
+    }
 
-    final List<Map<String, dynamic>> combined = [];
+    final customerSnap = await customerQuery.get();
+
+    final List<Map<String, dynamic>> customers = [];
 
     for (var doc in customerSnap.docs) {
       final data = doc.data();
-      data['type'] = 'Customer';
-      combined.add(data);
-    }
-    for (var doc in followUpSnap.docs) {
-      final data = doc.data();
-      data['type'] = 'Lead';
-      combined.add(data);
+      if (data != null) {
+        final mapData = data as Map<String, dynamic>;
+        mapData['type'] = 'Customer'; // Optional, can be removed if not used
+        customers.add(mapData);
+      }
     }
 
     // Filter by search query
-    return combined.where((data) {
+    final filtered = customers.where((data) {
       final phone = (data['phone'] ?? '').toString().toLowerCase();
       final name = (data['name'] ?? '').toString().toLowerCase();
       return searchQuery.isEmpty ||
           phone.contains(searchQuery) ||
           name.contains(searchQuery);
     }).toList();
+
+    // Sort alphabetically by name
+    filtered.sort((a, b) => (a['name'] ?? '').toString().toLowerCase().compareTo((b['name'] ?? '').toString().toLowerCase()));
+
+    return filtered;
   }
 }
