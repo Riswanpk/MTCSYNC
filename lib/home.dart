@@ -10,6 +10,9 @@ import 'feedback_admin.dart'; // Add this import
 import 'dashboard.dart'; // Import the dashboard page
 import 'manageusers.dart'; // Add this import
 import 'customer_list.dart'; // Import the customer list page
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -22,6 +25,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
+  File? _profileImage;
+  String? _profileImagePath;
+
   @override
   void initState() {
     super.initState();
@@ -33,6 +39,39 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     _scaleAnimation = Tween<double>(begin: 0.9, end: 1.1).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
+
+    _loadProfileImage();
+  }
+
+  Future<void> _loadProfileImage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final path = prefs.getString('profile_image_path');
+    if (path != null && File(path).existsSync()) {
+      setState(() {
+        _profileImagePath = path;
+        _profileImage = File(path);
+      });
+    } else if (path != null) {
+      // If file doesn't exist, remove the path from prefs
+      await prefs.remove('profile_image_path');
+      setState(() {
+        _profileImagePath = null;
+        _profileImage = null;
+      });
+    }
+  }
+
+  Future<void> _pickProfileImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      setState(() {
+        _profileImage = File(pickedFile.path);
+        _profileImagePath = pickedFile.path;
+      });
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('profile_image_path', pickedFile.path);
+    }
   }
 
   @override
@@ -53,8 +92,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       future: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser?.uid).get(),
       builder: (context, snapshot) {
         String? role;
+        String? username;
+        String? branch;
         if (snapshot.hasData) {
           role = snapshot.data?.get('role');
+          username = snapshot.data?.get('username') ?? snapshot.data?.get('email') ?? 'User';
+          branch = snapshot.data?.get('branch');
         }
         return WillPopScope(
           onWillPop: () async => false, // Disable back button
@@ -64,20 +107,73 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
-                  const DrawerHeader(
-                    decoration: BoxDecoration(
-                      color: Color(0xFF005BAC),
-                    ),
-                    child: Text(
-                      'Menu',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
+                  DrawerHeader(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF005BAC), Color(0xFF3383C7)], // Profile blue gradient
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Profile',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        GestureDetector(
+                          onTap: _pickProfileImage,
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 22,
+                                backgroundColor: Colors.white,
+                                backgroundImage: (_profileImage != null)
+                                    ? FileImage(_profileImage!)
+                                    : null,
+                                child: (_profileImage == null)
+                                    ? const Icon(Icons.account_circle, size: 38, color: Color(0xFF005BAC))
+                                    : null,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      username ?? '',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    Text(
+                                      branch ?? '',
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w400,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   ListTile(
-                    leading: const Icon(Icons.settings),
+                    leading: const Icon(Icons.settings, color: Color(0xFF005BAC)), // Blue for Settings
                     title: const Text('Settings'),
                     onTap: () {
                       Navigator.pop(context); // Close the drawer
@@ -88,7 +184,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                     },
                   ),
                   ListTile(
-                    leading: const Icon(Icons.feedback),
+                    leading: const Icon(Icons.feedback, color: Color(0xFF8CC63F)), // Green for Feedback
                     title: const Text('Feedback'),
                     onTap: () async {
                       Navigator.pop(context); // Close the drawer
@@ -117,7 +213,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                   // Add Manage Users option for admin
                   if (role == 'admin')
                     ListTile(
-                      leading: const Icon(Icons.manage_accounts),
+                      leading: const Icon(Icons.manage_accounts, color: Colors.deepPurple), // Purple for Manage Users
                       title: const Text('Manage Users'),
                       onTap: () {
                         Navigator.pop(context); // Close the drawer
@@ -128,7 +224,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                       },
                     ),
                   ListTile(
-                    leading: const Icon(Icons.logout),
+                    leading: const Icon(Icons.logout, color: Colors.red), // Red for Log Out
                     title: const Text('Log Out'),
                     onTap: () async {
                       await FirebaseAuth.instance.signOut();
