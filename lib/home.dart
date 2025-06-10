@@ -13,6 +13,7 @@ import 'customer_list.dart'; // Import the customer list page
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'loading_page.dart'; // Make sure you have a loading_page.dart file with LoadingPage class
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -326,28 +327,27 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                               height: 56, // Set a fixed height for all cards
                               child: NeumorphicButton(
                                 onTap: () async {
+                                  // 1. Instantly show the loading page (no fade-in)
+                                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoadingPage()));
+
+                                  // Fetch branch for current user
                                   final user = FirebaseAuth.instance.currentUser;
+                                  String? branch;
                                   if (user != null) {
                                     final userDoc = await FirebaseFirestore.instance
                                         .collection('users')
                                         .doc(user.uid)
                                         .get();
-                                    final branch = userDoc.data()?['branch'];
-                                    if (branch != null) {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => LeadsPage(branch: branch),
-                                        ),
-                                      );
-                                    } else {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Branch not found for user')),
-                                      );
-                                    }
+                                    branch = userDoc.data()?['branch'];
+                                  }
+                                  await Future.delayed(const Duration(seconds: 2)); // Ensure loading animation is visible
+
+                                  if (branch != null) {
+                                    Navigator.of(context).pushReplacement(fadeRoute(LeadsPage(branch: branch)));
                                   } else {
+                                    Navigator.of(context).pop(); // Remove loading page
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('User not logged in')),
+                                      const SnackBar(content: Text('Branch not found for user')),
                                     );
                                   }
                                 },
@@ -368,11 +368,10 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                               width: 140,
                               height: 56, // Set a fixed height for all cards
                               child: NeumorphicButton(
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (context) => const TodoPage()),
-                                  );
+                                onTap: () async {
+                                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoadingPage()));
+                                  await Future.delayed(const Duration(seconds: 2)); // Simulate loading
+                                  Navigator.of(context).pushReplacement(fadeRoute(const TodoPage()));
                                 },
                                 text: 'ToDo List',
                                 color: primaryGreen,
@@ -387,13 +386,14 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                 ),
                               ),
                             ),
-                            // Only show Dashboard button for admin or manager, not for sales
+                            // For Dashboard button (admin or manager)
                             if (role == 'admin' || role == 'manager')
                               SizedBox(
                                 width: 80,
-                                height: 56, // Set a fixed height for all cards
+                                height: 56,
                                 child: NeumorphicButton(
-                                  onTap: () {
+                                  onTap: () async {
+                                    await showLoadingDialog(context);
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(builder: (context) => const DashboardPage()),
@@ -405,13 +405,14 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                   icon: Icons.dashboard_rounded,
                                 ),
                               ),
-                            // For sales, make the Customer List button take the full row
+                            // For Customer List button (sales)
                             if (role == 'sales')
                               SizedBox(
                                 width: 290,
                                 height: 56,
                                 child: NeumorphicButton(
-                                  onTap: () {
+                                  onTap: () async {
+                                    await showLoadingDialog(context);
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(builder: (context) => const CustomerListPage()),
@@ -430,13 +431,14 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                                   ),
                                 ),
                               ),
-                            // For admin/manager, keep the original width
+                            // For Customer List button (admin or manager)
                             if (role == 'admin' || role == 'manager')
                               SizedBox(
                                 width: 200,
                                 height: 56,
                                 child: NeumorphicButton(
-                                  onTap: () {
+                                  onTap: () async {
+                                    await showLoadingDialog(context);
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(builder: (context) => const CustomerListPage()),
@@ -539,4 +541,91 @@ class NeumorphicButton extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<void> showLoadingDialog(BuildContext context) async {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) {
+      return const _RotatingLogoDialog();
+    },
+  );
+  await Future.delayed(const Duration(seconds: 2));
+  Navigator.of(context, rootNavigator: true).pop();
+}
+
+class _RotatingLogoDialog extends StatelessWidget {
+  const _RotatingLogoDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.white, // White background
+      child: const Center(
+        child: _RotatingLogo(),
+      ),
+    );
+  }
+}
+
+class _RotatingLogo extends StatefulWidget {
+  const _RotatingLogo();
+
+  @override
+  State<_RotatingLogo> createState() => _RotatingLogoState();
+}
+
+class _RotatingLogoState extends State<_RotatingLogo> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3), // Slow rotation
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Transform(
+          alignment: Alignment.center,
+          transform: Matrix4.identity()
+            ..setEntry(3, 2, 0.001) // perspective
+            ..rotateY(_controller.value * 2 * 3.1415926535), // Y-axis rotation
+          child: child,
+        );
+      },
+      child: Image.asset(
+        'assets/images/logo.png',
+        width: 200,
+        height: 200,
+      ),
+    );
+  }
+}
+
+// Add this anywhere above your _HomePageState class or in a utils file
+Route fadeRoute(Widget page) {
+  return PageRouteBuilder(
+    pageBuilder: (context, animation, secondaryAnimation) => page,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(
+        opacity: animation,
+        child: child,
+      );
+    },
+    transitionDuration: const Duration(milliseconds: 400),
+  );
 }

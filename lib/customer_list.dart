@@ -207,10 +207,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
                           separatorBuilder: (_, __) => const SizedBox(height: 8),
                           itemBuilder: (context, idx) {
                             final data = docs[idx];
-                            return Card(
-                              elevation: 2,
-                              color: Colors.green.shade100, // Light green card color
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            return ShrinkOnTouchCard(
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(12),
                                 onTap: () {
@@ -232,7 +229,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
                                           style: const TextStyle(
                                             fontSize: 16,
                                             fontFamily: 'Montserrat',
-                                            color: Colors.black, // Hard black text
+                                            color: Colors.black,
                                           ),
                                         ),
                                       ),
@@ -244,13 +241,13 @@ class _CustomerListPageState extends State<CustomerListPage> {
                                             fontSize: 16,
                                             fontWeight: FontWeight.w500,
                                             fontFamily: 'Montserrat',
-                                            color: Colors.black, // Hard black text
+                                            color: Colors.black,
                                           ),
                                         ),
                                       ),
                                       if (userRole == 'admin')
                                         IconButton(
-                                          icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                          icon: const Icon(Icons.delete, color: Color.fromARGB(255, 0, 0, 0)),
                                           tooltip: 'Delete',
                                           onPressed: () async {
                                             final confirm = await showDialog<bool>(
@@ -276,7 +273,6 @@ class _CustomerListPageState extends State<CustomerListPage> {
                                             }
                                           },
                                         ),
-                                      const Icon(Icons.arrow_forward_ios, size: 18, color: Colors.blueGrey),
                                     ],
                                   ),
                                 ),
@@ -329,5 +325,66 @@ class _CustomerListPageState extends State<CustomerListPage> {
     filtered.sort((a, b) => (a['name'] ?? '').toString().toLowerCase().compareTo((b['name'] ?? '').toString().toLowerCase()));
 
     return filtered;
+  }
+}
+
+class ShrinkOnTouchCard extends StatefulWidget {
+  final Widget child;
+  const ShrinkOnTouchCard({super.key, required this.child});
+
+  @override
+  _ShrinkOnTouchCardState createState() => _ShrinkOnTouchCardState();
+}
+
+class _ShrinkOnTouchCardState extends State<ShrinkOnTouchCard> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  bool _pressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  void _onTapDown(TapDownDetails details) {
+    setState(() => _pressed = true);
+    _controller.forward();
+  }
+
+  void _onTapUp(TapUpDetails details) {
+    setState(() => _pressed = false);
+    _controller.reverse();
+  }
+
+  void _onTapCancel() {
+    setState(() => _pressed = false);
+    _controller.reverse();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scaleAnimation,
+      child: GestureDetector(
+        onTapDown: _onTapDown,
+        onTapUp: _onTapUp,
+        onTapCancel: _onTapCancel,
+        child: Card(
+          color: _pressed
+              ? const Color(0xFFD0F0FD) // Light blue when pressed
+              : const Color.fromARGB(255, 215, 243, 213), // Light green when not pressed
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: widget.child,
+        ),
+      ),
+    );
   }
 }

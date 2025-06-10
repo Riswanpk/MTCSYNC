@@ -246,6 +246,13 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
               resizeToAvoidBottomInset: true,
               appBar: AppBar(
                 title: const Text('Todo List'),
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                backgroundColor: const Color.fromARGB(255, 15, 110, 205), // Or your preferred color
+                foregroundColor: Colors.white,
+                elevation: 0,
                 actions: [
                   IconButton(
                     icon: const Icon(Icons.delete_sweep_rounded, color: Colors.white),
