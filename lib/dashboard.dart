@@ -5,9 +5,40 @@ import 'package:fl_chart/fl_chart.dart';
 import 'monthly.dart';
 import 'leads.dart';
 import 'daily.dart';
+import 'insights.dart';
 
-class DashboardPage extends StatelessWidget {
+class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
+
+  @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
+  String? _selectedBranch;
+  List<String> _branches = [];
+  bool _loadingBranches = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchBranches();
+  }
+
+  Future<void> _fetchBranches() async {
+    final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
+    final branches = usersSnapshot.docs
+        .map((doc) => doc['branch'] ?? '')
+        .where((b) => b != null && b.toString().isNotEmpty)
+        .toSet()
+        .cast<String>()
+        .toList();
+    setState(() {
+      _branches = branches;
+      _selectedBranch = branches.isNotEmpty ? branches.first : null;
+      _loadingBranches = false;
+    });
+  }
 
   Future<Map<String, int>> _fetchCounts({String? branch}) async {
     final now = DateTime.now();
@@ -226,12 +257,58 @@ class DashboardPage extends StatelessWidget {
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text("Revenue", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      SizedBox(height: 200, child: RevenueChart()),
+                    children: [
+                      // Only show branch switch for admin, not for manager
+                      if (role == 'admin' && !_loadingBranches)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: DropdownButton<String>(
+                            value: _selectedBranch,
+                            items: _branches
+                                .map((b) => DropdownMenuItem(
+                                      value: b,
+                                      child: Text(b),
+                                    ))
+                                .toList(),
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedBranch = val;
+                              });
+                            },
+                            hint: const Text("Select Branch"),
+                          ),
+                        ),
+                      SizedBox(
+                        height: 260,
+                        child: LeadsPerMonthChart(
+                          branch: role == 'admin'
+                              ? _selectedBranch
+                              : branch, // For manager, always use their branch
+                        ),
+                      ),
                     ],
                   ),
                 ),
+                const SizedBox(height: 16),
+                // --- Insights Button ---
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.insights),
+                    label: const Text("Insights"),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const InsightsPage()),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 24),
               ],
             ),
           ),
@@ -420,6 +497,98 @@ class RevenueChart extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// Chart widget for leads per month
+class LeadsPerMonthChart extends StatelessWidget {
+  final String? branch;
+  const LeadsPerMonthChart({super.key, this.branch});
+
+  Future<List<int>> _fetchLeadsPerMonth(String? branch) async {
+    final now = DateTime.now();
+    List<int> leadsPerMonth = List.filled(12, 0);
+
+    Query query = FirebaseFirestore.instance.collection('follow_ups');
+    if (branch != null && branch.isNotEmpty) {
+      query = query.where('branch', isEqualTo: branch);
+    }
+    final snapshot = await query.get();
+
+    for (var doc in snapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final ts = data['created_at'];
+      if (ts is Timestamp) {
+        final dt = ts.toDate();
+        if (dt.year == now.year) {
+          leadsPerMonth[dt.month - 1]++;
+        }
+      }
+    }
+    return leadsPerMonth;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<int>>(
+      future: _fetchLeadsPerMonth(branch),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final leadsPerMonth = snapshot.data!;
+        final months = [
+          'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+        ];
+        return LineChart(
+          LineChartData(
+            minY: 0,
+            maxY: (leadsPerMonth.reduce((a, b) => a > b ? a : b) + 2).toDouble(),
+            titlesData: FlTitlesData(
+              leftTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  getTitlesWidget: (value, meta) => Text(value.toInt().toString(), style: const TextStyle(fontSize: 10)),
+                  reservedSize: 32,
+                ),
+              ),
+              bottomTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  getTitlesWidget: (value, meta) {
+                    int idx = value.toInt();
+                    if (idx >= 0 && idx < months.length) {
+                      return Text(months[idx], style: const TextStyle(fontSize: 10));
+                    }
+                    return const SizedBox.shrink();
+                  },
+                  interval: 1,
+                  reservedSize: 28,
+                ),
+              ),
+              rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            ),
+            borderData: FlBorderData(show: false),
+            gridData: FlGridData(show: false),
+            lineBarsData: [
+              LineChartBarData(
+                isCurved: true,
+                barWidth: 2,
+                color: Colors.blue,
+                dotData: FlDotData(show: true),
+                belowBarData: BarAreaData(
+                  show: true,
+                  color: Colors.blue.withOpacity(0.2),
+                ),
+                spots: List.generate(12, (i) => FlSpot(i.toDouble(), leadsPerMonth[i].toDouble())),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
