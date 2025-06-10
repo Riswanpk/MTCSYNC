@@ -14,6 +14,8 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'loading_page.dart'; // Make sure you have a loading_page.dart file with LoadingPage class
+import 'main.dart'; // <-- Import where your routeObserver is defined
+import 'todoform.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -22,12 +24,14 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
+class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin, RouteAware {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
   File? _profileImage;
   String? _profileImagePath;
+
+  bool _showTodoWarning = false;
 
   @override
   void initState() {
@@ -42,6 +46,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     );
 
     _loadProfileImage();
+    _checkTodoWarning(); // Check warning on init
   }
 
   Future<void> _loadProfileImage() async {
@@ -75,10 +80,81 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     }
   }
 
+  Future<void> _checkTodoWarning() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final role = userDoc.data()?['role'];
+    final email = userDoc.data()?['email'];
+    if (role != 'sales') {
+      setState(() {
+        _showTodoWarning = false;
+      });
+      return;
+    }
+
+    final now = DateTime.now();
+    final hour = now.hour;
+    // Show warning only between 7pm (19) and 12pm (12) next day
+    bool inWarningTime = (hour >= 19 && hour <= 23) || (hour >= 0 && hour < 12);
+
+    if (!inWarningTime) {
+      setState(() {
+        _showTodoWarning = false;
+      });
+      return;
+    }
+
+    // --- Check the daily report collection for this user ---
+    final today = DateTime(now.year, now.month, now.day);
+    final reportDate = hour < 12
+        ? DateTime(now.year, now.month, now.day - 1) // before noon, check yesterday's report
+        : today; // after noon, check today's report
+
+    final reportDocId = "${email}_${reportDate.year}_${reportDate.month}_${reportDate.day}";
+    final reportDoc = await FirebaseFirestore.instance
+        .collection('daily_reports')
+        .doc(reportDocId)
+        .get();
+
+    // Show warning if todo_done is not true (including if report doesn't exist)
+    final todoDone = reportDoc.exists && (reportDoc.data()?['todo_done'] == true);
+
+    setState(() {
+      _showTodoWarning = !todoDone;
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Subscribe to route changes
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      routeObserver.subscribe(this, route);
+    }
+    // Optionally, check once here too
+    _checkTodoWarning();
+  }
+
   @override
   void dispose() {
+    routeObserver.unsubscribe(this);
     _controller.dispose();
     super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    // Called when coming back to this page
+    _checkTodoWarning();
+  }
+
+  @override
+  void didPush() {
+    // Called when this page is pushed
+    _checkTodoWarning();
   }
 
   @override
@@ -297,6 +373,38 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                     ),
                   ),
                 ),
+
+                // --- WARNING BANNER FOR SALES ---
+                if (_showTodoWarning)
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const TodoFormPage()),
+                        );
+                      },
+                      child: Container(
+                        color: const Color.fromARGB(255, 243, 106, 2),
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.warning, color: Colors.white),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Text(
+                                "You have not created a ToDo!",
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
 
                 // Main content (unchanged)
                 Center(

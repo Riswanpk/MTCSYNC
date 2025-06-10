@@ -7,6 +7,10 @@ import 'leads.dart';
 import 'daily.dart';
 import 'insights.dart';
 
+// Add your theme colors
+const Color primaryBlue = Color(0xFF005BAC);
+const Color primaryGreen = Color(0xFF8CC63F);
+
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
@@ -249,7 +253,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF23242B) : Colors.white,
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4)),
@@ -267,7 +271,14 @@ class _DashboardPageState extends State<DashboardPage> {
                             items: _branches
                                 .map((b) => DropdownMenuItem(
                                       value: b,
-                                      child: Text(b),
+                                      child: Text(
+                                        b,
+                                        style: TextStyle(
+                                          color: Theme.of(context).brightness == Brightness.dark
+                                              ? Colors.white
+                                              : Colors.black,
+                                        ),
+                                      ),
                                     ))
                                 .toList(),
                             onChanged: (val) {
@@ -275,7 +286,20 @@ class _DashboardPageState extends State<DashboardPage> {
                                 _selectedBranch = val;
                               });
                             },
-                            hint: const Text("Select Branch"),
+                            dropdownColor: Theme.of(context).brightness == Brightness.dark
+                                ? const Color(0xFF23242B)
+                                : Colors.white,
+                            iconEnabledColor: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white
+                                : Colors.black,
+                            hint: Text(
+                              "Select Branch",
+                              style: TextStyle(
+                                color: Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.white
+                                    : Colors.black,
+                              ),
+                            ),
                           ),
                         ),
                       SizedBox(
@@ -335,11 +359,13 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
     return Container(
       margin: const EdgeInsets.all(4),
       padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withOpacity(isDark ? 0.18 : 0.08),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
@@ -354,7 +380,7 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             title,
-            style: const TextStyle(fontSize: 15, color: Colors.black87),
+            style: TextStyle(fontSize: 15, color: textColor),
             textAlign: TextAlign.center,
           ),
         ],
@@ -393,6 +419,8 @@ class MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -409,21 +437,21 @@ class MetricCard extends StatelessWidget {
             children: [
               Text(
                 value,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
               ),
               const SizedBox(width: 4),
               Icon(trendIcon, color: color, size: 20),
             ],
           ),
           const SizedBox(height: 8),
-          Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          Text(title, style: TextStyle(fontSize: 12, color: textColor.withOpacity(0.7))),
           SizedBox(height: 8),
           LineChart(
             LineChartData(
               lineBarsData: [
                 LineChartBarData(
                   isCurved: true,
-                  color: color,
+                  color: isDark ? Colors.white : color,
                   barWidth: 2,
                   dotData: FlDotData(show: false),
                   belowBarData: BarAreaData(show: false),
@@ -531,6 +559,8 @@ class LeadsPerMonthChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final graphBgColor = isDark ? const Color(0xFF23242B) : Colors.white;
     return FutureBuilder<List<int>>(
       future: _fetchLeadsPerMonth(branch),
       builder: (context, snapshot) {
@@ -542,50 +572,68 @@ class LeadsPerMonthChart extends StatelessWidget {
           'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
           'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
         ];
-        return LineChart(
-          LineChartData(
-            minY: 0,
-            maxY: (leadsPerMonth.reduce((a, b) => a > b ? a : b) + 2).toDouble(),
-            titlesData: FlTitlesData(
-              leftTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  getTitlesWidget: (value, meta) => Text(value.toInt().toString(), style: const TextStyle(fontSize: 10)),
-                  reservedSize: 32,
+        return Container(
+          decoration: BoxDecoration(
+            color: graphBgColor,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          padding: const EdgeInsets.all(8),
+          child: LineChart(
+            LineChartData(
+              minY: 0,
+              maxY: (leadsPerMonth.reduce((a, b) => a > b ? a : b) + 2).toDouble(),
+              titlesData: FlTitlesData(
+                leftTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    getTitlesWidget: (value, meta) => Text(
+                      value.toInt().toString(),
+                      style: TextStyle(fontSize: 10, color: isDark ? Colors.white : Colors.black),
+                    ),
+                    reservedSize: 32,
+                  ),
                 ),
-              ),
-              bottomTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  getTitlesWidget: (value, meta) {
-                    int idx = value.toInt();
-                    if (idx >= 0 && idx < months.length) {
-                      return Text(months[idx], style: const TextStyle(fontSize: 10));
-                    }
-                    return const SizedBox.shrink();
-                  },
-                  interval: 1,
-                  reservedSize: 28,
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    getTitlesWidget: (value, meta) {
+                      int idx = value.toInt();
+                      if (idx >= 0 && idx < months.length) {
+                        return Text(months[idx], style: TextStyle(fontSize: 10, color: isDark ? Colors.white : Colors.black));
+                      }
+                      return const SizedBox.shrink();
+                    },
+                    interval: 1,
+                    reservedSize: 28,
+                  ),
                 ),
+                rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
               ),
-              rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              borderData: FlBorderData(show: false),
+              gridData: FlGridData(show: false),
+              lineBarsData: [
+                LineChartBarData(
+                  isCurved: true,
+                  barWidth: 2,
+                  color: isDark ? Colors.white : Colors.blue,
+                  dotData: FlDotData(
+                    show: true,
+                    getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
+                      radius: 4,
+                      color: isDark ? Colors.white : Colors.blue,
+                      strokeWidth: 0,
+                    ),
+                  ),
+                  belowBarData: BarAreaData(
+                    show: true,
+                    color: (isDark ? Colors.white : Colors.blue).withOpacity(0.2),
+                  ),
+                  spots: List.generate(12, (i) => FlSpot(i.toDouble(), leadsPerMonth[i].toDouble())),
+                ),
+              ],
+              backgroundColor: graphBgColor,
             ),
-            borderData: FlBorderData(show: false),
-            gridData: FlGridData(show: false),
-            lineBarsData: [
-              LineChartBarData(
-                isCurved: true,
-                barWidth: 2,
-                color: Colors.blue,
-                dotData: FlDotData(show: true),
-                belowBarData: BarAreaData(
-                  show: true,
-                  color: Colors.blue.withOpacity(0.2),
-                ),
-                spots: List.generate(12, (i) => FlSpot(i.toDouble(), leadsPerMonth[i].toDouble())),
-              ),
-            ],
           ),
         );
       },

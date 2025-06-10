@@ -74,6 +74,8 @@ void main() async {
   );
 }
 
+final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -86,6 +88,7 @@ class MyApp extends StatelessWidget {
           title: 'MTC Sync',
           theme: themeNotifier.currentTheme,
           home: const SplashScreen(), // Your splash screen routes to login/home
+          navigatorObservers: [routeObserver],
         );
       },
     );

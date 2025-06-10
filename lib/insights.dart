@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+// Add your theme colors
+const Color primaryBlue = Color(0xFF005BAC);
+const Color primaryGreen = Color(0xFF8CC63F);
+
 class InsightsPage extends StatefulWidget {
   const InsightsPage({super.key});
 
