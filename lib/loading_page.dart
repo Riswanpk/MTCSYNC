@@ -29,7 +29,7 @@ class _RotatingLogoState extends State<_RotatingLogo> with SingleTickerProviderS
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 3),
+      duration: const Duration(milliseconds: 1500),
     )..repeat();
   }
 
