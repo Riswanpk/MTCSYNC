@@ -312,10 +312,11 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
     if (_userEmail == null) return;
     final now = DateTime.now();
 
-    // Get all todos for this user (regardless of status)
+    // Get all completed todos for this user
     final snapshot = await _firestore
         .collection('todo')
         .where('email', isEqualTo: _userEmail)
+        .where('status', isEqualTo: 'done') // Only completed todos
         .get();
 
     final batch = _firestore.batch();
