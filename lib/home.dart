@@ -96,33 +96,40 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
     final now = DateTime.now();
     final hour = now.hour;
-    // Show warning only between 7pm (19) and 12pm (12) next day
-    bool inWarningTime = (hour >= 19 && hour <= 23) || (hour >= 0 && hour < 12);
 
-    if (!inWarningTime) {
+    // If after 12pm, do not show warning
+    if (hour >= 12 && hour < 19) {
       setState(() {
         _showTodoWarning = false;
       });
       return;
     }
 
-    // --- Check the daily report collection for this user ---
-    final today = DateTime(now.year, now.month, now.day);
-    final reportDate = hour < 12
-        ? DateTime(now.year, now.month, now.day - 1) // before noon, check yesterday's report
-        : today; // after noon, check today's report
+    // If between 7pm and midnight, check for ToDo between 7pm today and now
+    // If between midnight and 12pm, check for ToDo between 7pm previous day and 12pm today
+    DateTime windowStart;
+    DateTime windowEnd;
 
-    final reportDocId = "${email}_${reportDate.year}_${reportDate.month}_${reportDate.day}";
-    final reportDoc = await FirebaseFirestore.instance
-        .collection('daily_reports')
-        .doc(reportDocId)
+    if (hour >= 19) {
+      // 7pm to midnight: check for ToDo between 7pm today and now
+      windowStart = DateTime(now.year, now.month, now.day, 19, 0, 0);
+      windowEnd = now;
+    } else {
+      // midnight to 12pm: check for ToDo between 7pm previous day and 12pm today
+      final today = DateTime(now.year, now.month, now.day);
+      windowStart = today.subtract(const Duration(days: 1)).add(const Duration(hours: 19)); // 7pm previous day
+      windowEnd = DateTime(now.year, now.month, now.day, 12, 0, 0); // 12pm today
+    }
+
+    final todosSnapshot = await FirebaseFirestore.instance
+        .collection('todo')
+        .where('email', isEqualTo: email)
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(windowStart))
+        .where('timestamp', isLessThan: Timestamp.fromDate(windowEnd))
         .get();
 
-    // Show warning if todo_done is not true (including if report doesn't exist)
-    final todoDone = reportDoc.exists && (reportDoc.data()?['todo_done'] == true);
-
     setState(() {
-      _showTodoWarning = !todoDone;
+      _showTodoWarning = todosSnapshot.docs.isEmpty;
     });
   }
 
@@ -377,15 +384,17 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 // --- WARNING BANNER FOR SALES ---
                 if (_showTodoWarning)
                   Positioned(
-                    top: 0,
+                    bottom: 0, // <-- Changed from top: 0 to bottom: 0
                     left: 0,
                     right: 0,
                     child: GestureDetector(
-                      onTap: () {
-                        Navigator.push(
+                      onTap: () async {
+                        await Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => const TodoFormPage()),
                         );
+                        // Re-check after returning from ToDo form
+                        _checkTodoWarning();
                       },
                       child: Container(
                         color: const Color.fromARGB(255, 243, 106, 2),

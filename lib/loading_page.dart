@@ -5,9 +5,10 @@ class LoadingPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: const Center(
+      backgroundColor: isDark ? const Color(0xFF181A20) : Colors.white,
+      body: Center(
         child: _RotatingLogo(),
       ),
     );
