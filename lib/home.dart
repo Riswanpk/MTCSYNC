@@ -677,8 +677,9 @@ class _RotatingLogoDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      color: Colors.white, // White background
+      color: isDark ? const Color(0xFF181A20) : Colors.white, // Dark for dark theme
       child: const Center(
         child: _RotatingLogo(),
       ),
