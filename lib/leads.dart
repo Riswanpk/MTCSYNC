@@ -76,19 +76,8 @@ class _LeadsPageState extends State<LeadsPage> {
   }
 
   // Add this method for Excel export
-  Future<void> _downloadLeadsExcel(BuildContext context, {String? branch}) async {
+  Future<String?> _downloadLeadsExcel(BuildContext context, {String? branch}) async {
     try {
-      // Request MANAGE_EXTERNAL_STORAGE permission if needed (Android 11+)
-      if (Platform.isAndroid) {
-        var status = await Permission.manageExternalStorage.request();
-        if (!status.isGranted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Manage External Storage permission denied')),
-          );
-          return;
-        }
-      }
-
       final excel = Excel.createExcel();
       excel.delete('Sheet1'); // Remove default sheet
 
@@ -151,18 +140,17 @@ class _LeadsPageState extends State<LeadsPage> {
         }
       }
 
-      // Save file to Downloads directory (works with MANAGE_EXTERNAL_STORAGE)
-      Directory downloadsDir = Directory('/storage/emulated/0/Download');
-      final file = File('${downloadsDir.path}/leads_${DateTime.now().millisecondsSinceEpoch}.xlsx');
+      // Save to temp directory for sharing
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/leads_${DateTime.now().millisecondsSinceEpoch}.xlsx');
       await file.writeAsBytes(excel.encode()!);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Excel file downloaded to ${file.path}')),
-      );
+      return file.path;
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to download Excel: $e')),
+        SnackBar(content: Text('Failed to generate Excel: $e')),
       );
+      return null;
     }
   }
 
@@ -346,10 +334,13 @@ class _LeadsPageState extends State<LeadsPage> {
                         );
                       }
                     } else if (value == 'download_excel') {
-                      await _downloadLeadsExcel(
+                      final excelPath = await _downloadLeadsExcel(
                         context,
                         branch: role == 'admin' ? null : managerBranch,
                       );
+                      if (excelPath != null) {
+                        Share.shareXFiles([XFile(excelPath)], text: 'Leads Excel Report');
+                      }
                     } else if (value == 'share_pdf') {
                       // Always pass branch: null for admin to fetch all leads, regardless of selectedBranch
                       final pdfPath = await _downloadLeadsPdf(context, branch: role == 'admin' ? null : managerBranch);
