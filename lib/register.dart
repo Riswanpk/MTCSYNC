@@ -16,6 +16,7 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
   final _emailController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _codeController = TextEditingController(); // Add this
   String? _selectedBranch;
 
   bool _isLoading = false;
@@ -42,6 +43,7 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
     _emailController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
+    _codeController.dispose(); // Add this
     super.dispose();
   }
 
@@ -54,6 +56,18 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
     });
 
     try {
+      // Fetch the current code from Firestore
+      final codeSnap = await FirebaseFirestore.instance.collection('registration_codes').doc('active').get();
+      final currentCode = codeSnap.data()?['code'];
+
+      if (_codeController.text.trim() != currentCode) {
+        setState(() {
+          _errorMessage = "Invalid registration code.";
+          _isLoading = false;
+        });
+        return;
+      }
+
       UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
@@ -224,6 +238,17 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                         validator: (v) {
                           if (v == null || v.isEmpty) return 'Please enter password';
                           if (v.length < 6) return 'Password must be at least 6 characters';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 15),
+                      TextFormField(
+                        controller: _codeController,
+                        decoration: _inputDecoration('Registration Code', Icons.vpn_key),
+                        keyboardType: TextInputType.number,
+                        validator: (v) {
+                          if (v == null || v.isEmpty) return 'Enter registration code';
+                          if (v.length != 4) return 'Code must be 4 digits';
                           return null;
                         },
                       ),

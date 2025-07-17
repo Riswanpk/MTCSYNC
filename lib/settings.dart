@@ -4,6 +4,8 @@ import 'theme_notifier.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:android_intent_plus/android_intent.dart';
 import 'dart:io';
+import 'dart:math';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({Key? key}) : super(key: key);
@@ -31,6 +33,17 @@ class SettingsPage extends StatelessWidget {
     }
   }
 
+  Future<void> _generateRegistrationCode(BuildContext context) async {
+    final code = (Random().nextInt(9000) + 1000).toString(); // 4-digit code
+    await FirebaseFirestore.instance.collection('registration_codes').doc('active').set({
+      'code': code,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Registration code generated: $code')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeNotifier = Provider.of<ThemeNotifier>(context);
@@ -46,37 +59,44 @@ class SettingsPage extends StatelessWidget {
         ),
         body: Padding(
           padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Appearance',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              SwitchListTile(
-                title: const Text('Dark Mode'),
-                value: themeNotifier.isDarkMode,
-                onChanged: (val) {
-                  themeNotifier.toggleTheme(val);
-                },
-                secondary: Icon(
-                  themeNotifier.isDarkMode ? Icons.dark_mode : Icons.light_mode,
-                  color: theme.colorScheme.primary,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Appearance',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
-              ),
-              const SizedBox(height: 32),
-              const Text(
-                'Notifications',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              ListTile(
-                leading: const Icon(Icons.music_note),
-                title: const Text('Notification Tone'),
-                subtitle: const Text('Change your notification sound'),
-                onTap: () => _openNotificationToneSettings(context),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              ),
-            ],
+                SwitchListTile(
+                  title: const Text('Dark Mode'),
+                  value: themeNotifier.isDarkMode,
+                  onChanged: (val) {
+                    themeNotifier.toggleTheme(val);
+                  },
+                  secondary: Icon(
+                    themeNotifier.isDarkMode ? Icons.dark_mode : Icons.light_mode,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(height: 32),
+                const Text(
+                  'Notifications',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.music_note),
+                  title: const Text('Notification Tone'),
+                  subtitle: const Text('Change your notification sound'),
+                  onTap: () => _openNotificationToneSettings(context),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                ),
+                const SizedBox(height: 32),
+                ElevatedButton(
+                  onPressed: () => _generateRegistrationCode(context),
+                  child: const Text('Generate Registration Code'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
