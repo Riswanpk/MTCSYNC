@@ -16,6 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'loading_page.dart'; // Make sure you have a loading_page.dart file with LoadingPage class
 import 'main.dart'; // <-- Import where your routeObserver is defined
 import 'todoform.dart';
+import 'dart:math';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -24,9 +25,13 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin, RouteAware {
+class _HomePageState extends State<HomePage> with TickerProviderStateMixin, RouteAware {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
+
+  // Add swing animation variables
+  late AnimationController _swingController;
+  late Animation<double> _swingAnimation;
 
   File? _profileImage;
   String? _profileImagePath;
@@ -43,6 +48,19 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
     _scaleAnimation = Tween<double>(begin: 0.9, end: 1.1).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+
+    // Update swing controller and animation for left-right-center swing
+    _swingController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800), // Longer for visible damping
+    );
+    // Damped sine curve: amplitude decreases over time
+    _swingAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _swingController,
+        curve: Curves.linear,
+      ),
     );
 
     _loadProfileImage();
@@ -149,6 +167,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   void dispose() {
     routeObserver.unsubscribe(this);
     _controller.dispose();
+    _swingController.dispose(); // Dispose swing controller
     super.dispose();
   }
 
@@ -422,14 +441,37 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Logo
+                        // Logo with swing animation on tap
                         Padding(
                           padding: const EdgeInsets.only(bottom: 16.0),
-                          child: Image.asset(
-                            'assets/images/logo.png',
-                            width: 160,
-                            height: 160,
-                            fit: BoxFit.contain,
+                          child: GestureDetector(
+                            onTap: () {
+                              _swingController.forward(from: 0.0);
+                            },
+                            child: AnimatedBuilder(
+                              animation: _swingAnimation,
+                              builder: (context, child) {
+                                // Damped oscillation: amplitude decreases, frequency controls swings
+                                final double maxAngle = 0.18; // ~10 degrees
+                                final double damping = 3.5;   // Higher = faster damping
+                                final double frequency = 3.5; // Number of swings
+
+                                double t = _swingAnimation.value; // 0.0 to 1.0
+                                double angle = maxAngle * exp(-damping * t) * sin(frequency * pi * t);
+
+                                return Transform.rotate(
+                                  angle: angle,
+                                  alignment: Alignment.topCenter,
+                                  child: child,
+                                );
+                              },
+                              child: Image.asset(
+                                'assets/images/logo.png',
+                                width: 160,
+                                height: 160,
+                                fit: BoxFit.contain,
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(height: 24),
