@@ -276,13 +276,15 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                     ),
                   ),
                   ListTile(
-                    leading: const Icon(Icons.settings, color: Color(0xFF005BAC)), // Blue for Settings
+                    leading: const Icon(Icons.settings, color: Color(0xFF005BAC)),
                     title: const Text('Settings'),
                     onTap: () {
                       Navigator.pop(context); // Close the drawer
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => const SettingsPage()),
+                        MaterialPageRoute(
+                          builder: (context) => SettingsPage(userRole: role ?? ''),
+                        ),
                       );
                     },
                   ),

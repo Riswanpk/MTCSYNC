@@ -8,7 +8,9 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SettingsPage extends StatelessWidget {
-  const SettingsPage({Key? key}) : super(key: key);
+  final String userRole; // Add this line
+
+  const SettingsPage({Key? key, required this.userRole}) : super(key: key); // Update constructor
 
   void _openNotificationSettings() {
     AwesomeNotifications().showNotificationConfigPage();
@@ -91,10 +93,11 @@ class SettingsPage extends StatelessWidget {
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                 ),
                 const SizedBox(height: 32),
-                ElevatedButton(
-                  onPressed: () => _generateRegistrationCode(context),
-                  child: const Text('Generate Registration Code'),
-                ),
+                if (userRole == 'admin') // Only show for admin
+                  ElevatedButton(
+                    onPressed: () => _generateRegistrationCode(context),
+                    child: const Text('Generate Registration Code'),
+                  ),
               ],
             ),
           ),
