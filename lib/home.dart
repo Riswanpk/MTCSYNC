@@ -16,8 +16,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'loading_page.dart'; // Make sure you have a loading_page.dart file with LoadingPage class
 import 'main.dart'; // <-- Import where your routeObserver is defined
 import 'todoform.dart';
+import 'dailyform.dart';
 import 'dart:math';
-
+import 'performance_score_page.dart';
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -325,6 +326,32 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => const ManageUsersPage()),
+                        );
+                      },
+                    ),
+                  // Add Daily Form option for manager
+                  if (role == 'manager')
+                    ListTile(
+                      leading: const Icon(Icons.assignment_turned_in, color: Colors.orange), // Orange for Daily Form
+                      title: const Text('Daily Form'),
+                      onTap: () {
+                        Navigator.pop(context); // Close the drawer
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => PerformanceForm()),
+                        );
+                      },
+                    ),
+                  // Add Performance option for sales
+                  if (role == 'sales')
+                    ListTile(
+                      leading: const Icon(Icons.bar_chart, color: Colors.teal),
+                      title: const Text('Performance'),
+                      onTap: () {
+                        Navigator.pop(context); // Close the drawer
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => PerformanceScorePage()),
                         );
                       },
                     ),
