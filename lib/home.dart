@@ -1,3 +1,4 @@
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -66,6 +67,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
 
     _loadProfileImage();
     _checkTodoWarning(); // Check warning on init
+    _scheduleScoreUpdateNotificationIfNeeded();
   }
 
   Future<void> _loadProfileImage() async {
@@ -150,6 +152,56 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
     setState(() {
       _showTodoWarning = todosSnapshot.docs.isEmpty;
     });
+  }
+
+  Future<void> _scheduleScoreUpdateNotificationIfNeeded() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    // Get user role
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final role = userDoc.data()?['role'];
+    if (role != 'sales') return;
+
+    // Get today's date range
+    final now = DateTime.now();
+    final startOfDay = DateTime(now.year, now.month, now.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
+
+    // Query dailyform for today
+    final formsSnapshot = await FirebaseFirestore.instance
+        .collection('dailyform')
+        .where('userId', isEqualTo: user.uid)
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+        .where('timestamp', isLessThan: Timestamp.fromDate(endOfDay))
+        .get();
+
+    if (formsSnapshot.docs.isNotEmpty) {
+      // Schedule notification for next day 9 AM
+      final nextDay = now.add(const Duration(days: 1));
+      final scheduledTime = DateTime(nextDay.year, nextDay.month, nextDay.day, 9, 0, 0);
+
+      await AwesomeNotifications().createNotification(
+        content: NotificationContent(
+          id: 2001, // Use a unique id or random if you want
+          channelKey: 'reminder_channel',
+          title: 'Your score has been updated!',
+          body: 'Check performance page to review',
+          notificationLayout: NotificationLayout.Default,
+        ),
+        schedule: NotificationCalendar(
+          year: scheduledTime.year,
+          month: scheduledTime.month,
+          day: scheduledTime.day,
+          hour: scheduledTime.hour,
+          minute: scheduledTime.minute,
+          second: 0,
+          millisecond: 0,
+          repeats: false,
+          preciseAlarm: true,
+        ),
+      );
+    }
   }
 
   @override
