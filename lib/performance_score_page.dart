@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'loading_page.dart';
+import 'theme_notifier.dart';
 
 class PerformanceScorePage extends StatefulWidget {
   @override
   State<PerformanceScorePage> createState() => _PerformanceScorePageState();
 }
 
-class _PerformanceScorePageState extends State<PerformanceScorePage> {
+class _PerformanceScorePageState extends State<PerformanceScorePage> with SingleTickerProviderStateMixin {
   int totalScore = 70; // 20 + 20 + 20 + 10
   bool isLoading = true;
 
@@ -25,10 +27,31 @@ class _PerformanceScorePageState extends State<PerformanceScorePage> {
   // 2. Add a variable:
   int performanceScore = 0;
 
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
   @override
   void initState() {
     super.initState();
     fetchScores();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _scaleAnimation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutBack,
+    );
+    // Start the animation after a short delay for effect
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) _controller.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   int calculateAttendanceMarks(List<Map<String, dynamic>> dailyForms) {
@@ -209,83 +232,100 @@ class _PerformanceScorePageState extends State<PerformanceScorePage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.blueGrey[50],
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text('My Performance Score'),
-        backgroundColor: Colors.blue[800],
+        title: Text('My Performance Score', style: theme.textTheme.titleLarge),
+        backgroundColor: colorScheme.primary,
         elevation: 0,
       ),
       body: Center(
         child: isLoading
-            ? CircularProgressIndicator()
-            : Card(
-                elevation: 8,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                color: Colors.white,
-                margin: EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                child: Padding(
-                  padding: const EdgeInsets.all(32.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(height: 16),
-                      Text(
-                        'Total Score ',
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.blue[900]),
-                      ),
-                      SizedBox(height: 18),
-                      Text(
-                        '$totalScore / 70',
-                        style: TextStyle(
-                          fontSize: 54,
-                          fontWeight: FontWeight.bold,
-                          color: totalScore >= 60
-                              ? Colors.green
-                              : totalScore >= 40
-                                  ? Colors.orange
-                                  : Colors.red,
-                          letterSpacing: 2,
-                        ),
-                      ),
-                      SizedBox(height: 18),
-                      if (lateReduced)
-                        _buildReason("Please reach on time everyday", Icons.access_time, Colors.redAccent),
-                      if (notApprovedReduced)
-                        _buildReason("Avoid unapproved leaves", Icons.block, Colors.redAccent),
-                      for (final reason in dressReasons)
-                        _buildReason(reason, Icons.checkroom, Colors.deepOrange),
-                      for (final reason in attitudeReasons)
-                        _buildReason(reason, Icons.sentiment_satisfied, Colors.deepPurple),
-                      if (meetingReduced)
-                        _buildReason("Attend all meetings", Icons.groups, Colors.blueGrey),
-                      SizedBox(height: 18),
-                      Card(
-                        color: Colors.teal[50],
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        margin: EdgeInsets.only(bottom: 16),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Column(
-                            children: [
-                              Text(
-                                'Performance Score ',
-                                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal[900]),
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                '$performanceScore / 30',
-                                style: TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.teal[700],
-                                ),
-                              ),
-                            ],
+            ? LoadingPage()
+            : AnimatedBuilder(
+                animation: _scaleAnimation,
+                builder: (context, child) {
+                  return Transform.scale(
+                    scale: _scaleAnimation.value,
+                    child: child,
+                  );
+                },
+                child: Card(
+                  elevation: 8,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  color: isDark ? colorScheme.surface : const Color.fromARGB(255, 203, 207, 207),
+                  margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                  child: Padding(
+                    padding: const EdgeInsets.all(32.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(height: 16),
+                        Text(
+                          'Total Score ',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: colorScheme.primary,
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 18),
+                        Text(
+                          '$totalScore / 70',
+                          style: theme.textTheme.displayMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: totalScore >= 60
+                                ? Colors.green
+                                : totalScore >= 40
+                                    ? Colors.orange
+                                    : Colors.red,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        if (lateReduced)
+                          _buildReason("Please reach on time everyday", Icons.access_time, Colors.redAccent),
+                        if (notApprovedReduced)
+                          _buildReason("Avoid unapproved leaves", Icons.block, Colors.redAccent),
+                        for (final reason in dressReasons)
+                          _buildReason(reason, Icons.checkroom, Colors.deepOrange),
+                        for (final reason in attitudeReasons)
+                          _buildReason(reason, Icons.sentiment_satisfied, Colors.deepPurple),
+                        if (meetingReduced)
+                          _buildReason("Attend all meetings", Icons.groups, Colors.blueGrey),
+                        const SizedBox(height: 18),
+                        Card(
+                          color: isDark ? colorScheme.background : Colors.teal[50],
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              children: [
+                                Text(
+                                  'Performance Score ',
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: colorScheme.primary,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '$performanceScore / 30',
+                                  style: theme.textTheme.headlineMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.red[700],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
