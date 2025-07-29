@@ -182,6 +182,10 @@ class _PerformanceFormState extends State<PerformanceForm> {
 
   @override
   Widget build(BuildContext context) {
+    // 2. Add this variable to control enabled/disabled state
+    bool isApprovedLeave = attendanceStatus == 'approved';
+    bool isUnapprovedLeave = attendanceStatus == 'notApproved';
+
     return Scaffold(
       appBar: AppBar(title: Text('Performance Form')),
       body: isLoadingUsers
@@ -225,13 +229,13 @@ class _PerformanceFormState extends State<PerformanceForm> {
                         title: Text('Punching time'),
                         value: 'punching',
                         groupValue: attendanceStatus,
-                        onChanged: (val) => setState(() => attendanceStatus = val),
+                        onChanged: (isApprovedLeave || isUnapprovedLeave) ? null : (val) => setState(() => attendanceStatus = val),
                       ),
                       RadioListTile<String>(
                         title: Text('Late time'),
                         value: 'late',
                         groupValue: attendanceStatus,
-                        onChanged: (val) => setState(() => attendanceStatus = val),
+                        onChanged: (isApprovedLeave || isUnapprovedLeave) ? null : (val) => setState(() => attendanceStatus = val),
                       ),
                       RadioListTile<String>(
                         title: Text('Approved leave'),
@@ -243,7 +247,7 @@ class _PerformanceFormState extends State<PerformanceForm> {
                         title: Text('Not Approved'),
                         value: 'notApproved',
                         groupValue: attendanceStatus,
-                        onChanged: (val) => setState(() => attendanceStatus = val),
+                        onChanged: (isApprovedLeave || isUnapprovedLeave) ? null : (val) => setState(() => attendanceStatus = val),
                       ),
                       Divider(),
 
@@ -251,17 +255,17 @@ class _PerformanceFormState extends State<PerformanceForm> {
                       CheckboxListTile(
                         title: Text('Wear clean uniform'),
                         value: cleanUniform,
-                        onChanged: (val) => setState(() => cleanUniform = val!),
+                        onChanged: (isApprovedLeave || isUnapprovedLeave) ? null : (val) => setState(() => cleanUniform = val!),
                       ),
                       CheckboxListTile(
                         title: Text('Keep inside'),
                         value: keepInside,
-                        onChanged: (val) => setState(() => keepInside = val!),
+                        onChanged: (isApprovedLeave || isUnapprovedLeave) ? null : (val) => setState(() => keepInside = val!),
                       ),
                       CheckboxListTile(
                         title: Text('Keep your hair neat'),
                         value: neatHair,
-                        onChanged: (val) => setState(() => neatHair = val!),
+                        onChanged: (isApprovedLeave || isUnapprovedLeave) ? null : (val) => setState(() => neatHair = val!),
                       ),
                       Divider(),
 
@@ -269,27 +273,27 @@ class _PerformanceFormState extends State<PerformanceForm> {
                       CheckboxListTile(
                         title: Text('Greet with a warm smile'),
                         value: greetSmile,
-                        onChanged: (val) => setState(() => greetSmile = val!),
+                        onChanged: (isApprovedLeave || isUnapprovedLeave) ? null : (val) => setState(() => greetSmile = val!),
                       ),
                       CheckboxListTile(
                         title: Text('Ask about their needs'),
                         value: askNeeds,
-                        onChanged: (val) => setState(() => askNeeds = val!),
+                        onChanged: (isApprovedLeave || isUnapprovedLeave) ? null : (val) => setState(() => askNeeds = val!),
                       ),
                       CheckboxListTile(
                         title: Text('Help find the right product'),
                         value: helpFindProduct,
-                        onChanged: (val) => setState(() => helpFindProduct = val!),
+                        onChanged: (isApprovedLeave || isUnapprovedLeave) ? null : (val) => setState(() => helpFindProduct = val!),
                       ),
                       CheckboxListTile(
                         title: Text('Confirm the purchase'),
                         value: confirmPurchase,
-                        onChanged: (val) => setState(() => confirmPurchase = val!),
+                        onChanged: (isApprovedLeave || isUnapprovedLeave) ? null : (val) => setState(() => confirmPurchase = val!),
                       ),
                       CheckboxListTile(
                         title: Text('Offer carry or delivery help'),
                         value: offerHelp,
-                        onChanged: (val) => setState(() => offerHelp = val!),
+                        onChanged: (isApprovedLeave || isUnapprovedLeave) ? null : (val) => setState(() => offerHelp = val!),
                       ),
                       Divider(),
 
@@ -297,13 +301,13 @@ class _PerformanceFormState extends State<PerformanceForm> {
                       CheckboxListTile(
                         title: Text('Attended'),
                         value: meetingAttended,
-                        onChanged: (val) => setState(() => meetingAttended = val!),
+                        onChanged: (isApprovedLeave || isUnapprovedLeave) ? null : (val) => setState(() => meetingAttended = val!),
                       ),
                       Divider(),
 
                       Text('5) Performance (End of Month Only)', style: TextStyle(fontWeight: FontWeight.bold)),
                       AbsorbPointer(
-                        absorbing: !_isEndOfMonth(),
+                        absorbing: !_isEndOfMonth() || isApprovedLeave,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [

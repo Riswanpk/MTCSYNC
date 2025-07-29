@@ -20,6 +20,8 @@ import 'todoform.dart';
 import 'dailyform.dart';
 import 'dart:math';
 import 'performance_score_page.dart';
+import 'admin_performance_page.dart'; // <-- Add this import if AdminPerformancePage exists in this file
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -404,6 +406,19 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => PerformanceScorePage()),
+                        );
+                      },
+                    ),
+                  // Add Performance option for admin
+                  if (role == 'admin')
+                    ListTile(
+                      leading: const Icon(Icons.bar_chart, color: Colors.deepPurple),
+                      title: const Text('Performance'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const AdminPerformancePage()),
                         );
                       },
                     ),
