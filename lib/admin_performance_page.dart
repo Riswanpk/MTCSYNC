@@ -80,87 +80,131 @@ class _AdminPerformancePageState extends State<AdminPerformancePage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Edit Daily Form Entry'),
+        backgroundColor: colorScheme.primary,
+        elevation: 1,
       ),
+      backgroundColor: colorScheme.background,
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // Branch Dropdown
-            DropdownButtonFormField<String>(
-              value: selectedBranch,
-              items: branches
-                  .map((b) => DropdownMenuItem<String>(
-                        value: b['branch'],
-                        child: Text(b['branch']),
-                      ))
-                  .toList(),
-              onChanged: (val) {
-                setState(() {
-                  selectedBranch = val;
-                  selectedUserId = null;
-                  forms = [];
-                  selectedDocId = null;
-                });
-                if (val != null) fetchUsersForBranch(val);
-              },
-              decoration: const InputDecoration(labelText: 'Select Branch'),
-            ),
-            const SizedBox(height: 12),
-            // User Dropdown
-            DropdownButtonFormField<String>(
-              value: selectedUserId,
-              items: users
-                  .map((u) => DropdownMenuItem<String>(
-                        value: u['id'],
-                        child: Text(u['username']),
-                      ))
-                  .toList(),
-              onChanged: (val) {
-                setState(() {
-                  selectedUserId = val;
-                  selectedDocId = null;
-                });
-                if (val != null) fetchFormsForUser(val);
-              },
-              decoration: const InputDecoration(labelText: 'Select User'),
-            ),
-            const SizedBox(height: 12),
-            // Date Dropdown
-            if (forms.isNotEmpty)
-              DropdownButtonFormField<String>(
-                value: selectedDocId,
-                items: forms
-                    .map((form) {
-                      final date = (form['timestamp'] as Timestamp?)?.toDate();
-                      final dateStr = date != null
-                          ? "${date.day}/${date.month}/${date.year}"
-                          : 'Unknown';
-                      return DropdownMenuItem<String>(
-                        value: form['docId'],
-                        child: Text(dateStr),
-                      );
-                    })
+            // Step 1: Branch Dropdown
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 400),
+              child: DropdownButtonFormField<String>(
+                key: ValueKey('branch-$selectedBranch'),
+                value: selectedBranch,
+                items: branches
+                    .map((b) => DropdownMenuItem<String>(
+                          value: b['branch'],
+                          child: Text(b['branch'], style: theme.textTheme.bodyLarge),
+                        ))
                     .toList(),
                 onChanged: (val) {
                   setState(() {
-                    selectedDocId = val;
+                    selectedBranch = val;
+                    selectedUserId = null;
+                    forms = [];
+                    selectedDocId = null;
                   });
+                  if (val != null) fetchUsersForBranch(val);
                 },
-                decoration: const InputDecoration(labelText: 'Select Date'),
+                decoration: InputDecoration(
+                  labelText: 'Select Branch',
+                  filled: true,
+                  fillColor: colorScheme.surface,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
               ),
+            ),
+            const SizedBox(height: 12),
+            // Step 2: User Dropdown
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 400),
+              child: selectedBranch == null
+                  ? const SizedBox.shrink()
+                  : DropdownButtonFormField<String>(
+                      key: ValueKey('user-$selectedUserId'),
+                      value: selectedUserId,
+                      items: users
+                          .map((u) => DropdownMenuItem<String>(
+                                value: u['id'],
+                                child: Text(u['username'], style: theme.textTheme.bodyLarge),
+                              ))
+                          .toList(),
+                      onChanged: (val) {
+                        setState(() {
+                          selectedUserId = val;
+                          selectedDocId = null;
+                        });
+                        if (val != null) fetchFormsForUser(val);
+                      },
+                      decoration: InputDecoration(
+                        labelText: 'Select User',
+                        filled: true,
+                        fillColor: colorScheme.surface,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 12),
+            // Step 3: Date Dropdown
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 400),
+              child: (selectedUserId == null || forms.isEmpty)
+                  ? const SizedBox.shrink()
+                  : DropdownButtonFormField<String>(
+                      key: ValueKey('date-$selectedDocId'),
+                      value: selectedDocId,
+                      items: forms
+                          .map((form) {
+                            final date = (form['timestamp'] as Timestamp?)?.toDate();
+                            final dateStr = date != null
+                                ? "${date.day}/${date.month}/${date.year}"
+                                : 'Unknown';
+                            return DropdownMenuItem<String>(
+                              value: form['docId'],
+                              child: Text(dateStr, style: theme.textTheme.bodyLarge),
+                            );
+                          })
+                          .toList(),
+                      onChanged: (val) {
+                        setState(() {
+                          selectedDocId = val;
+                        });
+                      },
+                      decoration: InputDecoration(
+                        labelText: 'Select Date',
+                        filled: true,
+                        fillColor: colorScheme.surface,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+            ),
             const SizedBox(height: 18),
             if (selectedDocId != null)
               Expanded(
-                child: _AdminEditForm(
-                  form: forms.firstWhere((f) => f['docId'] == selectedDocId),
-                  docId: selectedDocId!,
-                  onSaved: () async {
-                    // Refresh after save
-                    if (selectedUserId != null) await fetchFormsForUser(selectedUserId!);
-                  },
+                child: Card(
+                  color: colorScheme.surface,
+                  elevation: 3,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: _AdminEditForm(
+                      form: forms.firstWhere((f) => f['docId'] == selectedDocId),
+                      docId: selectedDocId!,
+                      onSaved: () async {
+                        // Refresh after save
+                        if (selectedUserId != null) await fetchFormsForUser(selectedUserId!);
+                      },
+                    ),
+                  ),
                 ),
               ),
           ],
@@ -250,6 +294,8 @@ class _AdminEditFormState extends State<_AdminEditForm> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final isApprovedLeave = attendanceStatus == 'approved';
     final isUnapprovedLeave = attendanceStatus == 'notApproved';
 
@@ -260,106 +306,143 @@ class _AdminEditFormState extends State<_AdminEditForm> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Attendance (never disable these)
-            const Text('Attendance', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              'Attendance',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.secondary, // Green from theme
+              ),
+            ),
             RadioListTile<String>(
               title: const Text('Punching time'),
               value: 'punching',
               groupValue: attendanceStatus,
               onChanged: (val) => setState(() => attendanceStatus = val!),
+              activeColor: colorScheme.primary,
             ),
             RadioListTile<String>(
               title: const Text('Late time'),
               value: 'late',
               groupValue: attendanceStatus,
               onChanged: (val) => setState(() => attendanceStatus = val!),
+              activeColor: colorScheme.primary,
             ),
             RadioListTile<String>(
               title: const Text('Approved leave'),
               value: 'approved',
               groupValue: attendanceStatus,
               onChanged: (val) => setState(() => attendanceStatus = val!),
+              activeColor: colorScheme.primary,
             ),
             RadioListTile<String>(
               title: const Text('Not Approved'),
               value: 'notApproved',
               groupValue: attendanceStatus,
               onChanged: (val) => setState(() => attendanceStatus = val!),
+              activeColor: colorScheme.primary,
             ),
-            const Divider(),
+            Divider(color: theme.dividerColor),
             // Dress Code
-            const Text('Dress Code', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              'Dress Code',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.secondary, // Green from theme
+              ),
+            ),
             CheckboxListTile(
               title: const Text('Wear clean uniform'),
               value: cleanUniform,
-              onChanged: (attendanceStatus == 'approved' || attendanceStatus == 'notApproved')
+              onChanged: (isApprovedLeave || isUnapprovedLeave)
                   ? null
                   : (val) => setState(() => cleanUniform = val!),
+              activeColor: colorScheme.primary,
             ),
             CheckboxListTile(
               title: const Text('Keep inside'),
               value: keepInside,
-              onChanged: (attendanceStatus == 'approved' || attendanceStatus == 'notApproved')
+              onChanged: (isApprovedLeave || isUnapprovedLeave)
                   ? null
                   : (val) => setState(() => keepInside = val!),
+              activeColor: colorScheme.primary,
             ),
             CheckboxListTile(
               title: const Text('Keep your hair neat'),
               value: neatHair,
-              onChanged: (attendanceStatus == 'approved' || attendanceStatus == 'notApproved')
+              onChanged: (isApprovedLeave || isUnapprovedLeave)
                   ? null
                   : (val) => setState(() => neatHair = val!),
+              activeColor: colorScheme.primary,
             ),
-            const Divider(),
+            Divider(color: theme.dividerColor),
             // Attitude
-            const Text('Attitude', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              'Attitude',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.secondary, // Green from theme
+              ),
+            ),
             CheckboxListTile(
               title: const Text('Greet with a warm smile'),
               value: greetSmile,
-              onChanged: (attendanceStatus == 'approved' || attendanceStatus == 'notApproved')
+              onChanged: (isApprovedLeave || isUnapprovedLeave)
                   ? null
                   : (val) => setState(() => greetSmile = val!),
+              activeColor: colorScheme.primary,
             ),
             CheckboxListTile(
               title: const Text('Ask about their needs'),
               value: askNeeds,
-              onChanged: (attendanceStatus == 'approved' || attendanceStatus == 'notApproved')
+              onChanged: (isApprovedLeave || isUnapprovedLeave)
                   ? null
                   : (val) => setState(() => askNeeds = val!),
+              activeColor: colorScheme.primary,
             ),
             CheckboxListTile(
               title: const Text('Help find the right product'),
               value: helpFindProduct,
-              onChanged: (attendanceStatus == 'approved' || attendanceStatus == 'notApproved')
+              onChanged: (isApprovedLeave || isUnapprovedLeave)
                   ? null
                   : (val) => setState(() => helpFindProduct = val!),
+              activeColor: colorScheme.primary,
             ),
             CheckboxListTile(
               title: const Text('Confirm the purchase'),
               value: confirmPurchase,
-              onChanged: (attendanceStatus == 'approved' || attendanceStatus == 'notApproved')
+              onChanged: (isApprovedLeave || isUnapprovedLeave)
                   ? null
                   : (val) => setState(() => confirmPurchase = val!),
+              activeColor: colorScheme.primary,
             ),
             CheckboxListTile(
               title: const Text('Offer carry or delivery help'),
               value: offerHelp,
-              onChanged: (attendanceStatus == 'approved' || attendanceStatus == 'notApproved')
+              onChanged: (isApprovedLeave || isUnapprovedLeave)
                   ? null
                   : (val) => setState(() => offerHelp = val!),
+              activeColor: colorScheme.primary,
             ),
-            const Divider(),
+            Divider(color: theme.dividerColor),
             // Meeting
-            const Text('Meeting', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              'Meeting',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.secondary, // Green from theme
+              ),
+            ),
             CheckboxListTile(
               title: const Text('Attended'),
               value: meetingAttended,
-              onChanged: (attendanceStatus == 'approved' || attendanceStatus == 'notApproved')
+              onChanged: (isApprovedLeave || isUnapprovedLeave)
                   ? null
                   : (val) => setState(() => meetingAttended = val!),
+              activeColor: colorScheme.primary,
             ),
-            const Divider(),
+            Divider(color: theme.dividerColor),
             // Performance
-            const Text('Performance (End of Month Only)', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text('Performance (End of Month Only)', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
             AbsorbPointer(
               absorbing: isApprovedLeave || !_isEndOfMonth(),
               child: Column(
@@ -369,18 +452,20 @@ class _AdminEditFormState extends State<_AdminEditForm> {
                     title: const Text('Target Achieved'),
                     value: targetAchieved ?? false,
                     onChanged: (val) => setState(() => targetAchieved = val),
+                    activeColor: colorScheme.primary,
                   ),
                   CheckboxListTile(
                     title: const Text('Other Performance'),
                     value: otherPerformance ?? false,
                     onChanged: (val) => setState(() => otherPerformance = val),
+                    activeColor: colorScheme.primary,
                   ),
                   if (!_isEndOfMonth())
-                    const Padding(
-                      padding: EdgeInsets.only(left: 16.0, top: 4),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 16.0, top: 4),
                       child: Text(
                         "Performance can be filled only at the end of the month.",
-                        style: TextStyle(color: Colors.red, fontSize: 13),
+                        style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.error),
                       ),
                     ),
                 ],
@@ -389,6 +474,11 @@ class _AdminEditFormState extends State<_AdminEditForm> {
             const SizedBox(height: 16),
             Center(
               child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colorScheme.primary,
+                  foregroundColor: colorScheme.onPrimary,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
                 onPressed: save,
                 child: const Text('Save Changes'),
               ),
