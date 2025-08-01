@@ -6,7 +6,7 @@ import 'follow.dart';
 import 'presentfollowup.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 // Add these imports for Excel export
-import 'package:excel/excel.dart';
+import 'package:excel/excel.dart' hide TextSpan;
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
@@ -115,13 +115,13 @@ class _LeadsPageState extends State<LeadsPage> {
 
         // Add header row (Username first)
         sheet.appendRow([
-          'Username',
-          'Name',
-          'Company',
-          'Address',
-          'Phone',
-          'Status',
-          'Comments',
+          TextCellValue('Username'),
+          TextCellValue('Name'),
+          TextCellValue('Company'),
+          TextCellValue('Address'),
+          TextCellValue('Phone'),
+          TextCellValue('Status'),
+          TextCellValue('Comments'),
         ]);
 
         // Add data rows
@@ -129,13 +129,13 @@ class _LeadsPageState extends State<LeadsPage> {
           final createdBy = data['created_by'] ?? '';
           final username = userIdToUsername[createdBy] ?? 'Unknown';
           sheet.appendRow([
-            username,
-            data['name'] ?? '',
-            data['company'] ?? '',
-            data['address'] ?? '',
-            data['phone'] ?? '',
-            data['status'] ?? '',
-            data['comments'] ?? '',
+            TextCellValue(username),
+            TextCellValue(data['name']?.toString() ?? ''),
+            TextCellValue(data['company']?.toString() ?? ''),
+            TextCellValue(data['address']?.toString() ?? ''),
+            TextCellValue(data['phone']?.toString() ?? ''),
+            TextCellValue(data['status']?.toString() ?? ''),
+            TextCellValue(data['comments']?.toString() ?? ''),
           ]);
         }
       }
@@ -143,7 +143,8 @@ class _LeadsPageState extends State<LeadsPage> {
       // Save to temp directory for sharing
       final tempDir = await getTemporaryDirectory();
       final file = File('${tempDir.path}/leads_${DateTime.now().millisecondsSinceEpoch}.xlsx');
-      await file.writeAsBytes(excel.encode()!);
+      final fileBytes = await excel.encode(); // <-- now async in v4.x
+      await file.writeAsBytes(fileBytes!);
 
       return file.path;
     } catch (e) {

@@ -41,9 +41,9 @@ dependencies:
   permission_handler: ^11.3.1
   flutter_slidable: ^4.0.0
   android_intent_plus: ^5.3.0
-  excel: ^2.0.6
+  excel: ^4.0.6
   path_provider: ^2.1.2
-  pdf: ^3.10.8
+  pdf: ^3.11.3
   share_plus: ^7.2.1
   fl_chart: ^1.0.0
   flutter_screenutil: ^5.9.3
@@ -83,6 +83,7 @@ flutter:
   assets:
      - assets/images/logo.png
      - assets/sounds/click.mp3
+     - assets/fonts/NotoSans-Regular.ttf
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

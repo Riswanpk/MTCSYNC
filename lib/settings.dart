@@ -13,27 +13,22 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:path_provider/path_provider.dart';
 
 class SettingsPage extends StatelessWidget {
-  final String userRole; // Add this line
+  final String userRole;
 
-  const SettingsPage({Key? key, required this.userRole}) : super(key: key); // Update constructor
-
-  void _openNotificationSettings() {
-    AwesomeNotifications().showNotificationConfigPage();
-  }
+  const SettingsPage({Key? key, required this.userRole}) : super(key: key);
 
   void _openNotificationToneSettings(BuildContext context) async {
     if (Platform.isAndroid) {
-      const channelId = 'reminder_channel'; // Use your actual channelKey
+      const channelId = 'reminder_channel';
       final intent = AndroidIntent(
         action: 'android.settings.CHANNEL_NOTIFICATION_SETTINGS',
         arguments: <String, dynamic>{
-          'android.provider.extra.APP_PACKAGE': 'com.mtc.mtcsync', // <-- Replace with your app's package name
+          'android.provider.extra.APP_PACKAGE': 'com.mtc.mtcsync',
           'android.provider.extra.CHANNEL_ID': channelId,
         },
       );
       await intent.launch();
     } else {
-      // For iOS, show a dialog or guide user to system settings manually
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please change notification sound from iOS Settings.')),
       );
@@ -41,7 +36,7 @@ class SettingsPage extends StatelessWidget {
   }
 
   Future<void> _generateRegistrationCode(BuildContext context) async {
-    final code = (Random().nextInt(9000) + 1000).toString(); // 4-digit code
+    final code = (Random().nextInt(9000) + 1000).toString();
     await FirebaseFirestore.instance.collection('registration_codes').doc('active').set({
       'code': code,
       'createdAt': FieldValue.serverTimestamp(),
@@ -51,7 +46,6 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  // Helper to check if current user is admin
   Future<bool> isAdmin() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return false;
@@ -59,10 +53,29 @@ class SettingsPage extends StatelessWidget {
     return doc.data()?['role'] == 'admin';
   }
 
-  // Export and send Excel
+  String _getScoreColorHex(int column, int value) {
+    // column: 1=Attendance, 2=Dress, 3=Attitude, 4=Performance, 5=Meeting
+    if (column == 4) { // Performance
+      if (value >= 25) return "#93C47D"; // green
+      if (value >= 15) return "#FFE599"; // yellow
+      if (value >= 10) return "#EA9999"; // red
+      return "#CCCCCC"; // grey
+    } else if (column > 0 && column < 4) { // Attendance, Dress, Attitude,
+      if (value >= 16) return "#93C47D"; // green
+      if (value >= 11) return "#FFE599"; // yellow
+      if (value >= 5) return "#EA9999"; // red
+      return "#CCCCCC"; // grey
+    } else if (column == 5) { // Meeting
+      if (value >= 9) return "#93C47D"; // green
+      if (value >= 5) return "#FFE599"; // yellow
+      if (value >= 1) return "#EA9999"; // red
+      return "#CCCCCC"; // grey
+    }
+    return "#FFFFFF";
+  }
+
   Future<void> exportAndSendExcel(BuildContext context) async {
     try {
-      // 1. Fetch all dailyform docs for the month
       final now = DateTime.now();
       final monthStart = DateTime(now.year, now.month, 1);
       final monthEnd = DateTime(now.year, now.month + 1, 1);
@@ -73,7 +86,6 @@ class SettingsPage extends StatelessWidget {
           .where('timestamp', isLessThan: Timestamp.fromDate(monthEnd))
           .get();
 
-      // 2. Group by branch and user
       final usersSnap = await FirebaseFirestore.instance.collection('users').get();
       final userMap = {for (var doc in usersSnap.docs) doc.id: doc.data()};
       final branchMap = <String, Map<String, List<Map<String, dynamic>>>>{};
@@ -87,58 +99,88 @@ class SettingsPage extends StatelessWidget {
         branchMap[branch]![data['userId']]!.add(data);
       }
 
-      // 3. Create Excel
       final excel = Excel.createExcel();
       branchMap.forEach((branch, users) {
         final sheet = excel[branch];
         int rowIdx = 0;
         users.forEach((userId, forms) {
           final username = forms.first['userName'] ?? 'User';
-          sheet
-            .cell(CellIndex.indexByString("A${rowIdx + 1}"))
-            .value = username;
+          sheet.cell(CellIndex.indexByString("A${rowIdx + 1}")).value = TextCellValue(username);
           rowIdx++;
-          sheet.appendRow([
-            'Attendance', 'Dress Code', 'Attitude', 'Performance', 'Meeting', 'Total'
-          ]);
-          // Calculate monthly scores (simple sum, adjust as needed)
-          int attendance = 0, dress = 0, attitude = 0, performance = 0;
+
+          // Table headers with borders
+          final headers = [
+            TextCellValue(''),
+            TextCellValue('Attendance'),
+            TextCellValue('Dress Code'),
+            TextCellValue('Attitude'),
+            TextCellValue('Performance'),
+            TextCellValue('Meeting'),
+            TextCellValue('Total'),
+          ];
+          for (int i =0 ; i < headers.length; i++) {
+            final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowIdx));
+            cell.value = headers[i];
+            cell.cellStyle = CellStyle(
+              bold: true,
+              backgroundColorHex: ExcelColor.fromHexString("#D9EAD3"),
+              
+            );
+          }
+          rowIdx++;
+
+          // Each day's row
           for (var form in forms) {
-            // Attendance
-            if (form['attendance'] == 'late') attendance += 15;
-            else if (form['attendance'] == 'notApproved') attendance += 10;
-            else attendance += 20;
-            // Dress Code
-            if (form['dressCode']?['cleanUniform'] == false) dress += 0;
-            else dress += 20;
-            // Attitude
-            if (form['attitude']?['greetSmile'] == false) attitude += 0;
-            else attitude += 20;
-            // Performance
+            int attendance = 20, dress = 20, attitude = 20, performance = 0;
+            // Deductions for the month
+            if (form['attendance'] == 'late') attendance -= 5;
+            else if (form['attendance'] == 'notApproved') attendance -= 10;
+            else if (form['attendance'] == 'approved') attendance -= 20;
+            if (form['dressCode']?['cleanUniform'] == false) dress -= 20;
+            if (form['attitude']?['greetSmile'] == false) attitude -= 20;
             if (form['performance']?['target'] == true) performance += 15;
             if (form['performance']?['otherPerformance'] == true) performance += 15;
-          }
-          // Meeting score logic
-          int meeting = 10;
-          for (var form in forms) {
+            if (attendance < 0) attendance = 0;
+            if (dress < 0) dress = 0;
+            if (attitude < 0) attitude = 0;
+            int meeting = 10;
             if (form['meeting']?['attended'] == false) meeting -= 1;
+            if (meeting < 0) meeting = 0;
+            int total = attendance + dress + attitude + performance + meeting;
+
+            final row = [
+              TextCellValue(''),
+              IntCellValue(attendance),
+              IntCellValue(dress),
+              IntCellValue(attitude),
+              IntCellValue(performance),
+              IntCellValue(meeting),
+              IntCellValue(total),
+            ];
+
+            for (int i = 0; i < row.length; i++) {
+              final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowIdx));
+              cell.value = row[i];
+              cell.cellStyle = CellStyle(
+                backgroundColorHex: i == 0
+                    ? ExcelColor.fromHexString("#FFFFFF")
+                    : ExcelColor.fromHexString(_getScoreColorHex(i, row[i] is IntCellValue ? (row[i] as IntCellValue).value : 0)),
+              );
+            }
+            rowIdx++;
           }
-          if (meeting < 0) meeting = 0;
-          sheet.appendRow([
-            attendance, dress, attitude, performance, meeting,
-            attendance + dress + attitude + performance + meeting
-          ]);
           rowIdx += 2;
         });
       });
 
-      // 4. Save to file
       final dir = await getTemporaryDirectory();
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
       final filePath = '${dir.path}/performance_${now.year}_${now.month}.xlsx';
-      final fileBytes = excel.encode();
+      final fileBytes = await excel.encode();
       final file = File(filePath)..writeAsBytesSync(fileBytes!);
 
-      // 5. Send email (using SMTP, e.g. Gmail app password)
       final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
       final message = Message()
         ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
@@ -152,7 +194,8 @@ class SettingsPage extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Excel file sent to crmmalabar@gmail.com')),
       );
-    } catch (e) {
+    } catch (e, stack) {
+      print('Excel send error: $e\n$stack');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to send Excel: $e')),
       );
@@ -206,13 +249,12 @@ class SettingsPage extends StatelessWidget {
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                 ),
                 const SizedBox(height: 32),
-                if (userRole == 'admin') // Only show for admin
+                if (userRole == 'admin')
                   ElevatedButton(
                     onPressed: () => _generateRegistrationCode(context),
                     child: const Text('Generate Registration Code'),
                   ),
                 const SizedBox(height: 32),
-                // Admin-specific settings
                 FutureBuilder<bool>(
                   future: isAdmin(),
                   builder: (context, snapshot) {
@@ -222,7 +264,7 @@ class SettingsPage extends StatelessWidget {
                         if (isAdminUser)
                           ElevatedButton(
                             onPressed: () => exportAndSendExcel(context),
-                            child: Text('Send Monthly Excel Report'),
+                            child: const Text('Send Monthly Excel Report'),
                           ),
                       ],
                     );
