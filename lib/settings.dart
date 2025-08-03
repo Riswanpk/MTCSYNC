@@ -6,7 +6,7 @@ import 'package:android_intent_plus/android_intent.dart';
 import 'dart:io';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:excel/excel.dart';
+import 'package:excel/excel.dart' as ex;
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -99,77 +99,156 @@ class SettingsPage extends StatelessWidget {
         branchMap[branch]![data['userId']]!.add(data);
       }
 
-      final excel = Excel.createExcel();
+      final excel = ex.Excel.createExcel();
       branchMap.forEach((branch, users) {
         final sheet = excel[branch];
         int rowIdx = 0;
         users.forEach((userId, forms) {
           final username = forms.first['userName'] ?? 'User';
-          sheet.cell(CellIndex.indexByString("A${rowIdx + 1}")).value = TextCellValue(username);
+          sheet.cell(ex.CellIndex.indexByString("A${rowIdx + 1}")).value = ex.TextCellValue(username);
           rowIdx++;
 
-          // Table headers with borders
+          // Table headers
           final headers = [
-            TextCellValue(''),
-            TextCellValue('Attendance'),
-            TextCellValue('Dress Code'),
-            TextCellValue('Attitude'),
-            TextCellValue('Performance'),
-            TextCellValue('Meeting'),
-            TextCellValue('Total'),
+            ex.TextCellValue('Week'),
+            ex.TextCellValue('Attendance'),
+            ex.TextCellValue('Dress Code'),
+            ex.TextCellValue('Attitude'),
+            ex.TextCellValue('Meeting'),
+            ex.TextCellValue('Total'),
           ];
-          for (int i =0 ; i < headers.length; i++) {
-            final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowIdx));
+          for (int i = 0; i < headers.length; i++) {
+            final cell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowIdx));
             cell.value = headers[i];
-            cell.cellStyle = CellStyle(
+            cell.cellStyle = ex.CellStyle(
               bold: true,
-              backgroundColorHex: ExcelColor.fromHexString("#D9EAD3"),
-              
+              backgroundColorHex: ex.ExcelColor.fromHexString("#D9EAD3"),
+              leftBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
+              rightBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
+              topBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
+              bottomBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
             );
           }
           rowIdx++;
 
-          // Each day's row
+          // Group forms by week (Sunday-Saturday, week belongs to month of its Saturday)
+          Map<int, List<Map<String, dynamic>>> weekMap = {};
+          Map<int, DateTime> weekEndDates = {}; // For labeling and sorting
+
           for (var form in forms) {
-            int attendance = 20, dress = 20, attitude = 20, performance = 0;
-            // Deductions for the month
-            if (form['attendance'] == 'late') attendance -= 5;
-            else if (form['attendance'] == 'notApproved') attendance -= 10;
-            else if (form['attendance'] == 'approved') attendance -= 20;
-            if (form['dressCode']?['cleanUniform'] == false) dress -= 20;
-            if (form['attitude']?['greetSmile'] == false) attitude -= 20;
-            if (form['performance']?['target'] == true) performance += 15;
-            if (form['performance']?['otherPerformance'] == true) performance += 15;
-            if (attendance < 0) attendance = 0;
-            if (dress < 0) dress = 0;
-            if (attitude < 0) attitude = 0;
-            int meeting = 10;
-            if (form['meeting']?['attended'] == false) meeting -= 1;
-            if (meeting < 0) meeting = 0;
-            int total = attendance + dress + attitude + performance + meeting;
+            final ts = form['timestamp'];
+            final date = ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
+
+            // Find the previous Sunday for this date
+            final prevSunday = date.subtract(Duration(days: date.weekday % 7));
+            // The Saturday of this week
+            final thisSaturday = prevSunday.add(const Duration(days: 6));
+
+            // Only include weeks whose Saturday is in the current month/year
+            if (thisSaturday.month != now.month || thisSaturday.year != now.year) continue;
+
+            // Week number: order by Saturday in month
+            final weekNum = thisSaturday.day; // or use a counter if you want W1, W2, etc.
+
+            // Use Saturday's date as key for sorting and labeling
+            weekMap.putIfAbsent(weekNum, () => []);
+            weekMap[weekNum]!.add(form);
+            weekEndDates[weekNum] = thisSaturday;
+          }
+
+          // Sort weeks by their Saturday date
+          final sortedWeekNums = weekEndDates.keys.toList()..sort();
+          double totalSum = 0;
+          int weekCount = 0;
+
+          for (int i = 0; i < sortedWeekNums.length; i++) {
+            final weekNum = sortedWeekNums[i];
+            final weekForms = weekMap[weekNum]!;
+            // Reset scores at the start of each week
+            int attendance = 20, dress = 20, attitude = 20, meeting = 10;
+
+            for (var form in weekForms) {
+              // Attendance deductions (do NOT deduct for approved leave)
+              if (form['attendance'] == 'late') attendance -= 5;
+              else if (form['attendance'] == 'notApproved') attendance -= 10;
+              // Dress Code
+              if (form['dressCode']?['cleanUniform'] == false) dress -= 20;
+              // Attitude
+              if (form['attitude']?['greetSmile'] == false) attitude -= 20;
+              // Meeting
+              if (form['meeting']?['attended'] == false) meeting -= 1;
+
+              // Clamp to zero
+              if (attendance < 0) attendance = 0;
+              if (dress < 0) dress = 0;
+              if (attitude < 0) attitude = 0;
+              if (meeting < 0) meeting = 0;
+            }
+
+            int weekTotal = attendance + dress + attitude + meeting;
+            totalSum += weekTotal;
+            weekCount++;
 
             final row = [
-              TextCellValue(''),
-              IntCellValue(attendance),
-              IntCellValue(dress),
-              IntCellValue(attitude),
-              IntCellValue(performance),
-              IntCellValue(meeting),
-              IntCellValue(total),
+              ex.TextCellValue('W${i + 1}'), // Week 1, 2, ...
+              ex.IntCellValue(attendance),
+              ex.IntCellValue(dress),
+              ex.IntCellValue(attitude),
+              ex.IntCellValue(meeting),
+              ex.IntCellValue(weekTotal),
             ];
-
-            for (int i = 0; i < row.length; i++) {
-              final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowIdx));
-              cell.value = row[i];
-              cell.cellStyle = CellStyle(
-                backgroundColorHex: i == 0
-                    ? ExcelColor.fromHexString("#FFFFFF")
-                    : ExcelColor.fromHexString(_getScoreColorHex(i, row[i] is IntCellValue ? (row[i] as IntCellValue).value : 0)),
+            for (int j = 0; j < row.length; j++) {
+              final cell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: j, rowIndex: rowIdx));
+              cell.value = row[j];
+              cell.cellStyle = ex.CellStyle(
+                backgroundColorHex: j == 0
+                    ? ex.ExcelColor.fromHexString("#FFFFFF")
+                    : ex.ExcelColor.fromHexString(_getScoreColorHex(j, row[j] is ex.IntCellValue ? (row[j] as ex.IntCellValue).value : 0)),
+                leftBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
+                rightBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
+                topBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
+                bottomBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
               );
             }
             rowIdx++;
           }
-          rowIdx += 2;
+
+          // Add average row (average of weekly totals)
+          final avg = weekCount > 0 ? totalSum / weekCount : 0;
+          final avgRow = [
+            ex.TextCellValue(''),
+            ex.TextCellValue(''),
+            ex.TextCellValue(''),
+            ex.TextCellValue('Average'),
+            ex.TextCellValue(''),
+            ex.DoubleCellValue(avg.toDouble()),
+          ];
+          for (int i = 0; i < avgRow.length; i++) {
+            final cell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowIdx));
+            cell.value = avgRow[i];
+            cell.cellStyle = ex.CellStyle(
+              bold: i == 3,
+              backgroundColorHex: i == 3
+                  ? ex.ExcelColor.fromHexString("#D9EAD3")
+                  : ex.ExcelColor.fromHexString("#FFFFFF"),
+              leftBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
+              rightBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
+              topBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
+              bottomBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
+            );
+          }
+          rowIdx++;
+
+          // Show performance score below the average row (from last form with performance field)
+          final perfForms = forms.where((f) => f['performance'] != null).toList();
+          int performanceScore = 0;
+          if (perfForms.isNotEmpty) {
+            final perf = perfForms.last['performance'];
+            if (perf?['target'] == true) performanceScore += 15;
+            if (perf?['otherPerformance'] == true) performanceScore += 15;
+          }
+          sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: rowIdx)).value = ex.TextCellValue('Performance');
+          sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: rowIdx)).value = ex.IntCellValue(performanceScore);
         });
       });
 

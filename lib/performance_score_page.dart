@@ -230,6 +230,55 @@ class _PerformanceScorePageState extends State<PerformanceScorePage> with Single
     );
   }
 
+  // Example Dart function for weekly scoring
+  Future<List<Map<String, dynamic>>> calculateWeeklyScores(List<Map<String, dynamic>> forms, DateTime now) async {
+    // Group forms by week (Sunday-Saturday)
+    Map<int, List<Map<String, dynamic>>> weekMap = {};
+    for (var form in forms) {
+      final ts = form['timestamp'];
+      final date = ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
+      if (date.month != now.month || date.year != now.year) continue;
+      // Find week number (weeks start on Sunday)
+      final firstDay = DateTime(now.year, now.month, 1);
+      final weekNum = ((date.difference(firstDay.subtract(Duration(days: firstDay.weekday % 7))).inDays) / 7).floor() + 1;
+      weekMap.putIfAbsent(weekNum, () => []).add(form);
+    }
+
+    List<int> sortedWeeks = weekMap.keys.toList()..sort();
+    List<Map<String, dynamic>> weeklyScores = [];
+
+    for (final weekNum in sortedWeeks) {
+      int attendance = 20, dress = 20, attitude = 20, meeting = 10;
+      for (var form in weekMap[weekNum]!) {
+        // Attendance
+        if (form['attendance'] == 'late') attendance -= 5;
+        else if (form['attendance'] == 'notApproved') attendance -= 10;
+        else if (form['attendance'] == 'approved') attendance -= 20;
+        // Dress Code
+        if (form['dressCode']?['cleanUniform'] == false) dress -= 20;
+        // Attitude
+        if (form['attitude']?['greetSmile'] == false) attitude -= 20;
+        // Meeting
+        if (form['meeting']?['attended'] == false) meeting -= 1;
+        // Clamp to zero
+        if (attendance < 0) attendance = 0;
+        if (dress < 0) dress = 0;
+        if (attitude < 0) attitude = 0;
+        if (meeting < 0) meeting = 0;
+      }
+      int total = attendance + dress + attitude + meeting;
+      weeklyScores.add({
+        'week': weekNum,
+        'attendance': attendance,
+        'dress': dress,
+        'attitude': attitude,
+        'meeting': meeting,
+        'total': total,
+      });
+    }
+    return weeklyScores;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
