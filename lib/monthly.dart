@@ -275,9 +275,8 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
                                 color: m['lead'] ? Colors.green : Colors.red,
                               )),
                             ])).toList(),
-                          ),
-                        );
-                      },
+                          ));
+                        },
                     ),
                 ],
               ),
@@ -294,55 +293,20 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
     final today = DateTime.now();
     final lastDay = (nextMonth.isAfter(today) ? today : nextMonth.subtract(const Duration(days: 1))).day;
 
-    Map<String, Map<String, bool>> missed = {};
+    List<Map<String, dynamic>> missedReport = [];
 
     for (int i = 0; i < lastDay; i++) {
       final date = monthStart.add(Duration(days: i));
       final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
-      missed[dateStr] = {'todo': false, 'lead': false};
+      final doc = await FirebaseFirestore.instance.collection('daily_report').doc('$email-$dateStr').get();
+      final data = doc.data();
 
-      final windowStart = date.subtract(const Duration(days: 1)).add(const Duration(hours: 19)); // 7pm previous day
-      final windowEnd = DateTime(date.year, date.month, date.day, 12, 0, 0); // 12pm current day
-
-      // Query todos for this user in the window
-      final todosSnapshot = await FirebaseFirestore.instance
-          .collection('todo')
-          .where('email', isEqualTo: email)
-          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(windowStart))
-          .where('timestamp', isLessThan: Timestamp.fromDate(windowEnd))
-          .get();
-
-      if (todosSnapshot.docs.isNotEmpty) {
-        missed[dateStr]!['todo'] = true;
-      }
-    }
-
-    final leadsSnapshot = await FirebaseFirestore.instance
-        .collection('follow_ups')
-        .where('created_by', isEqualTo: uid)
-        .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
-        .where('created_at', isLessThan: Timestamp.fromDate(nextMonth))
-        .get();
-
-    for (var doc in leadsSnapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
-      final timestamp = (data['created_at'] as Timestamp?)?.toDate();
-      if (timestamp != null) {
-        final dateStr = "${timestamp.year}-${timestamp.month.toString().padLeft(2, '0')}-${timestamp.day.toString().padLeft(2, '0')}";
-        if (missed[dateStr] != null) {
-          missed[dateStr]!['lead'] = true;
-        }
-      }
-    }
-
-    final List<Map<String, dynamic>> missedReport = [];
-    missed.forEach((dateStr, entry) {
       missedReport.add({
         'date': dateStr,
-        'todo': entry['todo'] ?? false,
-        'lead': entry['lead'] ?? false,
+        'todo': data?['todo'] ?? false,
+        'lead': data?['lead'] ?? false,
       });
-    });
+    }
     return missedReport;
   }
 

@@ -194,6 +194,9 @@ class _PerformanceScorePageState extends State<PerformanceScorePage> with Single
 
     final forms = formsSnapshot.docs.map((doc) => doc.data() as Map<String, dynamic>).toList();
 
+    // Get only current week forms
+    final weekForms = getCurrentWeekForms(forms, now);
+
     // Reset reasons
     lateReduced = false;
     notApprovedReduced = false;
@@ -201,19 +204,18 @@ class _PerformanceScorePageState extends State<PerformanceScorePage> with Single
     attitudeReduced = false;
     meetingReduced = false;
 
-    int attendance = calculateAttendanceMarks(forms);
-    int dress = calculateDressCodeMarks(forms);
-    int attitude = calculateAttitudeMarks(forms);
-    int meeting = calculateMeetingMarks(forms);
+    int attendance = calculateAttendanceMarks(weekForms);
+    int dress = calculateDressCodeMarks(weekForms);
+    int attitude = calculateAttitudeMarks(weekForms);
+    int meeting = calculateMeetingMarks(weekForms);
 
     // 3. In fetchScores(), after getting forms:
-    performanceScore = calculatePerformanceMarks(forms);
+    performanceScore = calculatePerformanceMarks(weekForms);
 
     setState(() {
       totalScore = attendance + dress + attitude + meeting;
       isLoading = false;
-      // 4. In setState:
-      performanceScore = calculatePerformanceMarks(forms);
+      performanceScore = calculatePerformanceMarks(weekForms);
     });
   }
 
@@ -232,34 +234,43 @@ class _PerformanceScorePageState extends State<PerformanceScorePage> with Single
 
   // Example Dart function for weekly scoring
   Future<List<Map<String, dynamic>>> calculateWeeklyScores(List<Map<String, dynamic>> forms, DateTime now) async {
-    // Group forms by week (Sunday-Saturday)
-    Map<int, List<Map<String, dynamic>>> weekMap = {};
+    // Group forms by week (Sunday-Saturday, week belongs to month of its Saturday)
+    Map<DateTime, List<Map<String, dynamic>>> weekMap = {};
     for (var form in forms) {
       final ts = form['timestamp'];
       final date = ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
-      if (date.month != now.month || date.year != now.year) continue;
-      // Find week number (weeks start on Sunday)
-      final firstDay = DateTime(now.year, now.month, 1);
-      final weekNum = ((date.difference(firstDay.subtract(Duration(days: firstDay.weekday % 7))).inDays) / 7).floor() + 1;
-      weekMap.putIfAbsent(weekNum, () => []).add(form);
+
+      // Find the previous Sunday for this date
+      final prevSunday = date.subtract(Duration(days: date.weekday % 7));
+      // The Saturday of this week
+      final thisSaturday = prevSunday.add(const Duration(days: 6));
+
+      // Only include weeks whose Saturday is in the current month/year
+      if (thisSaturday.month != now.month || thisSaturday.year != now.year) continue;
+
+      weekMap.putIfAbsent(thisSaturday, () => []);
+      weekMap[thisSaturday]!.add(form);
     }
 
-    List<int> sortedWeeks = weekMap.keys.toList()..sort();
+    // Sort weeks by their Saturday date
+    final sortedSaturdays = weekMap.keys.toList()..sort();
     List<Map<String, dynamic>> weeklyScores = [];
 
-    for (final weekNum in sortedWeeks) {
+    for (int i = 0; i < sortedSaturdays.length; i++) {
+      final weekForms = weekMap[sortedSaturdays[i]]!;
       int attendance = 20, dress = 20, attitude = 20, meeting = 10;
-      for (var form in weekMap[weekNum]!) {
-        // Attendance
+
+      for (var form in weekForms) {
+        // Attendance deductions (do NOT deduct for approved leave)
         if (form['attendance'] == 'late') attendance -= 5;
         else if (form['attendance'] == 'notApproved') attendance -= 10;
-        else if (form['attendance'] == 'approved') attendance -= 20;
         // Dress Code
         if (form['dressCode']?['cleanUniform'] == false) dress -= 20;
         // Attitude
         if (form['attitude']?['greetSmile'] == false) attitude -= 20;
         // Meeting
         if (form['meeting']?['attended'] == false) meeting -= 1;
+
         // Clamp to zero
         if (attendance < 0) attendance = 0;
         if (dress < 0) dress = 0;
@@ -268,15 +279,36 @@ class _PerformanceScorePageState extends State<PerformanceScorePage> with Single
       }
       int total = attendance + dress + attitude + meeting;
       weeklyScores.add({
-        'week': weekNum,
+        'weekLabel': 'W${i + 1}',
         'attendance': attendance,
         'dress': dress,
         'attitude': attitude,
         'meeting': meeting,
         'total': total,
+        'weekEnd': sortedSaturdays[i],
       });
     }
     return weeklyScores;
+  }
+
+  List<Map<String, dynamic>> getCurrentWeekForms(List<Map<String, dynamic>> forms, DateTime now) {
+    // Find today
+    final today = DateTime(now.year, now.month, now.day);
+
+    // Find the previous Sunday for today
+    final prevSunday = today.subtract(Duration(days: today.weekday % 7));
+    // The Saturday of this week
+    final thisSaturday = prevSunday.add(const Duration(days: 6));
+
+    // Only if this Saturday is in the current month/year, consider this week as current
+    if (thisSaturday.month != now.month || thisSaturday.year != now.year) return [];
+
+    // Return forms in this week (from prevSunday to thisSaturday)
+    return forms.where((form) {
+      final ts = form['timestamp'];
+      final date = ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
+      return !date.isBefore(prevSunday) && !date.isAfter(thisSaturday);
+    }).toList();
   }
 
   @override

@@ -329,6 +329,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
         final difference = now.difference(todoTime);
         if (difference.inHours >= 24) {
           batch.delete(doc.reference);
+          // Do NOT update daily_report here!
         }
       }
     }
@@ -348,12 +349,22 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
     final text = _todoController.text.trim();
     if (text.isEmpty || _userEmail == null) return;
 
+    final now = DateTime.now();
+    final dateStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
     await _firestore.collection('todo').add({
       'text': text,
       'email': _userEmail,
       'timestamp': FieldValue.serverTimestamp(),
       'status': 'pending',
     });
+
+    // Update daily_report for this user and date
+    await FirebaseFirestore.instance.collection('daily_report').doc('${_userEmail}-$dateStr').set({
+      'email': _userEmail,
+      'date': dateStr,
+      'todo': true,
+    }, SetOptions(merge: true));
 
     _todoController.clear();
   }
@@ -652,8 +663,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                           );
                         },
                       ),
-                    ),
-                  );
+                    ));
                 },
               );
             },
@@ -788,7 +798,30 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                               ),
                             );
                             if (confirm == true) {
-                              await _firestore.collection('todo').doc(doc.id).delete();
+                              final data = doc.data() as Map<String, dynamic>;
+                              final email = data['email'];
+                              final timestamp = data['timestamp'] as Timestamp?;
+                              if (timestamp != null) {
+                                final date = timestamp.toDate();
+                                final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+                                await _firestore.collection('todo').doc(doc.id).delete();
+
+                                // Check if any other todos exist for this user and date
+                                final otherTodos = await _firestore
+                                    .collection('todo')
+                                    .where('email', isEqualTo: email)
+                                    .where('timestamp', isGreaterThanOrEqualTo: DateTime(date.year, date.month, date.day, 0, 0, 0))
+                                    .where('timestamp', isLessThan: DateTime(date.year, date.month, date.day, 23, 59, 59))
+                                    .get();
+
+                                if (otherTodos.docs.isEmpty) {
+                                  await FirebaseFirestore.instance.collection('daily_report').doc('$email-$dateStr').set({
+                                    'email': email,
+                                    'date': dateStr,
+                                    'todo': false,
+                                  }, SetOptions(merge: true));
+                                }
+                              }
                             }
                           },
                           backgroundColor: Colors.red.shade400,
@@ -895,8 +928,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                           );
                         },
                       ),
-                    ),
-                  );
+                    ));
                 },
               );
             },

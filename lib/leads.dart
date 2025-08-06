@@ -908,10 +908,8 @@ class LeadCard extends StatelessWidget {
                 ),
               );
               if (confirm == true) {
-                await FirebaseFirestore.instance
-                    .collection('follow_ups')
-                    .doc(docId)
-                    .delete();
+                // Since we don't have the full lead data here, just delete the follow_ups document by docId
+                await FirebaseFirestore.instance.collection('follow_ups').doc(docId).delete();
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Lead deleted')),
                 );
