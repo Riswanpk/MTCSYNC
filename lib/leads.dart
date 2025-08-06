@@ -898,7 +898,7 @@ class LeadCard extends StatelessWidget {
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(true),
-                      child: Text('Delete', style: TextStyle(color: theme.colorScheme.error)),
+                      child: Text('Delete', style: TextStyle(color: Theme.of(context).colorScheme.error)),
                     ),
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(false),
@@ -908,11 +908,65 @@ class LeadCard extends StatelessWidget {
                 ),
               );
               if (confirm == true) {
-                // Since we don't have the full lead data here, just delete the follow_ups document by docId
-                await FirebaseFirestore.instance.collection('follow_ups').doc(docId).delete();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Lead deleted')),
-                );
+                // Get lead data before deleting
+                final docSnap = await FirebaseFirestore.instance.collection('follow_ups').doc(docId).get();
+                final data = docSnap.data();
+                String? userEmail = data?['userEmail'] ?? data?['email'];
+                final userId = data?['created_by'];
+                final timestamp = data?['created_at'] ?? data?['timestamp'];
+                // Fallback: fetch user email from users collection if missing
+                if (userEmail == null && userId != null) {
+                  final userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+                  userEmail = userDoc.data()?['email'];
+                }
+                if (userEmail != null && timestamp != null) {
+                  final date = (timestamp is Timestamp) ? timestamp.toDate() : DateTime.tryParse(timestamp.toString());
+                  final now = DateTime.now();
+                  if (date == null) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Error: Invalid lead date.')),
+                      );
+                    }
+                    return;
+                  }
+                  final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+                  await FirebaseFirestore.instance.collection('follow_ups').doc(docId).delete();
+
+                  // Only update daily_report if deleted within 24 hours of creation
+                  if (now.difference(date).inHours < 24) {
+                    // Check if any other leads exist for this user and date
+                    final leadsStart = DateTime(date.year, date.month, date.day, 0, 0, 0);
+                    final leadsEnd = DateTime(date.year, date.month, date.day, 23, 59, 59);
+
+                    final otherLeads = await FirebaseFirestore.instance
+                        .collection('follow_ups')
+                        .where('userEmail', isEqualTo: userEmail)
+                        .where('created_at', isGreaterThanOrEqualTo: leadsStart)
+                        .where('created_at', isLessThanOrEqualTo: leadsEnd)
+                        .get();
+
+                    if (otherLeads.docs.isEmpty) {
+                      await FirebaseFirestore.instance.collection('daily_report').doc('$userEmail-$dateStr').set({
+                        'email': userEmail,
+                        'userId': userId,
+                        'date': dateStr,
+                        'lead': false,
+                      }, SetOptions(merge: true));
+                    }
+                  }
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Lead deleted')),
+                    );
+                  }
+                } else {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Error: Could not delete lead. Missing user or date.')),
+                    );
+                  }
+                }
               }
             },
             backgroundColor: Colors.red.shade400,

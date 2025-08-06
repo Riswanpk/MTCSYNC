@@ -806,12 +806,15 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                                 final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
                                 await _firestore.collection('todo').doc(doc.id).delete();
 
-                                // Check if any other todos exist for this user and date
+                                // Check if any other todos exist for this user and date in the interval
+                                final windowStart = DateTime(date.year, date.month, date.day - 1, 19, 0, 0); // 7pm previous day
+                                final windowEnd = DateTime(date.year, date.month, date.day, 12, 0, 0); // 12pm today
+
                                 final otherTodos = await _firestore
                                     .collection('todo')
                                     .where('email', isEqualTo: email)
-                                    .where('timestamp', isGreaterThanOrEqualTo: DateTime(date.year, date.month, date.day, 0, 0, 0))
-                                    .where('timestamp', isLessThan: DateTime(date.year, date.month, date.day, 23, 59, 59))
+                                    .where('timestamp', isGreaterThanOrEqualTo: windowStart)
+                                    .where('timestamp', isLessThan: windowEnd)
                                     .get();
 
                                 if (otherTodos.docs.isEmpty) {

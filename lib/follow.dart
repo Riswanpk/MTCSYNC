@@ -150,6 +150,16 @@ class _FollowUpFormState extends State<FollowUpForm> {
 
 
     Navigator.pop(context);
+
+    // After successfully creating the lead in Firestore:
+    final now = DateTime.now();
+    final dateStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    await FirebaseFirestore.instance.collection('daily_report').doc('${user.email}-$dateStr').set({
+      'email': user.email ?? '',
+      'userId': user.uid,
+      'date': dateStr,
+      'lead': true,
+    }, SetOptions(merge: true));
   }
 
   Future<void> _autoFillFromCustomer(String phone) async {
@@ -174,7 +184,8 @@ class _FollowUpFormState extends State<FollowUpForm> {
     super.initState();
     // Set the date field to today's date in yyyy-mm-dd format
     final now = DateTime.now();
-    _dateController.text = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    final dateStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    _dateController.text = dateStr;
     // Ensure "+91 " is present at the start of the phone field
     if (!_phoneController.text.startsWith('+91 ')) {
       _phoneController.text = '+91 ';
