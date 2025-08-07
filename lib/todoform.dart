@@ -139,7 +139,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
     // Prepare reminder
     String? reminderText = _reminderController.text.trim().isEmpty ? null : _reminderController.text.trim();
 
-    await FirebaseFirestore.instance.collection('todo').add({
+    final todoRef = await FirebaseFirestore.instance.collection('todo').add({
       'title': title,
       'description': desc,
       'priority': _priority,
@@ -153,6 +153,18 @@ class _TodoFormPageState extends State<TodoFormPage> {
       if (assignedToName != null) 'assigned_to_name': assignedToName,
       if (reminderText != null) 'reminder': reminderText,
     });
+
+    // Add to daily_report only if created between 7pm-11:59pm or 12am-12pm
+    final now = DateTime.now();
+    final hour = now.hour;
+    if ((hour >= 13 && hour <= 23) || (hour >= 0 && hour < 12)) {
+      await FirebaseFirestore.instance.collection('daily_report').add({
+        'timestamp': now,
+        'userId': createdBy,
+        'documentId': todoRef.id,
+        'type': 'todo',
+      });
+    }
 
     // Schedule notification if reminder is set
     if (_selectedReminderDate != null && _selectedReminderTime != null && reminderText != null) {

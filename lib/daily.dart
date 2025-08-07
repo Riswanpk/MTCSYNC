@@ -61,32 +61,35 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final windowStart = today.subtract(const Duration(days: 1)).add(const Duration(hours: 19)); // previous day 7pm
-    final windowEnd = today.add(const Duration(hours: 12)); // current day 12pm
+    final windowStart = today.subtract(const Duration(days: 1)).add(const Duration(hours: 19)); // yesterday 7pm
+    final windowEnd = today.add(const Duration(hours: 12)); // today 12pm
 
-    // Fetch daily_report for each user
     for (var user in users) {
-      final email = user['email'];
-      final dateStr = "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
-      final doc = await FirebaseFirestore.instance.collection('daily_report').doc('$email-$dateStr').get();
-      user['lead'] = doc.data()?['lead'] ?? false;
-      user['todo'] = doc.data()?['todo'] ?? false;
-    }
+      final userId = user['uid'];
 
-    if (now.isAfter(windowStart) && now.isBefore(windowEnd)) {
-      final dateStr = "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
-      final currentUser = FirebaseAuth.instance.currentUser;
-      final userEmail = currentUser?.email ?? '';
-      await FirebaseFirestore.instance.collection('daily_report').doc('$userEmail-$dateStr').set({
-        'email': userEmail,
-        'date': dateStr,
-        'todo': true,
-      }, SetOptions(merge: true));
+      // Check for leads created today
+      final leadsQuery = await FirebaseFirestore.instance
+          .collection('daily_report')
+          .where('userId', isEqualTo: userId)
+          .where('type', isEqualTo: 'leads')
+          .where('timestamp', isGreaterThanOrEqualTo: today)
+          .where('timestamp', isLessThan: today.add(const Duration(days: 1)))
+          .get();
+      user['lead'] = leadsQuery.docs.isNotEmpty;
+
+      // Check for todos created between yesterday 7pm and today 12pm
+      final todoQuery = await FirebaseFirestore.instance
+          .collection('daily_report')
+          .where('userId', isEqualTo: userId)
+          .where('type', isEqualTo: 'todo')
+          .where('timestamp', isGreaterThanOrEqualTo: windowStart)
+          .where('timestamp', isLessThanOrEqualTo: windowEnd)
+          .get();
+      user['todo'] = todoQuery.docs.isNotEmpty;
     }
 
     return users;
   }
-
 
   @override
   Widget build(BuildContext context) {

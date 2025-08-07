@@ -350,23 +350,25 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
     if (text.isEmpty || _userEmail == null) return;
 
     final now = DateTime.now();
-    final dateStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    try {
+      final docRef = await _firestore.collection('todo').add({
+        'text': text,
+        'email': _userEmail,
+        'timestamp': now,
+        'status': 'pending',
+        'userId': _auth.currentUser?.uid,
+      });
 
-    await _firestore.collection('todo').add({
-      'text': text,
-      'email': _userEmail,
-      'timestamp': FieldValue.serverTimestamp(),
-      'status': 'pending',
-    });
-
-    // Update daily_report for this user and date
-    await FirebaseFirestore.instance.collection('daily_report').doc('${_userEmail}-$dateStr').set({
-      'email': _userEmail,
-      'date': dateStr,
-      'todo': true,
-    }, SetOptions(merge: true));
-
-    _todoController.clear();
+      _todoController.clear();
+    } catch (e, stack) {
+      print('Error creating todo: $e');
+      print(stack);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
   }
 
   DateTime _dateOnly(DateTime dateTime) {
@@ -799,32 +801,22 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                             );
                             if (confirm == true) {
                               final data = doc.data() as Map<String, dynamic>;
-                              final email = data['email'];
                               final timestamp = data['timestamp'] as Timestamp?;
-                              if (timestamp != null) {
-                                final date = timestamp.toDate();
-                                final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
-                                await _firestore.collection('todo').doc(doc.id).delete();
-
-                                // Check if any other todos exist for this user and date in the interval
-                                final windowStart = DateTime(date.year, date.month, date.day - 1, 19, 0, 0); // 7pm previous day
-                                final windowEnd = DateTime(date.year, date.month, date.day, 12, 0, 0); // 12pm today
-
-                                final otherTodos = await _firestore
-                                    .collection('todo')
-                                    .where('email', isEqualTo: email)
-                                    .where('timestamp', isGreaterThanOrEqualTo: windowStart)
-                                    .where('timestamp', isLessThan: windowEnd)
-                                    .get();
-
-                                if (otherTodos.docs.isEmpty) {
-                                  await FirebaseFirestore.instance.collection('daily_report').doc('$email-$dateStr').set({
-                                    'email': email,
-                                    'date': dateStr,
-                                    'todo': false,
-                                  }, SetOptions(merge: true));
+                              final userId = data['userId'] ?? _auth.currentUser?.uid;
+                              if (timestamp != null && userId != null) {
+                                final created = timestamp.toDate();
+                                final hour = created.hour;
+                                // Only write daily_report if created between 7pm-11:59pm or 12am-12pm
+                                if ((hour >= 13 && hour <= 23) || (hour >= 0 && hour < 12)) {
+                                  await FirebaseFirestore.instance.collection('daily_report').add({
+                                    'timestamp': created,
+                                    'userId': userId,
+                                    'documentId': doc.id,
+                                    'type': 'todo',
+                                  });
                                 }
                               }
+                              await _firestore.collection('todo').doc(doc.id).delete();
                             }
                           },
                           backgroundColor: Colors.red.shade400,

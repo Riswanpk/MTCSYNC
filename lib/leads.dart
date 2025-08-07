@@ -934,27 +934,8 @@ class LeadCard extends StatelessWidget {
                   await FirebaseFirestore.instance.collection('follow_ups').doc(docId).delete();
 
                   // Only update daily_report if deleted within 24 hours of creation
-                  if (now.difference(date).inHours < 24) {
-                    // Check if any other leads exist for this user and date
-                    final leadsStart = DateTime(date.year, date.month, date.day, 0, 0, 0);
-                    final leadsEnd = DateTime(date.year, date.month, date.day, 23, 59, 59);
-
-                    final otherLeads = await FirebaseFirestore.instance
-                        .collection('follow_ups')
-                        .where('userEmail', isEqualTo: userEmail)
-                        .where('created_at', isGreaterThanOrEqualTo: leadsStart)
-                        .where('created_at', isLessThanOrEqualTo: leadsEnd)
-                        .get();
-
-                    if (otherLeads.docs.isEmpty) {
-                      await FirebaseFirestore.instance.collection('daily_report').doc('$userEmail-$dateStr').set({
-                        'email': userEmail,
-                        'userId': userId,
-                        'date': dateStr,
-                        'lead': false,
-                      }, SetOptions(merge: true));
-                    }
-                  }
+                  
+                  
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Lead deleted')),

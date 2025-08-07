@@ -76,7 +76,8 @@ class _FollowUpFormState extends State<FollowUpForm> {
     final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
     final branch = userDoc.data()?['branch'] ?? 'Unknown';
 
-    await FirebaseFirestore.instance.collection('follow_ups').add({
+    // Save follow up and get document reference
+    final followUpRef = await FirebaseFirestore.instance.collection('follow_ups').add({
       'date': _dateController.text.trim(),
       'name': _nameController.text.trim(),
       'company': _companyController.text.trim(),
@@ -151,15 +152,13 @@ class _FollowUpFormState extends State<FollowUpForm> {
 
     Navigator.pop(context);
 
-    // After successfully creating the lead in Firestore:
-    final now = DateTime.now();
-    final dateStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-    await FirebaseFirestore.instance.collection('daily_report').doc('${user.email}-$dateStr').set({
-      'email': user.email ?? '',
+    // Store only timestamp, userId, documentId, and type in daily_report
+    await FirebaseFirestore.instance.collection('daily_report').add({
+      'timestamp': FieldValue.serverTimestamp(),
       'userId': user.uid,
-      'date': dateStr,
-      'lead': true,
-    }, SetOptions(merge: true));
+      'documentId': followUpRef.id,
+      'type': 'leads',
+    });
   }
 
   Future<void> _autoFillFromCustomer(String phone) async {
