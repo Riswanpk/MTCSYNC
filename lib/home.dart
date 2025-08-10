@@ -41,6 +41,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
   String? _profileImagePath;
 
   bool _showTodoWarning = false;
+  int _logoTapCount = 0; // Add this line
 
   @override
   void initState() {
@@ -545,6 +546,23 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                           child: GestureDetector(
                             onTap: () {
                               _swingController.forward(from: 0.0);
+                              _logoTapCount++;
+                              if (_logoTapCount > 5) {
+                                _logoTapCount = 0; // Reset counter after showing dialog
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text("Hey!"),
+                                    content: const Text("Don't you have anything else to do??"),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.of(context).pop(),
+                                        child: const Text("OK"),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
                             },
                             child: AnimatedBuilder(
                               animation: _swingAnimation,

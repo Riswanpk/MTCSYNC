@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart'; // <-- Add this
+import 'package:in_app_update/in_app_update.dart';
 
 import 'constant.dart';
 import 'login.dart';
@@ -91,6 +92,39 @@ class MyApp extends StatelessWidget {
           navigatorObservers: [routeObserver],
         );
       },
+    );
+  }
+}
+
+class UpdateGate extends StatefulWidget {
+  @override
+  State<UpdateGate> createState() => _UpdateGateState();
+}
+
+class _UpdateGateState extends State<UpdateGate> {
+  @override
+  void initState() {
+    super.initState();
+    _checkForUpdate();
+  }
+
+  Future<void> _checkForUpdate() async {
+    try {
+      final info = await InAppUpdate.checkForUpdate();
+      if (info.updateAvailability == UpdateAvailability.updateAvailable) {
+        // Force immediate update
+        await InAppUpdate.performImmediateUpdate();
+      }
+    } catch (e) {
+      // Handle error (e.g., show a message)
+      print('Update check failed: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(child: Text('App Content Here')),
     );
   }
 }

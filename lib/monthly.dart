@@ -171,44 +171,40 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
               child: Column(
                 children: [
                   // Only show branch dropdown for admin
-                  if (role == 'admin' && _branches.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: DropdownButton<String>(
-                        value: _selectedBranch,
-                        items: _branches
-                            .map((b) => DropdownMenuItem(value: b, child: Text(b)))
-                            .toList(),
-                        onChanged: (val) async {
-                          setState(() {
-                            _selectedBranch = val;
-                          });
-                          await _fetchUsersForBranch(val);
-                        },
-                        hint: const Text("Select Branch"),
-                      ),
-                    ),
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: DropdownButton<Map<String, dynamic>>(
-                      value: _selectedUser,
-                      items: _usersForBranch
-                          .map((u) => DropdownMenuItem(
-                                value: u,
-                                child: Text(u['username']),
-                              ))
-                          .toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedUser = val;
-                        });
-                      },
-                      hint: const Text("Select User"),
-                    ),
-                  ),
+                  
+                  
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
+                      if (role == 'admin' && _branches.isNotEmpty)
+                        DropdownButton<String>(
+                          value: _selectedBranch,
+                          items: _branches
+                              .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                              .toList(),
+                          onChanged: (val) async {
+                            setState(() {
+                              _selectedBranch = val;
+                            });
+                            await _fetchUsersForBranch(val);
+                          },
+                          hint: const Text("Select Branch"),
+                        ),
+                      DropdownButton<Map<String, dynamic>>(
+                        value: _selectedUser,
+                        items: _usersForBranch
+                            .map((u) => DropdownMenuItem(
+                                  value: u,
+                                  child: Text(u['username']),
+                                ))
+                            .toList(),
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedUser = val;
+                          });
+                        },
+                        hint: const Text("Select User"),
+                      ),
                       DropdownButton<int>(
                         value: _selectedMonth,
                         items: List.generate(12, (i) => i + 1)
@@ -228,7 +224,6 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
                           });
                         },
                       ),
-                      const SizedBox(width: 16),
                       DropdownButton<int>(
                         value: _selectedYear,
                         items: List.generate(5, (i) => DateTime.now().year - i)
@@ -287,7 +282,8 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
     );
   }
 
-  Future<List<Map<String, dynamic>>> _generateUserMonthlyReport(String uid, String email, int month, int year) async {
+  Future<List<Map<String, dynamic>>> _generateUserMonthlyReport(
+    String uid, String email, int month, int year) async {
     final monthStart = DateTime(year, month, 1);
     final nextMonth = month == 12 ? DateTime(year + 1, 1, 1) : DateTime(year, month + 1, 1);
     final today = DateTime.now();
@@ -301,10 +297,34 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
       final doc = await FirebaseFirestore.instance.collection('daily_report').doc('$email-$dateStr').get();
       final data = doc.data();
 
+      // --- LEAD LOGIC: tick if daily_report exists for this user, type 'leads', timestamp on this date ---
+      final dayStart = DateTime(date.year, date.month, date.day);
+      final dayEnd = dayStart.add(const Duration(days: 1));
+      final leadQuery = await FirebaseFirestore.instance
+          .collection('daily_report')
+          .where('userId', isEqualTo: uid)
+          .where('type', isEqualTo: 'leads')
+          .where('timestamp', isGreaterThanOrEqualTo: dayStart)
+          .where('timestamp', isLessThan: dayEnd)
+          .get();
+      final leadTick = leadQuery.docs.isNotEmpty;
+
+      // --- TODO LOGIC: tick if daily_report exists for this user, type 'todo', timestamp between yesterday 7pm and today 12pm ---
+      final todoWindowStart = dayStart.subtract(const Duration(days: 1)).add(const Duration(hours: 19)); // yesterday 7pm
+      final todoWindowEnd = dayStart.add(const Duration(hours: 12)); // today 12pm
+      final todoQuery = await FirebaseFirestore.instance
+          .collection('daily_report')
+          .where('userId', isEqualTo: uid)
+          .where('type', isEqualTo: 'todo')
+          .where('timestamp', isGreaterThanOrEqualTo: todoWindowStart)
+          .where('timestamp', isLessThanOrEqualTo: todoWindowEnd)
+          .get();
+      final todoTick = todoQuery.docs.isNotEmpty;
+
       missedReport.add({
         'date': dateStr,
-        'todo': data?['todo'] ?? false,
-        'lead': data?['lead'] ?? false,
+        'todo': todoTick,
+        'lead': leadTick,
       });
     }
     return missedReport;
