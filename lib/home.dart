@@ -21,6 +21,7 @@ import 'dailyform.dart';
 import 'dart:math';
 import 'performance_score_page.dart';
 import 'admin_performance_page.dart'; // <-- Add this import if AdminPerformancePage exists in this file
+import 'package:in_app_update/in_app_update.dart'; // Import the in_app_update package
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -67,6 +68,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
         curve: Curves.linear,
       ),
     );
+
+    _checkForUpdate(); // <--- Add this line
 
     _loadProfileImage();
     _checkTodoWarning(); // Check warning on init
@@ -204,6 +207,21 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
           preciseAlarm: true,
         ),
       );
+    }
+  }
+
+  Future<void> _checkForUpdate() async {
+    try {
+      final info = await InAppUpdate.checkForUpdate();
+      if (info.updateAvailability == UpdateAvailability.updateAvailable) {
+        // Flexible update (shows a download bar, user can continue using app)
+        await InAppUpdate.performImmediateUpdate();
+        // For flexible update, use: await InAppUpdate.startFlexibleUpdate();
+        // Then: await InAppUpdate.completeFlexibleUpdate();
+      }
+    } catch (e) {
+      // Optionally show a snackbar or log error
+      print('Update check failed: $e');
     }
   }
 
