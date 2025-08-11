@@ -74,6 +74,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
     _loadProfileImage();
     _checkTodoWarning(); // Check warning on init
     _scheduleScoreUpdateNotificationIfNeeded();
+    _checkAndSendMonthlyReport();
   }
 
   Future<void> _loadProfileImage() async {
@@ -222,6 +223,65 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
     } catch (e) {
       // Optionally show a snackbar or log error
       print('Update check failed: $e');
+    }
+  }
+
+  Future<void> _checkAndSendMonthlyReport() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final now = DateTime.now();
+      final currentMonth = '${now.year}-${now.month}';
+
+      // Reference to Firestore tracking doc
+      final trackingDocRef = FirebaseFirestore.instance
+          .collection('reportTracking')
+          .doc(uid);
+
+      final trackingDoc = await trackingDocRef.get();
+      final lastSentMonth = trackingDoc.data()?['lastSentMonth'];
+
+      // If report hasn't been sent for this month
+      if (lastSentMonth != currentMonth) {
+        await _sendMonthlyExcelReport();
+
+        // Update Firestore
+        await trackingDocRef.set({
+          'lastSentMonth': currentMonth,
+          'lastUpdated': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+    } catch (e) {
+      print('Error checking monthly report: $e');
+    }
+  }
+
+  Future<void> _sendMonthlyExcelReport() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+
+      // Get role from Firestore
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+
+      final role = userDoc.data()?['role']?.toString().toLowerCase();
+
+      if (role == null) {
+        print('User role not found!');
+        return;
+      }
+
+      // Check allowed roles
+      if (['sales', 'admin', 'manager'].contains(role)) {
+        final settingsPage = SettingsPage(userRole: role);
+        await settingsPage.exportAndSendExcel(context);
+        print('Monthly Excel Report Sent for $role!');
+      } else {
+        print('Role "$role" is not allowed to send reports.');
+      }
+    } catch (e) {
+      print('Error sending monthly report: $e');
     }
   }
 
