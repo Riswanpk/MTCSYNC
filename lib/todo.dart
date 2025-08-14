@@ -807,7 +807,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                                 final created = timestamp.toDate();
                                 final hour = created.hour;
                                 // Only write daily_report if created between 7pm-11:59pm or 12am-12pm
-                                if ((hour >= 13 && hour <= 23) || (hour >= 0 && hour < 12)) {
+                                if ((hour >= 18 && hour <= 23) || (hour >= 0 && hour < 12)) {
                                   await FirebaseFirestore.instance.collection('daily_report').add({
                                     'timestamp': created,
                                     'userId': userId,
