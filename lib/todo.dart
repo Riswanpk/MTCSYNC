@@ -6,6 +6,8 @@ import 'todoform.dart';
 import 'package:provider/provider.dart';
 import 'theme_notifier.dart';
 import 'package:flutter_slidable/flutter_slidable.dart'; // Add this import at the top
+import 'dart:async';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -179,12 +181,16 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
   late Future<void> _userInfoFuture;
 
   TabController? _tabController;
+  StreamSubscription<QuerySnapshot>? _assignmentListener;
+  FlutterLocalNotificationsPlugin? _localNotifications;
 
   @override
   void initState() {
     super.initState();
     _userInfoFuture = _loadUserInfo().then((_) {
       _deleteOldTasks();
+      _initLocalNotifications();
+      _setupAssignmentListener();
     });
     WidgetsBinding.instance.addObserver(this);
   }
@@ -198,10 +204,72 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
   }
   @override
   void dispose() {
+    _assignmentListener?.cancel();
     _tabController?.dispose();
     _todoController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  Future<void> _initLocalNotifications() async {
+    _localNotifications = FlutterLocalNotificationsPlugin();
+
+    const AndroidInitializationSettings androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initSettings =
+        InitializationSettings(android: androidSettings);
+
+    await _localNotifications!.initialize(initSettings);
+    // Register the custom sound in your AndroidManifest and place assignment.mp3 in android/app/src/main/res/raw/
+  }
+
+  void _setupAssignmentListener() async {
+    await _userInfoFuture;
+    if (_userRole != 'sales' || _userEmail == null) return;
+
+    await _assignmentListener?.cancel();
+
+    _assignmentListener = FirebaseFirestore.instance
+        .collection('todo')
+        .where('email', isEqualTo: _userEmail)
+        .where('assigned_by_name', isNotEqualTo: null)
+        .where('assignment_seen', isEqualTo: false)
+        .snapshots()
+        .listen((snapshot) {
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final title = data['title'] ?? 'New Task Assigned';
+        _showAssignmentNotification(title);
+        doc.reference.update({'assignment_seen': true});
+      }
+    });
+  }
+
+  Future<void> _showAssignmentNotification(String taskTitle) async {
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'assignment_channel',
+      'Assignment Notifications',
+      channelDescription: 'Channel for assignment notifications',
+      importance: Importance.max,
+      priority: Priority.high,
+      sound: RawResourceAndroidNotificationSound('assignment'), // assignment.mp3 in res/raw
+      playSound: true,
+    );
+    const NotificationDetails platformDetails =
+        NotificationDetails(android: androidDetails);
+
+    await _localNotifications?.show(
+      DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      'New Task Assigned',
+      'You have been assigned: $taskTitle',
+      platformDetails,
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _setupAssignmentListener();
   }
 
   @override
