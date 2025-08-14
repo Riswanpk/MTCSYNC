@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
+import 'monthly_performance_table_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'loading_page.dart';
 import 'theme_notifier.dart';
 
-class PerformanceScorePage extends StatefulWidget {
+// --- Score Page Widget (your original code, renamed) ---
+class PerformanceScoreInnerPage extends StatefulWidget {
   @override
-  State<PerformanceScorePage> createState() => _PerformanceScorePageState();
+  State<PerformanceScoreInnerPage> createState() => _PerformanceScoreInnerPageState();
 }
 
-class _PerformanceScorePageState extends State<PerformanceScorePage> with SingleTickerProviderStateMixin {
+class _PerformanceScoreInnerPageState extends State<PerformanceScoreInnerPage> with SingleTickerProviderStateMixin {
   int totalScore = 70; // 20 + 20 + 20 + 10
   bool isLoading = true;
 
@@ -410,6 +412,45 @@ class _PerformanceScorePageState extends State<PerformanceScorePage> with Single
                   ),
                 ),
               ),
+      ),
+    );
+  }
+}
+
+// --- Main Page with Bottom Navigation ---
+class PerformanceScorePage extends StatefulWidget {
+  @override
+  State<PerformanceScorePage> createState() => _PerformanceScorePageState();
+}
+
+class _PerformanceScorePageState extends State<PerformanceScorePage> {
+  int _selectedIndex = 0;
+
+  final List<Widget> _pages = [
+    PerformanceScoreInnerPage(),
+    MonthlyPerformanceTablePage(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: _pages,
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        onTap: (index) => setState(() => _selectedIndex = index),
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.score),
+            label: 'Score',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.table_chart),
+            label: 'Monthly Table',
+          ),
+        ],
       ),
     );
   }
