@@ -5,6 +5,7 @@ import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart'; // <-- Add this
 import 'package:in_app_update/in_app_update.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'constant.dart';
 import 'login.dart';
@@ -44,6 +45,12 @@ void main() async {
     ],
     debug: true,
   );
+
+  // Initialize Flutter Local Notifications
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+  const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const InitializationSettings initSettings = InitializationSettings(android: androidSettings);
+  await flutterLocalNotificationsPlugin.initialize(initSettings);
 
   // Request notification permissions (Awesome Notifications)
   bool isAllowed = await AwesomeNotifications().isNotificationAllowed();

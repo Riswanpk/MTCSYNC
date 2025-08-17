@@ -220,7 +220,19 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
         InitializationSettings(android: androidSettings);
 
     await _localNotifications!.initialize(initSettings);
-    // Register the custom sound in your AndroidManifest and place assignment.mp3 in android/app/src/main/res/raw/
+
+    // Create notification channel with default sound
+    const AndroidNotificationChannel assignmentChannel = AndroidNotificationChannel(
+      'assignment_channel',
+      'Assignment Notifications',
+      description: 'Channel for assignment notifications',
+      importance: Importance.max,
+      playSound: true,
+    );
+
+    await _localNotifications!
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(assignmentChannel);
   }
 
   void _setupAssignmentListener() async {
@@ -252,7 +264,6 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
       channelDescription: 'Channel for assignment notifications',
       importance: Importance.max,
       priority: Priority.high,
-      sound: RawResourceAndroidNotificationSound('assignment'), // assignment.mp3 in res/raw
       playSound: true,
     );
     const NotificationDetails platformDetails =

@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // Add this import
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -29,47 +28,11 @@ class _TodoFormPageState extends State<TodoFormPage> {
   String? _selectedSalesUserId;
   TimeOfDay? _selectedReminderTime;
   DateTime? _selectedReminderDate;
-  FlutterLocalNotificationsPlugin? _localNotifications;
 
   @override
   void initState() {
     super.initState();
     _fetchCurrentUserRoleAndBranch();
-    _initLocalNotifications(); // Initialize local notifications for assignment
-  }
-
-  Future<void> _initLocalNotifications() async {
-    _localNotifications = FlutterLocalNotificationsPlugin();
-
-    const AndroidInitializationSettings androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-    const InitializationSettings initSettings =
-        InitializationSettings(android: androidSettings);
-
-    await _localNotifications!.initialize(initSettings);
-    // Place assignment.mp3 in android/app/src/main/res/raw/
-  }
-
-  // New: Show assignment notification with flutter_local_notifications
-  Future<void> _showAssignmentNotification(String salesUserName, String taskTitle) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'assignment_channel',
-      'Assignment Notifications',
-      channelDescription: 'Channel for assignment notifications',
-      importance: Importance.max,
-      priority: Priority.high,
-      sound: RawResourceAndroidNotificationSound('assignment'), // assignment.mp3 in res/raw
-      playSound: true,
-    );
-    const NotificationDetails platformDetails =
-        NotificationDetails(android: androidDetails);
-
-    await _localNotifications?.show(
-      DateTime.now().millisecondsSinceEpoch.remainder(100000),
-      'New Task Assigned',
-      'Task "$taskTitle" assigned to $salesUserName',
-      platformDetails,
-    );
   }
 
   Future<void> _fetchCurrentUserRoleAndBranch() async {
