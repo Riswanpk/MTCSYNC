@@ -25,6 +25,7 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
   String? _currentUserRole;
   List<String> _branches = [];
   List<Map<String, dynamic>> _usersForBranch = [];
+  bool _isLoading = false; // <-- Add this
 
   @override
   void initState() {
@@ -128,155 +129,170 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
           branch = data['branch'];
         }
 
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('Monthly Missed Report'),
-            backgroundColor: const Color(0xFF005BAC),
-            foregroundColor: Colors.white,
-            elevation: 0,
-            actions: [
-              if (role == 'admin' || role == 'manager')
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.menu),
-                  onSelected: (value) async {
-                    if (value == 'download_pdf') {
-                      await _downloadMonthlyReportPdf(context, role, branch);
-                    } else if (value == 'leads_report') {
-                      await _downloadLeadsSummaryPdf(context, role, branch);
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'download_pdf',
-                      child: ListTile(
-                        leading: Icon(Icons.picture_as_pdf, color: Colors.red),
-                        title: Text('Missed Report'),
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'leads_report',
-                      child: ListTile(
-                        leading: Icon(Icons.assignment, color: Colors.blue),
-                        title: Text('Leads Report'),
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-          backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
-          body: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 24),
-              child: Column(
-                children: [
-                  // Only show branch dropdown for admin
-                  
-                  
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (role == 'admin' && _branches.isNotEmpty)
-                        DropdownButton<String>(
-                          value: _selectedBranch,
-                          items: _branches
-                              .map((b) => DropdownMenuItem(value: b, child: Text(b)))
-                              .toList(),
-                          onChanged: (val) async {
-                            setState(() {
-                              _selectedBranch = val;
-                            });
-                            await _fetchUsersForBranch(val);
-                          },
-                          hint: const Text("Select Branch"),
+        return Stack(
+          children: [
+            Scaffold(
+              appBar: AppBar(
+                title: const Text('Monthly Missed Report'),
+                backgroundColor: const Color(0xFF005BAC),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                actions: [
+                  if (role == 'admin' || role == 'manager')
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.menu),
+                      onSelected: (value) async {
+                        if (value == 'download_pdf') {
+                          setState(() => _isLoading = true);
+                          await _downloadMonthlyReportPdf(context, role, branch);
+                          setState(() => _isLoading = false);
+                        } else if (value == 'leads_report') {
+                          setState(() => _isLoading = true);
+                          await _downloadLeadsSummaryPdf(context, role, branch);
+                          setState(() => _isLoading = false);
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'download_pdf',
+                          child: ListTile(
+                            leading: Icon(Icons.picture_as_pdf, color: Colors.red),
+                            title: Text('Missed Report'),
+                          ),
                         ),
-                      DropdownButton<Map<String, dynamic>>(
-                        value: _selectedUser,
-                        items: _usersForBranch
-                            .map((u) => DropdownMenuItem(
-                                  value: u,
-                                  child: Text(u['username']),
-                                ))
-                            .toList(),
-                        onChanged: (val) {
-                          setState(() {
-                            _selectedUser = val;
-                          });
-                        },
-                        hint: const Text("Select User"),
-                      ),
-                      DropdownButton<int>(
-                        value: _selectedMonth,
-                        items: List.generate(12, (i) => i + 1)
-                            .map((m) => DropdownMenuItem(
-                                  value: m,
-                                  child: Text(
-                                    [
-                                      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-                                    ][m - 1],
-                                  ),
-                                ))
-                            .toList(),
-                        onChanged: (val) {
-                          setState(() {
-                            _selectedMonth = val!;
-                          });
-                        },
-                      ),
-                      DropdownButton<int>(
-                        value: _selectedYear,
-                        items: List.generate(5, (i) => DateTime.now().year - i)
-                            .map((y) => DropdownMenuItem(value: y, child: Text('$y')))
-                            .toList(),
-                        onChanged: (val) {
-                          setState(() {
-                            _selectedYear = val!;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                  if (_selectedUser != null)
-                    FutureBuilder<List<Map<String, dynamic>>>(
-                      future: _generateUserMonthlyReport(_selectedUser!['uid'], _selectedUser!['email'], _selectedMonth, _selectedYear),
-                      builder: (context, snap) {
-                        if (snap.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
-                        if (snap.hasError) {
-                          return Center(child: Text('Error: ${snap.error}'));
-                        }
-                        if (!snap.hasData || snap.data!.isEmpty) {
-                          return const Center(child: Text('No missed entries this month.'));
-                        }
-                        final missed = snap.data!;
-                        return SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: DataTable(
-                            columns: const [
-                              DataColumn(label: Text('Date')),
-                              DataColumn(label: Text('Todo')),
-                              DataColumn(label: Text('Lead')),
-                            ],
-                            rows: missed.map((m) => DataRow(cells: [
-                              DataCell(Text(m['date'])),
-                              DataCell(Icon(
-                                m['todo'] ? Icons.check_circle : Icons.cancel,
-                                color: m['todo'] ? Colors.green : Colors.red,
-                              )),
-                              DataCell(Icon(
-                                m['lead'] ? Icons.check_circle : Icons.cancel,
-                                color: m['lead'] ? Colors.green : Colors.red,
-                              )),
-                            ])).toList(),
-                          ));
-                        },
+                        const PopupMenuItem(
+                          value: 'leads_report',
+                          child: ListTile(
+                            leading: Icon(Icons.assignment, color: Colors.blue),
+                            title: Text('Leads Report'),
+                          ),
+                        ),
+                      ],
                     ),
                 ],
               ),
+              backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
+              body: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  child: Column(
+                    children: [
+                      // Only show branch dropdown for admin
+                      
+                      
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (role == 'admin' && _branches.isNotEmpty)
+                            DropdownButton<String>(
+                              value: _selectedBranch,
+                              items: _branches
+                                  .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                                  .toList(),
+                              onChanged: (val) async {
+                                setState(() {
+                                  _selectedBranch = val;
+                                });
+                                await _fetchUsersForBranch(val);
+                              },
+                              hint: const Text("Select Branch"),
+                            ),
+                          DropdownButton<Map<String, dynamic>>(
+                            value: _selectedUser,
+                            items: _usersForBranch
+                                .map((u) => DropdownMenuItem(
+                                      value: u,
+                                      child: Text(u['username']),
+                                    ))
+                                .toList(),
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedUser = val;
+                              });
+                            },
+                            hint: const Text("Select User"),
+                          ),
+                          DropdownButton<int>(
+                            value: _selectedMonth,
+                            items: List.generate(12, (i) => i + 1)
+                                .map((m) => DropdownMenuItem(
+                                      value: m,
+                                      child: Text(
+                                        [
+                                          'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                                          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+                                        ][m - 1],
+                                      ),
+                                    ))
+                                .toList(),
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedMonth = val!;
+                              });
+                            },
+                          ),
+                          DropdownButton<int>(
+                            value: _selectedYear,
+                            items: List.generate(5, (i) => DateTime.now().year - i)
+                                .map((y) => DropdownMenuItem(value: y, child: Text('$y')))
+                                .toList(),
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedYear = val!;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                      if (_selectedUser != null)
+                        FutureBuilder<List<Map<String, dynamic>>>(
+                          future: _generateUserMonthlyReport(_selectedUser!['uid'], _selectedUser!['email'], _selectedMonth, _selectedYear),
+                          builder: (context, snap) {
+                            if (snap.connectionState == ConnectionState.waiting) {
+                              return const Center(child: CircularProgressIndicator());
+                            }
+                            if (snap.hasError) {
+                              return Center(child: Text('Error: ${snap.error}'));
+                            }
+                            if (!snap.hasData || snap.data!.isEmpty) {
+                              return const Center(child: Text('No missed entries this month.'));
+                            }
+                            final missed = snap.data!;
+                            return SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: DataTable(
+                                columns: const [
+                                  DataColumn(label: Text('Date')),
+                                  DataColumn(label: Text('Todo')),
+                                  DataColumn(label: Text('Lead')),
+                                ],
+                                rows: missed.map((m) => DataRow(cells: [
+                                  DataCell(Text(m['date'])),
+                                  DataCell(Icon(
+                                    m['todo'] ? Icons.check_circle : Icons.cancel,
+                                    color: m['todo'] ? Colors.green : Colors.red,
+                                  )),
+                                  DataCell(Icon(
+                                    m['lead'] ? Icons.check_circle : Icons.cancel,
+                                    color: m['lead'] ? Colors.green : Colors.red,
+                                  )),
+                                ])).toList(),
+                              ));
+                          },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
-          ),
+            if (_isLoading)
+              Container(
+                color: Colors.black.withOpacity(0.3),
+                child: const Center(
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+          ],
         );
       },
     );

@@ -44,12 +44,12 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
     });
   }
 
-  Future<List<Map<String, dynamic>>> _fetchUsersAndLeads() async {
+  Future<List<Map<String, dynamic>>> _fetchUsersAndLeads({String role = 'sales'}) async {
     if (_selectedBranch == null) return [];
     final usersSnapshot = await FirebaseFirestore.instance
         .collection('users')
         .where('branch', isEqualTo: _selectedBranch)
-        .where('role', isEqualTo: 'sales')
+        .where('role', isEqualTo: role)
         .get();
     final users = usersSnapshot.docs
         .map((doc) => {
@@ -139,43 +139,119 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
             ),
           ),
           Expanded(
-            child: FutureBuilder<List<Map<String, dynamic>>>(
-              future: _fetchUsersAndLeads(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final users = snapshot.data!;
-                if (users.isEmpty) {
-                  return const Center(child: Text('No users found.'));
-                }
-                return ListView.builder(
-                  itemCount: users.length,
-                  itemBuilder: (context, idx) {
-                    final user = users[idx];
-                    return ListTile(
-                      leading: CircleAvatar(child: Text(user['username'].toString().substring(0, 1).toUpperCase())),
-                      title: Text(user['username']),
-                      subtitle: Text(user['email']),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            user['todo'] ? Icons.check_circle : Icons.cancel,
-                            color: user['todo'] ? Colors.blue : Colors.red,
-                          ),
-                          const SizedBox(width: 8),
-                          Icon(
-                            user['lead'] ? Icons.check_circle : Icons.cancel,
-                            color: user['lead'] ? Colors.green : Colors.red,
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
+            child: _role == 'admin'
+                ? FutureBuilder<List<Map<String, dynamic>>>(
+                    future: _fetchUsersAndLeads(role: 'sales'),
+                    builder: (context, salesSnapshot) {
+                      if (!salesSnapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final salesUsers = salesSnapshot.data!;
+                      return FutureBuilder<List<Map<String, dynamic>>>(
+                        future: _fetchUsersAndLeads(role: 'manager'),
+                        builder: (context, managerSnapshot) {
+                          if (!managerSnapshot.hasData) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+                          final managerUsers = managerSnapshot.data!;
+                          if (salesUsers.isEmpty && managerUsers.isEmpty) {
+                            return const Center(child: Text('No users found.'));
+                          }
+                          return ListView(
+                            children: [
+                              if (salesUsers.isNotEmpty) ...[
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  child: Text('Sales', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                ),
+                                ...salesUsers.map((user) => ListTile(
+                                      leading: CircleAvatar(child: Text(user['username'].toString().substring(0, 1).toUpperCase())),
+                                      title: Text(user['username']),
+                                      subtitle: Text(user['email']),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            user['todo'] ? Icons.check_circle : Icons.cancel,
+                                            color: user['todo'] ? Colors.blue : Colors.red,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Icon(
+                                            user['lead'] ? Icons.check_circle : Icons.cancel,
+                                            color: user['lead'] ? Colors.green : Colors.red,
+                                          ),
+                                        ],
+                                      ),
+                                    )),
+                              ],
+                              if (managerUsers.isNotEmpty) ...[
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  child: Text('Manager', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                ),
+                                ...managerUsers.map((user) => ListTile(
+                                      leading: CircleAvatar(child: Text(user['username'].toString().substring(0, 1).toUpperCase())),
+                                      title: Text(user['username']),
+                                      subtitle: Text(user['email']),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            user['todo'] ? Icons.check_circle : Icons.cancel,
+                                            color: user['todo'] ? Colors.blue : Colors.red,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Icon(
+                                            user['lead'] ? Icons.check_circle : Icons.cancel,
+                                            color: user['lead'] ? Colors.green : Colors.red,
+                                          ),
+                                        ],
+                                      ),
+                                    )),
+                              ],
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  )
+                : FutureBuilder<List<Map<String, dynamic>>>(
+                    future: _fetchUsersAndLeads(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final users = snapshot.data!;
+                      if (users.isEmpty) {
+                        return const Center(child: Text('No users found.'));
+                      }
+                      return ListView.builder(
+                        itemCount: users.length,
+                        itemBuilder: (context, idx) {
+                          final user = users[idx];
+                          return ListTile(
+                            leading: CircleAvatar(child: Text(user['username'].toString().substring(0, 1).toUpperCase())),
+                            title: Text(user['username']),
+                            subtitle: Text(user['email']),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  user['todo'] ? Icons.check_circle : Icons.cancel,
+                                  color: user['todo'] ? Colors.blue : Colors.red,
+                                ),
+                                const SizedBox(width: 8),
+                                Icon(
+                                  user['lead'] ? Icons.check_circle : Icons.cancel,
+                                  color: user['lead'] ? Colors.green : Colors.red,
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
           ),
         ],
       ),

@@ -228,14 +228,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
 
   Future<void> _checkAndSendMonthlyReport() async {
     try {
-      final uid = FirebaseAuth.instance.currentUser!.uid;
       final now = DateTime.now();
       final currentMonth = '${now.year}-${now.month}';
 
-      // Reference to Firestore tracking doc
+      // Use a global doc (e.g., "global" as the doc ID)
       final trackingDocRef = FirebaseFirestore.instance
           .collection('reportTracking')
-          .doc(uid);
+          .doc('global');
 
       final trackingDoc = await trackingDocRef.get();
       final lastSentMonth = trackingDoc.data()?['lastSentMonth'];
@@ -257,29 +256,21 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
 
   Future<void> _sendMonthlyExcelReport() async {
     try {
+      // You can use any role or just pick the current user
       final uid = FirebaseAuth.instance.currentUser!.uid;
 
-      // Get role from Firestore
+      // Get role from Firestore (optional, or just use a default)
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
           .get();
 
-      final role = userDoc.data()?['role']?.toString().toLowerCase();
+      final role = userDoc.data()?['role']?.toString().toLowerCase() ?? 'unknown';
 
-      if (role == null) {
-        print('User role not found!');
-        return;
-      }
-
-      // Check allowed roles
-      if (['sales', 'admin', 'manager'].contains(role)) {
-        final settingsPage = SettingsPage(userRole: role);
-        await settingsPage.exportAndSendExcel(context);
-        print('Monthly Excel Report Sent for $role!');
-      } else {
-        print('Role "$role" is not allowed to send reports.');
-      }
+      // Just send the report (no role check)
+      final settingsPage = SettingsPage(userRole: role);
+      await settingsPage.exportAndSendExcel(context);
+      print('Monthly Excel Report Sent!');
     } catch (e) {
       print('Error sending monthly report: $e');
     }
