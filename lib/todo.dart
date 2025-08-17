@@ -221,13 +221,14 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
 
     await _localNotifications!.initialize(initSettings);
 
-    // Create notification channel with default sound
+    // Create notification channel with custom sound
     const AndroidNotificationChannel assignmentChannel = AndroidNotificationChannel(
       'assignment_channel',
       'Assignment Notifications',
       description: 'Channel for assignment notifications',
       importance: Importance.max,
       playSound: true,
+      sound: RawResourceAndroidNotificationSound('assignment'), // <-- custom sound
     );
 
     await _localNotifications!
@@ -265,6 +266,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
       importance: Importance.max,
       priority: Priority.high,
       playSound: true,
+      sound: RawResourceAndroidNotificationSound('assignment'), // <-- custom sound
     );
     const NotificationDetails platformDetails =
         NotificationDetails(android: androidDetails);
@@ -278,7 +280,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
   }
 
   @override
-  void didChangeDependencies() {
+  didChangeDependencies() {
     super.didChangeDependencies();
     _setupAssignmentListener();
   }
