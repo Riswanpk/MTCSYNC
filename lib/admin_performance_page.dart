@@ -241,8 +241,9 @@ class _AdminEditFormState extends State<_AdminEditForm> {
   late bool confirmPurchase;
   late bool offerHelp;
   late bool meetingAttended;
-  late bool? targetAchieved;
-  late bool? otherPerformance;
+  // REMOVE performance fields
+  // late bool? targetAchieved;
+  // late bool? otherPerformance;
 
   @override
   void initState() {
@@ -259,8 +260,9 @@ class _AdminEditFormState extends State<_AdminEditForm> {
     confirmPurchase = f['attitude']?['confirmPurchase'] ?? false;
     offerHelp = f['attitude']?['offerHelp'] ?? false;
     meetingAttended = f['meeting']?['attended'] ?? false;
-    targetAchieved = f['performance']?['target'];
-    otherPerformance = f['performance']?['otherPerformance'];
+    // REMOVE performance fields
+    // targetAchieved = f['performance']?['target'];
+    // otherPerformance = f['performance']?['otherPerformance'];
   }
 
   Future<void> save() async {
@@ -281,10 +283,7 @@ class _AdminEditFormState extends State<_AdminEditForm> {
       'meeting': {
         'attended': meetingAttended,
       },
-      'performance': {
-        'target': targetAchieved,
-        'otherPerformance': otherPerformance,
-      },
+      // REMOVE 'performance'
     });
     widget.onSaved();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -441,37 +440,10 @@ class _AdminEditFormState extends State<_AdminEditForm> {
               activeColor: colorScheme.primary,
             ),
             Divider(color: theme.dividerColor),
-            // Performance
-            Text('Performance (End of Month Only)', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-            AbsorbPointer(
-              absorbing: isApprovedLeave || !_isEndOfMonth(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CheckboxListTile(
-                    title: const Text('Target Achieved'),
-                    value: targetAchieved ?? false,
-                    onChanged: (val) => setState(() => targetAchieved = val),
-                    activeColor: colorScheme.primary,
-                  ),
-                  CheckboxListTile(
-                    title: const Text('Other Performance'),
-                    value: otherPerformance ?? false,
-                    onChanged: (val) => setState(() => otherPerformance = val),
-                    activeColor: colorScheme.primary,
-                  ),
-                  if (!_isEndOfMonth())
-                    Padding(
-                      padding: const EdgeInsets.only(left: 16.0, top: 4),
-                      child: Text(
-                        "Performance can be filled only at the end of the month.",
-                        style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.error),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
+            // REMOVE Performance section from UI
+            // Text('Performance (End of Month Only)', ...),
+            // AbsorbPointer(...),
+            // const SizedBox(height: 16),
             Center(
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(

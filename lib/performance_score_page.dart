@@ -165,18 +165,15 @@ class _PerformanceScoreInnerPageState extends State<PerformanceScoreInnerPage> w
     return marks;
   }
 
-  // 1. Add performance score calculation:
-  int calculatePerformanceMarks(List<Map<String, dynamic>> dailyForms) {
-    int marks = 0;
-    // Find the latest form for the month with performance field
-    final now = DateTime.now();
-    final monthForms = dailyForms.where((form) => form['performance'] != null).toList();
-    if (monthForms.isNotEmpty) {
-      final perf = monthForms.last['performance'];
-      if (perf?['target'] == true) marks += 15;
-      if (perf?['otherPerformance'] == true) marks += 15;
+  // Replace this function:
+  // int calculatePerformanceMarks(List<Map<String, dynamic>> dailyForms) { ... }
+
+  Future<int> fetchPerformanceMarkFromDb(String uid) async {
+    final doc = await FirebaseFirestore.instance.collection('performance_mark').doc(uid).get();
+    if (doc.exists && doc.data()?['score'] != null) {
+      return doc.data()!['score'] as int;
     }
-    return marks;
+    return 0;
   }
 
   Future<void> fetchScores() async {
@@ -211,13 +208,13 @@ class _PerformanceScoreInnerPageState extends State<PerformanceScoreInnerPage> w
     int attitude = calculateAttitudeMarks(weekForms);
     int meeting = calculateMeetingMarks(weekForms);
 
-    // 3. In fetchScores(), after getting forms:
-    performanceScore = calculatePerformanceMarks(weekForms);
+    // Fetch performance mark from DB
+    int perfMark = await fetchPerformanceMarkFromDb(user.uid);
 
     setState(() {
       totalScore = attendance + dress + attitude + meeting;
       isLoading = false;
-      performanceScore = calculatePerformanceMarks(weekForms);
+      performanceScore = perfMark;
     });
   }
 
@@ -389,7 +386,7 @@ class _PerformanceScoreInnerPageState extends State<PerformanceScoreInnerPage> w
                             child: Column(
                               children: [
                                 Text(
-                                  'Performance Score ',
+                                  "Last Month's Performance Score ",
                                   style: theme.textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.bold,
                                     color: colorScheme.primary,

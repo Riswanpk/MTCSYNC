@@ -22,6 +22,7 @@ import 'dart:math';
 import 'performance_score_page.dart';
 import 'admin_performance_page.dart'; // <-- Add this import if AdminPerformancePage exists in this file
 import 'package:in_app_update/in_app_update.dart'; // Import the in_app_update package
+import 'entry_page.dart'; // Import the entry page
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -492,7 +493,19 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                         );
                       },
                     ),
-               
+                  // Add Entry Page option for admin
+                  if (role == 'admin')
+                    ListTile(
+                      leading: const Icon(Icons.add_box, color: Colors.blue),
+                      title: const Text('Entry Page'),
+                      onTap: () {
+                        Navigator.pop(context); // Close the drawer
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => EntryPage()),
+                        );
+                      },
+                    ),
                   
                   ListTile(
                     leading: const Icon(Icons.logout, color: Colors.red), // Red for Log Out

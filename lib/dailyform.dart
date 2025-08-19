@@ -26,10 +26,6 @@ class _PerformanceFormState extends State<PerformanceForm> {
   // Meeting
   bool meetingAttended = false;
 
-  // 1. Add state variables for performance
-  bool? targetAchieved; // null = not selected, true/false = selected
-  bool? otherPerformance; // null = not selected, true/false = selected
-
   String? selectedUserId;
   String? selectedUserName;
   List<Map<String, dynamic>> branchUsers = [];
@@ -145,13 +141,6 @@ class _PerformanceFormState extends State<PerformanceForm> {
       'meeting': {
         'attended': meetingAttended,
       },
-      // 4. In your submitForm(), add to Firestore:
-      'performance': _isEndOfMonth()
-          ? {
-              'target': targetAchieved ?? false,
-              'otherPerformance': otherPerformance ?? false,
-            }
-          : null,
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -172,9 +161,6 @@ class _PerformanceFormState extends State<PerformanceForm> {
       selectedUserId = null;
       selectedUserName = null;
       isLoadingUsers = true;
-      // 5. In setState after submit, reset:
-      targetAchieved = null;
-      otherPerformance = null;
     });
     // Refresh user list to remove the just-filled user
     fetchBranchUsers();
@@ -305,34 +291,10 @@ class _PerformanceFormState extends State<PerformanceForm> {
                       ),
                       Divider(),
 
-                      Text('5) Performance (End of Month Only)', style: TextStyle(fontWeight: FontWeight.bold)),
-                      AbsorbPointer(
-                        absorbing: !_isEndOfMonth() || isApprovedLeave,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            CheckboxListTile(
-                              title: Text('Target Achieved '),
-                              value: targetAchieved ?? false,
-                              onChanged: (val) => setState(() => targetAchieved = val),
-                            ),
-                            CheckboxListTile(
-                              title: Text('Other Performance '),
-                              value: otherPerformance ?? false,
-                              onChanged: (val) => setState(() => otherPerformance = val),
-                            ),
-                            if (!_isEndOfMonth())
-                              Padding(
-                                padding: const EdgeInsets.only(left: 16.0, top: 4),
-                                child: Text(
-                                  "Performance can be filled only at the end of the month.",
-                                  style: TextStyle(color: Colors.red, fontSize: 13),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(height: 20),
+                      // REMOVE Performance section from UI
+                      // Text('5) Performance (End of Month Only)', ...),
+                      // AbsorbPointer(...),
+                      // SizedBox(height: 20),
                       ElevatedButton(
                         onPressed: selectedUserId == null ? null : submitForm,
                         child: Text('Submit'),

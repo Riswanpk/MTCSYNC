@@ -111,9 +111,6 @@ class _MonthlyPerformanceTablePageState extends State<MonthlyPerformanceTablePag
                       if (cat == 'Wear clean uniform') value = form['dressCode']?['cleanUniform'] != false;
                       if (cat == 'Keep inside') value = form['dressCode']?['keepInside'] != false;
                       if (cat == 'Keep your hair neat') value = form['dressCode']?['neatHair'] != false;
-                    } else if (sectionKey == 'performance') {
-                      if (cat == 'Target') value = form['performance']?['target'] == true;
-                      if (cat == 'Other performance') value = form['performance']?['otherPerformance'] == true;
                     } else if (sectionKey == 'attitude') {
                       if (cat == 'Greet with a warm smile') value = form['attitude']?['greetSmile'] != false;
                       if (cat == 'Ask about their needs') value = form['attitude']?['askNeeds'] != false;
@@ -189,11 +186,7 @@ class _MonthlyPerformanceTablePageState extends State<MonthlyPerformanceTablePag
               ['Wear clean uniform', 'Keep inside', 'Keep your hair neat'],
               'dressCode',
             ),
-            buildTableSection(
-              'PERFORMANCE (OUT OF 30)',
-              ['Target', 'Other performance'],
-              'performance',
-            ),
+            
             buildTableSection(
               'ATTITUDE (OUT OF 20)',
               [

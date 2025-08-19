@@ -105,10 +105,11 @@ class SettingsPage extends StatelessWidget {
         int rowIdx = 0;
         users.forEach((userId, forms) {
           final username = forms.first['userName'] ?? 'User';
+          // USER NAME HEADER
           sheet.cell(ex.CellIndex.indexByString("A${rowIdx + 1}")).value = ex.TextCellValue(username);
-          rowIdx++;
+          rowIdx += 2;
 
-          // Table headers
+          // WEEKLY SUMMARY TABLE HEADER
           final headers = [
             ex.TextCellValue('Week'),
             ex.TextCellValue('Attendance'),
@@ -123,40 +124,27 @@ class SettingsPage extends StatelessWidget {
             cell.cellStyle = ex.CellStyle(
               bold: true,
               backgroundColorHex: ex.ExcelColor.fromHexString("#D9EAD3"),
-              leftBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
-              rightBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
-              topBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
-              bottomBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
             );
           }
           rowIdx++;
 
-          // Group forms by week (Sunday-Saturday, week belongs to month of its Saturday)
+          // WEEKLY DATA
           Map<int, List<Map<String, dynamic>>> weekMap = {};
-          Map<int, DateTime> weekEndDates = {}; // For labeling and sorting
+          Map<int, DateTime> weekEndDates = {};
+          final now = DateTime.now();
 
           for (var form in forms) {
             final ts = form['timestamp'];
             final date = ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
-
-            // Find the previous Sunday for this date
             final prevSunday = date.subtract(Duration(days: date.weekday % 7));
-            // The Saturday of this week
             final thisSaturday = prevSunday.add(const Duration(days: 6));
-
-            // Only include weeks whose Saturday is in the current month/year
             if (thisSaturday.month != now.month || thisSaturday.year != now.year) continue;
-
-            // Week number: order by Saturday in month
-            final weekNum = thisSaturday.day; // or use a counter if you want W1, W2, etc.
-
-            // Use Saturday's date as key for sorting and labeling
+            final weekNum = thisSaturday.day;
             weekMap.putIfAbsent(weekNum, () => []);
             weekMap[weekNum]!.add(form);
             weekEndDates[weekNum] = thisSaturday;
           }
 
-          // Sort weeks by their Saturday date
           final sortedWeekNums = weekEndDates.keys.toList()..sort();
           double totalSum = 0;
           int weekCount = 0;
@@ -164,7 +152,6 @@ class SettingsPage extends StatelessWidget {
           for (int i = 0; i < sortedWeekNums.length; i++) {
             final weekNum = sortedWeekNums[i];
             final weekForms = weekMap[weekNum]!;
-            // Reset scores at the start of each week
             int attendance = 20, dress = 20, attitude = 20, meeting = 10;
 
             for (var form in weekForms) {
@@ -173,12 +160,17 @@ class SettingsPage extends StatelessWidget {
               else if (form['attendance'] == 'notApproved') attendance -= 10;
               // Dress Code
               if (form['dressCode']?['cleanUniform'] == false) dress -= 20;
+              if (form['dressCode']?['keepInside'] == false) dress -= 0;
+              if (form['dressCode']?['neatHair'] == false) dress -= 0;
               // Attitude
               if (form['attitude']?['greetSmile'] == false) attitude -= 20;
+              if (form['attitude']?['askNeeds'] == false) attitude -= 0;
+              if (form['attitude']?['helpFindProduct'] == false) attitude -= 0;
+              if (form['attitude']?['confirmPurchase'] == false) attitude -= 0;
+              if (form['attitude']?['offerHelp'] == false) attitude -= 0;
               // Meeting
               if (form['meeting']?['attended'] == false) meeting -= 1;
 
-              // Clamp to zero
               if (attendance < 0) attendance = 0;
               if (dress < 0) dress = 0;
               if (attitude < 0) attitude = 0;
@@ -190,7 +182,7 @@ class SettingsPage extends StatelessWidget {
             weekCount++;
 
             final row = [
-              ex.TextCellValue('W${i + 1}'), // Week 1, 2, ...
+              ex.TextCellValue('W${i + 1}'),
               ex.IntCellValue(attendance),
               ex.IntCellValue(dress),
               ex.IntCellValue(attitude),
@@ -200,20 +192,11 @@ class SettingsPage extends StatelessWidget {
             for (int j = 0; j < row.length; j++) {
               final cell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: j, rowIndex: rowIdx));
               cell.value = row[j];
-              cell.cellStyle = ex.CellStyle(
-                backgroundColorHex: j == 0
-                    ? ex.ExcelColor.fromHexString("#FFFFFF")
-                    : ex.ExcelColor.fromHexString(_getScoreColorHex(j, row[j] is ex.IntCellValue ? (row[j] as ex.IntCellValue).value : 0)),
-                leftBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
-                rightBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
-                topBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
-                bottomBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
-              );
             }
             rowIdx++;
           }
 
-          // Add average row (average of weekly totals)
+          // AVERAGE ROW
           final avg = weekCount > 0 ? totalSum / weekCount : 0;
           final avgRow = [
             ex.TextCellValue(''),
@@ -231,24 +214,129 @@ class SettingsPage extends StatelessWidget {
               backgroundColorHex: i == 3
                   ? ex.ExcelColor.fromHexString("#D9EAD3")
                   : ex.ExcelColor.fromHexString("#FFFFFF"),
-              leftBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
-              rightBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
-              topBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
-              bottomBorder: ex.Border(borderStyle: ex.BorderStyle.Thin, borderColorHex: ex.ExcelColor.fromHexString('#000000')),
             );
           }
-          rowIdx++;
+          rowIdx += 2;
 
-          // Show performance score below the average row (from last form with performance field)
-          final perfForms = forms.where((f) => f['performance'] != null).toList();
-          int performanceScore = 0;
-          if (perfForms.isNotEmpty) {
-            final perf = perfForms.last['performance'];
-            if (perf?['target'] == true) performanceScore += 15;
-            if (perf?['otherPerformance'] == true) performanceScore += 15;
+          // DETAILED DAILY TABLES (like your image)
+          final monthStart = DateTime(now.year, now.month, 1);
+          final monthEnd = DateTime(now.year, now.month + 1, 1);
+          final daysInMonth = monthEnd.difference(monthStart).inDays;
+          final dateRow = [ex.TextCellValue('Date')];
+          for (int d = 0; d < daysInMonth; d++) {
+            final date = monthStart.add(Duration(days: d));
+            dateRow.add(ex.TextCellValue('${date.day}-${date.month < 10 ? '0' : ''}${date.month}'));
           }
-          sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: rowIdx)).value = ex.TextCellValue('Performance');
-          sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: rowIdx)).value = ex.IntCellValue(performanceScore);
+
+          // Helper to get form for a specific date
+          Map<String, dynamic>? getFormForDate(List<Map<String, dynamic>> forms, DateTime date) {
+            return forms.firstWhere(
+              (form) {
+                final ts = form['timestamp'];
+                final formDate = ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
+                return formDate.year == date.year && formDate.month == date.month && formDate.day == date.day;
+              },
+              orElse: () => {},
+            );
+          }
+
+          // ATTENDANCE TABLE
+          sheet.appendRow([ex.TextCellValue('ATTENDANCE (OUT OF 20)')]);
+          sheet.appendRow([ex.TextCellValue('CATEGORY'), ...dateRow.skip(1)]);
+          final attendanceCats = ['Punching Time', 'Late time', 'Approved Leave'];
+          for (final cat in attendanceCats) {
+            final row = [ex.TextCellValue(cat)];
+            for (int d = 0; d < daysInMonth; d++) {
+              final date = monthStart.add(Duration(days: d));
+              final form = getFormForDate(forms, date);
+              bool? value;
+              if (form == null || form.isEmpty) {
+                row.add(ex.TextCellValue('-'));
+                continue;
+              }
+              if (cat == 'Punching Time') value = form['attendance'] == 'present';
+              if (cat == 'Late time') value = form['attendance'] == 'late';
+              if (cat == 'Approved Leave') value = form['attendance'] == 'approvedLeave';
+              row.add(ex.TextCellValue(value == null ? '-' : value ? '✔' : '✘'));
+            }
+            sheet.appendRow(row);
+          }
+          rowIdx += attendanceCats.length + 2;
+
+          // DRESS CODE TABLE
+          sheet.appendRow([ex.TextCellValue('DRESS CODE (OUT OF 20)')]);
+          sheet.appendRow([ex.TextCellValue('CATEGORY'), ...dateRow.skip(1)]);
+          final dressCats = ['Wear clean uniform', 'Keep inside', 'Keep your hair neat'];
+          for (final cat in dressCats) {
+            final row = [ex.TextCellValue(cat)];
+            for (int d = 0; d < daysInMonth; d++) {
+              final date = monthStart.add(Duration(days: d));
+              final form = getFormForDate(forms, date);
+              bool? value;
+              if (form == null || form.isEmpty) {
+                row.add(ex.TextCellValue('-'));
+                continue;
+              }
+              if (cat == 'Wear clean uniform') value = form['dressCode']?['cleanUniform'] != false;
+              if (cat == 'Keep inside') value = form['dressCode']?['keepInside'] != false;
+              if (cat == 'Keep your hair neat') value = form['dressCode']?['neatHair'] != false;
+              row.add(ex.TextCellValue(value == null ? '-' : value ? '✔' : '✘'));
+            }
+            sheet.appendRow(row);
+          }
+          rowIdx += dressCats.length + 2;
+
+          // ATTITUDE TABLE
+          sheet.appendRow([ex.TextCellValue('ATTITUDE (OUT OF 20)')]);
+          sheet.appendRow([ex.TextCellValue('CATEGORY'), ...dateRow.skip(1)]);
+          final attitudeCats = [
+            'Greet with a warm smile',
+            'Ask about their needs',
+            'Help find the right product',
+            'Confirm the purchase',
+            'Offer carry or delivery help'
+          ];
+          for (final cat in attitudeCats) {
+            final row = [ex.TextCellValue(cat)];
+            for (int d = 0; d < daysInMonth; d++) {
+              final date = monthStart.add(Duration(days: d));
+              final form = getFormForDate(forms, date);
+              bool? value;
+              if (form == null || form.isEmpty) {
+                row.add(ex.TextCellValue('-'));
+                continue;
+              }
+              if (cat == 'Greet with a warm smile') value = form['attitude']?['greetSmile'] != false;
+              if (cat == 'Ask about their needs') value = form['attitude']?['askNeeds'] != false;
+              if (cat == 'Help find the right product') value = form['attitude']?['helpFindProduct'] != false;
+              if (cat == 'Confirm the purchase') value = form['attitude']?['confirmPurchase'] != false;
+              if (cat == 'Offer carry or delivery help') value = form['attitude']?['offerHelp'] != false;
+              row.add(ex.TextCellValue(value == null ? '-' : value ? '✔' : '✘'));
+            }
+            sheet.appendRow(row);
+          }
+          rowIdx += attitudeCats.length + 2;
+
+          // MEETING TABLE
+          sheet.appendRow([ex.TextCellValue('MEETING (OUT OF 10)')]);
+          sheet.appendRow([ex.TextCellValue('CATEGORY'), ...dateRow.skip(1)]);
+          final meetingCats = ['Meeting'];
+          for (final cat in meetingCats) {
+            final row = [ex.TextCellValue(cat)];
+            for (int d = 0; d < daysInMonth; d++) {
+              final date = monthStart.add(Duration(days: d));
+              final form = getFormForDate(forms, date);
+              bool? value;
+              if (form == null || form.isEmpty) {
+                row.add(ex.TextCellValue('-'));
+                continue;
+              }
+              if (cat == 'Meeting') value = form['meeting']?['attended'] == true;
+              row.add(ex.TextCellValue(value == null ? '-' : value ? '✔' : '✘'));
+            }
+            sheet.appendRow(row);
+          }
+          rowIdx += meetingCats.length + 4; // Add some space before next user
         });
       });
 
