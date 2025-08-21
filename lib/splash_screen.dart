@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'home.dart';
 import 'login.dart';
+import 'main.dart'; // to access initialNotificationAction
+import 'presentfollowup.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -15,17 +17,22 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
 
+    // If launched from notification, do nothing (let main.dart handle navigation)
+    if (initialNotificationAction != null &&
+        initialNotificationAction!.buttonKeyPressed == 'EDIT_FOLLOWUP' &&
+        initialNotificationAction!.payload?['docId'] != null) {
+      return;
+    }
+
+    // Normal splash logic
     Future.delayed(const Duration(seconds: 3), () {
       final user = FirebaseAuth.instance.currentUser;
-
       if (user == null) {
-        // User not logged in
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const LoginPage()),
         );
       } else {
-        // User logged in
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const HomePage()),

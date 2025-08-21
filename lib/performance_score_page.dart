@@ -233,81 +233,80 @@ class _PerformanceScoreInnerPageState extends State<PerformanceScoreInnerPage> w
 
   // Example Dart function for weekly scoring
   Future<List<Map<String, dynamic>>> calculateWeeklyScores(List<Map<String, dynamic>> forms, DateTime now) async {
-    // Group forms by week (Sunday-Saturday, week belongs to month of its Saturday)
-    Map<DateTime, List<Map<String, dynamic>>> weekMap = {};
-    for (var form in forms) {
-      final ts = form['timestamp'];
-      final date = ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
+  // Group forms by ISO week number
+  Map<int, List<Map<String, dynamic>>> weekMap = {};
+  Map<int, DateTime> weekStartDates = {};
 
-      // Find the previous Sunday for this date
-      final prevSunday = date.subtract(Duration(days: date.weekday % 7));
-      // The Saturday of this week
-      final thisSaturday = prevSunday.add(const Duration(days: 6));
+  for (var form in forms) {
+    final ts = form['timestamp'];
+    final date = ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
+    int weekNum = isoWeekNumber(date);
 
-      // Only include weeks whose Saturday is in the current month/year
-      if (thisSaturday.month != now.month || thisSaturday.year != now.year) continue;
-
-      weekMap.putIfAbsent(thisSaturday, () => []);
-      weekMap[thisSaturday]!.add(form);
-    }
-
-    // Sort weeks by their Saturday date
-    final sortedSaturdays = weekMap.keys.toList()..sort();
-    List<Map<String, dynamic>> weeklyScores = [];
-
-    for (int i = 0; i < sortedSaturdays.length; i++) {
-      final weekForms = weekMap[sortedSaturdays[i]]!;
-      int attendance = 20, dress = 20, attitude = 20, meeting = 10;
-
-      for (var form in weekForms) {
-        // Attendance deductions (do NOT deduct for approved leave)
-        if (form['attendance'] == 'late') attendance -= 5;
-        else if (form['attendance'] == 'notApproved') attendance -= 10;
-        // Dress Code
-        if (form['dressCode']?['cleanUniform'] == false) dress -= 20;
-        // Attitude
-        if (form['attitude']?['greetSmile'] == false) attitude -= 20;
-        // Meeting
-        if (form['meeting']?['attended'] == false) meeting -= 1;
-
-        // Clamp to zero
-        if (attendance < 0) attendance = 0;
-        if (dress < 0) dress = 0;
-        if (attitude < 0) attitude = 0;
-        if (meeting < 0) meeting = 0;
-      }
-      int total = attendance + dress + attitude + meeting;
-      weeklyScores.add({
-        'weekLabel': 'W${i + 1}',
-        'attendance': attendance,
-        'dress': dress,
-        'attitude': attitude,
-        'meeting': meeting,
-        'total': total,
-        'weekEnd': sortedSaturdays[i],
-      });
-    }
-    return weeklyScores;
+    // Find the Monday of this ISO week
+    final monday = date.subtract(Duration(days: date.weekday - 1));
+    weekMap.putIfAbsent(weekNum, () => []);
+    weekMap[weekNum]!.add(form);
+    weekStartDates[weekNum] = monday;
   }
 
+  final sortedWeekNums = weekMap.keys.toList()..sort();
+  List<Map<String, dynamic>> weeklyScores = [];
+
+  for (int i = 0; i < sortedWeekNums.length; i++) {
+    final weekNum = sortedWeekNums[i];
+    final weekForms = weekMap[weekNum]!;
+    int attendance = 20, dress = 20, attitude = 20, meeting = 10;
+
+    for (var form in weekForms) {
+      // Attendance deductions (do NOT deduct for approved leave)
+      if (form['attendance'] == 'late') attendance -= 5;
+      else if (form['attendance'] == 'notApproved') attendance -= 10;
+      // Dress Code
+      if (form['dressCode']?['cleanUniform'] == false) dress -= 20;
+      // Attitude
+      if (form['attitude']?['greetSmile'] == false) attitude -= 20;
+      // Meeting
+      if (form['meeting']?['attended'] == false) meeting -= 1;
+
+      // Clamp to zero
+      if (attendance < 0) attendance = 0;
+      if (dress < 0) dress = 0;
+      if (attitude < 0) attitude = 0;
+      if (meeting < 0) meeting = 0;
+    }
+    int total = attendance + dress + attitude + meeting;
+    weeklyScores.add({
+      'weekLabel': 'W$weekNum',
+      'attendance': attendance,
+      'dress': dress,
+      'attitude': attitude,
+      'meeting': meeting,
+      'total': total,
+      'weekStart': weekStartDates[weekNum],
+    });
+  }
+  return weeklyScores;
+}
+
   List<Map<String, dynamic>> getCurrentWeekForms(List<Map<String, dynamic>> forms, DateTime now) {
-    // Find today
+    // Find ISO week number for today
     final today = DateTime(now.year, now.month, now.day);
+    final currentWeekNum = isoWeekNumber(today);
 
-    // Find the previous Sunday for today
-    final prevSunday = today.subtract(Duration(days: today.weekday % 7));
-    // The Saturday of this week
-    final thisSaturday = prevSunday.add(const Duration(days: 6));
-
-    // Only if this Saturday is in the current month/year, consider this week as current
-    if (thisSaturday.month != now.month || thisSaturday.year != now.year) return [];
-
-    // Return forms in this week (from prevSunday to thisSaturday)
+    // Return forms in this ISO week
     return forms.where((form) {
       final ts = form['timestamp'];
       final date = ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
-      return !date.isBefore(prevSunday) && !date.isAfter(thisSaturday);
+      return isoWeekNumber(date) == currentWeekNum && date.year == today.year;
     }).toList();
+  }
+
+  int isoWeekNumber(DateTime date) {
+    // ISO week starts on Monday, week 1 is the week with the first Thursday of the year
+    final thursday = date.subtract(Duration(days: (date.weekday + 6) % 7 - 3));
+    final firstThursday = DateTime(date.year, 1, 4);
+    final diff = thursday.difference(firstThursday).inDays ~/ 7;
+    return 1 + diff;
   }
 
   @override
@@ -441,7 +440,7 @@ class _PerformanceScorePageState extends State<PerformanceScorePage> {
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.score),
-            label: 'Score',
+            label: 'My Score',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.table_chart),

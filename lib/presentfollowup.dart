@@ -1,10 +1,12 @@
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PresentFollowUp extends StatefulWidget {
   final String docId;
+  final bool editMode; // <-- Add this
 
-  const PresentFollowUp({super.key, required this.docId});
+  const PresentFollowUp({super.key, required this.docId, this.editMode = false}); // <-- Default false
 
   @override
   State<PresentFollowUp> createState() => _PresentFollowUpState();
@@ -28,6 +30,8 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
   String? _branch;
   String? _date;
 
+  DateTime? _selectedDate;
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -49,6 +53,36 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
     _status = data['status'];
     _branch = data['branch'];
     _date = data['date'];
+    if (_date != null && _date!.isNotEmpty) {
+      _selectedDate = DateTime.tryParse(_date!);
+    }
+  }
+
+  Future<void> _pickReminderTime(BuildContext context) async {
+    final initialTime = TimeOfDay.now();
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+    );
+    if (picked != null) {
+      _reminderController.text = picked.format(context);
+    }
+  }
+
+  Future<void> _pickDate(BuildContext context) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? now,
+      firstDate: DateTime(now.year - 2),
+      lastDate: DateTime(now.year + 2),
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedDate = picked;
+        _date = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+      });
+    }
   }
 
   Future<void> _saveEdits() async {
@@ -92,6 +126,65 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
         }
       }
 
+      // --- Schedule or reschedule local notification for reminder ---
+      if (_reminderController.text.isNotEmpty && _selectedDate != null) {
+        final reminderTime = _reminderController.text;
+        final timeParts = reminderTime.split(':');
+        int hour = 9;
+        int minute = 0;
+        if (timeParts.length >= 2) {
+          hour = int.tryParse(timeParts[0]) ?? 9;
+          minute = int.tryParse(timeParts[1].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+        }
+        // If AM/PM format, adjust hour
+        if (reminderTime.toLowerCase().contains('pm') && hour < 12) hour += 12;
+        if (reminderTime.toLowerCase().contains('am') && hour == 12) hour = 0;
+
+        final scheduledDateTime = DateTime(
+          _selectedDate!.year,
+          _selectedDate!.month,
+          _selectedDate!.day,
+          hour,
+          minute,
+        );
+
+        // Cancel previous notification for this follow-up (if any)
+        await AwesomeNotifications().cancelSchedule(int.tryParse(widget.docId.hashCode.toString().substring(0, 7)) ?? 0);
+
+        // Schedule new notification with action button
+        await AwesomeNotifications().createNotification(
+          content: NotificationContent(
+            id: int.tryParse(widget.docId.hashCode.toString().substring(0, 7)) ?? 0,
+            channelKey: 'basic_channel',
+            title: 'Follow-up Reminder',
+            body: 'Reminder for ${_nameController.text}',
+            notificationLayout: NotificationLayout.Default,
+            payload: {
+              'docId': widget.docId,
+              'action': 'edit_followup'
+            },
+          ),
+          actionButtons: [
+            NotificationActionButton(
+              key: 'EDIT_FOLLOWUP',
+              label: 'Edit',
+              autoDismissible: true,
+            ),
+          ],
+          schedule: NotificationCalendar(
+            year: scheduledDateTime.year,
+            month: scheduledDateTime.month,
+            day: scheduledDateTime.day,
+            hour: scheduledDateTime.hour,
+            minute: scheduledDateTime.minute,
+            second: 0,
+            millisecond: 0,
+            repeats: false,
+            preciseAlarm: true,
+          ),
+        );
+      }
+
       setState(() {
         _isEditing = false;
         _data = updatedData;
@@ -112,15 +205,10 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
     }
   }
 
-  Future<void> _pickReminderTime(BuildContext context) async {
-    final initialTime = TimeOfDay.now();
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: initialTime,
-    );
-    if (picked != null) {
-      _reminderController.text = picked.format(context);
-    }
+  @override
+  void initState() {
+    super.initState();
+    _isEditing = widget.editMode; // <-- Set edit mode from widget
   }
 
   @override
@@ -174,27 +262,38 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Edit Lead', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+                        Text('Edit Lead', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black)),
                         const SizedBox(height: 20),
-                        _editField('Name', _nameController, isDark),
-                        _editField('Company', _companyController, isDark),
-                        _editField('Address', _addressController, isDark),
-                        _editField('Phone', _phoneController, isDark, keyboardType: TextInputType.phone),
-                        _editField('Comments', _commentsController, isDark, maxLines: 2),
+                        _editField('Name', _nameController, Theme.of(context).brightness == Brightness.dark),
+                        _editField('Company', _companyController, Theme.of(context).brightness == Brightness.dark),
+                        _editField('Address', _addressController, Theme.of(context).brightness == Brightness.dark),
+                        _editField('Phone', _phoneController, Theme.of(context).brightness == Brightness.dark, keyboardType: TextInputType.phone),
+                        _editField('Comments', _commentsController, Theme.of(context).brightness == Brightness.dark, maxLines: 2),
                         const SizedBox(height: 12),
-                        _editDropdown('Status', ['In Progress', 'Completed'], _status, (val) => setState(() => _status = val), isDark),
+                        _editDropdown('Status', ['In Progress', 'Completed'], _status, (val) => setState(() => _status = val), Theme.of(context).brightness == Brightness.dark),
                         const SizedBox(height: 12),
                         _editField(
                           'Reminder',
                           _reminderController,
-                          isDark,
+                          Theme.of(context).brightness == Brightness.dark,
                           readOnly: true,
                           onTap: () => _pickReminderTime(context),
                           suffixIcon: const Icon(Icons.access_time),
                         ),
                         const SizedBox(height: 12),
-                        _editField('Branch', TextEditingController(text: _branch ?? ''), isDark, enabled: false),
-                        _editField('Date', TextEditingController(text: _date ?? ''), isDark, enabled: false),
+                        GestureDetector(
+                          onTap: () => _pickDate(context),
+                          child: AbsorbPointer(
+                            child: _editField(
+                              'Date',
+                              TextEditingController(text: _date ?? ''),
+                              Theme.of(context).brightness == Brightness.dark,
+                              readOnly: true,
+                              suffixIcon: const Icon(Icons.calendar_today),
+                            ),
+                          ),
+                        ),
+                        _editField('Branch', TextEditingController(text: _branch ?? ''), Theme.of(context).brightness == Brightness.dark, enabled: false),
                         const SizedBox(height: 24),
                         SizedBox(
                           width: double.infinity,

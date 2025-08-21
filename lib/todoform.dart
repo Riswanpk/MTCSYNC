@@ -93,7 +93,21 @@ class _TodoFormPageState extends State<TodoFormPage> {
   Future<void> _saveTodo() async {
     final title = _titleController.text.trim();
     final desc = _descController.text.trim();
-    if (title.isEmpty || desc.isEmpty || _priority.isEmpty) return;
+
+    if (title.isEmpty || desc.isEmpty || _priority.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill all required fields')),
+      );
+      return;
+    }
+
+    // 🔴 Make reminder mandatory
+    if (_selectedReminderDate == null || _selectedReminderTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a reminder date & time')),
+      );
+      return;
+    }
 
     setState(() => _isSaving = true);
 
@@ -114,32 +128,30 @@ class _TodoFormPageState extends State<TodoFormPage> {
     String? assignedByName;
 
     if (_currentUserRole == 'manager' && _selectedSalesUserId != null) {
-      // Assign to selected sales user
       final salesUser = _salesUsers.firstWhere(
         (u) => u['uid'] == _selectedSalesUserId,
         orElse: () => {},
       );
       email = salesUser['email'] ?? '';
-      createdBy = user.uid; // Manager is creator
+      createdBy = user.uid;
       assignedBy = user.uid;
       assignedByName = (await FirebaseFirestore.instance.collection('users').doc(user.uid).get()).data()?['username'] ?? '';
       assignedTo = salesUser['uid'];
       assignedToName = salesUser['username'];
-
-      // Do NOT show assignment notification here for manager
     } else {
-      // Assign to self (manager)
       final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       email = userDoc.data()?['email'] ?? user.email ?? 'unknown@example.com';
       createdBy = user.uid;
-      assignedBy = null;
-      assignedByName = null;
-      assignedTo = null;
-      assignedToName = null;
     }
 
-    // Prepare reminder
-    String? reminderText = _reminderController.text.trim().isEmpty ? null : _reminderController.text.trim();
+    // ✅ Reminder is always required now
+    final scheduledDate = DateTime(
+      _selectedReminderDate!.year,
+      _selectedReminderDate!.month,
+      _selectedReminderDate!.day,
+      _selectedReminderTime!.hour,
+      _selectedReminderTime!.minute,
+    );
 
     final todoRef = await FirebaseFirestore.instance.collection('todo').add({
       'title': title,
@@ -153,11 +165,11 @@ class _TodoFormPageState extends State<TodoFormPage> {
       if (assignedByName != null) 'assigned_by_name': assignedByName,
       if (assignedTo != null) 'assigned_to': assignedTo,
       if (assignedToName != null) 'assigned_to_name': assignedToName,
-      if (reminderText != null) 'reminder': reminderText,
-      if (assignedBy != null) 'assignment_seen': false, // Mark as unseen for sales user
+      'reminder': scheduledDate.toIso8601String(), // 🔒 Always saved
+      if (assignedBy != null) 'assignment_seen': false,
     });
 
-    // Add to daily_report only if created between 7pm-11:59pm or 12am-12pm
+    // Daily report logic
     final now = DateTime.now();
     final hour = now.hour;
     if ((hour >= 13 && hour <= 23) || (hour >= 0 && hour < 12)) {
@@ -169,17 +181,8 @@ class _TodoFormPageState extends State<TodoFormPage> {
       });
     }
 
-    // Schedule notification if reminder is set (still uses awesome_notifications)
-    if (_selectedReminderDate != null && _selectedReminderTime != null && reminderText != null) {
-      final scheduledDate = DateTime(
-        _selectedReminderDate!.year,
-        _selectedReminderDate!.month,
-        _selectedReminderDate!.day,
-        _selectedReminderTime!.hour,
-        _selectedReminderTime!.minute,
-      );
-      await _scheduleNotification(scheduledDate, title);
-    }
+    // 🔔 Always schedule notification (since mandatory)
+    await _scheduleNotification(scheduledDate, title);
 
     setState(() => _isSaving = false);
     Navigator.pop(context);
@@ -313,6 +316,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
                     child: Row(
                       children: [
                         _priorityDot('High'),
+                        const SizedBox(width: 6),
                         const Text('High'),
                       ],
                     ),
@@ -322,6 +326,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
                     child: Row(
                       children: [
                         _priorityDot('Medium'),
+                        const SizedBox(width: 6),
                         const Text('Medium'),
                       ],
                     ),
@@ -331,6 +336,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
                     child: Row(
                       children: [
                         _priorityDot('Low'),
+                        const SizedBox(width: 6),
                         const Text('Low'),
                       ],
                     ),
@@ -339,7 +345,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
                 onChanged: (val) => setState(() => _priority = val!),
               ),
               const SizedBox(height: 18),
-              Text('Reminder (optional)', style: TextStyle(color: labelColor, fontWeight: FontWeight.bold)),
+              Text('Reminder (required)', style: TextStyle(color: labelColor, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               TextField(
                 controller: _reminderController,
@@ -385,7 +391,9 @@ class _TodoFormPageState extends State<TodoFormPage> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _isSaving ? null : _saveTodo,
+                  onPressed: (_isSaving || _selectedReminderDate == null || _selectedReminderTime == null)
+                      ? null
+                      : _saveTodo,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryGreen,
                     foregroundColor: Colors.white,

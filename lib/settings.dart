@@ -130,22 +130,22 @@ class SettingsPage extends StatelessWidget {
 
           // WEEKLY DATA
           Map<int, List<Map<String, dynamic>>> weekMap = {};
-          Map<int, DateTime> weekEndDates = {};
-          final now = DateTime.now();
+          Map<int, String> weekLabels = {};
 
           for (var form in forms) {
             final ts = form['timestamp'];
             final date = ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
-            final prevSunday = date.subtract(Duration(days: date.weekday % 7));
-            final thisSaturday = prevSunday.add(const Duration(days: 6));
-            if (thisSaturday.month != now.month || thisSaturday.year != now.year) continue;
-            final weekNum = thisSaturday.day;
-            weekMap.putIfAbsent(weekNum, () => []);
-            weekMap[weekNum]!.add(form);
-            weekEndDates[weekNum] = thisSaturday;
+            // Week of month: 1 = days 1-7, 2 = 8-14, 3 = 15-21, 4 = 22-28, 5 = 29+
+            int weekOfMonth = ((date.day - 1) ~/ 7) + 1;
+            weekMap.putIfAbsent(weekOfMonth, () => []);
+            weekMap[weekOfMonth]!.add(form);
+            // Label for the week (e.g., "14-Aug to 20-Aug")
+            final weekStart = DateTime(date.year, date.month, (weekOfMonth - 1) * 7 + 1);
+            final weekEnd = DateTime(date.year, date.month, min(weekOfMonth * 7, DateUtils.getDaysInMonth(date.year, date.month)));
+            weekLabels[weekOfMonth] = "${weekStart.day}-${_monthShort(weekStart.month)} to ${weekEnd.day}-${_monthShort(weekEnd.month)}";
           }
 
-          final sortedWeekNums = weekEndDates.keys.toList()..sort();
+          final sortedWeekNums = weekMap.keys.toList()..sort();
           double totalSum = 0;
           int weekCount = 0;
 
@@ -182,7 +182,7 @@ class SettingsPage extends StatelessWidget {
             weekCount++;
 
             final row = [
-              ex.TextCellValue('W${i + 1}'),
+              ex.TextCellValue('Week $weekNum\n${weekLabels[weekNum]}'),
               ex.IntCellValue(attendance),
               ex.IntCellValue(dress),
               ex.IntCellValue(attitude),
@@ -216,7 +216,7 @@ class SettingsPage extends StatelessWidget {
                   : ex.ExcelColor.fromHexString("#FFFFFF"),
             );
           }
-          rowIdx += 2;
+          rowIdx += 2; // <-- Leave at least 2 rows space before monthly table
 
           // DETAILED DAILY TABLES (like your image)
           final monthStart = DateTime(now.year, now.month, 1);
@@ -367,6 +367,22 @@ class SettingsPage extends StatelessWidget {
         SnackBar(content: Text('Failed to send Excel: $e')),
       );
     }
+  }
+
+  String _monthShort(int month) {
+    const months = [
+      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return months[month];
+  }
+
+  int isoWeekNumber(DateTime date) {
+    // ISO week starts on Monday, week 1 is the week with the first Thursday of the year
+    final thursday = date.subtract(Duration(days: (date.weekday + 6) % 7 - 3));
+    final firstThursday = DateTime(date.year, 1, 4);
+    final diff = thursday.difference(firstThursday).inDays ~/ 7;
+    return 1 + diff;
   }
 
   @override
