@@ -112,14 +112,14 @@ class MyApp extends StatelessWidget {
 
           /// ✅ Handle deep links and splash properly
           onGenerateRoute: (settings) {
-            // If app launched from a notification with EDIT_FOLLOWUP
+            // If app launched from a notification
             if (initialNotificationAction != null &&
-                initialNotificationAction!.buttonKeyPressed == 'EDIT_FOLLOWUP' &&
                 initialNotificationAction!.payload?['docId'] != null) {
               final docId = initialNotificationAction!.payload!['docId']!;
+              final isEdit = initialNotificationAction!.buttonKeyPressed == 'EDIT_FOLLOWUP';
               initialNotificationAction = null; // Clear after handling
               return MaterialPageRoute(
-                builder: (context) => PresentFollowUp(docId: docId, editMode: true),
+                builder: (context) => PresentFollowUp(docId: docId, editMode: isEdit),
                 settings: settings,
               );
             }
@@ -170,12 +170,17 @@ class _UpdateGateState extends State<UpdateGate> {
 class NotificationController {
   @pragma("vm:entry-point")
   static Future<void> onActionReceivedMethod(ReceivedAction receivedAction) async {
-    initialNotificationAction = receivedAction;
-
-    if (receivedAction.buttonKeyPressed == 'EDIT_FOLLOWUP' &&
+    // If user taps the notification (not Edit button), go to PresentFollowUp
+    if (receivedAction.buttonKeyPressed == null &&
         receivedAction.payload?['docId'] != null) {
-      // Just store the action, let SplashScreen handle navigation
       initialNotificationAction = receivedAction;
+      // Navigation will be handled by SplashScreen/MyApp
+    }
+    // If user taps Edit button, also go to PresentFollowUp in edit mode
+    else if (receivedAction.buttonKeyPressed == 'EDIT_FOLLOWUP' &&
+        receivedAction.payload?['docId'] != null) {
+      initialNotificationAction = receivedAction;
+      // Navigation will be handled by SplashScreen/MyApp
     }
   }
 
@@ -204,6 +209,13 @@ class NotificationController {
           body: 'Follow-up reminder for $docId',
           payload: {'docId': docId},
         ),
+        actionButtons: [
+          NotificationActionButton(
+            key: 'EDIT_FOLLOWUP',
+            label: 'Edit',
+            autoDismissible: true,
+          ),
+        ],
         schedule: NotificationCalendar.fromDate(
           date: DateTime.now().add(const Duration(minutes: 30)),
         ),

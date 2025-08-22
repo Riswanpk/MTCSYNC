@@ -109,15 +109,16 @@ class _FollowUpFormState extends State<FollowUpForm> {
       }, SetOptions(merge: true));
 
       // ✅ Trigger immediate notification
-      await AwesomeNotifications().createNotification(
-        content: NotificationContent(
-          id: DateTime.now().millisecondsSinceEpoch.remainder(100000), // unique ID
-          channelKey: 'reminder_channel',
-          title: 'Follow-Up Saved',
-          body: 'Reminder for ${_nameController.text.trim()} saved successfully.',
-          notificationLayout: NotificationLayout.Default,
-        ),
-      );
+      // REMOVE THIS BLOCK:
+      // await AwesomeNotifications().createNotification(
+      //   content: NotificationContent(
+      //     id: DateTime.now().millisecondsSinceEpoch.remainder(100000), // unique ID
+      //     channelKey: 'reminder_channel',
+      //     title: 'Follow-Up Saved',
+      //     body: 'Reminder for ${_nameController.text.trim()} saved successfully.',
+      //     notificationLayout: NotificationLayout.Default,
+      //   ),
+      // );
       if (_selectedReminderTime != null && _reminderController.text.isNotEmpty) {
         final reminderParts = _reminderController.text.split(' ');
         final datePart = reminderParts[0].split('-');
@@ -130,15 +131,25 @@ class _FollowUpFormState extends State<FollowUpForm> {
           _selectedReminderTime!.minute,
         );
 
-        // Schedule notification
+        // Schedule notification with Edit button and docId payload
         await AwesomeNotifications().createNotification(
           content: NotificationContent(
             id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-            channelKey: 'reminder_channel',
+            channelKey: 'basic_channel', // Use basic_channel for consistency
             title: 'Follow-Up Reminder',
             body: 'Reminder for ${_nameController.text.trim()} - ${_companyController.text.trim()}',
             notificationLayout: NotificationLayout.Default,
+            payload: {
+              'docId': followUpRef.id,
+            },
           ),
+          actionButtons: [
+            NotificationActionButton(
+              key: 'EDIT_FOLLOWUP',
+              label: 'Edit',
+              autoDismissible: true,
+            ),
+          ],
           schedule: NotificationCalendar(
             year: scheduledDate.year,
             month: scheduledDate.month,
