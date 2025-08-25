@@ -152,30 +152,59 @@ class SettingsPage extends StatelessWidget {
           for (int i = 0; i < sortedWeekNums.length; i++) {
             final weekNum = sortedWeekNums[i];
             final weekForms = weekMap[weekNum]!;
+
             int attendance = 20, dress = 20, attitude = 20, meeting = 10;
 
+            // Group forms by day (yyyy-mm-dd)
+            final formsByDay = <String, Map<String, dynamic>>{};
             for (var form in weekForms) {
-              // Attendance deductions (do NOT deduct for approved leave)
-              if (form['attendance'] == 'late') attendance -= 5;
-              else if (form['attendance'] == 'notApproved') attendance -= 10;
-              // Dress Code
-              if (form['dressCode']?['cleanUniform'] == false) dress -= 20;
-              if (form['dressCode']?['keepInside'] == false) dress -= 0;
-              if (form['dressCode']?['neatHair'] == false) dress -= 0;
-              // Attitude
-              if (form['attitude']?['greetSmile'] == false) attitude -= 20;
-              if (form['attitude']?['askNeeds'] == false) attitude -= 0;
-              if (form['attitude']?['helpFindProduct'] == false) attitude -= 0;
-              if (form['attitude']?['confirmPurchase'] == false) attitude -= 0;
-              if (form['attitude']?['offerHelp'] == false) attitude -= 0;
-              // Meeting
-              if (form['meeting']?['attended'] == false) meeting -= 1;
-
-              if (attendance < 0) attendance = 0;
-              if (dress < 0) dress = 0;
-              if (attitude < 0) attitude = 0;
-              if (meeting < 0) meeting = 0;
+              final ts = form['timestamp'];
+              final date = ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
+              final key = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+              formsByDay[key] = form;
             }
+
+            for (var form in formsByDay.values) {
+              final att = form['attendance'];
+              if (att == 'late') {
+                attendance -= 5;
+              } else if (att == 'notApproved') {
+                attendance -= 10;
+              }
+              // No deduction for 'punching' or 'approved'
+
+              // Dress
+              if (att == 'approved' || att == 'notApproved') {
+                // skip deduction for any leave
+              } else {
+                if (form['dressCode']?['cleanUniform'] == false) dress -= 5;
+                if (form['dressCode']?['keepInside'] == false) dress -= 5;
+                if (form['dressCode']?['neatHair'] == false) dress -= 5;
+              }
+
+              // Attitude
+              if (att == 'approved' || att == 'notApproved') {
+                // skip deduction for any leave
+              } else {
+                if (form['attitude']?['greetSmile'] == false) attitude -= 2;
+                if (form['attitude']?['askNeeds'] == false) attitude -= 2;
+                if (form['attitude']?['helpFindProduct'] == false) attitude -= 2;
+                if (form['attitude']?['confirmPurchase'] == false) attitude -= 2;
+                if (form['attitude']?['offerHelp'] == false) attitude -= 2;
+              }
+
+              // Meeting
+              if (att == 'approved' || att == 'notApproved') {
+                // skip deduction for any leave
+              } else {
+                if (form['meeting']?['attended'] == false) meeting -= 1;
+              }
+            }
+
+            if (attendance < 0) attendance = 0;
+            if (dress < 0) dress = 0;
+            if (attitude < 0) attitude = 0;
+            if (meeting < 0) meeting = 0;
 
             int weekTotal = attendance + dress + attitude + meeting;
             totalSum += weekTotal;
@@ -243,7 +272,7 @@ class SettingsPage extends StatelessWidget {
           // ATTENDANCE TABLE
           sheet.appendRow([ex.TextCellValue('ATTENDANCE (OUT OF 20)')]);
           sheet.appendRow([ex.TextCellValue('CATEGORY'), ...dateRow.skip(1)]);
-          final attendanceCats = ['Punching Time', 'Late time', 'Approved Leave'];
+          final attendanceCats = ['Punching Time', 'Late time', 'Approved Leave', 'Unapproved Leave'];
           for (final cat in attendanceCats) {
             final row = [ex.TextCellValue(cat)];
             for (int d = 0; d < daysInMonth; d++) {
@@ -254,9 +283,10 @@ class SettingsPage extends StatelessWidget {
                 row.add(ex.TextCellValue('-'));
                 continue;
               }
-              if (cat == 'Punching Time') value = form['attendance'] == 'present';
+              if (cat == 'Punching Time') value = form['attendance'] == 'punching';
               if (cat == 'Late time') value = form['attendance'] == 'late';
-              if (cat == 'Approved Leave') value = form['attendance'] == 'approvedLeave';
+              if (cat == 'Approved Leave') value = form['attendance'] == 'approved';
+              if (cat == 'Unapproved Leave') value = form['attendance'] == 'notApproved';
               row.add(ex.TextCellValue(value == null ? '-' : value ? '✔' : '✘'));
             }
             sheet.appendRow(row);
@@ -351,7 +381,7 @@ class SettingsPage extends StatelessWidget {
       final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
       final message = Message()
         ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
-        ..recipients.add('crmmalabar@gmail.com')
+        ..recipients.addAll(['crmmalabar@gmail.com' ])
         ..subject = 'Monthly Sales Performance Report'
         ..text = 'Please find attached the monthly sales performance report.'
         ..attachments = [FileAttachment(file)];

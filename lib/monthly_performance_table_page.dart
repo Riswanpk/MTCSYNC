@@ -104,9 +104,16 @@ class _MonthlyPerformanceTablePageState extends State<MonthlyPerformanceTablePag
                     bool? value;
                     if (form == null || form.isEmpty) return const DataCell(Text('-', style: TextStyle(fontSize: 11)));
                     if (sectionKey == 'attendance') {
-                      if (cat == 'Punching Time') value = form['attendance'] == 'present';
-                      if (cat == 'Late time') value = form['attendance'] == 'late';
-                      if (cat == 'Approved Leave') value = form['attendance'] == 'approvedLeave';
+                      String att = form['attendance'] ?? '';
+                      if (cat == 'Punching Time') {
+                        value = att == 'punching' ? true : null;
+                      } else if (cat == 'Late time') {
+                        value = att == 'late' ? true : null;
+                      } else if (cat == 'Approved Leave') {
+                        value = att == 'approved' ? true : null;
+                      } else if (cat == 'Unapproved Leave') {
+                        value = att == 'notApproved' ? true : null;
+                      }
                     } else if (sectionKey == 'dressCode') {
                       if (cat == 'Wear clean uniform') value = form['dressCode']?['cleanUniform'] != false;
                       if (cat == 'Keep inside') value = form['dressCode']?['keepInside'] != false;
@@ -178,7 +185,7 @@ class _MonthlyPerformanceTablePageState extends State<MonthlyPerformanceTablePag
             ),
             buildTableSection(
               'ATTENDANCE (OUT OF 20)',
-              ['Punching Time', 'Late time', 'Approved Leave'],
+              ['Punching Time', 'Late time', 'Approved Leave', 'Unapproved Leave'],
               'attendance',
             ),
             buildTableSection(

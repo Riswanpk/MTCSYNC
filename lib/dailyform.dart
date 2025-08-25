@@ -119,6 +119,9 @@ class _PerformanceFormState extends State<PerformanceForm> {
     final managerDoc = await FirebaseFirestore.instance.collection('users').doc(currentUser.uid).get();
     final managerName = managerDoc.data()?['username'] ?? managerDoc.data()?['email'] ?? 'Manager';
 
+    // If leave, set all other fields to true
+    bool isLeave = attendanceStatus == 'approved' || attendanceStatus == 'notApproved';
+
     await FirebaseFirestore.instance.collection('dailyform').add({
       'userId': selectedUserId,
       'userName': selectedUserName,
@@ -127,19 +130,19 @@ class _PerformanceFormState extends State<PerformanceForm> {
       'timestamp': FieldValue.serverTimestamp(),
       'attendance': attendanceStatus,
       'dressCode': {
-        'cleanUniform': cleanUniform,
-        'keepInside': keepInside,
-        'neatHair': neatHair,
+        'cleanUniform': isLeave ? true : cleanUniform,
+        'keepInside': isLeave ? true : keepInside,
+        'neatHair': isLeave ? true : neatHair,
       },
       'attitude': {
-        'greetSmile': greetSmile,
-        'askNeeds': askNeeds,
-        'helpFindProduct': helpFindProduct,
-        'confirmPurchase': confirmPurchase,
-        'offerHelp': offerHelp,
+        'greetSmile': isLeave ? true : greetSmile,
+        'askNeeds': isLeave ? true : askNeeds,
+        'helpFindProduct': isLeave ? true : helpFindProduct,
+        'confirmPurchase': isLeave ? true : confirmPurchase,
+        'offerHelp': isLeave ? true : offerHelp,
       },
       'meeting': {
-        'attended': meetingAttended,
+        'attended': isLeave ? true : meetingAttended,
       },
     });
 

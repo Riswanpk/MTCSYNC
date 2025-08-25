@@ -58,96 +58,42 @@ class _PerformanceScoreInnerPageState extends State<PerformanceScoreInnerPage> w
 
   int calculateAttendanceMarks(List<Map<String, dynamic>> dailyForms) {
     int marks = 20;
-    int lateCount = 0;
-    int notApprovedCount = 0;
-
     for (var form in dailyForms) {
       final att = form['attendance'];
-      if (att is String) {
-        if (att == 'late') lateCount++;
-        if (att == 'notApproved') notApprovedCount++;
-      } else if (att is Map) {
-        if (att['status'] == 'late') lateCount++;
-        if (att['status'] == 'notApproved') notApprovedCount++;
-        if (att['lateTime'] == true) lateCount++;
-        if (att['notApproved'] == true) notApprovedCount++;
+      if (att == 'late') {
+        marks -= 5;
+      } else if (att == 'notApproved') {
+        marks -= 10;
       }
+      // No deduction for 'punching' or 'approved'
     }
-
-    int latePenalty = 0;
-    if (lateCount > 2) {
-      latePenalty = (lateCount - 2) * 5;
-      lateReduced = true;
-    }
-    int notApprovedPenalty = notApprovedCount * 10;
-    if (notApprovedCount > 0) notApprovedReduced = true;
-
-    marks -= (latePenalty + notApprovedPenalty);
     if (marks < 0) marks = 0;
     return marks;
   }
 
   int calculateDressCodeMarks(List<Map<String, dynamic>> dailyForms) {
     int marks = 20;
-    int falseCount = 0;
-    dressReasons.clear();
     for (var form in dailyForms) {
-      if (form['dressCode']?['cleanUniform'] == false) {
-        dressReduced = true;
-        if (!dressReasons.contains("Wear clean uniform")) {
-          dressReasons.add("Wear clean uniform");
-        }
-        falseCount++;
-      }
-      if (form['dressCode']?['keepInside'] == false) falseCount++;
-      if (form['dressCode']?['neatHair'] == false) falseCount++;
+      final att = form['attendance'];
+      if (att == 'approved' || att == 'notApproved') continue;
+      if (form['dressCode']?['cleanUniform'] == false) marks -= 5;
+      if (form['dressCode']?['keepInside'] == false) marks -= 5;
+      if (form['dressCode']?['neatHair'] == false) marks -= 5;
     }
-    marks -= falseCount * 5;
     if (marks < 0) marks = 0;
     return marks;
   }
 
   int calculateAttitudeMarks(List<Map<String, dynamic>> dailyForms) {
     int marks = 20;
-    // Reset attitude reasons
-    attitudeReasons.clear();
     for (var form in dailyForms) {
-      final attitude = form['attitude'];
-      if (attitude?['greetSmile'] == false) {
-        attitudeReduced = true;
-        if (!attitudeReasons.contains("Greet customers with a warm smile")) {
-          attitudeReasons.add("Greet customers with a warm smile");
-        }
-        marks -= 2;
-      }
-      if (attitude?['askNeeds'] == false) {
-        attitudeReduced = true;
-        if (!attitudeReasons.contains("Ask about their needs")) {
-          attitudeReasons.add("Ask about their needs");
-        }
-        marks -= 2;
-      }
-      if (attitude?['helpFindProduct'] == false) {
-        attitudeReduced = true;
-        if (!attitudeReasons.contains("Help find the right product")) {
-          attitudeReasons.add("Help find the right product");
-        }
-        marks -= 2;
-      }
-      if (attitude?['confirmPurchase'] == false) {
-        attitudeReduced = true;
-        if (!attitudeReasons.contains("Confirm the purchase")) {
-          attitudeReasons.add("Confirm the purchase");
-        }
-        marks -= 2;
-      }
-      if (attitude?['offerHelp'] == false) {
-        attitudeReduced = true;
-        if (!attitudeReasons.contains("Offer carry or delivery help")) {
-          attitudeReasons.add("Offer carry or delivery help");
-        }
-        marks -= 2;
-      }
+      final att = form['attendance'];
+      if (att == 'approved' || att == 'notApproved') continue;
+      if (form['attitude']?['greetSmile'] == false) marks -= 2;
+      if (form['attitude']?['askNeeds'] == false) marks -= 2;
+      if (form['attitude']?['helpFindProduct'] == false) marks -= 2;
+      if (form['attitude']?['confirmPurchase'] == false) marks -= 2;
+      if (form['attitude']?['offerHelp'] == false) marks -= 2;
     }
     if (marks < 0) marks = 0;
     return marks;
@@ -155,12 +101,11 @@ class _PerformanceScoreInnerPageState extends State<PerformanceScoreInnerPage> w
 
   int calculateMeetingMarks(List<Map<String, dynamic>> dailyForms) {
     int marks = 10;
-    int notAttended = 0;
     for (var form in dailyForms) {
-      if (form['meeting']?['attended'] == false) notAttended++;
+      final att = form['attendance'];
+      if (att == 'approved' || att == 'notApproved') continue; // skip deduction for any leave
+      if (form['meeting']?['attended'] == false) marks -= 1;
     }
-    if (notAttended > 0) meetingReduced = true;
-    marks -= notAttended * 1;
     if (marks < 0) marks = 0;
     return marks;
   }
@@ -233,60 +178,82 @@ class _PerformanceScoreInnerPageState extends State<PerformanceScoreInnerPage> w
 
   // Example Dart function for weekly scoring
   Future<List<Map<String, dynamic>>> calculateWeeklyScores(List<Map<String, dynamic>> forms, DateTime now) async {
-  // Group forms by ISO week number
-  Map<int, List<Map<String, dynamic>>> weekMap = {};
-  Map<int, DateTime> weekStartDates = {};
+    // Group forms by ISO week number
+    Map<int, List<Map<String, dynamic>>> weekMap = {};
+    Map<int, DateTime> weekStartDates = {};
 
-  for (var form in forms) {
-    final ts = form['timestamp'];
-    final date = ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
-    int weekNum = isoWeekNumber(date);
+    for (var form in forms) {
+      final ts = form['timestamp'];
+      final date = ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
+      int weekNum = isoWeekNumber(date);
 
-    // Find the Monday of this ISO week
-    final monday = date.subtract(Duration(days: date.weekday - 1));
-    weekMap.putIfAbsent(weekNum, () => []);
-    weekMap[weekNum]!.add(form);
-    weekStartDates[weekNum] = monday;
-  }
-
-  final sortedWeekNums = weekMap.keys.toList()..sort();
-  List<Map<String, dynamic>> weeklyScores = [];
-
-  for (int i = 0; i < sortedWeekNums.length; i++) {
-    final weekNum = sortedWeekNums[i];
-    final weekForms = weekMap[weekNum]!;
-    int attendance = 20, dress = 20, attitude = 20, meeting = 10;
-
-    for (var form in weekForms) {
-      // Attendance deductions (do NOT deduct for approved leave)
-      if (form['attendance'] == 'late') attendance -= 5;
-      else if (form['attendance'] == 'notApproved') attendance -= 10;
-      // Dress Code
-      if (form['dressCode']?['cleanUniform'] == false) dress -= 20;
-      // Attitude
-      if (form['attitude']?['greetSmile'] == false) attitude -= 20;
-      // Meeting
-      if (form['meeting']?['attended'] == false) meeting -= 1;
-
-      // Clamp to zero
-      if (attendance < 0) attendance = 0;
-      if (dress < 0) dress = 0;
-      if (attitude < 0) attitude = 0;
-      if (meeting < 0) meeting = 0;
+      // Find the Monday of this ISO week
+      final monday = date.subtract(Duration(days: date.weekday - 1));
+      weekMap.putIfAbsent(weekNum, () => []);
+      weekMap[weekNum]!.add(form);
+      weekStartDates[weekNum] = monday;
     }
-    int total = attendance + dress + attitude + meeting;
-    weeklyScores.add({
-      'weekLabel': 'W$weekNum',
-      'attendance': attendance,
-      'dress': dress,
-      'attitude': attitude,
-      'meeting': meeting,
-      'total': total,
-      'weekStart': weekStartDates[weekNum],
-    });
+
+    final sortedWeekNums = weekMap.keys.toList()..sort();
+    List<Map<String, dynamic>> weeklyScores = [];
+
+    for (int i = 0; i < sortedWeekNums.length; i++) {
+      final weekNum = sortedWeekNums[i];
+      final weekForms = weekMap[weekNum]!;
+      int attendance = 20, dress = 20, attitude = 20, meeting = 10;
+
+      for (var form in weekForms) {
+        final att = form['attendance'];
+        if (att == 'late') attendance -= 5;
+        else if (att == 'notApproved') attendance -= 10;
+        // No deduction for 'punching' or 'approved'
+
+        // Dress
+        if (att == 'approved' || att == 'notApproved') {
+          // skip deduction for any leave
+        } else {
+          if (form['dressCode']?['cleanUniform'] == false) dress -= 5;
+          if (form['dressCode']?['keepInside'] == false) dress -= 5;
+          if (form['dressCode']?['neatHair'] == false) dress -= 5;
+        }
+
+        // Attitude
+        if (att == 'approved' || att == 'notApproved') {
+          // skip deduction for any leave
+        } else {
+          if (form['attitude']?['greetSmile'] == false) attitude -= 2;
+          if (form['attitude']?['askNeeds'] == false) attitude -= 2;
+          if (form['attitude']?['helpFindProduct'] == false) attitude -= 2;
+          if (form['attitude']?['confirmPurchase'] == false) attitude -= 2;
+          if (form['attitude']?['offerHelp'] == false) attitude -= 2;
+        }
+
+        // Meeting
+        if (att == 'approved' || att == 'notApproved') {
+          // skip deduction for any leave
+        } else {
+          if (form['meeting']?['attended'] == false) meeting -= 1;
+        }
+
+        // Clamp to zero
+        if (attendance < 0) attendance = 0;
+        if (dress < 0) dress = 0;
+        if (attitude < 0) attitude = 0;
+        if (meeting < 0) meeting = 0;
+      }
+      int total = attendance + dress + attitude + meeting;
+      weeklyScores.add({
+        'weekLabel': 'W$weekNum',
+        'attendance': attendance,
+        'dress': dress,
+        'attitude': attitude,
+        'meeting': meeting,
+        'total': total,
+        'weekStart': weekStartDates[weekNum],
+      });
+    }
+    return weeklyScores;
   }
-  return weeklyScores;
-}
 
   List<Map<String, dynamic>> getCurrentWeekForms(List<Map<String, dynamic>> forms, DateTime now) {
     // Find ISO week number for today
