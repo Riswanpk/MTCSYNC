@@ -70,12 +70,21 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
       ),
     );
 
-    _checkForUpdate(); // <--- Add this line
-
+    _checkForUpdate();
     _loadProfileImage();
-    _checkTodoWarning(); // Check warning on init
-    _scheduleScoreUpdateNotificationIfNeeded();
+    _checkTodoWarning();
     _checkAndSendMonthlyReport();
+
+    // Show performance deduction notification for sales user
+    FirebaseAuth.instance.authStateChanges().listen((user) async {
+      if (user != null) {
+        final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        final role = userDoc.data()?['role'];
+        if (role == 'sales') {
+          _checkAndShowPerformanceDeductionNotification();
+        }
+      }
+    });
   }
 
   Future<void> _loadProfileImage() async {
@@ -275,6 +284,77 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
     } catch (e) {
       print('Error sending monthly report: $e');
     }
+  }
+
+  Future<void> _checkAndShowPerformanceDeductionNotification() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    // Fetch this week's forms
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month, 1);
+    final monthEnd = DateTime(now.year, now.month + 1, 1);
+
+    final formsSnapshot = await FirebaseFirestore.instance
+        .collection('dailyform')
+        .where('userId', isEqualTo: user.uid)
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
+        .where('timestamp', isLessThan: Timestamp.fromDate(monthEnd))
+        .get();
+
+    final forms = formsSnapshot.docs.map((doc) => doc.data() as Map<String, dynamic>).toList();
+
+    // Get only current week forms
+    final today = DateTime(now.year, now.month, now.day);
+    final currentWeekNum = isoWeekNumber(today);
+    final weekForms = forms.where((form) {
+      final ts = form['timestamp'];
+      final date = ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
+      return isoWeekNumber(date) == currentWeekNum && date.year == today.year;
+    }).toList();
+
+    bool deduction = false;
+    for (var form in weekForms) {
+      final att = form['attendance'];
+      if (att == 'late' || att == 'notApproved') deduction = true;
+      if (att != 'approved' && att != 'notApproved') {
+        if (form['dressCode']?['cleanUniform'] == false ||
+            form['dressCode']?['keepInside'] == false ||
+            form['dressCode']?['neatHair'] == false ||
+            form['attitude']?['greetSmile'] == false ||
+            form['attitude']?['askNeeds'] == false ||
+            form['attitude']?['helpFindProduct'] == false ||
+            form['attitude']?['confirmPurchase'] == false ||
+            form['attitude']?['offerHelp'] == false ||
+            form['meeting']?['attended'] == false) {
+          deduction = true;
+        }
+      }
+    }
+
+    // Only show notification if deduction and not already shown today
+    final prefs = await SharedPreferences.getInstance();
+    final lastNotified = prefs.getString('last_perf_deduction_notify');
+    final todayStr = "${now.year}-${now.month}-${now.day}";
+    if (deduction && lastNotified != todayStr) {
+      await AwesomeNotifications().createNotification(
+        content: NotificationContent(
+          id: 2002,
+          channelKey: 'reminder_channel',
+          title: 'Performance Deduction',
+          body: 'Your performance score was reduced. Check the Performance page for details.',
+          notificationLayout: NotificationLayout.Default,
+        ),
+      );
+      await prefs.setString('last_perf_deduction_notify', todayStr);
+    }
+  }
+
+  int isoWeekNumber(DateTime date) {
+    final thursday = date.subtract(Duration(days: (date.weekday + 6) % 7 - 3));
+    final firstThursday = DateTime(date.year, 1, 4);
+    final diff = thursday.difference(firstThursday).inDays ~/ 7;
+    return 1 + diff;
   }
 
   @override

@@ -147,11 +147,84 @@ class _PerformanceScoreInnerPageState extends State<PerformanceScoreInnerPage> w
     dressReduced = false;
     attitudeReduced = false;
     meetingReduced = false;
+    dressReasons.clear();
+    attitudeReasons.clear();
 
-    int attendance = calculateAttendanceMarks(weekForms);
-    int dress = calculateDressCodeMarks(weekForms);
-    int attitude = calculateAttitudeMarks(weekForms);
-    int meeting = calculateMeetingMarks(weekForms);
+    int attendance = 20;
+    int dress = 20;
+    int attitude = 20;
+    int meeting = 10;
+
+    for (var form in weekForms) {
+      final att = form['attendance'];
+      // Attendance deductions
+      if (att == 'late') {
+        attendance -= 5;
+        lateReduced = true;
+      } else if (att == 'notApproved') {
+        attendance -= 10;
+        notApprovedReduced = true;
+      }
+      // Dress deductions
+      if (att != 'approved' && att != 'notApproved') {
+        if (form['dressCode']?['cleanUniform'] == false) {
+          dress -= 5;
+          dressReduced = true;
+          dressReasons.add("Wear clean uniform");
+        }
+        if (form['dressCode']?['keepInside'] == false) {
+          dress -= 5;
+          dressReduced = true;
+          dressReasons.add("Keep inside");
+        }
+        if (form['dressCode']?['neatHair'] == false) {
+          dress -= 5;
+          dressReduced = true;
+          dressReasons.add("Keep your hair neat");
+        }
+      }
+      // Attitude deductions
+      if (att != 'approved' && att != 'notApproved') {
+        if (form['attitude']?['greetSmile'] == false) {
+          attitude -= 2;
+          attitudeReduced = true;
+          attitudeReasons.add("Greet with a warm smile");
+        }
+        if (form['attitude']?['askNeeds'] == false) {
+          attitude -= 2;
+          attitudeReduced = true;
+          attitudeReasons.add("Ask about their needs");
+        }
+        if (form['attitude']?['helpFindProduct'] == false) {
+          attitude -= 2;
+          attitudeReduced = true;
+          attitudeReasons.add("Help find the right product");
+        }
+        if (form['attitude']?['confirmPurchase'] == false) {
+          attitude -= 2;
+          attitudeReduced = true;
+          attitudeReasons.add("Confirm the purchase");
+        }
+        if (form['attitude']?['offerHelp'] == false) {
+          attitude -= 2;
+          attitudeReduced = true;
+          attitudeReasons.add("Offer carry or delivery help");
+        }
+      }
+      // Meeting deduction
+      if (att != 'approved' && att != 'notApproved') {
+        if (form['meeting']?['attended'] == false) {
+          meeting -= 1;
+          meetingReduced = true;
+        }
+      }
+    }
+
+    // Clamp to zero
+    if (attendance < 0) attendance = 0;
+    if (dress < 0) dress = 0;
+    if (attitude < 0) attitude = 0;
+    if (meeting < 0) meeting = 0;
 
     // Fetch performance mark from DB
     int perfMark = await fetchPerformanceMarkFromDb(user.uid);
