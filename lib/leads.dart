@@ -390,100 +390,121 @@ class _LeadsPageState extends State<LeadsPage> {
               ),
               Column(
                 children: [
-                  if (role == 'admin')
-                    Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: DropdownButtonFormField<String>(
-                        value: selectedBranch,
-                        items: availableBranches
-                            .map((branch) => DropdownMenuItem(
-                                  value: branch,
-                                  child: Text(branch),
-                                ))
-                            .toList(),
-                        onChanged: (val) {
-                          setState(() {
-                            selectedBranch = val;
-                          });
-                        },
-                        decoration: InputDecoration(
-                          labelText: 'Select Branch',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
+                  // --- TOP FILTERS ROW ---
                   Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: TextField(
-                      onChanged: (val) {
-                        setState(() {
-                          searchQuery = val.toLowerCase();
-                        });
-                      },
-                      decoration: InputDecoration(
-                        hintText: 'Search by name...',
-                        hintStyle: const TextStyle(color: Colors.green),
-                        prefixIcon: const Icon(Icons.search, color: Colors.green),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      style: const TextStyle(color: Colors.green),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: DropdownButtonFormField<String>(
-                      value: selectedStatus,
-                      items: statusOptions.map((status) {
-                        return DropdownMenuItem<String>(
-                          value: status,
-                          child: Text(status),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          selectedStatus = val!;
-                        });
-                      },
-                      decoration: InputDecoration(
-                        labelText: 'Filter by Status',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Add sort order dropdown/toggle here:
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8),
                     child: Row(
                       children: [
-                        const Text('Sort by Date:'),
+                        if (role == 'admin')
+                          Expanded(
+                            flex: 2,
+                            child: DropdownButtonFormField<String>(
+                              value: selectedBranch,
+                              items: availableBranches
+                                  .map((branch) => DropdownMenuItem(
+                                        value: branch,
+                                        child: Text(
+                                          branch,
+                                          style: const TextStyle(fontSize: 13), // Reduced font size
+                                        ),
+                                      ))
+                                  .toList(),
+                              onChanged: (val) {
+                                setState(() {
+                                  selectedBranch = val;
+                                });
+                              },
+                              decoration: InputDecoration(
+                                labelText: 'Branch',
+                                labelStyle: const TextStyle(fontSize: 12),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide.none,
+                                ),
+                                filled: true,
+                                fillColor: const Color.fromARGB(255, 229, 237, 229),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              ),
+                              style: const TextStyle(fontSize: 13, color: Colors.black),
+                              dropdownColor: const Color.fromARGB(255, 255, 255, 255),
+                              icon: const Icon(Icons.arrow_drop_down, size: 20),
+                            ),
+                          ),
+                        if (role == 'admin') const SizedBox(width: 8),
+                        Expanded(
+                          flex: 2,
+                          child: DropdownButtonFormField<String>(
+                            value: selectedStatus,
+                            items: statusOptions.map((status) {
+                              return DropdownMenuItem<String>(
+                                value: status,
+                                child: Text(
+                                  status,
+                                  style: const TextStyle(fontSize: 13), // Reduced font size
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              setState(() {
+                                selectedStatus = val!;
+                              });
+                            },
+                            decoration: InputDecoration(
+                              labelText: 'Status',
+                              labelStyle: const TextStyle(fontSize: 12),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide.none,
+                              ),
+                              filled: true,
+                              fillColor: const Color.fromARGB(255, 229, 237, 229),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            ),
+                            style: const TextStyle(fontSize: 13, color: Colors.black),
+                            dropdownColor: Colors.white,
+                            icon: const Icon(Icons.arrow_drop_down, size: 20),
+                          ),
+                        ),
                         const SizedBox(width: 8),
-                        DropdownButton<bool>(
-                          value: sortAscending,
-                          items: const [
-                            DropdownMenuItem(
-                              value: false,
-                              child: Text('Newest First'),
+                        Expanded(
+                          flex: 2,
+                          child: DropdownButtonFormField<bool>(
+                            value: sortAscending,
+                            items: const [
+                              DropdownMenuItem(
+                                value: false,
+                                child: Text('Newest', style: TextStyle(fontSize: 13)),
+                              ),
+                              DropdownMenuItem(
+                                value: true,
+                                child: Text('Oldest', style: TextStyle(fontSize: 13)),
+                              ),
+                            ],
+                            onChanged: (val) {
+                              setState(() {
+                                sortAscending = val!;
+                              });
+                            },
+                            decoration: InputDecoration(
+                              labelText: 'Sort',
+                              labelStyle: const TextStyle(fontSize: 12),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide.none,
+                              ),
+                              filled: true,
+                              fillColor: const Color.fromARGB(255, 229, 237, 229),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                             ),
-                            DropdownMenuItem(
-                              value: true,
-                              child: Text('Oldest First'),
-                            ),
-                          ],
-                          onChanged: (val) {
-                            setState(() {
-                              sortAscending = val!;
-                            });
-                          },
+                            style: const TextStyle(fontSize: 13, color: Colors.black),
+                            dropdownColor: Colors.white,
+                            icon: const Icon(Icons.arrow_drop_down, size: 20),
+                          ),
                         ),
                       ],
                     ),
                   ),
+                  // --- LEADS LIST ---
                   Expanded(
                     child: role == 'manager'
                         ? FutureBuilder<QuerySnapshot>(
@@ -746,6 +767,27 @@ class _LeadsPageState extends State<LeadsPage> {
                                   );
                                 },
                               ),
+                  ),
+                  // --- SEARCH BAR AT BOTTOM ---
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+                    child: TextField(
+                      onChanged: (val) {
+                        setState(() {
+                          searchQuery = val.toLowerCase();
+                        });
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'Search by name...',
+                        hintStyle: const TextStyle(color: Colors.green),
+                        prefixIcon: const Icon(Icons.search, color: Colors.green),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                      ),
+                      style: const TextStyle(color: Colors.green),
+                    ),
                   ),
                 ],
               ),

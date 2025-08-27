@@ -135,11 +135,9 @@ class SettingsPage extends StatelessWidget {
           for (var form in forms) {
             final ts = form['timestamp'];
             final date = ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
-            // Week of month: 1 = days 1-7, 2 = 8-14, 3 = 15-21, 4 = 22-28, 5 = 29+
             int weekOfMonth = ((date.day - 1) ~/ 7) + 1;
             weekMap.putIfAbsent(weekOfMonth, () => []);
             weekMap[weekOfMonth]!.add(form);
-            // Label for the week (e.g., "14-Aug to 20-Aug")
             final weekStart = DateTime(date.year, date.month, (weekOfMonth - 1) * 7 + 1);
             final weekEnd = DateTime(date.year, date.month, min(weekOfMonth * 7, DateUtils.getDaysInMonth(date.year, date.month)));
             weekLabels[weekOfMonth] = "${weekStart.day}-${_monthShort(weekStart.month)} to ${weekEnd.day}-${_monthShort(weekEnd.month)}";
@@ -210,6 +208,22 @@ class SettingsPage extends StatelessWidget {
             totalSum += weekTotal;
             weekCount++;
 
+            // --- Color logic for summary cells
+            Color getCellColor(int col, int value) {
+              if (col == 1 || col == 2 || col == 3) {
+                if (value >= 16) return Color(0xFF93C47D); // green
+                if (value >= 11) return Color(0xFFFFE599); // yellow
+                if (value >= 5) return Color(0xFFEA9999); // red
+                return Color(0xFFCCCCCC); // grey
+              } else if (col == 4) {
+                if (value >= 9) return Color(0xFF93C47D); // green
+                if (value >= 6) return Color(0xFFFFE599); // yellow
+                if (value >= 3) return Color(0xFFEA9999); // red
+                return Color(0xFFCCCCCC); // grey
+              }
+              return Colors.white;
+            }
+
             final row = [
               ex.TextCellValue('Week $weekNum\n${weekLabels[weekNum]}'),
               ex.IntCellValue(attendance),
@@ -221,6 +235,16 @@ class SettingsPage extends StatelessWidget {
             for (int j = 0; j < row.length; j++) {
               final cell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: j, rowIndex: rowIdx));
               cell.value = row[j];
+              // --- Apply color for value columns
+              if (j >= 1 && j <= 4) {
+                int val = row[j] is ex.IntCellValue ? (row[j] as ex.IntCellValue).value : 0;
+                cell.cellStyle = ex.CellStyle(
+                  backgroundColorHex: ex.ExcelColor.fromHexString(
+                    '#${getCellColor(j, val).value.toRadixString(16).substring(2).toUpperCase()}',
+                  ),
+                  bold: false,
+                );
+              }
             }
             rowIdx++;
           }
@@ -269,9 +293,34 @@ class SettingsPage extends StatelessWidget {
             );
           }
 
+          // --- Helper for tick/cross with color
+          ex.TextCellValue coloredTick(bool? value) {
+            if (value == null) return ex.TextCellValue('-');
+            if (value) {
+              return ex.TextCellValue('✔'); // Will color cell green below
+            } else {
+              return ex.TextCellValue('✘'); // Will color cell red below
+            }
+          }
+
           // ATTENDANCE TABLE
           sheet.appendRow([ex.TextCellValue('ATTENDANCE (OUT OF 20)')]);
-          sheet.appendRow([ex.TextCellValue('CATEGORY'), ...dateRow.skip(1)]);
+          // Color header cell
+          final attHeaderCell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: sheet.maxRows - 1));
+          attHeaderCell.cellStyle = ex.CellStyle(
+            bold: true,
+            backgroundColorHex: ex.ExcelColor.fromHexString("#D9EAD3"),
+          );
+
+          sheet.appendRow([ex.TextCellValue('CATEGORY '), ...dateRow.skip(1)]);
+          // Color sub-header row
+          for (int i = 0; i < dateRow.length; i++) {
+            final cell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: sheet.maxRows - 1));
+            cell.cellStyle = ex.CellStyle(
+              bold: true,
+              backgroundColorHex: ex.ExcelColor.fromHexString("#D9EAD3"),
+            );
+          }
           final attendanceCats = ['Punching Time', 'Late time', 'Approved Leave', 'Unapproved Leave'];
           for (final cat in attendanceCats) {
             final row = [ex.TextCellValue(cat)];
@@ -287,15 +336,47 @@ class SettingsPage extends StatelessWidget {
               if (cat == 'Late time') value = form['attendance'] == 'late';
               if (cat == 'Approved Leave') value = form['attendance'] == 'approved';
               if (cat == 'Unapproved Leave') value = form['attendance'] == 'notApproved';
-              row.add(ex.TextCellValue(value == null ? '-' : value ? '✔' : '✘'));
+              row.add(coloredTick(value));
             }
+            final rowIdxAtt = sheet.maxRows;
             sheet.appendRow(row);
+            // --- Color tick/cross cells
+            for (int col = 1; col < row.length; col++) {
+              final cell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: rowIdxAtt));
+              if (row[col] is ex.TextCellValue) {
+                final val = (row[col] as ex.TextCellValue).value;
+                if (val == '✔') {
+                  cell.cellStyle = ex.CellStyle(
+                    fontColorHex: ex.ExcelColor.fromHexString('#38761D'), // green
+                  );
+                } else if (val == '✘') {
+                  cell.cellStyle = ex.CellStyle(
+                    fontColorHex: ex.ExcelColor.fromHexString('#CC0000'), // red
+                  );
+                }
+              }
+            }
           }
           rowIdx += attendanceCats.length + 2;
 
           // DRESS CODE TABLE
           sheet.appendRow([ex.TextCellValue('DRESS CODE (OUT OF 20)')]);
-          sheet.appendRow([ex.TextCellValue('CATEGORY'), ...dateRow.skip(1)]);
+          // Color header cell
+          final dressHeaderCell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: sheet.maxRows - 1));
+          dressHeaderCell.cellStyle = ex.CellStyle(
+            bold: true,
+            backgroundColorHex: ex.ExcelColor.fromHexString("#D9EAD3"),
+          );
+
+          sheet.appendRow([ex.TextCellValue('CATEGORY '), ...dateRow.skip(1)]);
+          // Color sub-header row
+          for (int i = 0; i < dateRow.length; i++) {
+            final cell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: sheet.maxRows - 1));
+            cell.cellStyle = ex.CellStyle(
+              bold: true,
+              backgroundColorHex: ex.ExcelColor.fromHexString("#D9EAD3"),
+            );
+          }
           final dressCats = ['Wear clean uniform', 'Keep inside', 'Keep your hair neat'];
           for (final cat in dressCats) {
             final row = [ex.TextCellValue(cat)];
@@ -310,21 +391,44 @@ class SettingsPage extends StatelessWidget {
               if (cat == 'Wear clean uniform') value = form['dressCode']?['cleanUniform'] != false;
               if (cat == 'Keep inside') value = form['dressCode']?['keepInside'] != false;
               if (cat == 'Keep your hair neat') value = form['dressCode']?['neatHair'] != false;
-              row.add(ex.TextCellValue(value == null ? '-' : value ? '✔' : '✘'));
+              row.add(coloredTick(value));
             }
+            final rowIdxDress = sheet.maxRows;
             sheet.appendRow(row);
+            for (int col = 1; col < row.length; col++) {
+              final cell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: rowIdxDress));
+              if (row[col] is ex.TextCellValue) {
+                final val = (row[col] as ex.TextCellValue).value;
+                if (val == '✔') {
+                  cell.cellStyle = ex.CellStyle(
+                    fontColorHex: ex.ExcelColor.fromHexString('#38761D'),
+                  );
+                } else if (val == '✘') {
+                  cell.cellStyle = ex.CellStyle(
+                    fontColorHex: ex.ExcelColor.fromHexString('#CC0000'),
+                  );
+                }
+              }
+            }
           }
           rowIdx += dressCats.length + 2;
 
           // ATTITUDE TABLE
-          sheet.appendRow([ex.TextCellValue('ATTITUDE (OUT OF 20)')]);
-          sheet.appendRow([ex.TextCellValue('CATEGORY'), ...dateRow.skip(1)]);
+          sheet.appendRow([ex.TextCellValue('CATEGORY '), ...dateRow.skip(1)]);
+          // Color sub-header row
+          for (int i = 0; i < dateRow.length; i++) {
+            final cell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: sheet.maxRows - 1));
+            cell.cellStyle = ex.CellStyle(
+              bold: true,
+              backgroundColorHex: ex.ExcelColor.fromHexString("#D9EAD3"),
+            );
+          }
           final attitudeCats = [
             'Greet with a warm smile',
             'Ask about their needs',
             'Help find the right product',
             'Confirm the purchase',
-            'Offer carry or delivery help'
+            'Offer carry or delivery help' // Pad with spaces
           ];
           for (final cat in attitudeCats) {
             final row = [ex.TextCellValue(cat)];
@@ -336,20 +440,51 @@ class SettingsPage extends StatelessWidget {
                 row.add(ex.TextCellValue('-'));
                 continue;
               }
-              if (cat == 'Greet with a warm smile') value = form['attitude']?['greetSmile'] != false;
-              if (cat == 'Ask about their needs') value = form['attitude']?['askNeeds'] != false;
-              if (cat == 'Help find the right product') value = form['attitude']?['helpFindProduct'] != false;
-              if (cat == 'Confirm the purchase') value = form['attitude']?['confirmPurchase'] != false;
-              if (cat == 'Offer carry or delivery help') value = form['attitude']?['offerHelp'] != false;
-              row.add(ex.TextCellValue(value == null ? '-' : value ? '✔' : '✘'));
+              if (cat.trim() == 'Greet with a warm smile') value = form['attitude']?['greetSmile'] != false;
+              if (cat.trim() == 'Ask about their needs') value = form['attitude']?['askNeeds'] != false;
+              if (cat.trim() == 'Help find the right product') value = form['attitude']?['helpFindProduct'] != false;
+              if (cat.trim() == 'Confirm the purchase') value = form['attitude']?['confirmPurchase'] != false;
+              if (cat.trim() == 'Offer carry or delivery help') value = form['attitude']?['offerHelp'] != false;
+              row.add(coloredTick(value));
             }
+            final rowIdxAtti = sheet.maxRows;
             sheet.appendRow(row);
+            for (int col = 1; col < row.length; col++) {
+              final cell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: rowIdxAtti));
+              if (row[col] is ex.TextCellValue) {
+                final val = (row[col] as ex.TextCellValue).value;
+                if (val == '✔') {
+                  cell.cellStyle = ex.CellStyle(
+                    fontColorHex: ex.ExcelColor.fromHexString('#38761D'),
+                  );
+                } else if (val == '✘') {
+                  cell.cellStyle = ex.CellStyle(
+                    fontColorHex: ex.ExcelColor.fromHexString('#CC0000'),
+                  );
+                }
+              }
+            }
           }
           rowIdx += attitudeCats.length + 2;
 
           // MEETING TABLE
           sheet.appendRow([ex.TextCellValue('MEETING (OUT OF 10)')]);
-          sheet.appendRow([ex.TextCellValue('CATEGORY'), ...dateRow.skip(1)]);
+          // Color header cell
+          final meetHeaderCell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: sheet.maxRows - 1));
+          meetHeaderCell.cellStyle = ex.CellStyle(
+            bold: true,
+            backgroundColorHex: ex.ExcelColor.fromHexString("#D9EAD3"),
+          );
+
+          sheet.appendRow([ex.TextCellValue('CATEGORY '), ...dateRow.skip(1)]);
+          // Color sub-header row
+          for (int i = 0; i < dateRow.length; i++) {
+            final cell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: sheet.maxRows - 1));
+            cell.cellStyle = ex.CellStyle(
+              bold: true,
+              backgroundColorHex: ex.ExcelColor.fromHexString("#D9EAD3"),
+            );
+          }
           final meetingCats = ['Meeting'];
           for (final cat in meetingCats) {
             final row = [ex.TextCellValue(cat)];
@@ -362,11 +497,49 @@ class SettingsPage extends StatelessWidget {
                 continue;
               }
               if (cat == 'Meeting') value = form['meeting']?['attended'] == true;
-              row.add(ex.TextCellValue(value == null ? '-' : value ? '✔' : '✘'));
+              row.add(coloredTick(value));
             }
+            final rowIdxMeet = sheet.maxRows;
             sheet.appendRow(row);
+            for (int col = 1; col < row.length; col++) {
+              final cell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: rowIdxMeet));
+              if (row[col] is ex.TextCellValue) {
+                final val = (row[col] as ex.TextCellValue).value;
+                if (val == '✔') {
+                  cell.cellStyle = ex.CellStyle(
+                    fontColorHex: ex.ExcelColor.fromHexString('#38761D'),
+                  );
+                } else if (val == '✘') {
+                  cell.cellStyle = ex.CellStyle(
+                    fontColorHex: ex.ExcelColor.fromHexString('#CC0000'),
+                  );
+                }
+              }
+            }
           }
           rowIdx += meetingCats.length + 4; // Add some space before next user
+
+          // --- Auto adjust column width
+          for (int col = 0; col < (sheet.rows.isNotEmpty ? sheet.rows.map((r) => r.length).reduce((a, b) => a > b ? a : b) : 0); col++) {
+            int maxLen = 0;
+            for (var row in sheet.rows) {
+              if (col < row.length) {
+                final val = row[col]?.value.toString() ?? '';
+                if (val.length > maxLen) maxLen = val.length;
+              }
+            }
+            // Instead of setColWidth, pad the first column's cell values to 35 chars
+            if (col == 0) {
+              for (var row in sheet.rows) {
+                if (row.isNotEmpty && row[0]?.value is String) {
+                  String cellVal = row[0]!.value as String;
+                  if (cellVal.length < 35) {
+                  row[0]!.value = ex.TextCellValue(cellVal.padRight(35, ' '));
+                  }
+                }
+              }
+            }
+          }
         });
       });
 
