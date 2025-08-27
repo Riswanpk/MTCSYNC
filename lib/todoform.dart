@@ -67,7 +67,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
     });
   }
 
-  Future<void> _scheduleNotification(DateTime dateTime, String title) async {
+  Future<void> _scheduleNotification(DateTime dateTime, String title, String docId) async {
     await AwesomeNotifications().createNotification(
       content: NotificationContent(
         id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
@@ -75,6 +75,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
         title: 'Task Reminder',
         body: 'Reminder for: $title',
         notificationLayout: NotificationLayout.Default,
+        payload: {'docId': docId}, // <-- Add this line
       ),
       schedule: NotificationCalendar(
         year: dateTime.year,
@@ -181,11 +182,15 @@ class _TodoFormPageState extends State<TodoFormPage> {
       });
     }
 
-    // 🔔 Always schedule notification (since mandatory)
-    await _scheduleNotification(scheduledDate, title);
+    // 🔔 Only schedule notification if assigned to self
+    if (_currentUserRole != 'manager' || (_currentUserRole == 'manager' && (_selectedSalesUserId == null || _selectedSalesUserId == user.uid))) {
+      await _scheduleNotification(scheduledDate, title, todoRef.id);
+    }
 
-    setState(() => _isSaving = false);
-    Navigator.pop(context);
+    if (mounted) {
+      Navigator.pop(context);
+    }
+    // Don't call setState after pop, as the widget is disposed
   }
 
   @override

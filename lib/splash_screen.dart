@@ -17,9 +17,8 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
 
-    // If launched from notification, do nothing (let main.dart handle navigation)
+    // If launched from notification with docId, do nothing (let main.dart handle navigation)
     if (initialNotificationAction != null &&
-        initialNotificationAction!.buttonKeyPressed == 'EDIT_FOLLOWUP' &&
         initialNotificationAction!.payload?['docId'] != null) {
       return;
     }

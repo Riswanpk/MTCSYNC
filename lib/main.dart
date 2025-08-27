@@ -13,6 +13,7 @@ import 'home.dart';
 import 'splash_screen.dart';
 import 'theme_notifier.dart';
 import 'presentfollowup.dart';
+import 'todo.dart'; // <-- Add this import if not present
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,6 +41,15 @@ void main() async {
         channelDescription: 'Notification channel for basic tests',
         defaultColor: const Color(0xFF005BAC),
         ledColor: Colors.white,
+        importance: NotificationImportance.High,
+        channelShowBadge: true,
+      ),
+      NotificationChannel(
+        channelKey: 'reminder_channel', // <-- ADD THIS
+        channelName: 'Reminder Notifications',
+        channelDescription: 'Channel for task reminders',
+        defaultColor: const Color(0xFF8CC63F),
+        ledColor: Colors.green,
         importance: NotificationImportance.High,
         channelShowBadge: true,
       ),
@@ -117,9 +127,26 @@ class MyApp extends StatelessWidget {
                 initialNotificationAction!.payload?['docId'] != null) {
               final docId = initialNotificationAction!.payload!['docId']!;
               final isEdit = initialNotificationAction!.buttonKeyPressed == 'EDIT_FOLLOWUP';
+              final channelKey = initialNotificationAction!.channelKey;
               initialNotificationAction = null; // Clear after handling
+
+              // If it's a follow-up edit
+              if (isEdit) {
+                return MaterialPageRoute(
+                  builder: (context) => PresentFollowUp(docId: docId, editMode: true),
+                  settings: settings,
+                );
+              }
+              // If it's a todo reminder
+              if (channelKey == 'reminder_channel') {
+                return MaterialPageRoute(
+                  builder: (context) => TaskDetailPageFromId(docId: docId),
+                  settings: settings,
+                );
+              }
+              // Default: fallback to PresentFollowUp view
               return MaterialPageRoute(
-                builder: (context) => PresentFollowUp(docId: docId, editMode: isEdit),
+                builder: (context) => PresentFollowUp(docId: docId),
                 settings: settings,
               );
             }
@@ -170,14 +197,32 @@ class _UpdateGateState extends State<UpdateGate> {
 class NotificationController {
   @pragma("vm:entry-point")
   static Future<void> onActionReceivedMethod(ReceivedAction receivedAction) async {
-    // If user taps the notification (not Edit button), go to PresentFollowUp
+    // Handle todo reminder notification tap
+    if (receivedAction.channelKey == 'reminder_channel' &&
+        receivedAction.payload?['docId'] != null) {
+      final docId = receivedAction.payload!['docId']!;
+      // Use navigatorKey to push the detail page
+      navigatorKey.currentState?.push(
+        MaterialPageRoute(
+          builder: (context) => TaskDetailPageFromId(docId: docId),
+        ),
+      );
+      return;
+    }
+
+    // If it's a reminder notification for a todo
+    if (receivedAction.channelKey == 'reminder_channel' &&
+        receivedAction.payload?['docId'] != null) {
+      initialNotificationAction = receivedAction;
+      return;
+    }
+
+    // Existing logic for followup/edit, etc.
     if (receivedAction.buttonKeyPressed == null &&
         receivedAction.payload?['docId'] != null) {
       initialNotificationAction = receivedAction;
       // Navigation will be handled by SplashScreen/MyApp
-    }
-    // If user taps Edit button, also go to PresentFollowUp in edit mode
-    else if (receivedAction.buttonKeyPressed == 'EDIT_FOLLOWUP' &&
+    } else if (receivedAction.buttonKeyPressed == 'EDIT_FOLLOWUP' &&
         receivedAction.payload?['docId'] != null) {
       initialNotificationAction = receivedAction;
       // Navigation will be handled by SplashScreen/MyApp
