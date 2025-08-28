@@ -11,8 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:pdf/pdf.dart';
+
 
 class LeadsPage extends StatefulWidget {
   final String branch;
@@ -170,109 +169,7 @@ class _LeadsPageState extends State<LeadsPage> {
     }
   }
 
-  Future<String?> _downloadLeadsPdf(BuildContext context, {String? branch}) async {
-    try {
-      final pdf = pw.Document();
-
-      // Use built-in Helvetica font (works for English and basic symbols)
-      final regularFont = pw.Font.helvetica();
-      final boldFont = pw.Font.helveticaBold();
-
-      // Fetch all leads (or only for a specific branch)
-      QuerySnapshot query;
-      if (branch != null && branch.isNotEmpty) {
-        query = await FirebaseFirestore.instance
-            .collection('follow_ups')
-            .where('branch', isEqualTo: branch)
-            .get();
-      } else {
-        query = await FirebaseFirestore.instance.collection('follow_ups').get();
-      }
-
-      // Fetch all users to map userId -> username
-      final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
-      final userIdToUsername = {
-        for (var doc in usersSnapshot.docs)
-          doc.id: (doc.data() as Map<String, dynamic>)['username'] ?? 'Unknown'
-      };
-
-      // Group leads by branch
-      final Map<String, List<Map<String, dynamic>>> branchLeads = {};
-      for (final doc in query.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        final branchName = (data['branch'] ?? 'Unknown') as String;
-        branchLeads.putIfAbsent(branchName, () => []).add(data);
-      }
-
-      // Add a single PDF page with all branches, each with a title and table
-      pdf.addPage(
-        pw.MultiPage(
-          build: (pw.Context context) {
-            final List<pw.Widget> widgets = [];
-            branchLeads.forEach((branchName, leads) {
-              if (leads.isNotEmpty) {
-                final safeBranchName = branchName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-                widgets.add(
-                  pw.Text(
-                    'Branch: $safeBranchName',
-                    style: pw.TextStyle(font: boldFont, fontWeight: pw.FontWeight.bold, fontSize: 16),
-                    textAlign: pw.TextAlign.center,
-                  ),
-                );
-                widgets.add(pw.SizedBox(height: 8));
-                widgets.add(
-                  pw.Center(
-                    child: pw.Table.fromTextArray(
-                      headers: [
-                        'Rep', // Username column
-                        'Name',
-                        'Company',
-                        'Address',
-                        'Phone',
-                        'Status',
-                        'Comments'
-                      ],
-                      data: leads.map((data) {
-                        final createdBy = data['created_by'] ?? '';
-                        final username = userIdToUsername[createdBy] ?? 'Unknown';
-                        return [
-                          username,
-                          (data['name'] ?? '-').toString(),
-                          (data['company'] ?? '-').toString(),
-                          (data['address'] ?? '-').toString(),
-                          (data['phone'] ?? '-').toString(),
-                          (data['status'] ?? '-').toString(),
-                          (data['comments'] ?? '-').toString(),
-                        ];
-                      }).toList(),
-                      cellStyle: pw.TextStyle(font: regularFont, fontSize: 8), // Reduced font size
-                      headerStyle: pw.TextStyle(font: boldFont, fontWeight: pw.FontWeight.bold, fontSize: 9),
-                      cellAlignment: pw.Alignment.center, // Center align cells
-                      headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
-                    ),
-                  ),
-                );
-                widgets.add(pw.SizedBox(height: 20));
-              }
-            });
-            return widgets;
-          },
-        ),
-      );
-
-      Directory downloadsDir = Directory('/storage/emulated/0/Download');
-      final file = File('${downloadsDir.path}/leads_${DateTime.now().millisecondsSinceEpoch}.pdf');
-      await file.writeAsBytes(await pdf.save());
-      return file.path;
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to generate PDF: $e')),
-      );
-      return null;
-    }
-  }
-
-  @override
+ @override
   Widget build(BuildContext context) {
     return FutureBuilder<Map<String, dynamic>?>(
       future: _currentUserData,
@@ -342,13 +239,7 @@ class _LeadsPageState extends State<LeadsPage> {
                       if (excelPath != null) {
                         Share.shareXFiles([XFile(excelPath)], text: 'Leads Excel Report');
                       }
-                    } else if (value == 'share_pdf') {
-                      // Always pass branch: null for admin to fetch all leads, regardless of selectedBranch
-                      final pdfPath = await _downloadLeadsPdf(context, branch: role == 'admin' ? null : managerBranch);
-                      if (pdfPath != null) {
-                        Share.shareXFiles([XFile(pdfPath)], text: 'Leads PDF Report');
-                      }
-                    }
+                    } 
                   },
                   itemBuilder: (context) => [
                     const PopupMenuItem(
@@ -365,13 +256,7 @@ class _LeadsPageState extends State<LeadsPage> {
                         title: Text('Excel'),
                       ),
                     ),
-                    const PopupMenuItem(
-                      value: 'share_pdf',
-                      child: ListTile(
-                        leading: Icon(Icons.share, color: Colors.blue),
-                        title: Text('Share PDF'),
-                      ),
-                    ),
+                    
                   ],
                 ),
             ],

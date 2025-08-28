@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:pdf/pdf.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:excel/excel.dart' hide TextSpan;
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:share_plus/share_plus.dart';
+import 'dart:async';
 
 class MonthlyReportPage extends StatefulWidget {
   final String? branch;
@@ -25,7 +24,8 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
   String? _currentUserRole;
   List<String> _branches = [];
   List<Map<String, dynamic>> _usersForBranch = [];
-  bool _isLoading = false; // <-- Add this
+  bool _isLoading = false;
+  double _progress = 0.0; // Add this line
 
   @override
   void initState() {
@@ -34,7 +34,6 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
   }
 
   Future<void> _initDropdowns() async {
-    // Get current user role and branch list
     final user = FirebaseAuth.instance.currentUser;
     String? userRole;
     String? userBranch;
@@ -45,7 +44,6 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
       _currentUserRole = userRole;
     }
 
-    // If users and branch are provided (from dashboard/daily), use them
     if (widget.users.isNotEmpty && widget.branch != null) {
       setState(() {
         _selectedBranch = widget.branch;
@@ -56,7 +54,6 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
       return;
     }
 
-    // Fetch all branches from users collection (for admin)
     final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
     final branches = usersSnapshot.docs
         .map((doc) => doc['branch'] ?? '')
@@ -72,14 +69,12 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
       }
     });
 
-    // For manager, auto-select their branch and users
     if (userRole == 'manager' && userBranch != null) {
       await _fetchUsersForBranch(userBranch);
       setState(() {
         _selectedBranch = userBranch;
       });
     } else {
-      // For admin or others, use selected branch
       await _fetchUsersForBranch(_selectedBranch);
     }
   }
@@ -122,11 +117,17 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
       future: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid).get(),
       builder: (context, snapshot) {
         String role = 'sales';
-        String? branch;
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          // Center the loading indicator both vertically and horizontally
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
         if (snapshot.hasData && snapshot.data!.data() != null) {
           final data = snapshot.data!.data() as Map<String, dynamic>;
           role = data['role'] ?? 'sales';
-          branch = data['branch'];
         }
 
         return Stack(
@@ -138,37 +139,15 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
                 foregroundColor: Colors.white,
                 elevation: 0,
                 actions: [
-                  if (role == 'admin' || role == 'manager')
-                    PopupMenuButton<String>(
-                      icon: const Icon(Icons.menu),
-                      onSelected: (value) async {
-                        if (value == 'download_pdf') {
-                          setState(() => _isLoading = true);
-                          await _downloadMonthlyReportPdf(context, role, branch);
-                          setState(() => _isLoading = false);
-                        } else if (value == 'leads_report') {
-                          setState(() => _isLoading = true);
-                          await _downloadLeadsSummaryPdf(context, role, branch);
-                          setState(() => _isLoading = false);
-                        }
-                      },
-                      itemBuilder: (context) => [
-                        const PopupMenuItem(
-                          value: 'download_pdf',
-                          child: ListTile(
-                            leading: Icon(Icons.picture_as_pdf, color: Colors.red),
-                            title: Text('Missed Report'),
-                          ),
-                        ),
-                        const PopupMenuItem(
-                          value: 'leads_report',
-                          child: ListTile(
-                            leading: Icon(Icons.assignment, color: Colors.blue),
-                            title: Text('Leads Report'),
-                          ),
-                        ),
-                      ],
-                    ),
+                  IconButton(
+                    icon: const Icon(Icons.download),
+                    tooltip: 'Export Excel',
+                    onPressed: _isLoading ? null : () async {
+                      setState(() => _isLoading = true);
+                      await _generateAndShareExcel(role);
+                      setState(() => _isLoading = false);
+                    },
+                  ),
                 ],
               ),
               backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
@@ -177,9 +156,6 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
                   padding: const EdgeInsets.only(bottom: 24),
                   child: Column(
                     children: [
-                      // Only show branch dropdown for admin
-                      
-                      
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -246,7 +222,12 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
                       ),
                       if (_selectedUser != null)
                         FutureBuilder<List<Map<String, dynamic>>>(
-                          future: _generateUserMonthlyReport(_selectedUser!['uid'], _selectedUser!['email'], _selectedMonth, _selectedYear),
+                          future: _generateUserMonthlyReport(
+                            _selectedUser!['uid'],
+                            _selectedUser!['email'],
+                            _selectedMonth,
+                            _selectedYear,
+                          ),
                           builder: (context, snap) {
                             if (snap.connectionState == ConnectionState.waiting) {
                               return const Center(child: CircularProgressIndicator());
@@ -277,9 +258,10 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
                                     color: m['lead'] ? Colors.green : Colors.red,
                                   )),
                                 ])).toList(),
-                              ));
+                              ),
+                            );
                           },
-                      ),
+                        ),
                     ],
                   ),
                 ),
@@ -288,8 +270,106 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
             if (_isLoading)
               Container(
                 color: Colors.black.withOpacity(0.3),
-                child: const Center(
-                  child: CircularProgressIndicator(),
+                child: Center(
+                  child: SizedBox(
+                    width: 260,
+                    child: Card(
+                      color: Colors.white,
+                      elevation: 12,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(28.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              "Generating Excel...",
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                            ),
+                            const SizedBox(height: 28),
+                            Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                // Glossy background
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    height: 22,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          Colors.blue.shade200.withOpacity(0.5),
+                                          Colors.blue.shade50.withOpacity(0.2),
+                                          Colors.white.withOpacity(0.6),
+                                        ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                    ),
+                                    child: const SizedBox(width: double.infinity, height: 22),
+                                  ),
+                                ),
+                                // Progress bar
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: TweenAnimationBuilder<double>(
+                                    tween: Tween<double>(begin: 0, end: _progress),
+                                    duration: const Duration(milliseconds: 400),
+                                    curve: Curves.easeInOutCubic,
+                                    builder: (context, value, child) {
+                                      return LinearProgressIndicator(
+                                        value: value,
+                                        minHeight: 22,
+                                        backgroundColor: Colors.transparent,
+                                        valueColor: AlwaysStoppedAnimation<Color>(
+                                          Colors.blueAccent.shade700,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                // Glossy highlight overlay
+                                Positioned.fill(
+                                  child: IgnorePointer(
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(12),
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            Colors.white.withOpacity(0.25),
+                                            Colors.transparent,
+                                          ],
+                                          begin: Alignment.topCenter,
+                                          end: Alignment.bottomCenter,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 18),
+                            TweenAnimationBuilder<double>(
+                              tween: Tween<double>(begin: 0, end: _progress),
+                              duration: const Duration(milliseconds: 400),
+                              curve: Curves.easeInOutCubic,
+                              builder: (context, value, child) {
+                                return Text(
+                                  "${(value * 100).toInt()} %",
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    color: Colors.blueAccent,
+                                    letterSpacing: 1.2,
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
           ],
@@ -310,10 +390,6 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
     for (int i = 0; i < lastDay; i++) {
       final date = monthStart.add(Duration(days: i));
       final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
-      final doc = await FirebaseFirestore.instance.collection('daily_report').doc('$email-$dateStr').get();
-      final data = doc.data();
-
-      // --- LEAD LOGIC: tick if daily_report exists for this user, type 'leads', timestamp on this date ---
       final dayStart = DateTime(date.year, date.month, date.day);
       final dayEnd = dayStart.add(const Duration(days: 1));
       final leadQuery = await FirebaseFirestore.instance
@@ -325,9 +401,8 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
           .get();
       final leadTick = leadQuery.docs.isNotEmpty;
 
-      // --- TODO LOGIC: tick if daily_report exists for this user, type 'todo', timestamp between yesterday 7pm and today 12pm ---
-      final todoWindowStart = dayStart.subtract(const Duration(days: 1)).add(const Duration(hours: 19)); // yesterday 7pm
-      final todoWindowEnd = dayStart.add(const Duration(hours: 12)); // today 12pm
+      final todoWindowStart = dayStart.subtract(const Duration(days: 1)).add(const Duration(hours: 19));
+      final todoWindowEnd = dayStart.add(const Duration(hours: 12));
       final todoQuery = await FirebaseFirestore.instance
           .collection('daily_report')
           .where('userId', isEqualTo: uid)
@@ -346,152 +421,166 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
     return missedReport;
   }
 
-  Future<void> _downloadMonthlyReportPdf(BuildContext context, String role, String? branch) async {
+  Future<void> _generateAndShareExcel(String role) async {
     try {
-      final pdf = pw.Document();
+      setState(() {
+        _isLoading = true;
+        _progress = 0.0;
+      });
 
-      // Use branch filtering from monthly.dart UI
-      List<Map<String, dynamic>> usersToExport = _usersForBranch;
-      if (role == 'admin' && _selectedBranch == null) {
-        usersToExport = widget.users.where((u) => u['role'] != 'admin').toList();
+      // Determine branch to use
+      String branchToUse = '';
+      if (role == 'admin') {
+        branchToUse = _selectedBranch ?? '';
+      } else if (role == 'manager') {
+        branchToUse = _selectedBranch ?? '';
+      } else {
+        final user = FirebaseAuth.instance.currentUser;
+        final userDoc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
+        branchToUse = userDoc['branch'] ?? '';
       }
 
-      for (final user in usersToExport) {
-        final report = await _generateUserMonthlyReport(
-          user['uid'],
-          user['email'],
-          _selectedMonth,
-          _selectedYear,
-        );
-        pdf.addPage(
-          pw.Page(
-            pageFormat: PdfPageFormat.a4,
-            build: (pw.Context context) {
-              return pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text('Monthly Missed Report', style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
-                  pw.SizedBox(height: 8),
-                  pw.Text('User: ${user['username']} (${user['email']})', style: pw.TextStyle(fontSize: 16)),
-                  pw.SizedBox(height: 12),
-                  pw.Table.fromTextArray(
-                    headers: ['Date', 'Todo', 'Lead'],
-                    data: report.map((m) => [
-                      m['date'],
-                      m['todo'] ? 'Yes' : 'No',
-                      m['lead'] ? 'Yes' : 'No',
-                    ]).toList(),
-                    cellAlignment: pw.Alignment.center,
-                    headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                    cellStyle: const pw.TextStyle(fontSize: 12),
-                  ),
-                ],
-              );
-            },
-          ),
-        );
-      }
+      // Fetch all users of the branch
+      final usersSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('branch', isEqualTo: branchToUse)
+          .where('role', isNotEqualTo: 'admin')
+          .get();
 
-      // Save PDF to a temporary file
-      final tempDir = await getTemporaryDirectory();
-      final file = File('${tempDir.path}/monthly_report_${DateTime.now().millisecondsSinceEpoch}.pdf');
-      await file.writeAsBytes(await pdf.save());
+      final users = usersSnapshot.docs
+          .map((doc) => {
+                'uid': doc.id,
+                'username': doc['username'] ?? '',
+                'email': doc['email'] ?? '',
+              })
+          .toList();
 
-      // Share the PDF file
-      await Share.shareXFiles([XFile(file.path)], text: 'Monthly Missed Report');
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to share PDF: $e')),
-      );
-    }
-  }
+      // Table 1: Username, Leads Created, Leads Completed
+      final excel = Excel.createExcel();
+      final sheet1 = excel['Leads Summary'];
+      sheet1.appendRow([
+        TextCellValue('Username'),
+        TextCellValue('Leads Created'),
+        TextCellValue('Leads Completed'),
+      ]);
 
-  Future<void> _downloadLeadsSummaryPdf(BuildContext context, String role, String? branch) async {
-    try {
-      final pdf = pw.Document();
+      final monthStart = DateTime(_selectedYear, _selectedMonth, 1);
+      final nextMonth = _selectedMonth == 12
+          ? DateTime(_selectedYear + 1, 1, 1)
+          : DateTime(_selectedYear, _selectedMonth + 1, 1);
 
-      // Use branch filtering from monthly.dart UI
-      List<Map<String, dynamic>> usersToExport = _usersForBranch;
-      if (role == 'admin' && _selectedBranch == null) {
-        usersToExport = widget.users.where((u) => u['role'] != 'admin').toList();
-      }
-
-      List<List<String>> tableData = [];
-      for (final user in usersToExport) {
-        final uid = user['uid'];
-        final username = user['username'] ?? '';
-        final userBranch = user['branch'] ?? '';
-
-        final monthStart = DateTime(_selectedYear, _selectedMonth, 1);
-        final nextMonth = _selectedMonth == 12
-            ? DateTime(_selectedYear + 1, 1, 1)
-            : DateTime(_selectedYear, _selectedMonth + 1, 1);
-
+      for (int i = 0; i < users.length; i++) {
+        final user = users[i];
+        // Leads Created
         final createdSnapshot = await FirebaseFirestore.instance
             .collection('follow_ups')
-            .where('created_by', isEqualTo: uid)
+            .where('created_by', isEqualTo: user['uid'])
             .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
             .where('created_at', isLessThan: Timestamp.fromDate(nextMonth))
             .get();
         final createdCount = createdSnapshot.docs.length;
 
+        // Leads Completed
         final completedSnapshot = await FirebaseFirestore.instance
             .collection('follow_ups')
-            .where('created_by', isEqualTo: uid)
+            .where('created_by', isEqualTo: user['uid'])
             .where('status', isEqualTo: 'Completed')
             .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
             .where('created_at', isLessThan: Timestamp.fromDate(nextMonth))
             .get();
         final completedCount = completedSnapshot.docs.length;
 
-        tableData.add([
-          username,
-          createdCount.toString(),
-          completedCount.toString(),
-          userBranch,
+        sheet1.appendRow([
+          TextCellValue(user['username']),
+          TextCellValue(createdCount.toString()),
+          TextCellValue(completedCount.toString()),
         ]);
+        setState(() {
+          _progress = (i + 1) / (users.length * 2); // First half for table 1
+        });
       }
 
-      pdf.addPage(
-        pw.Page(
-          pageFormat: PdfPageFormat.a4,
-          build: (pw.Context context) {
-            return pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text('Leads Report', style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
-                pw.SizedBox(height: 8),
-                pw.Text(
-                  'Month: ${_selectedMonth.toString().padLeft(2, '0')}-${_selectedYear}',
-                  style: pw.TextStyle(fontSize: 16),
-                ),
-                pw.SizedBox(height: 12),
-                pw.Table.fromTextArray(
-                  headers: ['Username', 'Created', 'Completed', 'Branch'],
-                  data: tableData,
-                  cellAlignment: pw.Alignment.center,
-                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                  cellStyle: const pw.TextStyle(fontSize: 12),
-                ),
-              ],
-            );
-          },
-        ),
-      );
+      // Table 2: Username, Date, Todo, Lead (with space after each user, colored Yes/No)
+      final sheet2 = excel['Missed Report'];
+      sheet2.appendRow([
+        TextCellValue('Username'),
+        TextCellValue('Date'),
+        TextCellValue('Todo'),
+        TextCellValue('Lead'),
+      ]);
 
-      // Save PDF to a temporary file
+      for (int i = 0; i < users.length; i++) {
+        final user = users[i];
+        final missed = await _generateUserMonthlyReport(
+          user['uid'],
+          user['email'],
+          _selectedMonth,
+          _selectedYear,
+        );
+        for (final m in missed) {
+          final todoCell = TextCellValue(m['todo'] ? 'Yes' : 'No');
+          final leadCell = TextCellValue(m['lead'] ? 'Yes' : 'No');
+          final rowIdx = sheet2.maxRows;
+          sheet2.appendRow([
+            TextCellValue(user['username']),
+            TextCellValue(m['date']),
+            todoCell,
+            leadCell,
+          ]);
+          // Color the "Yes" as green and "No" as red
+          final todoExcelCell = sheet2.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: rowIdx));
+          final leadExcelCell = sheet2.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: rowIdx));
+          if (m['todo']) {
+            todoExcelCell.cellStyle = CellStyle(fontColorHex: ExcelColor.fromHexString('#008000')); // green
+          } else {
+            todoExcelCell.cellStyle = CellStyle(fontColorHex: ExcelColor.fromHexString('#FF0000')); // red
+          }
+          if (m['lead']) {
+            leadExcelCell.cellStyle = CellStyle(fontColorHex: ExcelColor.fromHexString('#008000')); // green
+          } else {
+            leadExcelCell.cellStyle = CellStyle(fontColorHex: ExcelColor.fromHexString('#FF0000')); // red
+          }
+        }
+        // Add an empty row after each user for spacing
+        sheet2.appendRow([
+          TextCellValue(''),
+          TextCellValue(''),
+          TextCellValue(''),
+          TextCellValue(''),
+        ]);
+        setState(() {
+          _progress = 0.5 + ((i + 1) / (users.length * 2)); // Second half for table 2
+        });
+      }
+
+      // Save and share
       final tempDir = await getTemporaryDirectory();
-      final file = File('${tempDir.path}/leads_report_${DateTime.now().millisecondsSinceEpoch}.pdf');
-      await file.writeAsBytes(await pdf.save());
+      final branchName = (branchToUse.isNotEmpty ? branchToUse : "AllBranches").replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+      final monthName = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      ][_selectedMonth - 1];
+      final file = File('${tempDir.path}/Monthly Report $branchName $monthName.xlsx');
+      final fileBytes = await excel.encode();
+      await file.writeAsBytes(fileBytes!);
 
-      // Share the PDF file
-      await Share.shareXFiles([XFile(file.path)], text: 'Leads Report');
+      await Share.shareXFiles([XFile(file.path)], text: 'Monthly Report Excel');
 
+      setState(() {
+        _progress = 1.0;
+      });
+
+      // Optionally, wait a moment to show 100%
+      await Future.delayed(const Duration(milliseconds: 400));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to generate leads report: $e')),
+        SnackBar(content: Text('Failed to generate Excel: $e')),
       );
+    } finally {
+      setState(() {
+        _isLoading = false;
+        _progress = 0.0;
+      });
     }
   }
 }
-

@@ -18,6 +18,10 @@ import 'todo.dart'; // <-- Add this import if not present
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Request camera and location permissions
+  await Permission.camera.request();
+  await Permission.location.request();
+
   // Initialize Firebase
   await Firebase.initializeApp(
     options: FirebaseOptions(
