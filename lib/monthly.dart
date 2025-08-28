@@ -249,18 +249,30 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
                                 ],
                                 rows: missed.map((m) => DataRow(cells: [
                                   DataCell(Text(m['date'])),
-                                  DataCell(Icon(
-                                    m['todo'] ? Icons.check_circle : Icons.cancel,
-                                    color: m['todo'] ? Colors.green : Colors.red,
-                                  )),
-                                  DataCell(Icon(
-                                    m['lead'] ? Icons.check_circle : Icons.cancel,
-                                    color: m['lead'] ? Colors.green : Colors.red,
-                                  )),
+                                  DataCell(
+                                    Text(
+                                      m['todo'] ? '✓' : '⭕',
+                                      style: TextStyle(
+                                        color: m['todo'] ? Colors.green : Colors.red,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    Text(
+                                      m['lead'] ? '✓' : '⭕',
+                                      style: TextStyle(
+                                        color: m['lead'] ? Colors.green : Colors.red,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
                                 ])).toList(),
-                              ),
+                              )
                             );
-                          },
+                            },
                         ),
                     ],
                   ),
