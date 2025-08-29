@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'watermark_util.dart';
 
 class CameraPage extends StatefulWidget {
   const CameraPage({super.key});
@@ -78,11 +79,20 @@ class _CameraPageState extends State<CameraPage> {
                       ElevatedButton.icon(
                         icon: const Icon(Icons.save),
                         label: const Text('Use This Photo'),
-                        onPressed: () {
-                          Navigator.pop(context, {
-                            'image': _capturedImage,
-                            'location': _locationString,
-                          });
+                        onPressed: () async {
+                          if (_capturedImage != null &&
+                              _locationString != null &&
+                              _dateTimeString != null) {
+                            final watermarkText = "${_locationString!}\n$_dateTimeString";
+                            final watermarkedFile = await addWatermark(
+                              imageFile: _capturedImage!,
+                              watermarkText: watermarkText,
+                            );
+                            Navigator.pop(context, {
+                              'image': watermarkedFile,
+                              'location': _locationString,
+                            });
+                          }
                         },
                       ),
                       const SizedBox(height: 8),

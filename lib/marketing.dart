@@ -138,6 +138,14 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
         _upcomingEventDate = null;
         _cameraImage = null;
         _locationString = null;
+        // Clear all controllers to reset the form fields
+        _shopNameController.clear();
+        _lastItemController.clear();
+        _currentEnquiriesController.clear();
+        _confirmedOrderController.clear();
+        _upcomingEventsController.clear();
+        _upcomingTrendsController.clear();
+        _feedbackController.clear();
       });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
