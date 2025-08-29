@@ -17,12 +17,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'loading_page.dart'; // Make sure you have a loading_page.dart file with LoadingPage class
 import 'main.dart'; // <-- Import where your routeObserver is defined
 import 'todoform.dart';
-import 'dailyform.dart';
+import 'Performance/dailyform.dart';
 import 'dart:math';
-import 'performance_score_page.dart';
-import 'admin_performance_page.dart'; // <-- Add this import if AdminPerformancePage exists in this file
+import 'Performance/performance_score_page.dart';
+import 'Performance/admin_performance_page.dart'; // <-- Add this import if AdminPerformancePage exists in this file
 import 'package:in_app_update/in_app_update.dart'; // Import the in_app_update package
-import 'entry_page.dart'; // Import the entry page
+import 'Performance/entry_page.dart'; // Import the entry page
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});

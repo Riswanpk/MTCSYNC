@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'monthly_performance_table_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'loading_page.dart';
-import 'theme_notifier.dart';
-
+import '../loading_page.dart';
+import '../theme_notifier.dart';
+import 'performance_graphics.dart';
+import 'performance_total.dart';
 // --- Score Page Widget (your original code, renamed) ---
 class PerformanceScoreInnerPage extends StatefulWidget {
   @override
@@ -32,6 +33,9 @@ class _PerformanceScoreInnerPageState extends State<PerformanceScoreInnerPage> w
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
+  PageController _pageController = PageController();
+  int _currentPage = 0;
+
   @override
   void initState() {
     super.initState();
@@ -53,6 +57,7 @@ class _PerformanceScoreInnerPageState extends State<PerformanceScoreInnerPage> w
   @override
   void dispose() {
     _controller.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -349,105 +354,210 @@ class _PerformanceScoreInnerPageState extends State<PerformanceScoreInnerPage> w
     return 1 + diff;
   }
 
+  Widget _buildScoreCard({Key? key, required Widget child}) {
+    return Padding(
+      key: key,
+      padding: const EdgeInsets.all(32.0),
+      child: child,
+    );
+  }
+
+  Widget _buildTotalScorePage(ThemeData theme, ColorScheme colorScheme) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 16),
+        Text(
+          'Total Score ',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: colorScheme.primary,
+            fontFamily: 'PTSans',
+          ),
+        ),
+        const SizedBox(height: 18),
+        Text(
+          '$totalScore / 70',
+          style: theme.textTheme.displayMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: totalScore >= 60
+                ? Colors.green
+                : totalScore >= 40
+                    ? Colors.orange
+                    : Colors.red,
+            letterSpacing: 2,
+          ),
+        ),
+        const SizedBox(height: 18),
+        if (lateReduced)
+          _buildReason("Please reach on time everyday", Icons.access_time, Colors.redAccent),
+        if (notApprovedReduced)
+          _buildReason("Avoid unapproved leaves", Icons.block, Colors.redAccent),
+        for (final reason in dressReasons)
+          _buildReason(reason, Icons.checkroom, Colors.deepOrange),
+        for (final reason in attitudeReasons)
+          _buildReason(reason, Icons.sentiment_satisfied, Colors.deepPurple),
+        if (meetingReduced)
+          _buildReason("Attend all meetings", Icons.groups, Colors.blueGrey),
+      ],
+    );
+  }
+
+  Widget _buildLastMonthScorePage(ThemeData theme, ColorScheme colorScheme) {
+    final isDark = theme.brightness == Brightness.dark;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Card(
+          color: isDark ? colorScheme.background : Colors.teal[50],
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          margin: const EdgeInsets.only(bottom: 16),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              children: [
+                Text(
+                  "Last Month's Performance Score ",
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '$performanceScore / 30',
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red[700],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSuperpositionTransition(Widget child, Animation<double> animation) {
+    // Cross-fade + scale
+    return FadeTransition(
+      opacity: animation,
+      child: ScaleTransition(
+        scale: Tween<double>(begin: 0.92, end: 1.0).animate(
+          CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
+        ),
+        child: child,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: Text('My Performance Score', style: theme.textTheme.titleLarge),
-        backgroundColor: colorScheme.primary,
-        elevation: 0,
-      ),
-      body: Center(
-        child: isLoading
-            ? LoadingPage()
-            : AnimatedBuilder(
-                animation: _scaleAnimation,
-                builder: (context, child) {
-                  return Transform.scale(
-                    scale: _scaleAnimation.value,
-                    child: child,
-                  );
-                },
-                child: Card(
-                  elevation: 8,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                  color: isDark ? colorScheme.surface : const Color.fromARGB(255, 203, 207, 207),
-                  margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                  child: Padding(
-                    padding: const EdgeInsets.all(32.0),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(height: 16),
-                        Text(
-                          'Total Score ',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: colorScheme.primary,
+    return DefaultTextStyle(
+      style: theme.textTheme.bodyMedium!.copyWith(fontFamily: 'PTSans'),
+      child: Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        appBar: AppBar(
+          title: Text('My Performance Score', style: theme.textTheme.titleLarge?.copyWith(fontFamily: 'PTSans')),
+          backgroundColor: colorScheme.primary,
+          elevation: 0,
+        ),
+        body: Center(
+          child: isLoading
+              ? LoadingPage()
+              : AnimatedBuilder(
+                  animation: _scaleAnimation,
+                  builder: (context, child) {
+                    return Transform.scale(
+                      scale: _scaleAnimation.value,
+                      child: child,
+                    );
+                  },
+                  child: SizedBox(
+                    height: 420,
+                    child: PageView.builder(
+                      controller: _pageController,
+                      itemCount: 3, // <-- changed from 2 to 3
+                      onPageChanged: (i) => setState(() => _currentPage = i),
+                      itemBuilder: (context, index) {
+                        return AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 500),
+                          transitionBuilder: _buildSuperpositionTransition,
+                          child: _buildScoreCard(
+                            key: ValueKey(index),
+                            child: index == 0
+                                ? Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      // Gauge at the top
+                                      TotalScoreGauge(
+                                        totalScore: totalScore,
+                                        lateReduced: lateReduced,
+                                        notApprovedReduced: notApprovedReduced,
+                                        dressReasons: dressReasons,
+                                        attitudeReasons: attitudeReasons,
+                                        meetingReduced: meetingReduced,
+                                      ),
+                                      const SizedBox(height: 24), // More space between gauge and statements
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            if (lateReduced)
+                                              _buildReason("Late arrival reduced score", Icons.alarm, Colors.red),
+                                            if (notApprovedReduced)
+                                              _buildReason("Not approved absence reduced score", Icons.close, Colors.red),
+                                            for (final reason in {...dressReasons})
+                                              _buildReason(reason, Icons.checkroom, Colors.orange),
+                                            for (final reason in {...attitudeReasons})
+                                              _buildReason(reason, Icons.sentiment_dissatisfied, Colors.orange),
+                                            if (meetingReduced)
+                                              _buildReason("Meeting attendance reduced score", Icons.meeting_room, Colors.purple),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : index == 1
+                                    ? _buildLastMonthScorePage(theme, colorScheme)
+                                    : PerformanceRadarChart(
+                                        attendance: 20 - (lateReduced ? 5 : 0) - (notApprovedReduced ? 10 : 0),
+                                        dress: 20 - dressReasons.length * 5,
+                                        attitude: 20 - attitudeReasons.length * 2,
+                                        meeting: meetingReduced ? 9 : 10,
+                                      ),
                           ),
-                        ),
-                        const SizedBox(height: 18),
-                        Text(
-                          '$totalScore / 70',
-                          style: theme.textTheme.displayMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: totalScore >= 60
-                                ? Colors.green
-                                : totalScore >= 40
-                                    ? Colors.orange
-                                    : Colors.red,
-                            letterSpacing: 2,
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        if (lateReduced)
-                          _buildReason("Please reach on time everyday", Icons.access_time, Colors.redAccent),
-                        if (notApprovedReduced)
-                          _buildReason("Avoid unapproved leaves", Icons.block, Colors.redAccent),
-                        for (final reason in dressReasons)
-                          _buildReason(reason, Icons.checkroom, Colors.deepOrange),
-                        for (final reason in attitudeReasons)
-                          _buildReason(reason, Icons.sentiment_satisfied, Colors.deepPurple),
-                        if (meetingReduced)
-                          _buildReason("Attend all meetings", Icons.groups, Colors.blueGrey),
-                        const SizedBox(height: 18),
-                        Card(
-                          color: isDark ? colorScheme.background : Colors.teal[50],
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          margin: const EdgeInsets.only(bottom: 16),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              children: [
-                                Text(
-                                  "Last Month's Performance Score ",
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: colorScheme.primary,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  '$performanceScore / 30',
-                                  style: theme.textTheme.headlineMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.red[700],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
+                        );
+                      },
                     ),
                   ),
                 ),
+        ),
+        bottomNavigationBar: Padding(
+          padding: const EdgeInsets.only(bottom: 16.0, top: 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(
+              3, // <-- changed from 2 to 3
+              (i) => AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                margin: const EdgeInsets.symmetric(horizontal: 6),
+                width: _currentPage == i ? 22 : 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: _currentPage == i ? colorScheme.primary : Colors.grey[400],
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
+            ),
+          ),
+        ),
       ),
     );
   }
