@@ -554,7 +554,7 @@ class SettingsPage extends StatelessWidget {
       final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
       final message = Message()
         ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
-        ..recipients.addAll(['crmmalabar@gmail.com' ])
+        ..recipients.addAll(['crmmalabar@gmail.com','performancemtc@gmail.com' ])
         ..subject = 'Monthly Sales Performance Report'
         ..text = 'Please find attached the monthly sales performance report.'
         ..attachments = [FileAttachment(file)];
