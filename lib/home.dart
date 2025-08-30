@@ -2,21 +2,21 @@ import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'todo.dart';
-import 'leads.dart';
+import 'Todo & Leads/todo.dart';
+import 'Todo & Leads/leads.dart';
 import 'login.dart';
-import 'settings.dart'; // Import the settings page
-import 'feedback.dart'; // Add this import
-import 'feedback_admin.dart'; // Add this import
-import 'dashboard.dart'; // Import the dashboard page
-import 'manageusers.dart'; // Add this import
-import 'customer_list.dart'; // Import the customer list page
+import 'Misc/settings.dart'; // Import the settings page
+import 'Feedback/feedback.dart'; // Add this import
+import 'Feedback/feedback_admin.dart'; // Add this import
+import 'Dashboard/dashboard.dart'; // Import the dashboard page
+import 'Misc/manageusers.dart'; // Add this import
+import 'Todo & Leads/customer_list.dart'; // Import the customer list page
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'loading_page.dart'; // Make sure you have a loading_page.dart file with LoadingPage class
+import 'Misc/loading_page.dart'; // Make sure you have a loading_page.dart file with LoadingPage class
 import 'main.dart'; // <-- Import where your routeObserver is defined
-import 'todoform.dart';
+import 'Todo & Leads/todoform.dart';
 import 'Performance/dailyform.dart';
 import 'dart:math';
 import 'Performance/performance_score_page.dart';

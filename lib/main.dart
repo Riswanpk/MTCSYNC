@@ -7,13 +7,13 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:in_app_update/in_app_update.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-import 'constant.dart';
+import 'Misc/constant.dart';
 import 'login.dart';
 import 'home.dart';
-import 'splash_screen.dart';
-import 'theme_notifier.dart';
-import 'presentfollowup.dart';
-import 'todo.dart'; // <-- Add this import if not present
+import 'Misc/splash_screen.dart';
+import 'Misc/theme_notifier.dart';
+import 'Todo & Leads/presentfollowup.dart';
+import 'Todo & Leads/todo.dart'; // <-- Add this import if not present
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'home.dart';
-import 'login.dart';
-import 'main.dart'; // to access initialNotificationAction
-import 'presentfollowup.dart';
+import '../home.dart';
+import '../login.dart';
+import '../main.dart'; // to access initialNotificationAction
+import '../Todo & Leads/presentfollowup.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});

@@ -58,6 +58,7 @@ dependencies:
   geocoding: ^4.0.0
   image: ^4.3.0
   image_watermark: ^0.1.0
+  url_launcher: ^6.3.2
   
 
   # The following adds the Cupertino Icons font to your application.
@@ -91,6 +92,9 @@ flutter:
      - assets/images/logo.png
      - assets/sounds/click.mp3
      - assets/fonts/NotoSans-Regular.ttf
+     - assets/fonts/Electrolize-Regular.ttf
+     - assets/fonts/Montserrat-Regular.ttf
+     - assets/fonts/AlumniSansSC-VariableFont_wght.ttf
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

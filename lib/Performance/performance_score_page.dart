@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'monthly_performance_table_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../loading_page.dart';
-import '../theme_notifier.dart';
+import '../Misc/loading_page.dart';
+import '../Misc/theme_notifier.dart';
 import 'performance_graphics.dart';
 import 'performance_total.dart';
 // --- Score Page Widget (your original code, renamed) ---

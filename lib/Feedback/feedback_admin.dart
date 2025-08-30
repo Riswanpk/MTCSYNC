@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart'; // Add this import
-import 'marketing.dart';
+import '../Marketing/marketing.dart';
 
 class FeedbackAdminPage extends StatelessWidget {
   const FeedbackAdminPage({super.key});

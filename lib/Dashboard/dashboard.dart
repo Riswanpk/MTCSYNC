@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'monthly.dart';
-import 'leads.dart';
+import '../Todo & Leads/leads.dart';
 import 'daily.dart';
 import 'insights.dart';
 

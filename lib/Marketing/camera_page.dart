@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'watermark_util.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CameraPage extends StatefulWidget {
   const CameraPage({super.key});
@@ -51,6 +52,15 @@ class _CameraPageState extends State<CameraPage> {
     }
   }
 
+  Future<void> _submitForm() async {
+    // Your existing form submission logic
+    await FirebaseFirestore.instance.collection('marketing').add({
+      // ...other fields...
+      'locationString': _locationString,
+      // ...other fields...
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -90,7 +100,7 @@ class _CameraPageState extends State<CameraPage> {
                             );
                             Navigator.pop(context, {
                               'image': watermarkedFile,
-                              'location': _locationString,
+                              'location': _locationString, // Already present
                             });
                           }
                         },
