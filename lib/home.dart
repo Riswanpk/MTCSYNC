@@ -239,9 +239,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
   Future<void> _checkAndSendMonthlyReport() async {
     try {
       final now = DateTime.now();
-      final currentMonth = '${now.year}-${now.month}';
+      final prevMonthDate = DateTime(now.year, now.month - 1, 1);
+      final prevMonthKey = '${prevMonthDate.year}-${prevMonthDate.month}';
 
-      // Use a global doc (e.g., "global" as the doc ID)
       final trackingDocRef = FirebaseFirestore.instance
           .collection('reportTracking')
           .doc('global');
@@ -249,13 +249,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
       final trackingDoc = await trackingDocRef.get();
       final lastSentMonth = trackingDoc.data()?['lastSentMonth'];
 
-      // If report hasn't been sent for this month
-      if (lastSentMonth != currentMonth) {
-        await _sendMonthlyExcelReport();
+      if (lastSentMonth != prevMonthKey) {
+        await _sendMonthlyExcelReport(year: prevMonthDate.year, month: prevMonthDate.month);
 
-        // Update Firestore
         await trackingDocRef.set({
-          'lastSentMonth': currentMonth,
+          'lastSentMonth': prevMonthKey,
           'lastUpdated': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       }
@@ -264,22 +262,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
     }
   }
 
-  Future<void> _sendMonthlyExcelReport() async {
+  Future<void> _sendMonthlyExcelReport({int? year, int? month}) async {
     try {
-      // You can use any role or just pick the current user
       final uid = FirebaseAuth.instance.currentUser!.uid;
-
-      // Get role from Firestore (optional, or just use a default)
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
           .get();
-
       final role = userDoc.data()?['role']?.toString().toLowerCase() ?? 'unknown';
-
-      // Just send the report (no role check)
       final settingsPage = SettingsPage(userRole: role);
-      await settingsPage.exportAndSendExcel(context);
+      await settingsPage.exportAndSendExcel(context, year: year, month: month);
       print('Monthly Excel Report Sent!');
     } catch (e) {
       print('Error sending monthly report: $e');

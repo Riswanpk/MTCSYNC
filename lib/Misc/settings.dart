@@ -74,11 +74,78 @@ class SettingsPage extends StatelessWidget {
     return "#FFFFFF";
   }
 
-  Future<void> exportAndSendExcel(BuildContext context) async {
+  Future<void> _pickMonthAndSendExcel(BuildContext context) async {
+    DateTime now = DateTime.now();
+    int selectedYear = now.year;
+    int selectedMonth = now.month;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text('Select Month'),
+          content: StatefulBuilder(
+            builder: (context, setState) {
+              return Row(
+                children: [
+                  DropdownButton<int>(
+                    value: selectedMonth,
+                    items: List.generate(12, (i) => i + 1)
+                        .map((m) => DropdownMenuItem(
+                              value: m,
+                              child: Text(
+                                '${_monthShort(m)}',
+                                style: TextStyle(fontSize: 16),
+                              ),
+                            ))
+                        .toList(),
+                    onChanged: (val) => setState(() => selectedMonth = val!),
+                  ),
+                  SizedBox(width: 16),
+                  DropdownButton<int>(
+                    value: selectedYear,
+                    items: [now.year - 1, now.year, now.year + 1]
+                        .map((y) => DropdownMenuItem(
+                              value: y,
+                              child: Text('$y'),
+                            ))
+                        .toList(),
+                    onChanged: (val) => setState(() => selectedYear = val!),
+                  ),
+                ],
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx, {'year': selectedYear, 'month': selectedMonth});
+              },
+              child: Text('Send'),
+            ),
+          ],
+        );
+      },
+    ).then((result) {
+      if (result != null && result is Map) {
+        exportAndSendExcel(context, year: result['year'], month: result['month']);
+      }
+    });
+  }
+
+  // Modify exportAndSendExcel to accept year/month:
+  Future<void> exportAndSendExcel(BuildContext context, {int? year, int? month}) async {
     try {
       final now = DateTime.now();
-      final monthStart = DateTime(now.year, now.month, 1);
-      final monthEnd = DateTime(now.year, now.month + 1, 1);
+      final reportYear = year ?? now.year;
+      final reportMonth = month ?? now.month;
+      final monthStart = DateTime(reportYear, reportMonth, 1);
+      final monthEnd = DateTime(reportYear, reportMonth + 1, 1);
+      final daysInMonth = monthEnd.difference(monthStart).inDays;
 
       final formsSnap = await FirebaseFirestore.instance
           .collection('dailyform')
@@ -306,7 +373,7 @@ class SettingsPage extends StatelessWidget {
           // ATTENDANCE TABLE
           sheet.appendRow([ex.TextCellValue('ATTENDANCE (OUT OF 20)')]);
           // Color header cell
-          final attHeaderCell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: sheet.maxRows - 1));
+          final attHeaderCell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: 0));
           attHeaderCell.cellStyle = ex.CellStyle(
             bold: true,
             backgroundColorHex: ex.ExcelColor.fromHexString("#D9EAD3"),
@@ -315,7 +382,7 @@ class SettingsPage extends StatelessWidget {
           sheet.appendRow([ex.TextCellValue('CATEGORY '), ...dateRow.skip(1)]);
           // Color sub-header row
           for (int i = 0; i < dateRow.length; i++) {
-            final cell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: sheet.maxRows - 1));
+            final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
             cell.cellStyle = ex.CellStyle(
               bold: true,
               backgroundColorHex: ex.ExcelColor.fromHexString("#D9EAD3"),
@@ -342,7 +409,7 @@ class SettingsPage extends StatelessWidget {
             sheet.appendRow(row);
             // --- Color tick/cross cells
             for (int col = 1; col < row.length; col++) {
-              final cell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: rowIdxAtt));
+              final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: rowIdxAtt, columnIndex: col));
               if (row[col] is ex.TextCellValue) {
                 final val = (row[col] as ex.TextCellValue).value;
                 if (val == '✔') {
@@ -362,7 +429,7 @@ class SettingsPage extends StatelessWidget {
           // DRESS CODE TABLE
           sheet.appendRow([ex.TextCellValue('DRESS CODE (OUT OF 20)')]);
           // Color header cell
-          final dressHeaderCell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: sheet.maxRows - 1));
+          final dressHeaderCell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: 0));
           dressHeaderCell.cellStyle = ex.CellStyle(
             bold: true,
             backgroundColorHex: ex.ExcelColor.fromHexString("#D9EAD3"),
@@ -371,7 +438,7 @@ class SettingsPage extends StatelessWidget {
           sheet.appendRow([ex.TextCellValue('CATEGORY '), ...dateRow.skip(1)]);
           // Color sub-header row
           for (int i = 0; i < dateRow.length; i++) {
-            final cell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: sheet.maxRows - 1));
+            final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
             cell.cellStyle = ex.CellStyle(
               bold: true,
               backgroundColorHex: ex.ExcelColor.fromHexString("#D9EAD3"),
@@ -396,7 +463,7 @@ class SettingsPage extends StatelessWidget {
             final rowIdxDress = sheet.maxRows;
             sheet.appendRow(row);
             for (int col = 1; col < row.length; col++) {
-              final cell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: rowIdxDress));
+              final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: rowIdxDress, columnIndex: col));
               if (row[col] is ex.TextCellValue) {
                 final val = (row[col] as ex.TextCellValue).value;
                 if (val == '✔') {
@@ -417,7 +484,7 @@ class SettingsPage extends StatelessWidget {
           sheet.appendRow([ex.TextCellValue('CATEGORY '), ...dateRow.skip(1)]);
           // Color sub-header row
           for (int i = 0; i < dateRow.length; i++) {
-            final cell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: sheet.maxRows - 1));
+            final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
             cell.cellStyle = ex.CellStyle(
               bold: true,
               backgroundColorHex: ex.ExcelColor.fromHexString("#D9EAD3"),
@@ -450,7 +517,7 @@ class SettingsPage extends StatelessWidget {
             final rowIdxAtti = sheet.maxRows;
             sheet.appendRow(row);
             for (int col = 1; col < row.length; col++) {
-              final cell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: rowIdxAtti));
+              final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: rowIdxAtti, columnIndex: col));
               if (row[col] is ex.TextCellValue) {
                 final val = (row[col] as ex.TextCellValue).value;
                 if (val == '✔') {
@@ -470,7 +537,7 @@ class SettingsPage extends StatelessWidget {
           // MEETING TABLE
           sheet.appendRow([ex.TextCellValue('MEETING (OUT OF 10)')]);
           // Color header cell
-          final meetHeaderCell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: sheet.maxRows - 1));
+          final meetHeaderCell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: 0));
           meetHeaderCell.cellStyle = ex.CellStyle(
             bold: true,
             backgroundColorHex: ex.ExcelColor.fromHexString("#D9EAD3"),
@@ -479,7 +546,7 @@ class SettingsPage extends StatelessWidget {
           sheet.appendRow([ex.TextCellValue('CATEGORY '), ...dateRow.skip(1)]);
           // Color sub-header row
           for (int i = 0; i < dateRow.length; i++) {
-            final cell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: i, rowIndex: sheet.maxRows - 1));
+            final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
             cell.cellStyle = ex.CellStyle(
               bold: true,
               backgroundColorHex: ex.ExcelColor.fromHexString("#D9EAD3"),
@@ -502,7 +569,7 @@ class SettingsPage extends StatelessWidget {
             final rowIdxMeet = sheet.maxRows;
             sheet.appendRow(row);
             for (int col = 1; col < row.length; col++) {
-              final cell = sheet.cell(ex.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: rowIdxMeet));
+              final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: rowIdxMeet, columnIndex: col));
               if (row[col] is ex.TextCellValue) {
                 final val = (row[col] as ex.TextCellValue).value;
                 if (val == '✔') {
@@ -547,7 +614,7 @@ class SettingsPage extends StatelessWidget {
       if (!await dir.exists()) {
         await dir.create(recursive: true);
       }
-      final filePath = '${dir.path}/performance_${now.year}_${now.month}.xlsx';
+      final filePath = '${dir.path}/performance_${reportYear}_${reportMonth}.xlsx';
       final fileBytes = await excel.encode();
       final file = File(filePath)..writeAsBytesSync(fileBytes!);
 
@@ -649,7 +716,7 @@ class SettingsPage extends StatelessWidget {
                       children: [
                         if (isAdminUser)
                           ElevatedButton(
-                            onPressed: () => exportAndSendExcel(context),
+                            onPressed: () => _pickMonthAndSendExcel(context),
                             child: const Text('Send Monthly Excel Report'),
                           ),
                       ],
