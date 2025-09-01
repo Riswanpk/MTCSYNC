@@ -35,6 +35,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
   String feedback = '';
   File? _imageFile;
   bool isLoading = false;
+  String? locationString;
 
   Future<void> _openCamera() async {
     final result = await Navigator.push(
@@ -49,7 +50,18 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
   }
 
   Future<void> _submitForm() async {
+    // Validate the form first
     if (!_formKey.currentState!.validate()) return;
+
+    // Custom validation for required fields that are not handled by Form validators
+    if ((lastItemPurchasedDate == null && lastPurchasedMonth.trim().isEmpty) ||
+        (upcomingEventDate == null || upcomingEventDetails.trim().isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill all required fields.')),
+      );
+      return;
+    }
+
     setState(() => isLoading = true);
 
     String? imageUrl;
@@ -69,14 +81,17 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
       'branch': widget.branch,
       'shopName': shopName,
       'lastItemPurchasedDate': lastItemPurchasedDate,
+      'lastPurchasedMonth': lastPurchasedMonth,
       'lastPurchasedItem': lastPurchasedItem,
       'currentEnquiries': currentEnquiries,
       'confirmedOrder': confirmedOrder,
-      'upcomingEvents': upcomingEventDetails,
+      'upcomingEventDate': upcomingEventDate,
+      'upcomingEventDetails': upcomingEventDetails,
       'newProductSuggestion': newProductSuggestion,
       'upcomingTrends': upcomingTrends,
       'feedback': feedback,
       'imageUrl': imageUrl,
+      'locationString': locationString, // <-- Add this line
       'timestamp': FieldValue.serverTimestamp(),
     });
 
@@ -87,6 +102,11 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
     _formKey.currentState!.reset();
     setState(() {
       _imageFile = null;
+      lastItemPurchasedDate = null;
+      lastPurchasedMonth = '';
+      upcomingEventDate = null;
+      upcomingEventDetails = '';
+      locationString = null; // <-- Reset
     });
   }
 

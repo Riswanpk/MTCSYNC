@@ -17,14 +17,11 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
 
-    // If launched from notification with docId, do nothing (let main.dart handle navigation)
-    if (initialNotificationAction != null &&
-        initialNotificationAction!.payload?['docId'] != null) {
-      return;
-    }
-
-    // Normal splash logic
+    // Only run splash navigation if no notification navigation is pending
     Future.delayed(const Duration(seconds: 3), () {
+      // Add this guard:
+      if (initialNotificationAction != null) return;
+
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         Navigator.pushReplacement(

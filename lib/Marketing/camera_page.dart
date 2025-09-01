@@ -61,6 +61,19 @@ class _CameraPageState extends State<CameraPage> {
     });
   }
 
+  Future<void> _openCamera() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const CameraPage()),
+    );
+    if (result != null && result is Map && result['image'] != null) {
+      setState(() {
+        _capturedImage = result['image'];
+        _locationString = result['location']; // <-- Capture location
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(

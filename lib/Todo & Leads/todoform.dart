@@ -75,7 +75,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
         title: 'Task Reminder',
         body: 'Reminder for: $title',
         notificationLayout: NotificationLayout.Default,
-        payload: {'docId': docId}, // <-- Add this line
+        payload: {'docId': docId, 'type': 'todo'},
       ),
       schedule: NotificationCalendar(
         year: dateTime.year,

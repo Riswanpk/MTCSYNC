@@ -13,7 +13,7 @@ import 'home.dart';
 import 'Misc/splash_screen.dart';
 import 'Misc/theme_notifier.dart';
 import 'Todo & Leads/presentfollowup.dart';
-import 'Todo & Leads/todo.dart'; // <-- Add this import if not present
+import 'Todo & Leads/todo.dart'; // <-- Already present
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -124,43 +124,32 @@ class MyApp extends StatelessWidget {
           navigatorObservers: [routeObserver],
           navigatorKey: navigatorKey,
 
-          /// ✅ Handle deep links and splash properly
-          onGenerateRoute: (settings) {
-            // If app launched from a notification
-            if (initialNotificationAction != null &&
-                initialNotificationAction!.payload?['docId'] != null) {
-              final docId = initialNotificationAction!.payload!['docId']!;
-              final isEdit = initialNotificationAction!.buttonKeyPressed == 'EDIT_FOLLOWUP';
-              final channelKey = initialNotificationAction!.channelKey;
-              initialNotificationAction = null; // Clear after handling
+          /// ✅ Direct notification routing: skip splash/home if notification is present
+          home: Builder(
+            builder: (context) {
+              if (initialNotificationAction != null &&
+                  initialNotificationAction!.payload?['docId'] != null) {
+                final docId = initialNotificationAction!.payload!['docId']!;
+                final isEdit = initialNotificationAction!.buttonKeyPressed == 'EDIT_FOLLOWUP';
+                final channelKey = initialNotificationAction!.channelKey;
+                final isTodo = initialNotificationAction!.payload?['type'] == 'todo';
+                initialNotificationAction = null; // Clear after handling
 
-              // If it's a follow-up edit
-              if (isEdit) {
-                return MaterialPageRoute(
-                  builder: (context) => PresentFollowUp(docId: docId, editMode: true),
-                  settings: settings,
-                );
+                if (isEdit) {
+                  return PresentFollowUp(docId: docId, editMode: true);
+                }
+                if ((channelKey == 'reminder_channel' || channelKey == 'basic_channel') && isTodo) {
+                  return TaskDetailPageFromId(docId: docId);
+                }
+                if ((channelKey == 'reminder_channel' || channelKey == 'basic_channel') && !isTodo) {
+                  return PresentFollowUp(docId: docId);
+                }
+                return PresentFollowUp(docId: docId);
               }
-              // If it's a todo reminder
-              if (channelKey == 'reminder_channel') {
-                return MaterialPageRoute(
-                  builder: (context) => TaskDetailPageFromId(docId: docId),
-                  settings: settings,
-                );
-              }
-              // Default: fallback to PresentFollowUp view
-              return MaterialPageRoute(
-                builder: (context) => PresentFollowUp(docId: docId),
-                settings: settings,
-              );
-            }
-
-            // Otherwise → go through SplashScreen
-            return MaterialPageRoute(
-              builder: (context) => const SplashScreen(),
-              settings: settings,
-            );
-          },
+              // Otherwise → go through SplashScreen
+              return const SplashScreen();
+            },
+          ),
         );
       },
     );
@@ -201,35 +190,44 @@ class _UpdateGateState extends State<UpdateGate> {
 class NotificationController {
   @pragma("vm:entry-point")
   static Future<void> onActionReceivedMethod(ReceivedAction receivedAction) async {
-    // Handle todo reminder notification tap
-    if (receivedAction.channelKey == 'reminder_channel' &&
-        receivedAction.payload?['docId'] != null) {
-      final docId = receivedAction.payload!['docId']!;
-      // Use navigatorKey to push the detail page
-      navigatorKey.currentState?.push(
-        MaterialPageRoute(
-          builder: (context) => TaskDetailPageFromId(docId: docId),
-        ),
-      );
-      return;
-    }
+    if (receivedAction.payload?['docId'] != null) {
+      initialNotificationAction = receivedAction;
 
-    // If it's a reminder notification for a todo
-    if (receivedAction.channelKey == 'reminder_channel' &&
-        receivedAction.payload?['docId'] != null) {
-      initialNotificationAction = receivedAction;
-      return;
-    }
+      Future<void> doNavigate() async {
+        final navigator = navigatorKey.currentState;
+        if (navigator != null) {
+          final docId = receivedAction.payload!['docId']!;
+          final isEdit = receivedAction.buttonKeyPressed == 'EDIT_FOLLOWUP';
+          final channelKey = receivedAction.channelKey;
+          final isTodo = receivedAction.payload?['type'] == 'todo';
 
-    // Existing logic for followup/edit, etc.
-    if (receivedAction.buttonKeyPressed == null &&
-        receivedAction.payload?['docId'] != null) {
-      initialNotificationAction = receivedAction;
-      // Navigation will be handled by SplashScreen/MyApp
-    } else if (receivedAction.buttonKeyPressed == 'EDIT_FOLLOWUP' &&
-        receivedAction.payload?['docId'] != null) {
-      initialNotificationAction = receivedAction;
-      // Navigation will be handled by SplashScreen/MyApp
+          // Use same logic as edit followup for todo: open in view for normal, edit for edit button
+          if (isEdit) {
+            navigator.pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => PresentFollowUp(docId: docId, editMode: true)),
+              (route) => false,
+            );
+          } else if ((channelKey == 'reminder_channel' || channelKey == 'basic_channel') && isTodo) {
+            navigator.pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => TaskDetailPageFromId(docId: docId)),
+              (route) => false,
+            );
+          } else {
+            navigator.pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => PresentFollowUp(docId: docId)),
+              (route) => false,
+            );
+          }
+          initialNotificationAction = null; // Clear after handling
+        } else {
+          // If navigator is not ready, try again shortly
+          await Future.delayed(const Duration(milliseconds: 300));
+          await doNavigate();
+        }
+      }
+
+      // Start navigation attempt
+      doNavigate();
     }
   }
 
