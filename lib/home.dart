@@ -73,7 +73,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
     _checkForUpdate();
     _loadProfileImage();
     _checkTodoWarning();
-    _checkAndSendMonthlyReport();
+
+    // Only send report if today is the 1st of the month
+    final now = DateTime.now();
+    if (now.day == 1) {
+      _checkAndSendMonthlyReport();
+    }
 
     // Show performance deduction notification for sales user
     FirebaseAuth.instance.authStateChanges().listen((user) async {
