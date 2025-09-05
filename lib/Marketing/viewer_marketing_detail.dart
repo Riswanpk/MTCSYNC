@@ -14,77 +14,90 @@ class ViewerMarketingDetailPage extends StatelessWidget {
         appBar: AppBar(
           title: Text(data['shopName'] ?? 'Form Details'),
           backgroundColor: const Color(0xFF2C3E50),
+          actions: [
+            if (data['locationString'] != null && data['locationString'].toString().isNotEmpty)
+              IconButton(
+                icon: const Icon(Icons.map),
+                tooltip: 'Open in Google Maps',
+                onPressed: () => _openMap(context, data['locationString']),
+              ),
+          ],
         ),
         backgroundColor: const Color(0xFFE3E8EA),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Card(
-            color: const Color(0xFFF7F2F2),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _detail('Form Type', data['formType']),
-                  _detail('Shop Name', data['shopName']),
-                  _detail('Last Item Purchased Date', _formatDateOrString(data['lastItemPurchasedDate'], data['lastPurchasedMonth'])),
-                  _detail('Last Purchased Item', data['lastPurchasedItem']),
-                  _detail('Current Enquiries', data['currentEnquiries']),
-                  _detail('Confirmed Order', data['confirmedOrder']),
-                  _detail('Upcoming Big Events Date', _formatDate(data['upcomingEventDate'])),
-                  _detail('Upcoming Big Events Details', data['upcomingEvents']),
-                  _detail('New Product Suggestion', data['newProductSuggestion']),
-                  _detail('Upcoming Trends', data['upcomingTrends']),
-                  _detail('Feedback', data['feedback']),
-                  _detail('Branch', data['branch']),
-                  _detail('Username', data['username']),
-                  _detail('User ID', data['userid']),
-                  const SizedBox(height: 16),
-                  if (data['locationString'] != null && data['locationString'].toString().isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: InkWell(
-                        onTap: () => _openMap(context, data['locationString']),
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.blue[50],
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.location_on, color: Colors.blue),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  data['locationString'],
-                                  style: const TextStyle(
-                                    color: Colors.blue,
-                                    decoration: TextDecoration.underline,
-                                    fontSize: 15,
-                                  ),
-                                ),
+        body: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Card(
+                color: const Color(0xFFF7F2F2),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _detail('Form Type', data['formType']),
+                      _detail('Shop Name', data['shopName']),
+                      _detail('Last Item Purchased Date', _formatDateOrString(data['lastItemPurchasedDate'], data['lastPurchasedMonth'])),
+                      _detail('Last Purchased Item', data['lastPurchasedItem']),
+                      _detail('Current Enquiries', data['currentEnquiries']),
+                      _detail('Confirmed Order', data['confirmedOrder']),
+                      _detail('Upcoming Big Events Date', _formatDate(data['upcomingEventDate'])),
+                      _detail('Upcoming Big Events Details', data['upcomingEvents']),
+                      _detail('New Product Suggestion', data['newProductSuggestion']),
+                      _detail('Upcoming Trends', data['upcomingTrends']),
+                      _detail('Feedback', data['feedback']),
+                      _detail('Branch', data['branch']),
+                      _detail('Username', data['username']),
+                      _detail('User ID', data['userid']),
+                      const SizedBox(height: 16),
+                      if (data['locationString'] != null && data['locationString'].toString().isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: InkWell(
+                            onTap: () => _openMap(context, data['locationString']),
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.blue[50],
+                                borderRadius: BorderRadius.circular(10),
                               ),
-                            ],
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.location_on, color: Colors.blue),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      data['locationString'],
+                                      style: const TextStyle(
+                                        color: Colors.blue,
+                                        decoration: TextDecoration.underline,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                  if (data['imageUrl'] != null && data['imageUrl'].toString().isNotEmpty)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        data['imageUrl'],
-                        height: 180,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Text('Image not available'),
-                      ),
-                    ),
-                ],
+                      if (data['imageUrl'] != null && data['imageUrl'].toString().isNotEmpty)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(
+                            data['imageUrl'],
+                            height: 180,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Text('Image not available'),
+                          ),
+                        ),
+                      const SizedBox(height: 60),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );

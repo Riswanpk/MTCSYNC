@@ -45,6 +45,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
     if (result != null && result is Map && result['image'] != null) {
       setState(() {
         _imageFile = result['image'];
+        locationString = result['location']; // <-- Capture location here
       });
     }
   }

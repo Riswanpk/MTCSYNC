@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'camera_page.dart'; // Add this import
+import 'dart:io'; // Add this import
 
 class HotelResortCustomerForm extends StatefulWidget {
   final String username;
@@ -36,6 +38,8 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
   String feedback5 = '';
   String anySuggestion = '';
   bool isLoading = false;
+  File? _imageFile;
+  String? locationString;
 
   InputDecoration _inputDecoration(String label, {bool required = false}) => InputDecoration(
         labelText: required ? '$label *' : label,
@@ -51,6 +55,19 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
         ),
         contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
       );
+
+  Future<void> _openCamera() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const CameraPage()),
+    );
+    if (result != null && result is Map && result['image'] != null) {
+      setState(() {
+        _imageFile = result['image'];
+        locationString = result['location'];
+      });
+    }
+  }
 
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate() || category.isEmpty || date == null) {
@@ -80,18 +97,21 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
       'feedback4': feedback4,
       'feedback5': feedback5,
       'anySuggestion': anySuggestion,
+      'locationString': locationString, // <-- Save location
       'timestamp': FieldValue.serverTimestamp(),
     });
 
-    setState(() => isLoading = false);
+    setState(() {
+      isLoading = false;
+      _imageFile = null;
+      locationString = null;
+      category = '';
+      date = null;
+    });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Form submitted successfully!')),
     );
     _formKey.currentState!.reset();
-    setState(() {
-      category = '';
-      date = null;
-    });
   }
 
   @override
@@ -307,6 +327,33 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                       decoration: _inputDecoration('ANY SUGGESTION'),
                       onChanged: (v) => anySuggestion = v,
                     ),
+                    const SizedBox(height: 16),
+
+                    // ATTACH SHOP PHOTO
+                    Text(
+                      'Attach Shop Photo',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontFamily: 'Electorize',
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _imageFile == null
+                        ? OutlinedButton.icon(
+                            icon: const Icon(Icons.camera_alt),
+                            label: const Text('Take Photo'),
+                            onPressed: _openCamera,
+                          )
+                        : Column(
+                            children: [
+                              Image.file(_imageFile!, height: 120),
+                              TextButton(
+                                onPressed: () => setState(() => _imageFile = null),
+                                child: const Text('Remove Photo'),
+                              ),
+                            ],
+                          ),
                     const SizedBox(height: 28),
 
                     ElevatedButton(

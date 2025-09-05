@@ -92,13 +92,6 @@ class _CameraPageState extends State<CameraPage> {
                     children: [
                       Image.file(_capturedImage!, height: 300),
                       const SizedBox(height: 16),
-                      if (_locationString != null && _dateTimeString != null)
-                        Text(
-                          "${_locationString!}\n$_dateTimeString",
-                          style: const TextStyle(fontSize: 14),
-                          textAlign: TextAlign.left,
-                        ),
-                      const SizedBox(height: 16),
                       ElevatedButton.icon(
                         icon: const Icon(Icons.save),
                         label: const Text('Use This Photo'),
