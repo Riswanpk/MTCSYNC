@@ -87,244 +87,85 @@ class _CustomerListPageState extends State<CustomerListPage> {
   String searchQuery = '';
   String? userBranch;
   String? userRole;
+  String? userId;
 
   @override
   void initState() {
     super.initState();
-    _fetchUserBranch();
+    _fetchUserInfo();
   }
 
-  Future<void> _fetchUserBranch() async {
+  Future<void> _fetchUserInfo() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       setState(() {
-        userBranch = doc.data()?['branch'];
-        userRole = doc.data()?['role'];
+        userBranch = userDoc.data()?['branch'];
+        userRole = userDoc.data()?['role'];
+        userId = user.uid;
       });
     }
   }
 
-  Future<void> _deleteEntry(Map<String, dynamic> data) async {
-    String? phone = data['phone'];
-    if (phone == null) return;
-    // Find the document by phone (assuming phone is unique)
-    Query query = FirebaseFirestore.instance
-        .collection('customer')
-        .where('phone', isEqualTo: phone);
-    // Only filter by branch if not admin
-    if (userRole != 'admin') {
-      query = query.where('branch', isEqualTo: userBranch);
-    }
-    final snap = await query.get();
-    for (var doc in snap.docs) {
-      await doc.reference.delete();
-    }
-    setState(() {}); // Refresh list
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (userBranch == null) {
+    if (userBranch == null || userRole == null) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
-    final theme = Theme.of(context);
+    // Always fetch all customer, filter in Dart for matching branch
+    final customerQuery = FirebaseFirestore.instance.collection('customer');
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Customer & Leads List'),
+        title: const Text('Customer List'),
         backgroundColor: const Color(0xFF005BAC),
-        foregroundColor: Colors.white,
-        elevation: 2,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                color: theme.cardColor,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2))],
-              ),
-              child: TextField(
-                decoration: InputDecoration(
-                  hintText: 'Search by phone or name...',
-                  prefixIcon: Icon(Icons.search, color: Colors.blueGrey),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-                ),
-                onChanged: (val) {
-                  setState(() {
-                    searchQuery = val.trim().toLowerCase();
-                  });
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: FutureBuilder<List<Map<String, dynamic>>>(
-                future: _fetchCombinedData(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  final docs = snapshot.data!;
-                  if (docs.isEmpty) {
-                    return const Center(child: Text('No customers or leads found.'));
-                  }
-                  return Column(
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              flex: 2,
-                              child: Text('Phone', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey[800], fontFamily: 'Montserrat')),
-                            ),
-                            Expanded(
-                              flex: 3,
-                              child: Text('Name', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey[800], fontFamily: 'Montserrat')),
-                            ),
-                            if (userRole == 'admin')
-                              const SizedBox(width: 40), // For delete button
-                            const SizedBox(width: 24), // For arrow icon
-                          ],
-                        ),
-                      ),
-                      const Divider(height: 0, thickness: 1),
-                      Expanded(
-                        child: ListView.separated(
-                          itemCount: docs.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
-                          itemBuilder: (context, idx) {
-                            final data = docs[idx];
-                            return ShrinkOnTouchCard(
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(12),
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => CustomerProfilePage(customer: data),
-                                    ),
-                                  );
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        flex: 2,
-                                        child: Text(
-                                          data['phone'] ?? '-',
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontFamily: 'Montserrat',
-                                            color: Colors.black,
-                                          ),
-                                        ),
-                                      ),
-                                      Expanded(
-                                        flex: 3,
-                                        child: Text(
-                                          data['name'] ?? '-',
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w500,
-                                            fontFamily: 'Montserrat',
-                                            color: Colors.black,
-                                          ),
-                                        ),
-                                      ),
-                                      if (userRole == 'admin')
-                                        IconButton(
-                                          icon: const Icon(Icons.delete, color: Color.fromARGB(255, 0, 0, 0)),
-                                          tooltip: 'Delete',
-                                          onPressed: () async {
-                                            final confirm = await showDialog<bool>(
-                                              context: context,
-                                              builder: (ctx) => AlertDialog(
-                                                title: const Text('Delete Entry'),
-                                                content: Text('Are you sure you want to delete this Customer?'),
-                                                actions: [
-                                                  TextButton(
-                                                    onPressed: () => Navigator.pop(ctx, false),
-                                                    child: const Text('Cancel'),
-                                                  ),
-                                                  ElevatedButton(
-                                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                                                    onPressed: () => Navigator.pop(ctx, true),
-                                                    child: const Text('Delete'),
-                                                  ),
-                                                ],
-                                              ),
-                                            );
-                                            if (confirm == true) {
-                                              await _deleteEntry(data);
-                                            }
-                                          },
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
+      body: StreamBuilder<QuerySnapshot>(
+        stream: customerQuery.snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final docs = snapshot.data!.docs;
+          // Filter by branch in Dart
+          final filteredDocs = docs.where((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final branch = (data['branch'] ?? '').toString();
+            final name = (data['name'] ?? '').toString().toLowerCase();
+            // Admin: show all, others: only matching branch
+            final branchMatch = userRole == 'admin' ? true : branch == userBranch;
+            final nameMatch = searchQuery.isEmpty || name.contains(searchQuery);
+            return branchMatch && nameMatch;
+          }).toList();
+
+          if (filteredDocs.isEmpty) {
+            return const Center(child: Text('No customers found.'));
+          }
+
+          return ListView.builder(
+            itemCount: filteredDocs.length,
+            itemBuilder: (context, index) {
+              final data = filteredDocs[index].data() as Map<String, dynamic>;
+              return ListTile(
+                title: Text(data['name'] ?? ''),
+                subtitle: Text(data['branch'] ?? ''),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CustomerProfilePage(customer: data),
+                    ),
                   );
                 },
-              ),
-            ),
-          ],
-        ),
+              );
+            },
+          );
+        },
       ),
     );
-  }
-
-  Future<List<Map<String, dynamic>>> _fetchCombinedData() async {
-    Query customerQuery = FirebaseFirestore.instance.collection('customer');
-    // If not admin, filter by branch
-    if (userRole != 'admin') {
-      customerQuery = customerQuery.where('branch', isEqualTo: userBranch);
-    }
-
-    final customerSnap = await customerQuery.get();
-
-    final List<Map<String, dynamic>> customers = [];
-
-    for (var doc in customerSnap.docs) {
-      final data = doc.data();
-      if (data != null) {
-        final mapData = data as Map<String, dynamic>;
-        mapData['type'] = 'Customer'; // Optional, can be removed if not used
-        customers.add(mapData);
-      }
-    }
-
-    // Filter by search query
-    final filtered = customers.where((data) {
-      final phone = (data['phone'] ?? '').toString().toLowerCase();
-      final name = (data['name'] ?? '').toString().toLowerCase();
-      return searchQuery.isEmpty ||
-          phone.contains(searchQuery) ||
-          name.contains(searchQuery);
-    }).toList();
-
-    // Sort alphabetically by name
-    filtered.sort((a, b) => (a['name'] ?? '').toString().toLowerCase().compareTo((b['name'] ?? '').toString().toLowerCase()));
-
-    return filtered;
   }
 }
 

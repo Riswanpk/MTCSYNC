@@ -23,7 +23,7 @@ import 'Performance/performance_score_page.dart';
 import 'Performance/admin_performance_page.dart'; // <-- Add this import if AdminPerformancePage exists in this file
 import 'package:in_app_update/in_app_update.dart'; // Import the in_app_update package
 import 'Performance/entry_page.dart'; // Import the entry page
-
+import 'Marketing/marketing.dart'; // Import marketing page
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -834,58 +834,54 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                                   icon: Icons.dashboard_rounded,
                                 ),
                               ),
-                            // For Customer List button (sales)
-                            if (role == 'sales')
-                              SizedBox(
-                                width: 290,
-                                height: 56,
-                                child: NeumorphicButton(
-                                  onTap: () async {
-                                    await showLoadingDialog(context);
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (context) => const CustomerListPage()),
+                            // REMOVE Customer List button for all roles here
+                            // Add Marketing button
+                            SizedBox(
+                              width: 200,
+                              height: 56,
+                              child: NeumorphicButton(
+                                onTap: () async {
+                                  // Fetch branch, username, userid for current user
+                                  final user = FirebaseAuth.instance.currentUser;
+                                  String? branch, username, userid;
+                                  if (user != null) {
+                                    final userDoc = await FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(user.uid)
+                                        .get();
+                                    branch = userDoc.data()?['branch'];
+                                    username = userDoc.data()?['username'] ?? userDoc.data()?['email'] ?? '';
+                                    userid = user.uid;
+                                  }
+                                  if (branch != null && username != null && userid != null) {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => MarketingFormPage(
+                                          username: username ?? '',
+                                          userid: userid?? '',
+                                          branch: branch?? '',
+                                        ),
+                                      ),
                                     );
-                                  },
-                                  text: 'Customer List',
-                                  color: Colors.teal,
-                                  textColor: Colors.white,
-                                  icon: Icons.people_outline,
-                                  textStyle: const TextStyle(
-                                    fontFamily: 'Montserrat',
-                                    fontWeight: FontWeight.normal,
-                                    fontSize: 17, // Match Leads button font size
-                                    letterSpacing: 1.1,
-                                    color: Colors.white,
-                                  ),
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('User info not found')),
+                                    );
+                                  }
+                                },
+                                text: 'Marketing',
+                                color: const Color.fromARGB(255, 192, 25, 14),
+                                textColor: Colors.white,
+                                icon: Icons.campaign,
+                                textStyle: const TextStyle(
+                                  fontFamily: 'Montserrat',
+                                  fontWeight: FontWeight.normal,
+                                  fontSize: 17,
+                                  letterSpacing: 1.1,
+                                  color: Colors.white,
                                 ),
                               ),
-                            // For Customer List button (admin or manager)
-                            if (role == 'admin' || role == 'manager')
-                              SizedBox(
-                                width: 200,
-                                height: 56,
-                                child: NeumorphicButton(
-                                  onTap: () async {
-                                    await showLoadingDialog(context);
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (context) => const CustomerListPage()),
-                                    );
-                                  },
-                                  text: 'Customer List',
-                                  color: Colors.teal,
-                                  textColor: Colors.white,
-                                  icon: Icons.people_outline,
-                                  textStyle: const TextStyle(
-                                    fontFamily: 'Montserrat',
-                                    fontWeight: FontWeight.normal,
-                                    fontSize: 17, // Match Leads button font size
-                                    letterSpacing: 1.1,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
+                            ),
                           ],
                         ),
                       ],

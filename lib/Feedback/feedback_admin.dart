@@ -40,13 +40,6 @@ class FeedbackAdminPage extends StatelessWidget {
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
         elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.campaign),
-            tooltip: 'Marketing Form',
-            onPressed: () => _openMarketingForm(context), // Use the new method
-          ),
-        ],
       ),
       backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
       body: StreamBuilder<QuerySnapshot>(

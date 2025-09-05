@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
+import 'customer_list.dart'; // Import the customer list page
 
 
 class LeadsPage extends StatefulWidget {
@@ -191,9 +192,17 @@ class _LeadsPageState extends State<LeadsPage> {
             backgroundColor: const Color(0xFF005BAC),
             foregroundColor: Colors.white,
             actions: [
+              // Move Customer List button to right-side burger menu for all roles
+              Builder(
+                builder: (context) => IconButton(
+                  icon: const Icon(Icons.menu),
+                  tooltip: 'Menu',
+                  onPressed: () => Scaffold.of(context).openEndDrawer(),
+                ),
+              ),
               if (role == 'admin' || role == 'manager')
                 PopupMenuButton<String>(
-                  icon: const Icon(Icons.menu),
+                  icon: const Icon(Icons.more_vert),
                   onSelected: (value) async {
                     if (value == 'delete_completed') {
                       final confirm = await showDialog<bool>(
@@ -260,6 +269,35 @@ class _LeadsPageState extends State<LeadsPage> {
                   ],
                 ),
             ],
+          ),
+          // Remove left drawer, add endDrawer for Customer List
+          endDrawer: Drawer(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                DrawerHeader(
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF005BAC),
+                  ),
+                  child: const Text(
+                    'Menu',
+                    style: TextStyle(color: Colors.white, fontSize: 24),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.people_outline),
+                  title: const Text('Customer List'),
+                  onTap: () {
+                    Navigator.pop(context); // Close the drawer
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const CustomerListPage()),
+                    );
+                  },
+                ),
+                // ...add other menu items if needed...
+              ],
+            ),
           ),
           body: Stack(
             children: [
@@ -587,7 +625,7 @@ class _LeadsPageState extends State<LeadsPage> {
                                   // Only leads created by current sales user
                                   final visibleLeads = allLeads.where((doc) {
                                     final data = doc.data() as Map<String, dynamic>;
-                                    return data['created_by'] == currentUserId;
+                                    return data['branch'] == widget.branch;
                                   }).toList();
 
                                   final filteredLeads = visibleLeads.where((doc) {
