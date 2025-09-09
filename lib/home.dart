@@ -19,7 +19,7 @@ import 'main.dart'; // <-- Import where your routeObserver is defined
 import 'Todo & Leads/todoform.dart';
 import 'Performance/dailyform.dart';
 import 'dart:math';
-import 'Performance/performance_score_page.dart';
+import 'Performance/performance_score_page.dart'; // Make sure this import exists and the file exports PerformanceScorePage
 import 'Performance/admin_performance_page.dart'; // <-- Add this import if AdminPerformancePage exists in this file
 import 'package:in_app_update/in_app_update.dart'; // Import the in_app_update package
 import 'Performance/entry_page.dart'; // Import the entry page
@@ -553,7 +553,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                         Navigator.pop(context); // Close the drawer
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => PerformanceScorePage()),
+                          MaterialPageRoute(builder: (context) => PerformanceScoreInnerPage()),
                         );
                       },
                     ),

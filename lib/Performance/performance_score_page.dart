@@ -466,137 +466,235 @@ class _PerformanceScoreInnerPageState extends State<PerformanceScoreInnerPage> w
           backgroundColor: colorScheme.primary,
           elevation: 0,
         ),
-        body: Center(
-          child: isLoading
-              ? LoadingPage()
-              : AnimatedBuilder(
-                  animation: _scaleAnimation,
-                  builder: (context, child) {
-                    return Transform.scale(
-                      scale: _scaleAnimation.value,
-                      child: child,
-                    );
-                  },
-                  child: SizedBox(
-                    height: 420,
-                    child: PageView.builder(
-                      controller: _pageController,
-                      itemCount: 3, // <-- changed from 2 to 3
-                      onPageChanged: (i) => setState(() => _currentPage = i),
-                      itemBuilder: (context, index) {
-                        return AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 500),
-                          transitionBuilder: _buildSuperpositionTransition,
-                          child: _buildScoreCard(
-                            key: ValueKey(index),
-                            child: index == 0
-                                ? Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                    children: [
-                                      // Gauge at the top
-                                      TotalScoreGauge(
-                                        totalScore: totalScore,
-                                        lateReduced: lateReduced,
-                                        notApprovedReduced: notApprovedReduced,
-                                        dressReasons: dressReasons,
-                                        attitudeReasons: attitudeReasons,
-                                        meetingReduced: meetingReduced,
-                                      ),
-                                      const SizedBox(height: 24), // More space between gauge and statements
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            if (lateReduced)
-                                              _buildReason("Late arrival reduced score", Icons.alarm, Colors.red),
-                                            if (notApprovedReduced)
-                                              _buildReason("Not approved absence reduced score", Icons.close, Colors.red),
-                                            for (final reason in {...dressReasons})
-                                              _buildReason(reason, Icons.checkroom, Colors.orange),
-                                            for (final reason in {...attitudeReasons})
-                                              _buildReason(reason, Icons.sentiment_dissatisfied, Colors.orange),
-                                            if (meetingReduced)
-                                              _buildReason("Meeting attendance reduced score", Icons.meeting_room, Colors.purple),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  )
-                                : index == 1
-                                    ? _buildLastMonthScorePage(theme, colorScheme)
-                                    : PerformanceRadarChart(
-                                        attendance: 20 - (lateReduced ? 5 : 0) - (notApprovedReduced ? 10 : 0),
-                                        dress: 20 - dressReasons.length * 5,
-                                        attitude: 20 - attitudeReasons.length * 2,
-                                        meeting: meetingReduced ? 9 : 10,
-                                      ),
+        body: isLoading
+            ? Center(child: LoadingPage())
+            : Column(
+                children: [
+                  // Page indicator
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12.0, bottom: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        2,
+                        (index) => AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          width: _currentPage == index ? 24 : 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: _currentPage == index ? colorScheme.primary : Colors.grey[400],
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                        );
-                      },
+                        ),
+                      ),
                     ),
                   ),
-                ),
-        ),
-        bottomNavigationBar: Padding(
-          padding: const EdgeInsets.only(bottom: 16.0, top: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(
-              3, // <-- changed from 2 to 3
-              (i) => AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                margin: const EdgeInsets.symmetric(horizontal: 6),
-                width: _currentPage == i ? 22 : 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: _currentPage == i ? colorScheme.primary : Colors.grey[400],
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                  Expanded(
+                    child: PageView(
+                      controller: _pageController,
+                      onPageChanged: (index) {
+                        setState(() {
+                          _currentPage = index;
+                        });
+                      },
+                      children: [
+                        // --- First Tab: Score Summary ---
+                        SingleChildScrollView(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 24.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                // --- Total Score Card with Progress Bar ---
+                                Card(
+                                  elevation: 4,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                  color: colorScheme.surface,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(24.0),
+                                    child: Column(
+                                      children: [
+                                        Text(
+                                          'Your Total Score',
+                                          style: theme.textTheme.titleMedium?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            color: colorScheme.primary,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Text(
+                                          '$totalScore / 70',
+                                          style: theme.textTheme.displayMedium?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            color: totalScore >= 60
+                                                ? Colors.green
+                                                : totalScore >= 40
+                                                    ? Colors.orange
+                                                    : Colors.red,
+                                            letterSpacing: 2,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 18),
+                                        // Progress Bar
+                                        LinearProgressIndicator(
+                                          value: totalScore / 70,
+                                          minHeight: 12,
+                                          backgroundColor: Colors.grey[300],
+                                          valueColor: AlwaysStoppedAnimation<Color>(
+                                            totalScore >= 60
+                                                ? Colors.green
+                                                : totalScore >= 40
+                                                    ? Colors.orange
+                                                    : Colors.red,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 28),
+                                // --- Breakdown Cards ---
+                                Wrap(
+                                  spacing: 16,
+                                  runSpacing: 16,
+                                  children: [
+                                    _buildBreakdownCard(
+                                      icon: Icons.access_time,
+                                      label: "Attendance",
+                                      value: 20 - (lateReduced ? 5 : 0) - (notApprovedReduced ? 10 : 0),
+                                      max: 20,
+                                      color: Colors.blue,
+                                    ),
+                                    _buildBreakdownCard(
+                                      icon: Icons.checkroom,
+                                      label: "Dress Code",
+                                      value: 20 - dressReasons.length * 5,
+                                      max: 20,
+                                      color: Colors.orange,
+                                    ),
+                                    _buildBreakdownCard(
+                                      icon: Icons.sentiment_satisfied,
+                                      label: "Attitude",
+                                      value: 20 - attitudeReasons.length * 2,
+                                      max: 20,
+                                      color: Colors.deepPurple,
+                                    ),
+                                    _buildBreakdownCard(
+                                      icon: Icons.groups,
+                                      label: "Meeting",
+                                      value: meetingReduced ? 9 : 10,
+                                      max: 10,
+                                      color: Colors.teal,
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 32),
+                                // --- Reasons Section ---
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    "How to Improve",
+                                    style: theme.textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: colorScheme.primary,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                if (lateReduced)
+                                  _buildReason("Please reach on time everyday", Icons.access_time, Colors.redAccent),
+                                if (notApprovedReduced)
+                                  _buildReason("Avoid unapproved leaves", Icons.block, Colors.redAccent),
+                                for (final reason in dressReasons)
+                                  _buildReason(reason, Icons.checkroom, Colors.deepOrange),
+                                for (final reason in attitudeReasons)
+                                  _buildReason(reason, Icons.sentiment_satisfied, Colors.deepPurple),
+                                if (meetingReduced)
+                                  _buildReason("Attend all meetings", Icons.groups, Colors.blueGrey),
+                                const SizedBox(height: 32),
+                                // --- Last Month Score Card ---
+                                _buildLastMonthScorePage(theme, colorScheme),
+                              ],
+                            ),
+                          ),
+                        ),
+                        // --- Second Tab: Radar Chart ---
+                        SingleChildScrollView(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 24.0),
+                            child: Card(
+                              elevation: 2,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              color: colorScheme.surfaceVariant,
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Column(
+                                  children: [
+                                    Text(
+                                      "Performance Breakdown",
+                                      style: theme.textTheme.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: colorScheme.primary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    PerformanceRadarChart(
+                                      attendance: 20 - (lateReduced ? 5 : 0) - (notApprovedReduced ? 10 : 0),
+                                      dress: 20 - dressReasons.length * 5,
+                                      attitude: 20 - attitudeReasons.length * 2,
+                                      meeting: meetingReduced ? 9 : 10,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ),
-        ),
       ),
     );
   }
-}
 
-// --- Main Page with Bottom Navigation ---
-class PerformanceScorePage extends StatefulWidget {
-  @override
-  State<PerformanceScorePage> createState() => _PerformanceScorePageState();
-}
-
-class _PerformanceScorePageState extends State<PerformanceScorePage> {
-  int _selectedIndex = 0;
-
-  final List<Widget> _pages = [
-    PerformanceScoreInnerPage(),
-    MonthlyPerformanceTablePage(),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _pages,
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.score),
-            label: 'My Score',
+  Widget _buildBreakdownCard({
+    required IconData icon,
+    required String label,
+    required int value,
+    required int max,
+    required Color color,
+  }) {
+    return SizedBox(
+      width: 150,
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color, size: 32),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                style: TextStyle(fontWeight: FontWeight.bold, color: color),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                "$value / $max",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
+            ],
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.table_chart),
-            label: 'Monthly Table',
-          ),
-        ],
+        ),
       ),
     );
   }

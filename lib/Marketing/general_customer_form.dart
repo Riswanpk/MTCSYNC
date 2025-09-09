@@ -108,30 +108,98 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // SHOP NAME *
-                    TextFormField(
-                      decoration: _inputDecoration('SHOP NAME', required: true),
-                      validator: (v) => v == null || v.isEmpty ? 'Enter shop name' : null,
-                      onChanged: (v) => shopName = v,
+                    const SizedBox(height: 12),
+                    Text(
+                      'General Customer Visit Form',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Electorize',
+                        color: Color(0xFF1E3D59),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    // SECTION: CUSTOMER INFO
+                    _buildSectionTitle('Customer Information'),
+                    const SizedBox(height: 10),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color.fromARGB(255, 194, 235, 241),
+                        borderRadius: const BorderRadius.only(
+                          topRight: Radius.circular(22),
+                          topLeft: Radius.circular(0),
+                          bottomLeft: Radius.circular(22),
+                          bottomRight: Radius.circular(0),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.3),
+                            spreadRadius: 1,
+                            blurRadius: 6,
+                            offset: const Offset(2, 3),
+                          ),
+                        ],
+                      ),
+                      child: TextFormField(
+                        decoration: _inputDecoration('SHOP NAME', required: true),
+                        validator: (v) => v == null || v.isEmpty ? 'Enter shop name' : null,
+                        onChanged: (v) => shopName = v,
+                      ),
                     ),
                     const SizedBox(height: 16),
-
-                    // PLACE
-                    TextFormField(
-                      decoration: _inputDecoration('PLACE'),
-                      onChanged: (v) => place = v,
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color.fromARGB(255, 194, 235, 241),
+                        borderRadius: const BorderRadius.only(
+                          topRight: Radius.circular(22),
+                          topLeft: Radius.circular(0),
+                          bottomLeft: Radius.circular(22),
+                          bottomRight: Radius.circular(0),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.3),
+                            spreadRadius: 1,
+                            blurRadius: 6,
+                            offset: const Offset(2, 3),
+                          ),
+                        ],
+                      ),
+                      child: TextFormField(
+                        decoration: _inputDecoration('PLACE'),
+                        onChanged: (v) => place = v,
+                      ),
                     ),
                     const SizedBox(height: 16),
-
-                    // PHONE NO
-                    TextFormField(
-                      decoration: _inputDecoration('PHONE NO'),
-                      keyboardType: TextInputType.phone,
-                      onChanged: (v) => phoneNo = v,
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color.fromARGB(255, 194, 235, 241),
+                        borderRadius: const BorderRadius.only(
+                          topRight: Radius.circular(22),
+                          topLeft: Radius.circular(0),
+                          bottomLeft: Radius.circular(22),
+                          bottomRight: Radius.circular(0),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.3),
+                            spreadRadius: 1,
+                            blurRadius: 6,
+                            offset: const Offset(2, 3),
+                          ),
+                        ],
+                      ),
+                      child: TextFormField(
+                        decoration: _inputDecoration('PHONE NO'),
+                        keyboardType: TextInputType.phone,
+                        onChanged: (v) => phoneNo = v,
+                      ),
                     ),
-                    const SizedBox(height: 16),
-
-                    // NATURE OF BUSINESS *
+                    const SizedBox(height: 20),
+                    // SECTION: BUSINESS INFO
+                    _buildSectionTitle('Business Information'),
+                    const SizedBox(height: 10),
                     Padding(
                       padding: const EdgeInsets.only(left: 4, bottom: 8),
                       child: Text(
@@ -185,49 +253,109 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                           style: TextStyle(color: Colors.red, fontSize: 12, fontFamily: 'Electorize'),
                         ),
                       ),
-                    const SizedBox(height: 16),
-
-                    // CURRENT ENQUIRIES
-                    TextFormField(
-                      decoration: _inputDecoration('CURRENT ENQUIRIES'),
-                      onChanged: (v) => currentEnquiries = v,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // CONFIRMED ORDER *
-                    TextFormField(
-                      decoration: _inputDecoration('CONFIRMED ORDER', required: true),
-                      validator: (v) => v == null || v.isEmpty ? 'Enter confirmed order' : null,
-                      onChanged: (v) => confirmedOrder = v,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // NEW PRODUCT SUGGESTION
-                    TextFormField(
-                      decoration: _inputDecoration('NEW PRODUCT SUGGESTION'),
-                      onChanged: (v) => newProductSuggestion = v,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Attach Shop Photo
-                    Text(
-                      'Attach Shop Photo',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontFamily: 'Electorize',
-                        color: Colors.grey[800],
+                    const SizedBox(height: 20),
+                    // SECTION: ORDERS & ENQUIRIES
+                    _buildSectionTitle('Orders & Enquiries'),
+                    const SizedBox(height: 10),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color.fromARGB(255, 194, 235, 241),
+                        borderRadius: const BorderRadius.only(
+                          topRight: Radius.circular(22),
+                          topLeft: Radius.circular(0),
+                          bottomLeft: Radius.circular(22),
+                          bottomRight: Radius.circular(0),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.3),
+                            spreadRadius: 1,
+                            blurRadius: 6,
+                            offset: const Offset(2, 3),
+                          ),
+                        ],
+                      ),
+                      child: TextFormField(
+                        decoration: _inputDecoration('CURRENT ENQUIRIES'),
+                        onChanged: (v) => currentEnquiries = v,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 16),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color.fromARGB(255, 194, 235, 241),
+                        borderRadius: const BorderRadius.only(
+                          topRight: Radius.circular(22),
+                          topLeft: Radius.circular(0),
+                          bottomLeft: Radius.circular(22),
+                          bottomRight: Radius.circular(0),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.3),
+                            spreadRadius: 1,
+                            blurRadius: 6,
+                            offset: const Offset(2, 3),
+                          ),
+                        ],
+                      ),
+                      child: TextFormField(
+                        decoration: _inputDecoration('CONFIRMED ORDER', required: true),
+                        validator: (v) => v == null || v.isEmpty ? 'Enter confirmed order' : null,
+                        onChanged: (v) => confirmedOrder = v,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color.fromARGB(255, 194, 235, 241),
+                        borderRadius: const BorderRadius.only(
+                          topRight: Radius.circular(22),
+                          topLeft: Radius.circular(0),
+                          bottomLeft: Radius.circular(22),
+                          bottomRight: Radius.circular(0),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.3),
+                            spreadRadius: 1,
+                            blurRadius: 6,
+                            offset: const Offset(2, 3),
+                          ),
+                        ],
+                      ),
+                      child: TextFormField(
+                        decoration: _inputDecoration('NEW PRODUCT SUGGESTION'),
+                        onChanged: (v) => newProductSuggestion = v,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    // SECTION: PHOTO
+                    _buildSectionTitle('Attach Shop Photo'),
+                    const SizedBox(height: 10),
                     _imageFile == null
                         ? OutlinedButton.icon(
                             icon: const Icon(Icons.camera_alt),
                             label: const Text('Take Photo'),
                             onPressed: _openCamera,
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.only(
+                                  topRight: Radius.circular(22),
+                                  topLeft: Radius.circular(0),
+                                  bottomLeft: Radius.circular(22),
+                                  bottomRight: Radius.circular(0),
+                                ),
+                              ),
+                            ),
                           )
                         : Column(
                             children: [
-                              Image.file(_imageFile!, height: 120),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.file(_imageFile!, height: 120, fit: BoxFit.cover),
+                              ),
                               TextButton(
                                 onPressed: () => setState(() => _imageFile = null),
                                 child: const Text('Remove Photo'),
@@ -235,13 +363,22 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                             ],
                           ),
                     const SizedBox(height: 28),
-
                     ElevatedButton(
                       onPressed: _submitForm,
                       style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1E3D59),
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.only(
+                            topRight: Radius.circular(22),
+                            topLeft: Radius.circular(0),
+                            bottomLeft: Radius.circular(22),
+                            bottomRight: Radius.circular(0),
+                          ),
+                        ),
+                        elevation: 3,
                       ),
                       child: const Text('Submit'),
                     ),
@@ -249,6 +386,17 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                 ),
               ),
             ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+        color: Color(0xFF34495E),
+      ),
     );
   }
 }

@@ -114,221 +114,406 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
   InputDecoration _inputDecoration(String label) => InputDecoration(
         labelText: label,
         labelStyle: const TextStyle(
-          fontSize: 16,
-          fontFamily: 'Electorize', // Ensure Electorize is used for labels too
+          fontSize: 12,
+          fontFamily: 'Electorize',
         ),
         filled: true,
-        fillColor: const Color(0xFFF7F2F2),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
+        fillColor: const Color.fromARGB(255, 241, 235, 188),
+        border: const OutlineInputBorder(
+          borderRadius: BorderRadius.only(
+            topRight: Radius.circular(22), // only top-right rounded
+            topLeft: Radius.circular(0),
+            bottomLeft: Radius.circular(22),
+            bottomRight: Radius.circular(0),
+          ),
           borderSide: BorderSide.none,
         ),
         contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
       );
 
-  @override
-  Widget build(BuildContext context) {
-    return DefaultTextStyle(
-      style: const TextStyle(fontFamily: 'Electorize'),
-      child: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(20.0),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Premium Customer Visit Form',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontFamily: 'Electorize',
-                        color: Color(0xFF2C3E50),
+@override
+Widget build(BuildContext context) {
+  return DefaultTextStyle(
+    style: const TextStyle(fontFamily: 'Electorize'),
+    child: isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : SingleChildScrollView(
+            padding: const EdgeInsets.all(20.0),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 12),
+                  Text(
+                    'Premium Customer Visit Form',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'Electorize',
+                      color: Color(0xFF1E3D59),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // SECTION: CUSTOMER INFO
+                  _buildSectionTitle('Customer Information'),
+                  const SizedBox(height: 10),
+                  // --- Shop Name with shadow and same size as other boxes ---
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color.fromARGB(255, 255, 255, 255),
+                      borderRadius: const BorderRadius.only(
+                        topRight: Radius.circular(22),
+                        topLeft: Radius.circular(0),
+                        bottomLeft: Radius.circular(22),
+                        bottomRight: Radius.circular(0),
                       ),
-                    ),
-                    const SizedBox(height: 28),
-
-                    // SHOP NAME
-                    TextFormField(
-                      decoration: _inputDecoration('SHOP NAME '),
-                      validator: (v) => v == null || v.isEmpty ? 'Enter shop name' : null,
-                      onChanged: (v) => shopName = v,
-                    ),
-                    const SizedBox(height: 10),
-
-                    // LAST ITEM PURCHASED DATE/MONTH (Date Picker)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: InkWell(
-                            onTap: () async {
-                              final picked = await showDatePicker(
-                                context: context,
-                                initialDate: lastItemPurchasedDate ?? DateTime.now(),
-                                firstDate: DateTime(2000),
-                                lastDate: DateTime.now(),
-                              );
-                              if (picked != null) {
-                                setState(() {
-                                  lastItemPurchasedDate = picked;
-                                  lastPurchasedMonth = '';
-                                });
-                              }
-                            },
-                            child: InputDecorator(
-                              decoration: _inputDecoration('LAST ITEM PURCHASED DATE '),
-                              child: Text(
-                                lastItemPurchasedDate != null
-                                    ? "${lastItemPurchasedDate!.day}/${lastItemPurchasedDate!.month}/${lastItemPurchasedDate!.year}"
-                                    : 'Select date',
-                                style: TextStyle(
-                                  color: lastItemPurchasedDate != null ? Colors.black : Colors.grey[600],
-                                ),
-                              ),
-                            ),
-                          ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.3),
+                          spreadRadius: 1,
+                          blurRadius: 6,
+                          offset: const Offset(2, 3),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
+                    child: TextFormField(
+                      decoration: _inputDecoration('Shop Name'),
+                      validator: (v) => v == null || v.isEmpty ? 'Enter shop name' : null,
+                      onChanged: (v) => shopName = v,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
 
-                    // LAST PURCHASED ITEM
-                    TextFormField(
-                      decoration: _inputDecoration('LAST PURCHASED ITEM '),
+                  // SECTION: PURCHASE HISTORY
+                  _buildSectionTitle('Purchase History'),
+                  const SizedBox(height: 10),
+                  _buildDatePickerField(
+                    label: 'Last Item Purchased Date',
+                    date: lastItemPurchasedDate,
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: lastItemPurchasedDate ?? DateTime.now(),
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime.now(),
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          lastItemPurchasedDate = picked;
+                          lastPurchasedMonth = '';
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 15),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color.fromARGB(255, 255, 255, 255),
+                      borderRadius: const BorderRadius.only(
+                        topRight: Radius.circular(22),
+                        topLeft: Radius.circular(0),
+                        bottomLeft: Radius.circular(22),
+                        bottomRight: Radius.circular(0),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.3),
+                          spreadRadius: 1,
+                          blurRadius: 6,
+                          offset: const Offset(2, 3),
+                        ),
+                      ],
+                    ),
+                    child: TextFormField(
+                      decoration: _inputDecoration('Last Purchased Item'),
                       validator: (v) => v == null || v.isEmpty ? 'Enter last purchased item' : null,
                       onChanged: (v) => lastPurchasedItem = v,
                     ),
-                    const SizedBox(height: 10),
+                  ),
+                  const SizedBox(height: 20),
 
-                    // CURRENT ENQUIRIES
-                    TextFormField(
-                      decoration: _inputDecoration('CURRENT ENQUIRIES '),
+                  // SECTION: ORDERS & ENQUIRIES
+                  _buildSectionTitle('Orders & Enquiries'),
+                  const SizedBox(height: 10),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color.fromARGB(255, 194, 235, 241),
+                      borderRadius: const BorderRadius.only(
+                        topRight: Radius.circular(22),
+                        topLeft: Radius.circular(0),
+                        bottomLeft: Radius.circular(22),
+                        bottomRight: Radius.circular(0),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.3),
+                          spreadRadius: 1,
+                          blurRadius: 6,
+                          offset: const Offset(2, 3),
+                        ),
+                      ],
+                    ),
+                    child: TextFormField(
+                      decoration: _inputDecoration('Current Enquiries'),
                       validator: (v) => v == null || v.isEmpty ? 'Enter current enquiries' : null,
                       onChanged: (v) => currentEnquiries = v,
                     ),
-                    const SizedBox(height: 10),
-
-                    // CONFIRMED ORDER
-                    TextFormField(
-                      decoration: _inputDecoration('CONFIRMED ORDER '),
+                  ),
+                  const SizedBox(height: 15),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color.fromARGB(255, 194, 235, 241),
+                      borderRadius: const BorderRadius.only(
+                        topRight: Radius.circular(22),
+                        topLeft: Radius.circular(0),
+                        bottomLeft: Radius.circular(22),
+                        bottomRight: Radius.circular(0),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.3),
+                          spreadRadius: 1,
+                          blurRadius: 6,
+                          offset: const Offset(2, 3),
+                        ),
+                      ],
+                    ),
+                    child: TextFormField(
+                      decoration: _inputDecoration('Confirmed Order'),
                       validator: (v) => v == null || v.isEmpty ? 'Enter confirmed order' : null,
                       onChanged: (v) => confirmedOrder = v,
                     ),
-                    const SizedBox(height: 10),
+                  ),
+                  const SizedBox(height: 20),
 
-                    // UPCOMING BIG EVENTS DATE
-                    InkWell(
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: upcomingEventDate ?? DateTime.now(),
-                          firstDate: DateTime.now().subtract(const Duration(days: 1)),
-                          lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
-                        );
-                        if (picked != null) {
-                          setState(() {
-                            upcomingEventDate = picked;
-                          });
-                        }
-                      },
-                      child: InputDecorator(
-                        decoration: _inputDecoration('UPCOMING BIG EVENTS DATE '),
-                        child: Text(
-                          upcomingEventDate != null
-                              ? "${upcomingEventDate!.day}/${upcomingEventDate!.month}/${upcomingEventDate!.year}"
-                              : 'Select date',
-                          style: TextStyle(
-                            color: upcomingEventDate != null ? Colors.black : Colors.grey[600],
-                          ),
-                        ),
+                  // SECTION: UPCOMING EVENTS
+                  _buildSectionTitle('Upcoming Events'),
+                  const SizedBox(height: 10),
+                  _buildDatePickerField(
+                    label: 'Upcoming Big Events Date',
+                    date: upcomingEventDate,
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: upcomingEventDate ?? DateTime.now(),
+                        firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                        lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          upcomingEventDate = picked;
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 15),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color.fromARGB(255, 255, 255, 255),
+                      borderRadius: const BorderRadius.only(
+                        topRight: Radius.circular(22),
+                        topLeft: Radius.circular(0),
+                        bottomLeft: Radius.circular(22),
+                        bottomRight: Radius.circular(0),
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.3),
+                          spreadRadius: 1,
+                          blurRadius: 6,
+                          offset: const Offset(2, 3),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 10),
-
-                    // UPCOMING BIG EVENTS DETAILS
-                    TextFormField(
-                      decoration: _inputDecoration('UPCOMING BIG EVENTS DETAILS '),
+                    child: TextFormField(
+                      decoration: _inputDecoration('Upcoming Big Events Details'),
                       validator: (v) => v == null || v.isEmpty ? 'Enter event details' : null,
                       onChanged: (v) => upcomingEventDetails = v,
                     ),
-                    const SizedBox(height: 10),
+                  ),
+                  const SizedBox(height: 20),
 
-                    // NEW PRODUCT SUGGESTION
-                    TextFormField(
-                      decoration: _inputDecoration('NEW PRODUCT SUGGESTION '),
+                  // SECTION: FEEDBACK & SUGGESTIONS
+                  _buildSectionTitle('Feedback & Suggestions'),
+                  const SizedBox(height: 10),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color.fromARGB(255, 194, 235, 241),
+                      borderRadius: const BorderRadius.only(
+                        topRight: Radius.circular(22),
+                        topLeft: Radius.circular(0),
+                        bottomLeft: Radius.circular(22),
+                        bottomRight: Radius.circular(0),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.3),
+                          spreadRadius: 1,
+                          blurRadius: 6,
+                          offset: const Offset(2, 3),
+                        ),
+                      ],
+                    ),
+                    child: TextFormField(
+                      decoration: _inputDecoration('New Product Suggestion'),
                       validator: (v) => v == null || v.isEmpty ? 'Enter new product suggestion' : null,
                       onChanged: (v) => newProductSuggestion = v,
                     ),
-                    const SizedBox(height: 10),
-
-                    // UPCOMING TRENDS
-                    TextFormField(
-                      decoration: _inputDecoration('UPCOMING TRENDS '),
+                  ),
+                  const SizedBox(height: 15),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color.fromARGB(255, 194, 235, 241),
+                      borderRadius: const BorderRadius.only(
+                        topRight: Radius.circular(22),
+                        topLeft: Radius.circular(0),
+                        bottomLeft: Radius.circular(22),
+                        bottomRight: Radius.circular(0),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.3),
+                          spreadRadius: 1,
+                          blurRadius: 6,
+                          offset: const Offset(2, 3),
+                        ),
+                      ],
+                    ),
+                    child: TextFormField(
+                      decoration: _inputDecoration('Upcoming Trends'),
                       validator: (v) => v == null || v.isEmpty ? 'Enter upcoming trends' : null,
                       onChanged: (v) => upcomingTrends = v,
                     ),
-                    const SizedBox(height: 10),
-
-                    // FEEDBACK ABOUT OUR PRODUCT AND SERVICES
-                    TextFormField(
-                      decoration: _inputDecoration('FEED BACK ABOUT OUR PRODUCT AND SERVICES '),
-                      maxLines: 2,
+                  ),
+                  const SizedBox(height: 15),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color.fromARGB(255, 194, 235, 241),
+                      borderRadius: const BorderRadius.only(
+                        topRight: Radius.circular(22),
+                        topLeft: Radius.circular(0),
+                        bottomLeft: Radius.circular(22),
+                        bottomRight: Radius.circular(0),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.3),
+                          spreadRadius: 1,
+                          blurRadius: 6,
+                          offset: const Offset(2, 3),
+                        ),
+                      ],
+                    ),
+                    child: TextFormField(
+                      decoration: _inputDecoration('Feedback About Our Product & Services'),
+                      maxLines: 3,
                       validator: (v) => v == null || v.isEmpty ? 'Enter feedback' : null,
                       onChanged: (v) => feedback = v,
                     ),
-                    const SizedBox(height: 20),
+                  ),
+                  const SizedBox(height: 20),
 
-                    // CAMERA IMAGE
-                    Text(
-                      'Attach Shop Photo',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontFamily: 'Electorize',
-                        color: Colors.grey[800],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    _imageFile == null
-                        ? OutlinedButton.icon(
-                            icon: const Icon(Icons.camera_alt),
-                            label: const Text('Take Photo'),
-                            onPressed: _openCamera,
-                          )
-                        : Column(
-                            children: [
-                              Image.file(_imageFile!, height: 120),
-                              TextButton(
-                                onPressed: () => setState(() => _imageFile = null),
-                                child: const Text('Remove Photo'),
+                  // SECTION: PHOTO
+                  _buildSectionTitle('Attach Shop Photo'),
+                  const SizedBox(height: 10),
+                  _imageFile == null
+                      ? OutlinedButton.icon(
+                          icon: const Icon(Icons.camera_alt_outlined),
+                          label: const Text('Take Photo'),
+                          onPressed: _openCamera,
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.only(
+                                topRight: Radius.circular(22),
+                                topLeft: Radius.circular(0),
+                                bottomLeft: Radius.circular(22),
+                                bottomRight: Radius.circular(0),
                               ),
-                            ],
+                            ),
                           ),
-                    const SizedBox(height: 28),
+                        )
+                      : Column(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.file(_imageFile!, height: 150, fit: BoxFit.cover),
+                            ),
+                            TextButton(
+                              onPressed: () => setState(() => _imageFile = null),
+                              child: const Text('Remove Photo'),
+                            ),
+                          ],
+                        ),
+                  const SizedBox(height: 30),
 
-                    ElevatedButton(
-                      onPressed: () {
-                        // Custom validation for date/month and event fields
-                        if ((lastItemPurchasedDate == null && lastPurchasedMonth.trim().isEmpty) ||
-                            (upcomingEventDate == null || upcomingEventDetails.trim().isEmpty)) {
-                          setState(() {}); // To show error messages
-                          return;
-                        }
-                        _submitForm();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                  // SUBMIT BUTTON
+                  ElevatedButton(
+                    onPressed: () {
+                      if ((lastItemPurchasedDate == null && lastPurchasedMonth.trim().isEmpty) ||
+                          (upcomingEventDate == null || upcomingEventDetails.trim().isEmpty)) {
+                        setState(() {});
+                        return;
+                      }
+                      _submitForm();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1E3D59),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.only(
+                          topRight: Radius.circular(22),
+                          topLeft: Radius.circular(0),
+                          bottomLeft: Radius.circular(22),
+                          bottomRight: Radius.circular(0),
+                        ),
                       ),
-                      child: const Text('Submit'),
+                      elevation: 3,
                     ),
-                  ],
-                ),
+                    child: const Text('Submit'),
+                  ),
+                ],
               ),
-          )
-    );
-  }
+            ),
+          ),
+  );
+}
+
+// --- Helpers for section titles and date fields ---
+Widget _buildSectionTitle(String title) {
+  return Text(
+    title,
+    style: const TextStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.bold,
+      color: Color(0xFF34495E),
+    ),
+  );
+}
+
+Widget _buildDatePickerField({
+  required String label,
+  required DateTime? date,
+  required VoidCallback onTap,
+}) {
+  return InkWell(
+    onTap: onTap,
+    child: InputDecorator(
+      decoration: _inputDecoration(label),
+      child: Text(
+        date != null
+            ? "${date.day}/${date.month}/${date.year}"
+            : 'Select date',
+        style: TextStyle(
+          color: date != null ? Colors.black : Colors.grey[600],
+        ),
+      ),
+    ),
+  );
+}
 }
