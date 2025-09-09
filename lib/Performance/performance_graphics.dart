@@ -43,31 +43,6 @@ class PerformanceRadarChart extends StatelessWidget {
               painter: RadarChartPainter(metrics: metrics),
             ),
           ),
-          const SizedBox(height: 16),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 18,
-            children: metrics.map((m) {
-              return Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: _metricColor(m['label'] as String),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '${m['label']} (${(m['value'] as num).toInt()}/${(m['max'] as num).toInt()})',
-                    style: TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                ],
-              );
-            }).toList(),
-          ),
         ],
       ),
     );
@@ -76,13 +51,13 @@ class PerformanceRadarChart extends StatelessWidget {
   Color _metricColor(String label) {
     switch (label) {
       case 'Attendance':
-        return Colors.blue;
+        return const Color.fromARGB(255, 0, 0, 0);
       case 'Dress Code':
-        return Colors.deepOrange;
+        return const Color.fromARGB(255, 0, 0, 0);
       case 'Attitude':
-        return Colors.deepPurple;
+        return const Color.fromARGB(255, 0, 0, 0);
       case 'Meeting':
-        return Colors.teal;
+        return const Color.fromARGB(255, 0, 0, 0);
       default:
         return Colors.grey;
     }
@@ -96,17 +71,17 @@ class RadarChartPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final Paint gridPaint = Paint()
-      ..color = Colors.grey.withOpacity(0.25)
+      ..color = const Color.fromARGB(255, 255, 255, 255).withOpacity(0.25)
       ..style = PaintingStyle.stroke;
     final Paint outlinePaint = Paint()
       ..color = Colors.grey.withOpacity(0.5)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     final Paint fillPaint = Paint()
-      ..color = Colors.blue.withOpacity(0.18)
+      ..color = const Color.fromARGB(255, 247, 40, 40).withOpacity(0.18)
       ..style = PaintingStyle.fill;
     final Paint linePaint = Paint()
-      ..color = Colors.blue
+      ..color = const Color.fromARGB(255, 0, 0, 0)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
 

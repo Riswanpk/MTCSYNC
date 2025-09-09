@@ -49,21 +49,27 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
         );
     }
 
+    // Assume you pass user role as an argument or get it from context/provider
+    final String? userRole = ModalRoute.of(context)?.settings.arguments is Map
+        ? (ModalRoute.of(context)!.settings.arguments as Map)['role'] as String?
+        : null;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Marketing Form'),
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.visibility),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ViewerMarketingPage()),
-              );
-            },
-          ),
+          if (userRole == 'admin')
+            IconButton(
+              icon: const Icon(Icons.visibility),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ViewerMarketingPage()),
+                );
+              },
+            ),
         ],
       ),
       body: Column(

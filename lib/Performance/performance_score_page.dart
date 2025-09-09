@@ -553,42 +553,6 @@ class _PerformanceScoreInnerPageState extends State<PerformanceScoreInnerPage> w
                                     ),
                                   ),
                                 ),
-                                const SizedBox(height: 28),
-                                // --- Breakdown Cards ---
-                                Wrap(
-                                  spacing: 16,
-                                  runSpacing: 16,
-                                  children: [
-                                    _buildBreakdownCard(
-                                      icon: Icons.access_time,
-                                      label: "Attendance",
-                                      value: 20 - (lateReduced ? 5 : 0) - (notApprovedReduced ? 10 : 0),
-                                      max: 20,
-                                      color: Colors.blue,
-                                    ),
-                                    _buildBreakdownCard(
-                                      icon: Icons.checkroom,
-                                      label: "Dress Code",
-                                      value: 20 - dressReasons.length * 5,
-                                      max: 20,
-                                      color: Colors.orange,
-                                    ),
-                                    _buildBreakdownCard(
-                                      icon: Icons.sentiment_satisfied,
-                                      label: "Attitude",
-                                      value: 20 - attitudeReasons.length * 2,
-                                      max: 20,
-                                      color: Colors.deepPurple,
-                                    ),
-                                    _buildBreakdownCard(
-                                      icon: Icons.groups,
-                                      label: "Meeting",
-                                      value: meetingReduced ? 9 : 10,
-                                      max: 10,
-                                      color: Colors.teal,
-                                    ),
-                                  ],
-                                ),
                                 const SizedBox(height: 32),
                                 // --- Reasons Section ---
                                 Align(
@@ -631,19 +595,48 @@ class _PerformanceScoreInnerPageState extends State<PerformanceScoreInnerPage> w
                                 padding: const EdgeInsets.all(16.0),
                                 child: Column(
                                   children: [
-                                    Text(
-                                      "Performance Breakdown",
-                                      style: theme.textTheme.titleMedium?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        color: colorScheme.primary,
-                                      ),
-                                    ),
                                     const SizedBox(height: 12),
                                     PerformanceRadarChart(
                                       attendance: 20 - (lateReduced ? 5 : 0) - (notApprovedReduced ? 10 : 0),
                                       dress: 20 - dressReasons.length * 5,
                                       attitude: 20 - attitudeReasons.length * 2,
                                       meeting: meetingReduced ? 9 : 10,
+                                    ),
+                                    const SizedBox(height: 28),
+                                    // --- Breakdown Cards ---
+                                    Wrap(
+                                      spacing: 16,
+                                      runSpacing: 16,
+                                      children: [
+                                        _buildBreakdownCard(
+                                          icon: Icons.access_time,
+                                          label: "Attendance",
+                                          value: 20 - (lateReduced ? 5 : 0) - (notApprovedReduced ? 10 : 0),
+                                          max: 20,
+                                          color: Colors.blue,
+                                        ),
+                                        _buildBreakdownCard(
+                                          icon: Icons.checkroom,
+                                          label: "Dress Code",
+                                          value: 20 - dressReasons.length * 5,
+                                          max: 20,
+                                          color: Colors.orange,
+                                        ),
+                                        _buildBreakdownCard(
+                                          icon: Icons.sentiment_satisfied,
+                                          label: "Attitude",
+                                          value: 20 - attitudeReasons.length * 2,
+                                          max: 20,
+                                          color: Colors.deepPurple,
+                                        ),
+                                        _buildBreakdownCard(
+                                          icon: Icons.groups,
+                                          label: "Meeting",
+                                          value: meetingReduced ? 9 : 10,
+                                          max: 10,
+                                          color: Colors.teal,
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
