@@ -200,11 +200,38 @@ class _LeadsPageState extends State<LeadsPage> {
                   onPressed: () => Scaffold.of(context).openEndDrawer(),
                 ),
               ),
-              if (role == 'admin' || role == 'manager')
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert),
-                  onSelected: (value) async {
-                    if (value == 'delete_completed') {
+            ],
+          ),
+          endDrawer: Drawer(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                DrawerHeader(
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF005BAC),
+                  ),
+                  child: const Text(
+                    'Menu',
+                    style: TextStyle(color: Colors.white, fontSize: 24),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.people_outline),
+                  title: const Text('Customer List'),
+                  onTap: () {
+                    Navigator.pop(context); // Close the drawer
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const CustomerListPage()),
+                    );
+                  },
+                ),
+                if (role == 'admin' || role == 'manager')
+                  ListTile(
+                    leading: const Icon(Icons.delete_forever, color: Colors.red),
+                    title: const Text('Delete All Completed Leads'),
+                    onTap: () async {
+                      Navigator.pop(context);
                       final confirm = await showDialog<bool>(
                         context: context,
                         builder: (context) => AlertDialog(
@@ -231,16 +258,21 @@ class _LeadsPageState extends State<LeadsPage> {
                             .where('branch', isEqualTo: branch)
                             .where('status', isEqualTo: 'Completed')
                             .get();
-
                         for (final doc in query.docs) {
                           await doc.reference.delete();
                         }
-
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('All completed leads deleted')),
                         );
                       }
-                    } else if (value == 'download_excel') {
+                    },
+                  ),
+                if (role == 'admin' || role == 'manager')
+                  ListTile(
+                    leading: const Icon(Icons.download, color: Colors.green),
+                    title: const Text('Excel'),
+                    onTap: () async {
+                      Navigator.pop(context);
                       final excelPath = await _downloadLeadsExcel(
                         context,
                         branch: role == 'admin' ? null : managerBranch,
@@ -248,53 +280,8 @@ class _LeadsPageState extends State<LeadsPage> {
                       if (excelPath != null) {
                         Share.shareXFiles([XFile(excelPath)], text: 'Leads Excel Report');
                       }
-                    } 
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'delete_completed',
-                      child: ListTile(
-                        leading: Icon(Icons.delete_forever, color: Colors.red),
-                        title: Text('Delete All Completed Leads'),
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'download_excel',
-                      child: ListTile(
-                        leading: Icon(Icons.download, color: Colors.green),
-                        title: Text('Excel'),
-                      ),
-                    ),
-                    
-                  ],
-                ),
-            ],
-          ),
-          // Remove left drawer, add endDrawer for Customer List
-          endDrawer: Drawer(
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: [
-                DrawerHeader(
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF005BAC),
+                    },
                   ),
-                  child: const Text(
-                    'Menu',
-                    style: TextStyle(color: Colors.white, fontSize: 24),
-                  ),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.people_outline),
-                  title: const Text('Customer List'),
-                  onTap: () {
-                    Navigator.pop(context); // Close the drawer
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const CustomerListPage()),
-                    );
-                  },
-                ),
                 // ...add other menu items if needed...
               ],
             ),

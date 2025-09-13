@@ -59,18 +59,8 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
         title: const Text('Marketing Form'),
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
-        actions: [
-          if (userRole == 'admin')
-            IconButton(
-              icon: const Icon(Icons.visibility),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ViewerMarketingPage()),
-                );
-              },
-            ),
-        ],
+        // Removed the view icon button for all users
+        actions: [],
       ),
       body: Column(
         children: [

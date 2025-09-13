@@ -24,6 +24,7 @@ import 'Performance/admin_performance_page.dart'; // <-- Add this import if Admi
 import 'package:in_app_update/in_app_update.dart'; // Import the in_app_update package
 import 'Performance/entry_page.dart'; // Import the entry page
 import 'Marketing/marketing.dart'; // Import marketing page
+import 'Marketing/viewer_marketing.dart'; // Import viewer marketing page
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -848,7 +849,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                                 onTap: () async {
                                   // Fetch branch, username, userid for current user
                                   final user = FirebaseAuth.instance.currentUser;
-                                  String? branch, username, userid;
+                                  String? branch, username, userid, role;
                                   if (user != null) {
                                     final userDoc = await FirebaseFirestore.instance
                                         .collection('users')
@@ -857,8 +858,15 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                                     branch = userDoc.data()?['branch'];
                                     username = userDoc.data()?['username'] ?? userDoc.data()?['email'] ?? '';
                                     userid = user.uid;
+                                    role = userDoc.data()?['role'];
                                   }
-                                  if (branch != null && username != null && userid != null) {
+                                  if (role == 'admin') {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => const ViewerMarketingPage(),
+                                      ),
+                                    );
+                                  } else if (branch != null && username != null && userid != null) {
                                     Navigator.of(context).push(
                                       MaterialPageRoute(
                                         builder: (_) => MarketingFormPage(

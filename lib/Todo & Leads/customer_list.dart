@@ -62,7 +62,7 @@ class CustomerProfilePage extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
         children: [
-          Icon(icon, color: Colors.blueGrey, size: 22),
+          Icon(icon, color: const Color.fromARGB(255, 123, 139, 96), size: 22),
           const SizedBox(width: 14),
           Text('$label:', style: const TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(width: 8),
@@ -109,6 +109,9 @@ class _CustomerListPageState extends State<CustomerListPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     if (userBranch == null || userRole == null) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -148,18 +151,59 @@ class _CustomerListPageState extends State<CustomerListPage> {
           return ListView.builder(
             itemCount: filteredDocs.length,
             itemBuilder: (context, index) {
-              final data = filteredDocs[index].data() as Map<String, dynamic>;
-              return ListTile(
-                title: Text(data['name'] ?? ''),
-                subtitle: Text(data['branch'] ?? ''),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CustomerProfilePage(customer: data),
-                    ),
-                  );
-                },
+              final doc = filteredDocs[index];
+              final data = doc.data() as Map<String, dynamic>;
+              return Container(
+                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color.fromARGB(255, 0, 0, 0), width: 1.2),
+                  borderRadius: BorderRadius.circular(14),
+                  color: isDark ? const Color(0xFF23262F) : Colors.white,
+                ),
+                child: ListTile(
+                  title: Text(data['name'] ?? ''),
+                  subtitle: Text(data['branch'] ?? ''),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Color.fromARGB(255, 148, 220, 47)),
+                    tooltip: 'Delete Customer',
+                    onPressed: () async {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Delete Customer'),
+                          content: const Text('Are you sure you want to delete this customer?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Cancel'),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirm == true) {
+                        await FirebaseFirestore.instance
+                            .collection('customer')
+                            .doc(doc.id)
+                            .delete();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Customer deleted')),
+                        );
+                      }
+                    },
+                  ),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CustomerProfilePage(customer: data),
+                      ),
+                    );
+                  },
+                ),
               );
             },
           );

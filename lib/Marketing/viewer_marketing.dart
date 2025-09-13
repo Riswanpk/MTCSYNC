@@ -24,24 +24,42 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
 
   Future<void> fetchBranches() async {
     final snapshot = await FirebaseFirestore.instance.collection('marketing').get();
-    final allBranches = snapshot.docs.map((doc) => doc['branch'] as String? ?? '').toSet().toList();
+    final allBranches = <String>{};
+    for (var doc in snapshot.docs) {
+      final branch = doc['branch'] as String?;
+      if (branch != null && branch.isNotEmpty) {
+        allBranches.add(branch);
+      }
+    }
+    final sortedBranches = allBranches.toList()..sort();
     setState(() {
-      branches = allBranches.where((b) => b.isNotEmpty).toList();
-      if (branches.isNotEmpty) selectedBranch = branches.first;
+      branches = sortedBranches;
+      if (branches.isNotEmpty && (selectedBranch == null || !branches.contains(selectedBranch))) {
+        selectedBranch = branches.first;
+      }
     });
-    fetchUsernames();
+    await fetchUsernames();
   }
 
   Future<void> fetchUsernames() async {
-    if (selectedBranch == null) return;
+    if (selectedBranch == null) {
+      setState(() {
+        usernames = [];
+        selectedUsername = null;
+      });
+      return;
+    }
     final snapshot = await FirebaseFirestore.instance
         .collection('marketing')
         .where('branch', isEqualTo: selectedBranch)
         .get();
     final allUsers = snapshot.docs.map((doc) => doc['username'] as String? ?? '').toSet().toList();
+    allUsers.sort();
     setState(() {
       usernames = allUsers.where((u) => u.isNotEmpty).toList();
-      if (usernames.isNotEmpty) selectedUsername = usernames.first;
+      if (usernames.isNotEmpty && (selectedUsername == null || !usernames.contains(selectedUsername))) {
+        selectedUsername = usernames.first;
+      }
     });
   }
 
