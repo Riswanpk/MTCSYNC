@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'camera_page.dart';
 import 'dart:io';
+import 'package:flutter/services.dart'; // Add this import
 
 class HotelResortCustomerForm extends StatefulWidget {
   final String username;
@@ -41,6 +42,8 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
   bool isLoading = false;
   File? _imageFile;
   String? locationString;
+  bool _photoError = false; // Add this line
+  int feedbackRating = 0; // Add this line
 
   // 🔹 Unified InputDecoration (used inside reusable textfield)
   InputDecoration _inputDecoration(String label, {bool required = false}) =>
@@ -62,6 +65,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
     TextInputType? keyboardType,
     String? Function(String?)? validator,
     Function(String)? onChanged,
+    List<TextInputFormatter>? inputFormatters, // Add this line
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -85,6 +89,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
         decoration: _inputDecoration(label, required: required),
         validator: validator,
         onChanged: onChanged,
+        inputFormatters: inputFormatters, // Add this line
       ),
     );
   }
@@ -105,11 +110,18 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate() ||
         category.isEmpty ||
-        date == null) {
-      setState(() {}); // Show error
+        date == null ||
+        _imageFile == null ||
+        feedbackRating == 0) { // Add feedbackRating check
+      setState(() {
+        _photoError = _imageFile == null;
+      });
       return;
     }
-    setState(() => isLoading = true);
+    setState(() {
+      isLoading = true;
+      _photoError = false;
+    });
 
     await FirebaseFirestore.instance.collection('marketing').add({
       'formType': 'Hotel / Resort Customer',
@@ -126,13 +138,9 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
       'currentEnquiry': currentEnquiry,
       'confirmedOrder': confirmedOrder,
       'newProductSuggestion': newProductSuggestion,
-      'feedback1': feedback1,
-      'feedback2': feedback2,
-      'feedback3': feedback3,
-      'feedback4': feedback4,
-      'feedback5': feedback5,
       'anySuggestion': anySuggestion,
       'locationString': locationString,
+      'feedbackRating': feedbackRating, 
       'timestamp': FieldValue.serverTimestamp(),
     });
 
@@ -142,6 +150,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
       locationString = null;
       category = '';
       date = null;
+      feedbackRating = 0; // Reset rating
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Form submitted successfully!')),
@@ -210,11 +219,18 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                       label: 'CONTACT NUMBER',
                       required: true,
                       keyboardType: TextInputType.phone,
-                      validator: (v) => v == null || v.isEmpty
-                          ? 'Enter contact number'
-                          : null,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(10),
+                      ],
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return 'Enter phone number';
+                        if (v.length != 10) return 'Phone number must be 10 digits';
+                        return null;
+                      },
                       onChanged: (v) => contactNumber = v,
                     ),
+                    
 
                     // DATE
                     _buildSectionTitle('Visit Date'),
@@ -349,18 +365,45 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                     ),
 
                     // FEEDBACK
-                    _buildSectionTitle(
-                        'Customer Feedback About Our Product & Service'),
-                    _buildTextField(
-                        label: '1', onChanged: (v) => feedback1 = v),
-                    _buildTextField(
-                        label: '2', onChanged: (v) => feedback2 = v),
-                    _buildTextField(
-                        label: '3', onChanged: (v) => feedback3 = v),
-                    _buildTextField(
-                        label: '4', onChanged: (v) => feedback4 = v),
-                    _buildTextField(
-                        label: '5', onChanged: (v) => feedback5 = v),
+                    _buildSectionTitle('Customer Feedback About Our Product & Service'),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: List.generate(5, (index) {
+                          final starNumber = index + 1;
+                          return Column(
+                            children: [
+                              Text('$starNumber', style: const TextStyle(fontSize: 15)),
+                              IconButton(
+                                icon: Icon(
+                                  feedbackRating >= starNumber
+                                      ? Icons.star
+                                      : Icons.star_border,
+                                  color: feedbackRating >= starNumber
+                                      ? Colors.amber
+                                      : Colors.grey,
+                                  size: 32,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    feedbackRating = starNumber;
+                                  });
+                                },
+                              ),
+                            ],
+                          );
+                        }),
+                      ),
+                    ),
+                    if (feedbackRating == 0)
+                      const Padding(
+                        padding: EdgeInsets.only(left: 8, bottom: 8),
+                        child: Text(
+                          'Please select a rating',
+                          style: TextStyle(color: Colors.red, fontSize: 13, fontFamily: 'Electorize'),
+                        ),
+                      ),
 
                     // ANY SUGGESTION
                     _buildSectionTitle('Any Suggestion'),
@@ -413,7 +456,14 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                                   height: 150, fit: BoxFit.cover),
                             ),
                           ),
-
+                    if (_photoError)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Text(
+                          'Please attach a shop photo',
+                          style: TextStyle(color: Colors.red, fontSize: 13, fontFamily: 'Electorize'),
+                        ),
+                      ),
                     const SizedBox(height: 28),
 
                     // SUBMIT BUTTON

@@ -36,6 +36,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
   File? _imageFile;
   bool isLoading = false;
   String? locationString;
+  bool _photoError = false; // Add this line
 
   Future<void> _openCamera() async {
     final result = await Navigator.push(
@@ -52,7 +53,12 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
 
   Future<void> _submitForm() async {
     // Validate the form first
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate() || _imageFile == null) {
+      setState(() {
+        _photoError = _imageFile == null;
+      });
+      return;
+    }
 
     // Custom validation for required fields that are not handled by Form validators
     if ((lastItemPurchasedDate == null && lastPurchasedMonth.trim().isEmpty) ||
@@ -448,6 +454,14 @@ Widget build(BuildContext context) {
                             ),
                           ],
                         ),
+                  if (_photoError)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Text(
+                        'Please attach a shop photo',
+                        style: TextStyle(color: Colors.red, fontSize: 13, fontFamily: 'Electorize'),
+                      ),
+                    ),
                   const SizedBox(height: 30),
 
                   // SUBMIT BUTTON

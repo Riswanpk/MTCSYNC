@@ -14,14 +14,7 @@ class ViewerMarketingDetailPage extends StatelessWidget {
         appBar: AppBar(
           title: Text(data['shopName'] ?? 'Form Details'),
           backgroundColor: const Color(0xFF2C3E50),
-          actions: [
-            if (data['locationString'] != null && data['locationString'].toString().isNotEmpty)
-              IconButton(
-                icon: const Icon(Icons.map),
-                tooltip: 'Open in Google Maps',
-                onPressed: () => _openMap(context, data['locationString']),
-              ),
-          ],
+          // Removed actions with Google Maps icon
         ),
         backgroundColor: const Color(0xFFE3E8EA),
         body: Stack(
@@ -81,14 +74,18 @@ class ViewerMarketingDetailPage extends StatelessWidget {
                             ),
                           ),
                         ),
+                      // Location info stays above the photo
                       if (data['imageUrl'] != null && data['imageUrl'].toString().isNotEmpty)
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.network(
-                            data['imageUrl'],
-                            height: 180,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Text('Image not available'),
+                        GestureDetector(
+                          onTap: () => _showFullScreenImage(context, data['imageUrl']),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.network(
+                              data['imageUrl'],
+                              height: 180,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Text('Image not available'),
+                            ),
                           ),
                         ),
                       const SizedBox(height: 60),
@@ -164,5 +161,42 @@ class ViewerMarketingDetailPage extends StatelessWidget {
         const SnackBar(content: Text('Could not open Google Maps')),
       );
     }
+  }
+
+  void _showFullScreenImage(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: InteractiveViewer(
+                minScale: 1,
+                maxScale: 4,
+                child: Center(
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Text('Image not available', style: TextStyle(color: Colors.white)),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 30,
+              right: 30,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 32),
+                onPressed: () => Navigator.of(ctx).pop(),
+                tooltip: 'Close',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

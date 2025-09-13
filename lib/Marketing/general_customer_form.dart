@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'camera_page.dart'; // Add this import
 import 'dart:io'; // Add this import
+import 'package:flutter/services.dart'; // Add this import
 
 class GeneralCustomerForm extends StatefulWidget {
   final String username;
@@ -25,17 +26,19 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
   String place = '';
   String phoneNo = '';
   String natureOfBusiness = '';
+  String customNatureOfBusiness = ''; // Add this line
   String currentEnquiries = '';
   String confirmedOrder = '';
   String newProductSuggestion = '';
   bool isLoading = false;
   File? _imageFile;
   String? locationString;
+  bool _photoError = false; // Add this line
 
   InputDecoration _inputDecoration(String label, {bool required = false}) => InputDecoration(
         labelText: required ? '$label *' : label,
         labelStyle: const TextStyle(
-          fontSize: 16,
+          fontSize: 13,
           fontFamily: 'Electorize',
         ),
         filled: true,
@@ -61,11 +64,16 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
   }
 
   Future<void> _submitForm() async {
-    if (!_formKey.currentState!.validate() || natureOfBusiness.isEmpty) {
-      setState(() {}); // Show error
+    if (!_formKey.currentState!.validate() || natureOfBusiness.isEmpty || _imageFile == null) {
+      setState(() {
+        _photoError = _imageFile == null;
+      });
       return;
     }
-    setState(() => isLoading = true);
+    setState(() {
+      isLoading = true;
+      _photoError = false;
+    });
 
     await FirebaseFirestore.instance.collection('marketing').add({
       'formType': 'General Customer',
@@ -75,7 +83,9 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
       'shopName': shopName,
       'place': place,
       'phoneNo': phoneNo,
-      'natureOfBusiness': natureOfBusiness,
+      'natureOfBusiness': natureOfBusiness == 'OTHERS' && customNatureOfBusiness.isNotEmpty
+          ? customNatureOfBusiness
+          : natureOfBusiness,
       'currentEnquiries': currentEnquiries,
       'confirmedOrder': confirmedOrder,
       'newProductSuggestion': newProductSuggestion,
@@ -88,6 +98,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
       _imageFile = null;
       locationString = null;
       natureOfBusiness = '';
+      customNatureOfBusiness = ''; // Reset custom field
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Form submitted successfully!')),
@@ -125,7 +136,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                     const SizedBox(height: 10),
                     Container(
                       decoration: BoxDecoration(
-                        color: const Color.fromARGB(255, 194, 235, 241),
+                        color: const Color.fromARGB(255, 247, 242, 242),
                         borderRadius: const BorderRadius.only(
                           topRight: Radius.circular(22),
                           topLeft: Radius.circular(0),
@@ -150,7 +161,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                     const SizedBox(height: 16),
                     Container(
                       decoration: BoxDecoration(
-                        color: const Color.fromARGB(255, 194, 235, 241),
+                        color: const Color.fromARGB(255, 247, 242, 242),
                         borderRadius: const BorderRadius.only(
                           topRight: Radius.circular(22),
                           topLeft: Radius.circular(0),
@@ -167,14 +178,14 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                         ],
                       ),
                       child: TextFormField(
-                        decoration: _inputDecoration('PLACE'),
+                        decoration: _inputDecoration('PLACE', required: true),
                         onChanged: (v) => place = v,
                       ),
                     ),
                     const SizedBox(height: 16),
                     Container(
                       decoration: BoxDecoration(
-                        color: const Color.fromARGB(255, 194, 235, 241),
+                        color: const Color.fromARGB(255, 247, 242, 242),
                         borderRadius: const BorderRadius.only(
                           topRight: Radius.circular(22),
                           topLeft: Radius.circular(0),
@@ -191,8 +202,17 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                         ],
                       ),
                       child: TextFormField(
-                        decoration: _inputDecoration('PHONE NO'),
+                        decoration: _inputDecoration('PHONE NO', required: true),
                         keyboardType: TextInputType.phone,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(10),
+                        ],
+                        validator: (v) {
+                          if (v == null || v.isEmpty) return 'Enter phone number';
+                          if (v.length != 10) return 'Phone number must be 10 digits';
+                          return null;
+                        },
                         onChanged: (v) => phoneNo = v,
                       ),
                     ),
@@ -203,7 +223,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                     Padding(
                       padding: const EdgeInsets.only(left: 4, bottom: 8),
                       child: Text(
-                        'NATURE OF BUSINESS *',
+                        'NATURE OF BUSINESS ',
                         style: const TextStyle(
                           fontSize: 16,
                           fontFamily: 'Electorize',
@@ -217,32 +237,60 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                           title: const Text('EVENT', style: TextStyle(fontFamily: 'Electorize')),
                           value: 'EVENT',
                           groupValue: natureOfBusiness,
-                          onChanged: (v) => setState(() => natureOfBusiness = v ?? ''),
+                          onChanged: (v) => setState(() {
+                            natureOfBusiness = v ?? '';
+                            customNatureOfBusiness = '';
+                          }),
                         ),
                         RadioListTile<String>(
                           title: const Text('CATERING', style: TextStyle(fontFamily: 'Electorize')),
                           value: 'CATERING',
                           groupValue: natureOfBusiness,
-                          onChanged: (v) => setState(() => natureOfBusiness = v ?? ''),
+                          onChanged: (v) => setState(() {
+                            natureOfBusiness = v ?? '';
+                            customNatureOfBusiness = '';
+                          }),
                         ),
                         RadioListTile<String>(
                           title: const Text('RENTAL SERVICES', style: TextStyle(fontFamily: 'Electorize')),
                           value: 'RENTAL SERVICES',
                           groupValue: natureOfBusiness,
-                          onChanged: (v) => setState(() => natureOfBusiness = v ?? ''),
+                          onChanged: (v) => setState(() {
+                            natureOfBusiness = v ?? '';
+                            customNatureOfBusiness = '';
+                          }),
                         ),
                         RadioListTile<String>(
                           title: const Text('AUDITORIUM', style: TextStyle(fontFamily: 'Electorize')),
                           value: 'AUDITORIUM',
                           groupValue: natureOfBusiness,
-                          onChanged: (v) => setState(() => natureOfBusiness = v ?? ''),
+                          onChanged: (v) => setState(() {
+                            natureOfBusiness = v ?? '';
+                            customNatureOfBusiness = '';
+                          }),
                         ),
                         RadioListTile<String>(
                           title: const Text('OTHERS', style: TextStyle(fontFamily: 'Electorize')),
                           value: 'OTHERS',
                           groupValue: natureOfBusiness,
-                          onChanged: (v) => setState(() => natureOfBusiness = v ?? ''),
+                          onChanged: (v) => setState(() {
+                            natureOfBusiness = v ?? '';
+                          }),
                         ),
+                        if (natureOfBusiness == 'OTHERS')
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                            child: TextFormField(
+                              decoration: _inputDecoration('Please specify'),
+                              onChanged: (v) => customNatureOfBusiness = v,
+                              validator: (v) {
+                                if (natureOfBusiness == 'OTHERS' && (v == null || v.isEmpty)) {
+                                  return 'Please specify nature of business';
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
                       ],
                     ),
                     if (natureOfBusiness.isEmpty)
@@ -259,7 +307,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                     const SizedBox(height: 10),
                     Container(
                       decoration: BoxDecoration(
-                        color: const Color.fromARGB(255, 194, 235, 241),
+                        color: const Color.fromARGB(255, 247, 242, 242),
                         borderRadius: const BorderRadius.only(
                           topRight: Radius.circular(22),
                           topLeft: Radius.circular(0),
@@ -276,14 +324,14 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                         ],
                       ),
                       child: TextFormField(
-                        decoration: _inputDecoration('CURRENT ENQUIRIES'),
+                        decoration: _inputDecoration('CURRENT ENQUIRIES',required: true),
                         onChanged: (v) => currentEnquiries = v,
                       ),
                     ),
                     const SizedBox(height: 16),
                     Container(
                       decoration: BoxDecoration(
-                        color: const Color.fromARGB(255, 194, 235, 241),
+                        color: const Color.fromARGB(255, 247, 242, 242),
                         borderRadius: const BorderRadius.only(
                           topRight: Radius.circular(22),
                           topLeft: Radius.circular(0),
@@ -308,7 +356,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                     const SizedBox(height: 16),
                     Container(
                       decoration: BoxDecoration(
-                        color: const Color.fromARGB(255, 194, 235, 241),
+                        color: const Color.fromARGB(255, 247, 242, 242),
                         borderRadius: const BorderRadius.only(
                           topRight: Radius.circular(22),
                           topLeft: Radius.circular(0),
@@ -362,11 +410,19 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                               ),
                             ],
                           ),
+                    if (_photoError)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Text(
+                          'Please attach a shop photo',
+                          style: TextStyle(color: Colors.red, fontSize: 13, fontFamily: 'Electorize'),
+                        ),
+                      ),
                     const SizedBox(height: 28),
                     ElevatedButton(
                       onPressed: _submitForm,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1E3D59),
+                        backgroundColor: const Color.fromARGB(192, 31, 113, 255),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
