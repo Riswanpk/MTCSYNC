@@ -53,6 +53,10 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
           fontSize: 16,
           fontFamily: 'Electorize',
         ),
+        filled: true,
+        fillColor: Theme.of(context).brightness == Brightness.dark
+            ? Colors.grey[900]
+            : const Color.fromARGB(255, 255, 255, 255),
         border: InputBorder.none,
         contentPadding:
             const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
@@ -254,7 +258,9 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                         padding: const EdgeInsets.symmetric(
                             vertical: 16, horizontal: 16),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.black
+                              : Colors.white,
                           borderRadius: const BorderRadius.only(
                             topRight: Radius.circular(22),
                             bottomLeft: Radius.circular(22),
@@ -274,9 +280,9 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                               : 'Select date',
                           style: TextStyle(
                             fontSize: 16,
-                            color: date != null
-                                ? Colors.black
-                                : Colors.grey.shade600,
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white
+                                : Colors.black,
                           ),
                         ),
                       ),

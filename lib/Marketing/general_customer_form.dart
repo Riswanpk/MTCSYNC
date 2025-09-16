@@ -42,7 +42,9 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
           fontFamily: 'Electorize',
         ),
         filled: true,
-        fillColor: const Color(0xFFF7F2F2),
+        fillColor: Theme.of(context).brightness == Brightness.dark
+            ? Colors.grey[900]
+            : const Color(0xFFF7F2F2),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide.none,
@@ -136,7 +138,9 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                     const SizedBox(height: 10),
                     Container(
                       decoration: BoxDecoration(
-                        color: const Color.fromARGB(255, 247, 242, 242),
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.grey[900]
+                            : const Color.fromARGB(255, 247, 242, 242),
                         borderRadius: const BorderRadius.only(
                           topRight: Radius.circular(22),
                           topLeft: Radius.circular(0),
@@ -161,7 +165,9 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                     const SizedBox(height: 16),
                     Container(
                       decoration: BoxDecoration(
-                        color: const Color.fromARGB(255, 247, 242, 242),
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.grey[900]
+                            : const Color.fromARGB(255, 247, 242, 242),
                         borderRadius: const BorderRadius.only(
                           topRight: Radius.circular(22),
                           topLeft: Radius.circular(0),
@@ -185,7 +191,9 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                     const SizedBox(height: 16),
                     Container(
                       decoration: BoxDecoration(
-                        color: const Color.fromARGB(255, 247, 242, 242),
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.grey[900]
+                            : const Color.fromARGB(255, 247, 242, 242),
                         borderRadius: const BorderRadius.only(
                           topRight: Radius.circular(22),
                           topLeft: Radius.circular(0),
@@ -224,10 +232,12 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                       padding: const EdgeInsets.only(left: 4, bottom: 8),
                       child: Text(
                         'NATURE OF BUSINESS ',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
                           fontFamily: 'Electorize',
-                          color: Colors.black87,
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white
+                              : Colors.black87,
                         ),
                       ),
                     ),
@@ -307,7 +317,9 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                     const SizedBox(height: 10),
                     Container(
                       decoration: BoxDecoration(
-                        color: const Color.fromARGB(255, 247, 242, 242),
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.grey[900]
+                            : const Color.fromARGB(255, 247, 242, 242),
                         borderRadius: const BorderRadius.only(
                           topRight: Radius.circular(22),
                           topLeft: Radius.circular(0),
@@ -331,7 +343,9 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                     const SizedBox(height: 16),
                     Container(
                       decoration: BoxDecoration(
-                        color: const Color.fromARGB(255, 247, 242, 242),
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.grey[900]
+                            : const Color.fromARGB(255, 247, 242, 242),
                         borderRadius: const BorderRadius.only(
                           topRight: Radius.circular(22),
                           topLeft: Radius.circular(0),
@@ -356,7 +370,9 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                     const SizedBox(height: 16),
                     Container(
                       decoration: BoxDecoration(
-                        color: const Color.fromARGB(255, 247, 242, 242),
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.grey[900]
+                            : const Color.fromARGB(255, 247, 242, 242),
                         borderRadius: const BorderRadius.only(
                           topRight: Radius.circular(22),
                           topLeft: Radius.circular(0),

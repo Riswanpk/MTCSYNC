@@ -124,7 +124,9 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
           fontFamily: 'Electorize',
         ),
         filled: true,
-        fillColor: const Color.fromARGB(255, 241, 235, 188),
+        fillColor: Theme.of(context).brightness == Brightness.dark
+            ? Colors.grey[900]
+            : const Color.fromARGB(255, 241, 235, 188),
         border: const OutlineInputBorder(
           borderRadius: BorderRadius.only(
             topRight: Radius.circular(22), // only top-right rounded
@@ -524,7 +526,9 @@ Widget _buildDatePickerField({
             ? "${date.day}/${date.month}/${date.year}"
             : 'Select date',
         style: TextStyle(
-          color: date != null ? Colors.black : Colors.grey[600],
+          color: Theme.of(context).brightness == Brightness.dark
+              ? Colors.white
+              : Colors.black,
         ),
       ),
     ),
