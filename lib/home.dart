@@ -25,6 +25,9 @@ import 'package:in_app_update/in_app_update.dart'; // Import the in_app_update p
 import 'Performance/entry_page.dart'; // Import the entry page
 import 'Marketing/marketing.dart'; // Import marketing page
 import 'Marketing/viewer_marketing.dart'; // Import viewer marketing page
+import 'Performance/excel_view_performance.dart'; // <-- Add this import
+import 'Performance/insights_performance.dart';
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -561,8 +564,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                   // Add Performance option for admin
                   if (role == 'admin')
                     ListTile(
-                      leading: const Icon(Icons.bar_chart, color: Colors.deepPurple),
-                      title: const Text('Performance'),
+                      leading: const Icon(Icons.edit_note, color: Colors.deepPurple),
+                      title: const Text('Edit Performance Form'),
                       onTap: () {
                         Navigator.pop(context);
                         Navigator.push(
@@ -571,6 +574,31 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                         );
                       },
                     ),
+                  // Add Performance Insights for admin
+                  if (role == 'admin')
+                    ListTile(
+                      leading: const Icon(Icons.insert_chart, color: Color.fromARGB(255, 255, 175, 3)),
+                      title: const Text('Performance Monthly'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => ExcelViewPerformancePage()),
+                        );
+                      },
+                    ),
+                  if (role == 'admin')
+                    ListTile(
+                      leading: const Icon(Icons.insights, color: Colors.green),
+                      title: const Text('Performance Insights'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => InsightsPerformancePage()),
+                        );
+                      },
+                    ),  
                   // Add Entry Page option for admin
                   if (role == 'admin')
                     ListTile(

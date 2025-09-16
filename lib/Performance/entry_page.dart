@@ -58,6 +58,45 @@ class _EntryPageState extends State<EntryPage> {
     });
   }
 
+  Future<void> savePerformanceMark(String userId, int score) async {
+    final now = DateTime.now();
+    final month = now.month;
+    final year = now.year;
+
+    // Only allow marks <= 30
+    if (score > 30) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Mark cannot be greater than 30')),
+      );
+      return;
+    }
+
+    final query = await FirebaseFirestore.instance
+        .collection('performance_mark')
+        .where('userId', isEqualTo: userId)
+        .where('month', isEqualTo: month)
+        .where('year', isEqualTo: year)
+        .get();
+
+    if (query.docs.isNotEmpty) {
+      // Update existing entry for this month
+      final docId = query.docs.first.id;
+      await FirebaseFirestore.instance
+          .collection('performance_mark')
+          .doc(docId)
+          .update({'score': score});
+    } else {
+      // Create new entry for new month
+      await FirebaseFirestore.instance.collection('performance_mark').add({
+        'userId': userId,
+        'score': score,
+        'month': month,
+        'year': year,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    }
+  }
+
   Future<void> saveMarks() async {
     for (var user in users) {
       final uid = user['id'];
@@ -65,19 +104,13 @@ class _EntryPageState extends State<EntryPage> {
       final markStr = controllers[uid]?.text ?? '';
       if (markStr.isEmpty) continue;
       final mark = int.tryParse(markStr);
-      if (mark == null) continue;
-
-      // Save to Firestore: collection "performance_mark"
-      await FirebaseFirestore.instance
-          .collection('performance_mark')
-          .doc(uid)
-          .set({
-        'userId': uid,
-        'username': username,
-        'branch': selectedBranch,
-        'score': mark,
-        'timestamp': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      if (mark == null || mark > 30) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Mark for $username must be 0-30')),
+        );
+        continue;
+      }
+      await savePerformanceMark(uid, mark);
     }
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Performance marks saved!')),
