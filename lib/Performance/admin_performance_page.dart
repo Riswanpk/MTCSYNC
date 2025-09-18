@@ -12,9 +12,12 @@ class _AdminPerformancePageState extends State<AdminPerformancePage> {
   String? selectedBranch;
   String? selectedUserId;
   String? selectedDocId;
+  int? selectedMonth;
+  DateTime? selectedDate;
   List<Map<String, dynamic>> branches = [];
   List<Map<String, dynamic>> users = [];
   List<Map<String, dynamic>> forms = [];
+  List<DateTime> availableDates = [];
   bool isLoading = false;
 
   @override
@@ -61,27 +64,101 @@ class _AdminPerformancePageState extends State<AdminPerformancePage> {
       forms = [];
       isLoading = true;
       selectedDocId = null;
+      selectedMonth = null;
+      selectedDate = null;
+      availableDates = [];
     });
     final formsSnap = await FirebaseFirestore.instance
         .collection('dailyform')
         .where('userId', isEqualTo: userId)
         .orderBy('timestamp', descending: true)
         .get();
+    forms = formsSnap.docs
+        .map((doc) => {
+              ...doc.data(),
+              'docId': doc.id,
+            })
+        .toList();
+
+    // Extract available months and dates
+    final monthsSet = <int>{};
+    final datesSet = <DateTime>{};
+    for (var form in forms) {
+      final ts = form['timestamp'] as Timestamp?;
+      if (ts != null) {
+        final date = ts.toDate();
+        monthsSet.add(date.month);
+        datesSet.add(DateTime(date.year, date.month, date.day));
+      }
+    }
     setState(() {
-      forms = formsSnap.docs
-          .map((doc) => {
-                ...doc.data(),
-                'docId': doc.id,
-              })
-          .toList();
       isLoading = false;
+      selectedMonth = monthsSet.isNotEmpty ? monthsSet.first : null;
+      availableDates = datesSet.where((d) => selectedMonth == null || d.month == selectedMonth).toList()
+        ..sort((a, b) => b.compareTo(a));
+      selectedDate = null; // Don't auto-select date
+      selectedDocId = null;
     });
+  }
+
+  void updateAvailableDates() {
+    if (selectedMonth == null) {
+      setState(() {
+        availableDates = [];
+        selectedDate = null;
+        selectedDocId = null;
+      });
+      return;
+    }
+    availableDates = forms
+        .map((f) => (f['timestamp'] as Timestamp?)?.toDate())
+        .where((d) => d != null && d.month == selectedMonth)
+        .map((d) => DateTime(d!.year, d.month, d.day))
+        .toSet()
+        .toList()
+      ..sort((a, b) => b.compareTo(a));
+    setState(() {
+      selectedDate = null;
+      selectedDocId = null;
+    });
+  }
+
+  void updateSelectedDocId() {
+    if (selectedDate != null) {
+      final doc = forms.firstWhere(
+        (f) {
+          final ts = f['timestamp'] as Timestamp?;
+          final date = ts?.toDate();
+          return date != null &&
+              date.year == selectedDate!.year &&
+              date.month == selectedDate!.month &&
+              date.day == selectedDate!.day;
+        },
+        orElse: () => {},
+      );
+      setState(() {
+        selectedDocId = doc['docId'];
+      });
+    } else {
+      setState(() {
+        selectedDocId = null;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+
+    // Get all months present in forms
+    final monthsList = forms
+        .map((f) => (f['timestamp'] as Timestamp?)?.toDate())
+        .where((d) => d != null)
+        .map((d) => d!.month)
+        .toSet()
+        .toList()
+      ..sort((a, b) => b.compareTo(a));
 
     return Scaffold(
       appBar: AppBar(
@@ -94,102 +171,137 @@ class _AdminPerformancePageState extends State<AdminPerformancePage> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // Step 1: Branch Dropdown
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 400),
-              child: DropdownButtonFormField<String>(
-                key: ValueKey('branch-$selectedBranch'),
-                value: selectedBranch,
-                items: branches
-                    .map((b) => DropdownMenuItem<String>(
-                          value: b['branch'],
-                          child: Text(b['branch'], style: theme.textTheme.bodyLarge),
-                        ))
-                    .toList(),
-                onChanged: (val) {
-                  setState(() {
-                    selectedBranch = val;
-                    selectedUserId = null;
-                    forms = [];
-                    selectedDocId = null;
-                  });
-                  if (val != null) fetchUsersForBranch(val);
-                },
-                decoration: InputDecoration(
-                  labelText: 'Select Branch',
-                  filled: true,
-                  fillColor: colorScheme.surface,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            // --- First row: Branch & User ---
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    key: ValueKey('branch-$selectedBranch'),
+                    value: selectedBranch,
+                    items: branches
+                        .map((b) => DropdownMenuItem<String>(
+                              value: b['branch'],
+                              child: Text(b['branch'], style: theme.textTheme.bodyLarge),
+                            ))
+                        .toList(),
+                    onChanged: (val) {
+                      setState(() {
+                        selectedBranch = val;
+                        selectedUserId = null;
+                        forms = [];
+                        selectedDocId = null;
+                        selectedMonth = null;
+                        selectedDate = null;
+                        availableDates = [];
+                      });
+                      if (val != null) fetchUsersForBranch(val);
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'Select Branch',
+                      filled: true,
+                      fillColor: colorScheme.surface,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    key: ValueKey('user-$selectedUserId'),
+                    value: selectedUserId,
+                    items: users
+                        .map((u) => DropdownMenuItem<String>(
+                              value: u['id'],
+                              child: Text(u['username'], style: theme.textTheme.bodyLarge),
+                            ))
+                        .toList(),
+                    onChanged: (val) {
+                      setState(() {
+                        selectedUserId = val;
+                        selectedMonth = null;
+                        selectedDate = null;
+                        availableDates = [];
+                        forms = [];
+                        selectedDocId = null;
+                      });
+                      if (val != null) fetchFormsForUser(val);
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'Select User',
+                      filled: true,
+                      fillColor: colorScheme.surface,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
-            // Step 2: User Dropdown
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 400),
-              child: selectedBranch == null
-                  ? const SizedBox.shrink()
-                  : DropdownButtonFormField<String>(
-                      key: ValueKey('user-$selectedUserId'),
-                      value: selectedUserId,
-                      items: users
-                          .map((u) => DropdownMenuItem<String>(
-                                value: u['id'],
-                                child: Text(u['username'], style: theme.textTheme.bodyLarge),
-                              ))
-                          .toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          selectedUserId = val;
-                          selectedDocId = null;
-                        });
-                        if (val != null) fetchFormsForUser(val);
-                      },
-                      decoration: InputDecoration(
-                        labelText: 'Select User',
-                        filled: true,
-                        fillColor: colorScheme.surface,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
+            // --- Second row: Month & Date ---
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<int>(
+                    key: ValueKey('month-$selectedMonth'),
+                    value: selectedMonth,
+                    items: monthsList
+                        .map((m) => DropdownMenuItem<int>(
+                              value: m,
+                              child: Text(
+                                "${m.toString().padLeft(2, '0')}",
+                                style: theme.textTheme.bodyLarge,
+                              ),
+                            ))
+                        .toList(),
+                    onChanged: (val) {
+                      setState(() {
+                        selectedMonth = val;
+                      });
+                      updateAvailableDates();
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'Select Month',
+                      filled: true,
+                      fillColor: colorScheme.surface,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-            ),
-            const SizedBox(height: 12),
-            // Step 3: Date Dropdown
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 400),
-              child: (selectedUserId == null || forms.isEmpty)
-                  ? const SizedBox.shrink()
-                  : DropdownButtonFormField<String>(
-                      key: ValueKey('date-$selectedDocId'),
-                      value: selectedDocId,
-                      items: forms
-                          .map((form) {
-                            final date = (form['timestamp'] as Timestamp?)?.toDate();
-                            final dateStr = date != null
-                                ? "${date.day}/${date.month}/${date.year}"
-                                : 'Unknown';
-                            return DropdownMenuItem<String>(
-                              value: form['docId'],
-                              child: Text(dateStr, style: theme.textTheme.bodyLarge),
-                            );
-                          })
-                          .toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          selectedDocId = val;
-                        });
-                      },
-                      decoration: InputDecoration(
-                        labelText: 'Select Date',
-                        filled: true,
-                        fillColor: colorScheme.surface,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<DateTime>(
+                    key: ValueKey('date-$selectedDate'),
+                    value: selectedDate,
+                    items: availableDates
+                        .map((d) => DropdownMenuItem<DateTime>(
+                              value: d,
+                              child: Text(
+                                "${d.day}", // Only show day number
+                                style: theme.textTheme.bodyLarge,
+                              ),
+                            ))
+                        .toList(),
+                    onChanged: (val) {
+                      setState(() {
+                        selectedDate = val;
+                        // Always update selectedDocId and force rebuild
+                        updateSelectedDocId();
+                      });
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'Select Date',
+                      filled: true,
+                      fillColor: colorScheme.surface,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 18),
             if (selectedDocId != null)
               Expanded(
+                key: ValueKey(selectedDocId), // <-- Add key to force rebuild when docId changes
                 child: Card(
                   color: colorScheme.surface,
                   elevation: 3,
@@ -200,7 +312,6 @@ class _AdminPerformancePageState extends State<AdminPerformancePage> {
                       form: forms.firstWhere((f) => f['docId'] == selectedDocId),
                       docId: selectedDocId!,
                       onSaved: () async {
-                        // Refresh after save
                         if (selectedUserId != null) await fetchFormsForUser(selectedUserId!);
                       },
                     ),

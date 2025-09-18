@@ -292,7 +292,7 @@ class SettingsPage extends StatelessWidget {
             }
 
             final row = [
-              ex.TextCellValue('Week $weekNum\n${weekLabels[weekNum]}'),
+              ex.TextCellValue('Week $weekNum\n${weekLabels[weekNum]}  '),
               ex.IntCellValue(attendance),
               ex.IntCellValue(dress),
               ex.IntCellValue(attitude),

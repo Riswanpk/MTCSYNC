@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mtcsync/Performance/insights_detail_viewer.dart';
 
 class InsightsPerformancePage extends StatefulWidget {
   @override
@@ -178,33 +179,46 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
                               itemCount: userPerformances.length,
                               itemBuilder: (context, idx) {
                                 final user = userPerformances[idx];
-                                return Card(
-                                  color: isDark ? Colors.grey[900] : Colors.white,
-                                  elevation: 2,
-                                  margin: const EdgeInsets.symmetric(vertical: 6),
-                                  child: ListTile(
-                                    leading: CircleAvatar(
-                                      backgroundColor: Colors.blue,
-                                      child: Text(
-                                        '${idx + 1}',
-                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                return GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => InsightsDetailViewerPage(
+                                          userId: user.userId,
+                                          username: user.username,
+                                        ),
                                       ),
-                                    ),
-                                    title: Text(user.username, style: TextStyle(fontWeight: FontWeight.bold)),
-                                    subtitle: Text(
-                                      'Avg Weekly: ${user.avgWeeklyMark} / 70 | Perf: ${user.perfMark} / 30',
-                                      style: TextStyle(fontSize: 13),
-                                    ),
-                                    trailing: Text(
-                                      '${user.total} / 100',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 18,
-                                        color: user.total >= 80
-                                            ? Colors.green
-                                            : user.total >= 60
-                                                ? Colors.orange
-                                                : Colors.red,
+                                    );
+                                  },
+                                  child: Card(
+                                    color: isDark ? Colors.grey[900] : Colors.white,
+                                    elevation: 2,
+                                    margin: const EdgeInsets.symmetric(vertical: 6),
+                                    child: ListTile(
+                                      leading: CircleAvatar(
+                                        backgroundColor: Colors.blue,
+                                        child: Text(
+                                          '${idx + 1}',
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                      title: Text(user.username, style: TextStyle(fontWeight: FontWeight.bold)),
+                                      subtitle: Text(
+                                        'Avg Weekly: ${user.avgWeeklyMark} / 70 | Perf: ${user.perfMark} / 30',
+                                        style: TextStyle(fontSize: 13),
+                                      ),
+                                      trailing: Text(
+                                        '${user.total} / 100',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 18,
+                                          color: user.total >= 80
+                                              ? Colors.green
+                                              : user.total >= 60
+                                                  ? Colors.orange
+                                                  : Colors.red,
+                                        ),
                                       ),
                                     ),
                                   ),

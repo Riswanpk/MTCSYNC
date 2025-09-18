@@ -62,7 +62,7 @@ class _ExcelViewPerformancePageState extends State<ExcelViewPerformancePage> {
     final isDark = theme.brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Performance Insights'),
+        title: const Text('Monthly Report'),
         backgroundColor: theme.colorScheme.primary,
         foregroundColor: Colors.white,
       ),

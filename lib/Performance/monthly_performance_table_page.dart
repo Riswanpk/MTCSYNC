@@ -13,6 +13,10 @@ class _MonthlyPerformanceTablePageState extends State<MonthlyPerformanceTablePag
   List<DateTime> monthDates = [];
   int selectedWeek = 0; // 0 = All, 1 = Week 1, etc.
 
+  // Add these for month/year selection
+  int selectedMonth = DateTime.now().month;
+  int selectedYear = DateTime.now().year;
+
   @override
   void initState() {
     super.initState();
@@ -23,9 +27,9 @@ class _MonthlyPerformanceTablePageState extends State<MonthlyPerformanceTablePag
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final now = DateTime.now();
-    final monthStart = DateTime(now.year, now.month, 1);
-    final monthEnd = DateTime(now.year, now.month + 1, 1);
+    // Use selectedMonth/selectedYear instead of now
+    final monthStart = DateTime(selectedYear, selectedMonth, 1);
+    final monthEnd = DateTime(selectedYear, selectedMonth + 1, 1);
 
     final formsSnapshot = await FirebaseFirestore.instance
         .collection('dailyform')
@@ -162,6 +166,53 @@ class _MonthlyPerformanceTablePageState extends State<MonthlyPerformanceTablePag
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // --- Month/Year Picker ---
+            Row(
+              children: [
+                const Text('Month: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                DropdownButton<int>(
+                  value: selectedMonth,
+                  items: List.generate(12, (i) => i + 1)
+                      .map((m) => DropdownMenuItem(
+                            value: m,
+                            child: Text('${m.toString().padLeft(2, '0')}'),
+                          ))
+                      .toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() {
+                        selectedMonth = val;
+                        isLoading = true;
+                      });
+                      fetchMonthlyForms();
+                    }
+                  },
+                ),
+                const SizedBox(width: 16),
+                const Text('Year: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                DropdownButton<int>(
+                  value: selectedYear,
+                  items: [
+                    DateTime.now().year - 1,
+                    DateTime.now().year,
+                    DateTime.now().year + 1,
+                  ].map((y) => DropdownMenuItem(
+                        value: y,
+                        child: Text('$y'),
+                      ))
+                  .toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() {
+                        selectedYear = val;
+                        isLoading = true;
+                      });
+                      fetchMonthlyForms();
+                    }
+                  },
+                ),
+              ],
+            ),
             // Week filter dropdown
             Row(
               children: [
@@ -193,7 +244,6 @@ class _MonthlyPerformanceTablePageState extends State<MonthlyPerformanceTablePag
               ['Wear clean uniform', 'Keep inside', 'Keep your hair neat'],
               'dressCode',
             ),
-            
             buildTableSection(
               'ATTITUDE (OUT OF 20)',
               [

@@ -121,7 +121,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                           ),
                           title: Text(
                             username,
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                           ),
                           subtitle: Text(
                             email,
@@ -134,7 +134,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                             style: TextStyle(
                               color: isDark ? Colors.white : Colors.black,
                               fontWeight: FontWeight.w500,
-                              fontSize: 16,
+                              fontSize: 13,
                             ),
                             underline: Container(),
                             items: _roles

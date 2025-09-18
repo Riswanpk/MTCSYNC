@@ -54,7 +54,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 500),
     )..repeat(reverse: true);
 
     _scaleAnimation = Tween<double>(begin: 0.9, end: 1.1).animate(
@@ -483,6 +483,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                     ),
                   ),
                   ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                     leading: const Icon(Icons.settings, color: Color(0xFF005BAC)),
                     title: const Text('Settings'),
                     onTap: () {
@@ -496,6 +498,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                     },
                   ),
                   ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                     leading: const Icon(Icons.feedback, color: Color(0xFF8CC63F)), // Green for Feedback
                     title: const Text('Feedback'),
                     onTap: () async {
@@ -525,6 +529,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                   // Add Manage Users option for admin
                   if (role == 'admin')
                     ListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                       leading: const Icon(Icons.manage_accounts, color: Colors.deepPurple), // Purple for Manage Users
                       title: const Text('Manage Users'),
                       onTap: () {
@@ -538,6 +544,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                   // Add Daily Form option for manager
                   if (role == 'manager')
                     ListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                       leading: const Icon(Icons.assignment_turned_in, color: Colors.orange), // Orange for Daily Form
                       title: const Text('Daily Form'),
                       onTap: () {
@@ -551,6 +559,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                   // Add Performance option for sales
                   if (role == 'sales')
                     ListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                       leading: const Icon(Icons.bar_chart, color: Colors.teal),
                       title: const Text('Performance'),
                       onTap: () {
@@ -564,6 +574,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                   // Add Performance option for admin
                   if (role == 'admin')
                     ListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                       leading: const Icon(Icons.edit_note, color: Colors.deepPurple),
                       title: const Text('Edit Performance Form'),
                       onTap: () {
@@ -577,6 +589,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                   // Add Performance Insights for admin
                   if (role == 'admin')
                     ListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                       leading: const Icon(Icons.insert_chart, color: Color.fromARGB(255, 255, 175, 3)),
                       title: const Text('Performance Monthly'),
                       onTap: () {
@@ -589,6 +603,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                     ),
                   if (role == 'admin')
                     ListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                       leading: const Icon(Icons.insights, color: Colors.green),
                       title: const Text('Performance Insights'),
                       onTap: () {
@@ -602,6 +618,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                   // Add Entry Page option for admin
                   if (role == 'admin')
                     ListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                       leading: const Icon(Icons.add_box, color: Colors.blue),
                       title: const Text('Entry Page'),
                       onTap: () {
@@ -612,8 +630,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                         );
                       },
                     ),
-                  
                   ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                     leading: const Icon(Icons.logout, color: Colors.red), // Red for Log Out
                     title: const Text('Log Out'),
                     onTap: () async {
@@ -803,7 +822,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                                         .get();
                                     branch = userDoc.data()?['branch'];
                                   }
-                                  await Future.delayed(const Duration(milliseconds: 1500)); // Ensure loading animation is visible
+                                  await Future.delayed(const Duration(milliseconds: 500)); // Ensure loading animation is visible
 
                                   if (branch != null) {
                                     Navigator.of(context).pushReplacement(fadeRoute(LeadsPage(branch: branch)));
@@ -833,7 +852,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                               child: NeumorphicButton(
                                 onTap: () async {
                                   Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoadingPage()));
-                                  await Future.delayed(const Duration(milliseconds: 1500)); // Simulate loading
+                                  await Future.delayed(const Duration(milliseconds: 500)); // Simulate loading
                                   Navigator.of(context).pushReplacement(fadeRoute(const TodoPage()));
                                 },
                                 text: 'ToDo List',
@@ -875,6 +894,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                               height: 56,
                               child: NeumorphicButton(
                                 onTap: () async {
+                                  // Show loading page for 1 second before navigating to Marketing
+                                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoadingPage()));
+                                  await Future.delayed(const Duration(seconds: 1)); // Reduced to 1 second
+
                                   // Fetch branch, username, userid for current user
                                   final user = FirebaseAuth.instance.currentUser;
                                   String? branch, username, userid, role;
@@ -889,13 +912,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                                     role = userDoc.data()?['role'];
                                   }
                                   if (role == 'admin') {
-                                    Navigator.of(context).push(
+                                    Navigator.of(context).pushReplacement(
                                       MaterialPageRoute(
                                         builder: (_) => const ViewerMarketingPage(),
                                       ),
                                     );
                                   } else if (branch != null && username != null && userid != null) {
-                                    Navigator.of(context).push(
+                                    Navigator.of(context).pushReplacement(
                                       MaterialPageRoute(
                                         builder: (_) => MarketingFormPage(
                                           username: username ?? '',
@@ -905,6 +928,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                                       ),
                                     );
                                   } else {
+                                    Navigator.of(context).pop(); // Remove loading page
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(content: Text('User info not found')),
                                     );
