@@ -54,7 +54,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 500),
+      duration: const Duration(milliseconds: 4000), // Slower bubbles (was 500)
     )..repeat(reverse: true);
 
     _scaleAnimation = Tween<double>(begin: 0.9, end: 1.1).animate(
@@ -822,7 +822,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                                         .get();
                                     branch = userDoc.data()?['branch'];
                                   }
-                                  await Future.delayed(const Duration(milliseconds: 500)); // Ensure loading animation is visible
+                                  await Future.delayed(const Duration(milliseconds: 800)); // Ensure loading animation is visible
 
                                   if (branch != null) {
                                     Navigator.of(context).pushReplacement(fadeRoute(LeadsPage(branch: branch)));
@@ -852,7 +852,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                               child: NeumorphicButton(
                                 onTap: () async {
                                   Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoadingPage()));
-                                  await Future.delayed(const Duration(milliseconds: 500)); // Simulate loading
+                                  await Future.delayed(const Duration(milliseconds: 800)); // Simulate loading
                                   Navigator.of(context).pushReplacement(fadeRoute(const TodoPage()));
                                 },
                                 text: 'ToDo List',
@@ -875,10 +875,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                                 height: 56,
                                 child: NeumorphicButton(
                                   onTap: () async {
-                                    await showLoadingDialog(context);
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (context) => const DashboardPage()),
+                                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoadingPage()));
+                                    await Future.delayed(const Duration(milliseconds: 800)); // Simulate loading
+                                    Navigator.of(context).pushReplacement(
+                                      MaterialPageRoute(builder: (_) => const DashboardPage()),
                                     );
                                   },
                                   text: '',
@@ -896,7 +896,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                                 onTap: () async {
                                   // Show loading page for 1 second before navigating to Marketing
                                   Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoadingPage()));
-                                  await Future.delayed(const Duration(seconds: 1)); // Reduced to 1 second
+                                  await Future.delayed(const Duration(milliseconds: 1000)); // Reduced to 1 second
 
                                   // Fetch branch, username, userid for current user
                                   final user = FirebaseAuth.instance.currentUser;
@@ -1041,7 +1041,7 @@ Future<void> showLoadingDialog(BuildContext context) async {
       return const _RotatingLogoDialog();
     },
   );
-  await Future.delayed(const Duration(milliseconds: 1500)); // 1.5 seconds
+  await Future.delayed(const Duration(milliseconds: 800)); // 1.5 seconds
   Navigator.of(context, rootNavigator: true).pop();
 }
 
@@ -1075,7 +1075,7 @@ class _RotatingLogoState extends State<_RotatingLogo> with SingleTickerProviderS
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500), // Slow rotation
+      duration: const Duration(milliseconds: 800), // Slow rotation
     )..repeat();
   }
 

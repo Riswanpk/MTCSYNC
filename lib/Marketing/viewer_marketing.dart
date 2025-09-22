@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'viewer_marketing_detail.dart';
+import 'report_marketing.dart'; // ✅ Import your ReportMarketingPage
 
 class ViewerMarketingPage extends StatefulWidget {
   const ViewerMarketingPage({super.key});
@@ -71,6 +72,18 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
         appBar: AppBar(
           title: const Text('View Marketing Forms'),
           backgroundColor: const Color(0xFF2C3E50),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.insert_chart_outlined),
+              tooltip: "Go to Reports",
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => ReportMarketingPage()),
+                );
+              },
+            ),
+          ],
         ),
         backgroundColor: const Color(0xFFE3E8EA),
         body: Padding(

@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:permission_handler/permission_handler.dart';
+
 import 'leads.dart'; // Make sure this import exists
 
 // Update fetchCustomerSuggestions to search by name OR phone:
@@ -354,30 +357,110 @@ class _FollowUpFormState extends State<FollowUpForm> {
                         decoration: InputDecoration(
                           labelText: 'Phone',
                           prefixIcon: const Icon(Icons.phone),
-                          suffixIcon: IconButton(
-                            icon: const Icon(Icons.paste),
-                            tooltip: 'Paste from clipboard',
-                            onPressed: () async {
-                              final clipboardData = await Clipboard.getData('text/plain');
-                              if (clipboardData != null && clipboardData.text != null) {
-                                // Extract only digits
-                                final digits = RegExp(r'\d').allMatches(clipboardData.text!).map((m) => m.group(0)).join();
-                                if (digits.length >= 10) {
-                                  // Take the last 10 digits (to ignore country code)
-                                  final tenDigits = digits.substring(digits.length - 10);
-                                  // Format as "+91 XXXXX YYYYY"
-                                  final formatted = '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
-                                  _phoneController.text = formatted;
-                                  _phoneController.selection = TextSelection.fromPosition(
-                                    TextPosition(offset: formatted.length),
-                                  );
-                                } else {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Clipboard does not contain 10 digits')),
-                                  );
-                                }
-                              }
-                            },
+                          suffixIcon: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.paste),
+                                tooltip: 'Paste from clipboard',
+                                onPressed: () async {
+                                  final clipboardData = await Clipboard.getData('text/plain');
+                                  if (clipboardData != null && clipboardData.text != null) {
+                                    // Extract only digits
+                                    final digits = RegExp(r'\d').allMatches(clipboardData.text!).map((m) => m.group(0)).join();
+                                    if (digits.length >= 10) {
+                                      // Take the last 10 digits (to ignore country code)
+                                      final tenDigits = digits.substring(digits.length - 10);
+                                      // Format as "+91 XXXXX YYYYY"
+                                      final formatted = '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
+                                      _phoneController.text = formatted;
+                                      _phoneController.selection = TextSelection.fromPosition(
+                                        TextPosition(offset: formatted.length),
+                                      );
+                                    } else {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Clipboard does not contain 10 digits')),
+                                      );
+                                    }
+                                  }
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.contacts),
+                                tooltip: 'Pick from contacts',
+                                onPressed: () async {
+                                  try {
+                                    // Request permission using permission_handler first
+                                    var status = await Permission.contacts.status;
+                                    if (!status.isGranted) {
+                                      await Permission.contacts.request();
+                                      status = await Permission.contacts.status; // <-- Check again after requesting
+                                    }
+                                    if (!status.isGranted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Contact permission denied')),
+                                      );
+                                      return;
+                                    }
+                                    
+                                    List<Contact> contacts = await FlutterContacts.getContacts(withProperties: true);
+                                    Contact? selectedContact = await showDialog<Contact>(
+                                      context: context,
+                                      builder: (context) {
+                                        return AlertDialog(
+                                          title: const Text('Select Contact'),
+                                          content: SizedBox(
+                                            width: double.maxFinite,
+                                            height: 400,
+                                            child: ListView(
+                                              children: contacts
+                                                  .where((c) => c.phones.isNotEmpty)
+                                                  .map((contact) => ListTile(
+                                                        title: Text(contact.displayName ?? ''),
+                                                        subtitle: Text(contact.phones.first.number ?? ''),
+                                                        onTap: () => Navigator.pop(context, contact),
+                                                      ))
+                                                  .toList(),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    );
+                                    if (selectedContact != null && selectedContact.phones.isNotEmpty) {
+                                      final phone = selectedContact.phones.first.number ?? '';
+                                      final name = selectedContact.displayName ?? '';
+                                      // Extract only digits
+                                      final digits = RegExp(r'\d').allMatches(phone).map((m) => m.group(0)).join();
+                                      if (digits.length >= 10) {
+                                        final tenDigits = digits.substring(digits.length - 10);
+                                        final formatted = '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
+                                        _phoneController.text = formatted;
+                                        _phoneController.selection = TextSelection.fromPosition(
+                                          TextPosition(offset: formatted.length),
+                                        );
+                                        if (name.isNotEmpty) {
+                                          _nameController.text = name;
+                                        }
+                                        // Autofill company if present in contact
+                                        if (selectedContact.organizations.isNotEmpty &&
+                                            selectedContact.organizations.first.company != null &&
+                                            selectedContact.organizations.first.company!.isNotEmpty) {
+                                          _companyController.text = selectedContact.organizations.first.company!;
+                                        }
+                                      } else {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Contact does not contain a valid 10-digit phone number')),
+                                        );
+                                      }
+                                    }
+                                  } catch (e) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Failed to pick contact: $e')),
+                                    );
+                                  }
+                                },
+                              ),
+                            ],
                           ),
                         ),
                         keyboardType: TextInputType.phone,

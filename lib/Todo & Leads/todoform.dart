@@ -8,7 +8,8 @@ const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
 
 class TodoFormPage extends StatefulWidget {
-  const TodoFormPage({Key? key}) : super(key: key);
+  final String? docId; // <-- Add this
+  const TodoFormPage({Key? key, this.docId}) : super(key: key);
 
   @override
   State<TodoFormPage> createState() => _TodoFormPageState();
@@ -33,6 +34,9 @@ class _TodoFormPageState extends State<TodoFormPage> {
   void initState() {
     super.initState();
     _fetchCurrentUserRoleAndBranch();
+    if (widget.docId != null) {
+      _loadTodoForEdit(widget.docId!);
+    }
   }
 
   Future<void> _fetchCurrentUserRoleAndBranch() async {
@@ -89,6 +93,27 @@ class _TodoFormPageState extends State<TodoFormPage> {
         repeats: false,
       ),
     );
+  }
+
+  Future<void> _loadTodoForEdit(String docId) async {
+    final doc = await FirebaseFirestore.instance.collection('todo').doc(docId).get();
+    if (!doc.exists) return;
+    final data = doc.data();
+    if (data == null) return;
+    setState(() {
+      _titleController.text = data['title'] ?? '';
+      _descController.text = data['description'] ?? '';
+      _priority = data['priority'] ?? 'High';
+      if (data['reminder'] != null) {
+        final reminderDate = DateTime.tryParse(data['reminder']);
+        if (reminderDate != null) {
+          _selectedReminderDate = DateTime(reminderDate.year, reminderDate.month, reminderDate.day);
+          _selectedReminderTime = TimeOfDay(hour: reminderDate.hour, minute: reminderDate.minute);
+          _reminderController.text =
+              "${reminderDate.year}-${reminderDate.month.toString().padLeft(2, '0')}-${reminderDate.day.toString().padLeft(2, '0')} ${_selectedReminderTime!.format(context)}";
+        }
+      }
+    });
   }
 
   Future<void> _saveTodo() async {
@@ -153,6 +178,19 @@ class _TodoFormPageState extends State<TodoFormPage> {
       _selectedReminderTime!.hour,
       _selectedReminderTime!.minute,
     );
+
+    if (widget.docId != null) {
+      // Update existing todo
+      await FirebaseFirestore.instance.collection('todo').doc(widget.docId).update({
+        'title': title,
+        'description': desc,
+        'priority': _priority,
+        'reminder': scheduledDate.toIso8601String(),
+        // Optionally update other fields as needed
+      });
+      if (mounted) Navigator.pop(context);
+      return;
+    }
 
     final todoRef = await FirebaseFirestore.instance.collection('todo').add({
       'title': title,

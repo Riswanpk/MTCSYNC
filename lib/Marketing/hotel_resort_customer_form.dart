@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'camera_page.dart';
 import 'dart:io';
 import 'package:flutter/services.dart'; // Add this import
+import 'package:firebase_storage/firebase_storage.dart'; // Add this import
 
 class HotelResortCustomerForm extends StatefulWidget {
   final String username;
@@ -116,16 +117,31 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
         category.isEmpty ||
         date == null ||
         _imageFile == null ||
-        feedbackRating == 0) { // Add feedbackRating check
+        feedbackRating == 0) {
       setState(() {
         _photoError = _imageFile == null;
       });
       return;
     }
+
     setState(() {
       isLoading = true;
       _photoError = false;
     });
+
+    String? imageUrl;
+    if (_imageFile != null) {
+      try {
+        final ref = FirebaseStorage.instance
+            .ref()
+            .child('marketing')
+            .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
+        await ref.putFile(_imageFile!);
+        imageUrl = await ref.getDownloadURL();
+      } catch (e) {
+        imageUrl = null;
+      }
+    }
 
     await FirebaseFirestore.instance.collection('marketing').add({
       'formType': 'Hotel / Resort Customer',
@@ -144,7 +160,8 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
       'newProductSuggestion': newProductSuggestion,
       'anySuggestion': anySuggestion,
       'locationString': locationString,
-      'feedbackRating': feedbackRating, 
+      'feedbackRating': feedbackRating,
+      'imageUrl': imageUrl,
       'timestamp': FieldValue.serverTimestamp(),
     });
 
@@ -154,7 +171,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
       locationString = null;
       category = '';
       date = null;
-      feedbackRating = 0; // Reset rating
+      feedbackRating = 0;
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Form submitted successfully!')),

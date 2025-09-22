@@ -69,6 +69,20 @@ class TaskDetailPage extends StatelessWidget {
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit, color: Colors.white),
+            tooltip: 'Edit Task',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => TodoFormPage(docId: data['id'] ?? data['docId']),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(24),
@@ -1376,3 +1390,4 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
     );
   }
 }
+                  

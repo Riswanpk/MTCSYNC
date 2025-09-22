@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'camera_page.dart'; // Add this import
 import 'dart:io'; // Add this import
 import 'package:flutter/services.dart'; // Add this import
+import 'package:firebase_storage/firebase_storage.dart'; // Add this import
 
 class GeneralCustomerForm extends StatefulWidget {
   final String username;
@@ -72,10 +73,25 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
       });
       return;
     }
+
     setState(() {
       isLoading = true;
       _photoError = false;
     });
+
+    String? imageUrl;
+    if (_imageFile != null) {
+      try {
+        final ref = FirebaseStorage.instance
+            .ref()
+            .child('marketing')
+            .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
+        await ref.putFile(_imageFile!);
+        imageUrl = await ref.getDownloadURL();
+      } catch (e) {
+        imageUrl = null;
+      }
+    }
 
     await FirebaseFirestore.instance.collection('marketing').add({
       'formType': 'General Customer',
@@ -91,7 +107,8 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
       'currentEnquiries': currentEnquiries,
       'confirmedOrder': confirmedOrder,
       'newProductSuggestion': newProductSuggestion,
-      'locationString': locationString, // <-- Save location
+      'locationString': locationString,
+      'imageUrl': imageUrl,
       'timestamp': FieldValue.serverTimestamp(),
     });
 
@@ -100,7 +117,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
       _imageFile = null;
       locationString = null;
       natureOfBusiness = '';
-      customNatureOfBusiness = ''; // Reset custom field
+      customNatureOfBusiness = '';
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Form submitted successfully!')),

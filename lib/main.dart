@@ -78,6 +78,7 @@ void main() async {
 
   await Permission.notification.request();
   await Permission.manageExternalStorage.request();
+  await Permission.contacts.request();
   await Permission.scheduleExactAlarm.request();
   await Permission.reminders.request();
   if (await Permission.storage.isDenied) {

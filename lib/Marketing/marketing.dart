@@ -3,6 +3,7 @@ import 'premium_customer_form.dart';
 import 'general_customer_form.dart';
 import 'hotel_resort_customer_form.dart';
 import 'viewer_marketing.dart';
+import 'report_marketing.dart'; // Import the report page
 
 class MarketingFormPage extends StatefulWidget {
   final String username;
@@ -59,8 +60,18 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
         title: const Text('Marketing Form'),
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
-        // Removed the view icon button for all users
-        actions: [],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.insert_drive_file),
+            tooltip: 'Report',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => ReportMarketingPage()),
+              );
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
