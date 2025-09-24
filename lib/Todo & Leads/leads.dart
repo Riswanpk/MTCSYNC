@@ -27,7 +27,9 @@ class _LeadsPageState extends State<LeadsPage> {
   String searchQuery = '';
   String selectedStatus = 'All';
   String? selectedBranch;
+  String? selectedUser; // <-- NEW: selected user for filter
   List<String> availableBranches = [];
+  List<Map<String, dynamic>> availableUsers = []; // <-- NEW: list of users for dropdown
   final ValueNotifier<bool> _isHovering = ValueNotifier(false);
 
   final List<String> statusOptions = [
@@ -50,6 +52,7 @@ class _LeadsPageState extends State<LeadsPage> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     _currentUserData = FirebaseFirestore.instance.collection('users').doc(uid).get().then((doc) => doc.data());
     _fetchBranches();
+    _fetchUsers(); // <-- NEW: fetch users for dropdown
     // Auto delete completed leads at end of month
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final userData = await _currentUserData;
@@ -72,6 +75,19 @@ class _LeadsPageState extends State<LeadsPage> {
       if (branches.isNotEmpty && selectedBranch == null) {
         selectedBranch = branches.first;
       }
+    });
+  }
+
+  // NEW: Fetch users for filter dropdown
+  Future<void> _fetchUsers() async {
+    final snapshot = await FirebaseFirestore.instance.collection('users').get();
+    setState(() {
+      availableUsers = snapshot.docs
+          .map((doc) => {
+                'id': doc.id,
+                'username': (doc.data() as Map<String, dynamic>)['username'] ?? 'Unknown'
+              })
+          .toList();
     });
   }
 
@@ -182,8 +198,6 @@ class _LeadsPageState extends State<LeadsPage> {
         final currentUserId = FirebaseAuth.instance.currentUser?.uid;
         final role = userData['role'] ?? 'sales';
         final managerBranch = userData['branch'];
-
-        // For admin, use selectedBranch, otherwise use user's branch
         final branchToShow = role == 'admin' ? selectedBranch ?? '' : widget.branch;
 
         return Scaffold(
@@ -315,32 +329,74 @@ class _LeadsPageState extends State<LeadsPage> {
                                         value: branch,
                                         child: Text(
                                           branch,
-                                          style: const TextStyle(fontSize: 13), // Reduced font size
+                                          style: const TextStyle(fontSize: 12),
                                         ),
                                       ))
                                   .toList(),
                               onChanged: (val) {
                                 setState(() {
                                   selectedBranch = val;
+                                  selectedUser = null; // Reset user filter on branch change
+                                  _fetchUsers(); // Optionally refetch users for branch
                                 });
                               },
                               decoration: InputDecoration(
                                 labelText: 'Branch',
-                                labelStyle: const TextStyle(fontSize: 12),
+                                labelStyle: const TextStyle(fontSize: 11),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(10),
                                   borderSide: BorderSide.none,
                                 ),
                                 filled: true,
                                 fillColor: const Color.fromARGB(255, 229, 237, 229),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               ),
-                              style: const TextStyle(fontSize: 13, color: Colors.black),
+                              style: const TextStyle(fontSize: 12, color: Colors.black),
                               dropdownColor: const Color.fromARGB(255, 255, 255, 255),
-                              icon: const Icon(Icons.arrow_drop_down, size: 20),
+                              icon: const Icon(Icons.arrow_drop_down, size: 18),
                             ),
                           ),
-                        if (role == 'admin') const SizedBox(width: 8),
+                        if (role == 'admin') const SizedBox(width: 6),
+                        // --- USER FILTER DROPDOWN ---
+                        Expanded(
+                          flex: 2,
+                          child: DropdownButtonFormField<String>(
+                            value: selectedUser,
+                            items: [
+                              const DropdownMenuItem(
+                                value: null,
+                                child: Text('All Users', style: TextStyle(fontSize: 12)),
+                              ),
+                              ...availableUsers.map((user) => DropdownMenuItem(
+                                    value: user['id'],
+                                    child: Text(
+                                      user['username'],
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  )),
+                            ],
+                            onChanged: (val) {
+                              setState(() {
+                                selectedUser = val;
+                              });
+                            },
+                            decoration: InputDecoration(
+                              labelText: 'User',
+                              labelStyle: const TextStyle(fontSize: 11),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide.none,
+                              ),
+                              filled: true,
+                              fillColor: const Color.fromARGB(255, 229, 237, 229),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            ),
+                            style: const TextStyle(fontSize: 12, color: Colors.black),
+                            dropdownColor: Colors.white,
+                            icon: const Icon(Icons.arrow_drop_down, size: 18),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
                         Expanded(
                           flex: 2,
                           child: DropdownButtonFormField<String>(
@@ -350,7 +406,7 @@ class _LeadsPageState extends State<LeadsPage> {
                                 value: status,
                                 child: Text(
                                   status,
-                                  style: const TextStyle(fontSize: 13), // Reduced font size
+                                  style: const TextStyle(fontSize: 12),
                                 ),
                               );
                             }).toList(),
@@ -361,21 +417,21 @@ class _LeadsPageState extends State<LeadsPage> {
                             },
                             decoration: InputDecoration(
                               labelText: 'Status',
-                              labelStyle: const TextStyle(fontSize: 12),
+                              labelStyle: const TextStyle(fontSize: 11),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
                                 borderSide: BorderSide.none,
                               ),
                               filled: true,
                               fillColor: const Color.fromARGB(255, 229, 237, 229),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             ),
-                            style: const TextStyle(fontSize: 13, color: Colors.black),
+                            style: const TextStyle(fontSize: 12, color: Colors.black),
                             dropdownColor: Colors.white,
-                            icon: const Icon(Icons.arrow_drop_down, size: 20),
+                            icon: const Icon(Icons.arrow_drop_down, size: 18),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
                         Expanded(
                           flex: 2,
                           child: DropdownButtonFormField<bool>(
@@ -383,11 +439,11 @@ class _LeadsPageState extends State<LeadsPage> {
                             items: const [
                               DropdownMenuItem(
                                 value: false,
-                                child: Text('Newest', style: TextStyle(fontSize: 13)),
+                                child: Text('Newest', style: TextStyle(fontSize: 12)),
                               ),
                               DropdownMenuItem(
                                 value: true,
-                                child: Text('Oldest', style: TextStyle(fontSize: 13)),
+                                child: Text('Oldest', style: TextStyle(fontSize: 12)),
                               ),
                             ],
                             onChanged: (val) {
@@ -397,18 +453,18 @@ class _LeadsPageState extends State<LeadsPage> {
                             },
                             decoration: InputDecoration(
                               labelText: 'Sort',
-                              labelStyle: const TextStyle(fontSize: 12),
+                              labelStyle: const TextStyle(fontSize: 11),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
                                 borderSide: BorderSide.none,
                               ),
                               filled: true,
                               fillColor: const Color.fromARGB(255, 229, 237, 229),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             ),
-                            style: const TextStyle(fontSize: 13, color: Colors.black),
+                            style: const TextStyle(fontSize: 12, color: Colors.black),
                             dropdownColor: Colors.white,
-                            icon: const Icon(Icons.arrow_drop_down, size: 20),
+                            icon: const Icon(Icons.arrow_drop_down, size: 18),
                           ),
                         ),
                       ],
@@ -448,7 +504,15 @@ class _LeadsPageState extends State<LeadsPage> {
                                     return branchUserIds.contains(data['created_by']);
                                   }).toList();
 
-                                  final filteredLeads = visibleLeads.where((doc) {
+                                  // --- USER FILTER ---
+                                  final userFilteredLeads = selectedUser == null
+                                      ? visibleLeads
+                                      : visibleLeads.where((doc) {
+                                          final data = doc.data() as Map<String, dynamic>;
+                                          return data['created_by'] == selectedUser;
+                                        }).toList();
+
+                                  final filteredLeads = userFilteredLeads.where((doc) {
                                     final data = doc.data() as Map<String, dynamic>;
                                     final name = (data['name'] ?? '').toString().toLowerCase();
                                     final status = (data['status'] ?? 'Unknown').toString();
@@ -533,7 +597,15 @@ class _LeadsPageState extends State<LeadsPage> {
                                   }
                                   final allLeads = snapshot.data!.docs;
 
-                                  final filteredLeads = allLeads.where((doc) {
+                                  // --- USER FILTER ---
+                                  final userFilteredLeads = selectedUser == null
+                                      ? allLeads
+                                      : allLeads.where((doc) {
+                                          final data = doc.data() as Map<String, dynamic>;
+                                          return data['created_by'] == selectedUser;
+                                        }).toList();
+
+                                  final filteredLeads = userFilteredLeads.where((doc) {
                                     final data = doc.data() as Map<String, dynamic>;
                                     final name = (data['name'] ?? '').toString().toLowerCase();
                                     final status = (data['status'] ?? 'Unknown').toString();
@@ -615,7 +687,15 @@ class _LeadsPageState extends State<LeadsPage> {
                                     return data['branch'] == widget.branch;
                                   }).toList();
 
-                                  final filteredLeads = visibleLeads.where((doc) {
+                                  // --- USER FILTER ---
+                                  final userFilteredLeads = selectedUser == null
+                                      ? visibleLeads
+                                      : visibleLeads.where((doc) {
+                                          final data = doc.data() as Map<String, dynamic>;
+                                          return data['created_by'] == selectedUser;
+                                        }).toList();
+
+                                  final filteredLeads = userFilteredLeads.where((doc) {
                                     final data = doc.data() as Map<String, dynamic>;
                                     final name = (data['name'] ?? '').toString().toLowerCase();
                                     final status = (data['status'] ?? 'Unknown').toString();
