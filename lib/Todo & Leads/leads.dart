@@ -52,7 +52,22 @@ class _LeadsPageState extends State<LeadsPage> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     _currentUserData = FirebaseFirestore.instance.collection('users').doc(uid).get().then((doc) => doc.data());
     _fetchBranches();
-    _fetchUsers(); // <-- NEW: fetch users for dropdown
+    // Only fetch users for the current branch for manager/sales
+    _currentUserData.then((userData) {
+      if (userData != null) {
+        final role = userData['role'] ?? 'sales';
+        final branch = userData['branch'] ?? '';
+        if (role == 'admin') {
+          // Do NOT fetch users here for admin, wait for branch selection
+          // _fetchUsers(); <-- REMOVE THIS LINE
+        } else {
+          _fetchUsers(branch); // manager/sales: only fetch for their branch
+          setState(() {
+            selectedBranch = branch;
+          });
+        }
+      }
+    });
     // Auto delete completed leads at end of month
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final userData = await _currentUserData;
@@ -79,8 +94,12 @@ class _LeadsPageState extends State<LeadsPage> {
   }
 
   // NEW: Fetch users for filter dropdown
-  Future<void> _fetchUsers() async {
-    final snapshot = await FirebaseFirestore.instance.collection('users').get();
+  Future<void> _fetchUsers([String? branch]) async {
+    Query query = FirebaseFirestore.instance.collection('users');
+    if (branch != null && branch.isNotEmpty) {
+      query = query.where('branch', isEqualTo: branch);
+    }
+    final snapshot = await query.get();
     setState(() {
       availableUsers = snapshot.docs
           .map((doc) => {
@@ -316,159 +335,308 @@ class _LeadsPageState extends State<LeadsPage> {
                 children: [
                   // --- TOP FILTERS ROW ---
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8),
-                    child: Row(
-                      children: [
-                        if (role == 'admin')
-                          Expanded(
-                            flex: 2,
-                            child: DropdownButtonFormField<String>(
-                              value: selectedBranch,
-                              items: availableBranches
-                                  .map((branch) => DropdownMenuItem(
-                                        value: branch,
-                                        child: Text(
-                                          branch,
-                                          style: const TextStyle(fontSize: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    child: role == 'admin'
+                        ? Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Flexible(
+                                    flex: 1,
+                                    child: SizedBox(
+                                      height: 36,
+                                      child: DropdownButtonFormField<String>(
+                                        value: selectedBranch,
+                                        items: availableBranches
+                                            .map((branch) => DropdownMenuItem(
+                                                  value: branch,
+                                                  child: Text(
+                                                    branch,
+                                                    style: const TextStyle(fontSize: 9),
+                                                  ),
+                                                ))
+                                            .toList(),
+                                        onChanged: (val) {
+                                          setState(() {
+                                            selectedBranch = val;
+                                            selectedUser = null;
+                                          });
+                                          // Only fetch users after branch is selected
+                                          if (val != null) {
+                                            _fetchUsers(val);
+                                          } else {
+                                            setState(() {
+                                              availableUsers = [];
+                                            });
+                                          }
+                                        },
+                                        decoration: InputDecoration(
+                                          labelText: 'Branch',
+                                          labelStyle: const TextStyle(fontSize: 9),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          filled: true,
+                                          fillColor: const Color.fromARGB(255, 229, 237, 229),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                                         ),
-                                      ))
-                                  .toList(),
-                              onChanged: (val) {
-                                setState(() {
-                                  selectedBranch = val;
-                                  selectedUser = null; // Reset user filter on branch change
-                                  _fetchUsers(); // Optionally refetch users for branch
-                                });
-                              },
-                              decoration: InputDecoration(
-                                labelText: 'Branch',
-                                labelStyle: const TextStyle(fontSize: 11),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide.none,
-                                ),
-                                filled: true,
-                                fillColor: const Color.fromARGB(255, 229, 237, 229),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              ),
-                              style: const TextStyle(fontSize: 12, color: Colors.black),
-                              dropdownColor: const Color.fromARGB(255, 255, 255, 255),
-                              icon: const Icon(Icons.arrow_drop_down, size: 18),
-                            ),
-                          ),
-                        if (role == 'admin') const SizedBox(width: 6),
-                        // --- USER FILTER DROPDOWN ---
-                        Expanded(
-                          flex: 2,
-                          child: DropdownButtonFormField<String>(
-                            value: selectedUser,
-                            items: [
-                              const DropdownMenuItem(
-                                value: null,
-                                child: Text('All Users', style: TextStyle(fontSize: 12)),
-                              ),
-                              ...availableUsers.map((user) => DropdownMenuItem(
-                                    value: user['id'],
-                                    child: Text(
-                                      user['username'],
-                                      style: const TextStyle(fontSize: 12),
+                                        style: const TextStyle(fontSize: 10, color: Colors.black),
+                                        dropdownColor: Colors.white,
+                                        icon: const Icon(Icons.arrow_drop_down, size: 14),
+                                      ),
                                     ),
-                                  )),
-                            ],
-                            onChanged: (val) {
-                              setState(() {
-                                selectedUser = val;
-                              });
-                            },
-                            decoration: InputDecoration(
-                              labelText: 'User',
-                              labelStyle: const TextStyle(fontSize: 11),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide.none,
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Flexible(
+                                    flex: 1,
+                                    child: SizedBox(
+                                      height: 36,
+                                      child: DropdownButtonFormField<String>(
+                                        value: selectedUser,
+                                        items: [
+                                          const DropdownMenuItem(
+                                            value: null,
+                                            child: Text('All Users', style: TextStyle(fontSize: 9)),
+                                          ),
+                                          ...availableUsers.map((user) => DropdownMenuItem(
+                                                value: user['id'],
+                                                child: Text(
+                                                  user['username'],
+                                                  style: const TextStyle(fontSize: 9),
+                                                ),
+                                              )),
+                                        ],
+                                        onChanged: (val) {
+                                          setState(() {
+                                            selectedUser = val;
+                                          });
+                                        },
+                                        decoration: InputDecoration(
+                                          labelText: 'User',
+                                          labelStyle: const TextStyle(fontSize: 9),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          filled: true,
+                                          fillColor: const Color.fromARGB(255, 229, 237, 229),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 1, vertical: 10),
+                                        ),
+                                        style: const TextStyle(fontSize: 8, color: Colors.black),
+                                        dropdownColor: Colors.white,
+                                        icon: const Icon(Icons.arrow_drop_down, size: 14),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              filled: true,
-                              fillColor: const Color.fromARGB(255, 229, 237, 229),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            ),
-                            style: const TextStyle(fontSize: 12, color: Colors.black),
-                            dropdownColor: Colors.white,
-                            icon: const Icon(Icons.arrow_drop_down, size: 18),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          flex: 2,
-                          child: DropdownButtonFormField<String>(
-                            value: selectedStatus,
-                            items: statusOptions.map((status) {
-                              return DropdownMenuItem<String>(
-                                value: status,
-                                child: Text(
-                                  status,
-                                  style: const TextStyle(fontSize: 12),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Flexible(
+                                    flex: 1,
+                                    child: SizedBox(
+                                      height: 36,
+                                      child: DropdownButtonFormField<String>(
+                                        value: selectedStatus,
+                                        items: statusOptions.map((status) {
+                                          return DropdownMenuItem<String>(
+                                            value: status,
+                                            child: Text(
+                                              status,
+                                              style: const TextStyle(fontSize: 10),
+                                            ),
+                                          );
+                                        }).toList(),
+                                        onChanged: (val) {
+                                          setState(() {
+                                            selectedStatus = val!;
+                                          });
+                                        },
+                                        decoration: InputDecoration(
+                                          labelText: 'Status',
+                                          labelStyle: const TextStyle(fontSize: 9),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          filled: true,
+                                          fillColor: const Color.fromARGB(255, 229, 237, 229),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                        ),
+                                        style: const TextStyle(fontSize: 10, color: Colors.black),
+                                        dropdownColor: Colors.white,
+                                        icon: const Icon(Icons.arrow_drop_down, size: 14),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Flexible(
+                                    flex: 1,
+                                    child: SizedBox(
+                                      height: 36,
+                                      child: DropdownButtonFormField<bool>(
+                                        value: sortAscending,
+                                        items: const [
+                                          DropdownMenuItem(
+                                            value: false,
+                                            child: Text('Newest', style: TextStyle(fontSize: 10)),
+                                          ),
+                                          DropdownMenuItem(
+                                            value: true,
+                                            child: Text('Oldest', style: TextStyle(fontSize: 10)),
+                                          ),
+                                        ],
+                                        onChanged: (val) {
+                                          setState(() {
+                                            sortAscending = val!;
+                                          });
+                                        },
+                                        decoration: InputDecoration(
+                                          labelText: 'Sort',
+                                          labelStyle: const TextStyle(fontSize: 9),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          filled: true,
+                                          fillColor: const Color.fromARGB(255, 229, 237, 229),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                        ),
+                                        style: const TextStyle(fontSize: 10, color: Colors.black),
+                                        dropdownColor: Colors.white,
+                                        icon: const Icon(Icons.arrow_drop_down, size: 14),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          )
+                        : Row(
+                            children: [
+                              // --- USER FILTER DROPDOWN ---
+                              Flexible(
+                                flex: 1,
+                                child: SizedBox(
+                                  height: 36,
+                                  child: DropdownButtonFormField<String>(
+                                    value: selectedUser,
+                                    items: [
+                                      const DropdownMenuItem(
+                                        value: null,
+                                        child: Text('All Users', style: TextStyle(fontSize: 9)),
+                                      ),
+                                      ...availableUsers.map((user) => DropdownMenuItem(
+                                            value: user['id'],
+                                            child: Text(
+                                              user['username'],
+                                              style: const TextStyle(fontSize: 9),
+                                            ),
+                                          )),
+                                    ],
+                                    onChanged: (val) {
+                                      setState(() {
+                                        selectedUser = val;
+                                      });
+                                    },
+                                    decoration: InputDecoration(
+                                      labelText: 'User',
+                                      labelStyle: const TextStyle(fontSize: 9),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                      filled: true,
+                                      fillColor: const Color.fromARGB(255, 229, 237, 229),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 1, vertical: 10),
+                                    ),
+                                    style: const TextStyle(fontSize: 8, color: Colors.black),
+                                    dropdownColor: Colors.white,
+                                    icon: const Icon(Icons.arrow_drop_down, size: 14),
+                                  ),
                                 ),
-                              );
-                            }).toList(),
-                            onChanged: (val) {
-                              setState(() {
-                                selectedStatus = val!;
-                              });
-                            },
-                            decoration: InputDecoration(
-                              labelText: 'Status',
-                              labelStyle: const TextStyle(fontSize: 11),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide.none,
                               ),
-                              filled: true,
-                              fillColor: const Color.fromARGB(255, 229, 237, 229),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            ),
-                            style: const TextStyle(fontSize: 12, color: Colors.black),
-                            dropdownColor: Colors.white,
-                            icon: const Icon(Icons.arrow_drop_down, size: 18),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          flex: 2,
-                          child: DropdownButtonFormField<bool>(
-                            value: sortAscending,
-                            items: const [
-                              DropdownMenuItem(
-                                value: false,
-                                child: Text('Newest', style: TextStyle(fontSize: 12)),
+                              const SizedBox(width: 2),
+                              Flexible(
+                                flex: 1,
+                                child: SizedBox(
+                                  height: 36,
+                                  child: DropdownButtonFormField<String>(
+                                    value: selectedStatus,
+                                    items: statusOptions.map((status) {
+                                      return DropdownMenuItem<String>(
+                                        value: status,
+                                        child: Text(
+                                          status,
+                                          style: const TextStyle(fontSize: 10),
+                                        ),
+                                      );
+                                    }).toList(),
+                                    onChanged: (val) {
+                                      setState(() {
+                                        selectedStatus = val!;
+                                      });
+                                    },
+                                    decoration: InputDecoration(
+                                      labelText: 'Status',
+                                      labelStyle: const TextStyle(fontSize: 9),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                      filled: true,
+                                      fillColor: const Color.fromARGB(255, 229, 237, 229),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                    ),
+                                    style: const TextStyle(fontSize: 10, color: Colors.black),
+                                    dropdownColor: Colors.white,
+                                    icon: const Icon(Icons.arrow_drop_down, size: 14),
+                                  ),
+                                ),
                               ),
-                              DropdownMenuItem(
-                                value: true,
-                                child: Text('Oldest', style: TextStyle(fontSize: 12)),
+                              const SizedBox(width: 2),
+                              Flexible(
+                                flex: 1,
+                                child: SizedBox(
+                                  height: 36,
+                                  child: DropdownButtonFormField<bool>(
+                                    value: sortAscending,
+                                    items: const [
+                                      DropdownMenuItem(
+                                        value: false,
+                                        child: Text('Newest', style: TextStyle(fontSize: 10)),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: true,
+                                        child: Text('Oldest', style: TextStyle(fontSize: 10)),
+                                      ),
+                                    ],
+                                    onChanged: (val) {
+                                      setState(() {
+                                        sortAscending = val!;
+                                      });
+                                    },
+                                    decoration: InputDecoration(
+                                      labelText: 'Sort',
+                                      labelStyle: const TextStyle(fontSize: 9),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                      filled: true,
+                                      fillColor: const Color.fromARGB(255, 229, 237, 229),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                    ),
+                                    style: const TextStyle(fontSize: 10, color: Colors.black),
+                                    dropdownColor: Colors.white,
+                                    icon: const Icon(Icons.arrow_drop_down, size: 14),
+                                  ),
+                                ),
                               ),
                             ],
-                            onChanged: (val) {
-                              setState(() {
-                                sortAscending = val!;
-                              });
-                            },
-                            decoration: InputDecoration(
-                              labelText: 'Sort',
-                              labelStyle: const TextStyle(fontSize: 11),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide.none,
-                              ),
-                              filled: true,
-                              fillColor: const Color.fromARGB(255, 229, 237, 229),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            ),
-                            style: const TextStyle(fontSize: 12, color: Colors.black),
-                            dropdownColor: Colors.white,
-                            icon: const Icon(Icons.arrow_drop_down, size: 18),
                           ),
-                        ),
-                      ],
-                    ),
                   ),
                   // --- LEADS LIST ---
                   Expanded(
@@ -584,7 +752,7 @@ class _LeadsPageState extends State<LeadsPage> {
                                         .collection('follow_ups')
                                         .where('branch', isEqualTo: branchToShow)
                                         .snapshots()
-                                    : const Stream.empty(),
+                                    : const Stream.empty(), // Prevent loading until branch selected
                                 builder: (context, snapshot) {
                                   if (branchToShow.isEmpty) {
                                     return const Center(child: Text("Please select a branch."));
