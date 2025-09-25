@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'package:excel/excel.dart' as excel;
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:share_plus/share_plus.dart';
-import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'dart:typed_data';
+import 'report_excel_marketing.dart'; // Import the Excel report generator
 
 class ReportMarketingPage extends StatefulWidget {
   @override
@@ -68,25 +68,32 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> {
       return true;
     }).map((doc) {
       final data = doc.data();
-      // Ensure photo URL is included and all fields are present
       final result = <String, dynamic>{};
       data.forEach((key, value) {
-        if (key == 'imageUrl') {
-          result['Photo URL'] = value ?? '';
-        } else if (value is Timestamp) {
-          result[key] = value.toDate().toString();
+        if (value is Timestamp) {
+          result[key] = value.toDate();
         } else {
           result[key] = value ?? '';
         }
       });
-      // Add document ID for reference
       result['Document ID'] = doc.id;
       return result;
     }).toList();
+
+    // Sort by branch then date
+    filtered.sort((a, b) {
+      final branchA = a['branch']?.toString() ?? '';
+      final branchB = b['branch']?.toString() ?? '';
+      final dateA = a['timestamp'] is DateTime ? a['timestamp'] as DateTime : DateTime.tryParse(a['timestamp']?.toString() ?? '') ?? DateTime(2000);
+      final dateB = b['timestamp'] is DateTime ? b['timestamp'] as DateTime : DateTime.tryParse(b['timestamp']?.toString() ?? '') ?? DateTime(2000);
+      final branchCompare = branchA.compareTo(branchB);
+      if (branchCompare != 0) return branchCompare;
+      return dateA.compareTo(dateB);
+    });
+
     return filtered;
   }
-
-  Future<File> _generatePdf(List<Map<String, dynamic>> data) async {
+Future<File> _generatePdf(List<Map<String, dynamic>> data) async {
   final pdf = pw.Document();
 
   if (data.isEmpty) {
@@ -98,78 +105,130 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> {
       ),
     );
   } else {
-    // Build table header
-    final headers = data.first.keys.toList();
+    for (var entry in data) {
+      // Load photo if available
+      pw.Widget? photoWidget;
+      if (entry['photoUrl'] != null && entry['photoUrl'].toString().isNotEmpty) {
+        final imageProvider = await networkImage(entry['photoUrl']);
+        photoWidget = pw.Container(
+          height: 180,
+          width: 180,
+          child: pw.Image(imageProvider, fit: pw.BoxFit.cover),
+        );
+      }
 
-    // Build rows
-    final rows = data.map((row) {
-      return headers.map((h) => row[h]?.toString() ?? '').toList();
-    }).toList();
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          build: (pw.Context context) {
+            return pw.Padding(
+              padding: const pw.EdgeInsets.all(24),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'Marketing Form Entry',
+                    style: pw.TextStyle(
+                      fontSize: 20,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 12),
 
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        build: (pw.Context context) => [
-          pw.Text('Marketing Report',
-              style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
-          pw.SizedBox(height: 20),
-          pw.Table.fromTextArray(
-            headers: headers,
-            data: rows,
-            border: pw.TableBorder.all(),
-            headerStyle:
-                pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12),
-            cellStyle: const pw.TextStyle(fontSize: 10),
-            cellAlignment: pw.Alignment.centerLeft,
-          ),
-        ],
-      ),
-    );
+                  // Display photo (not clickable)
+                  if (photoWidget != null) ...[
+                    pw.Text('Photo:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    photoWidget,
+                    pw.SizedBox(height: 12),
+                  ],
+
+                  // Display other fields
+                  ...entry.entries
+                      .where((e) => e.key != 'photoUrl' && e.key != 'Document ID')
+                      .map((e) {
+                    String value;
+                    if (e.value is DateTime) {
+                      value = DateFormat('yyyy-MM-dd HH:mm').format(e.value as DateTime);
+                    } else {
+                      value = e.value?.toString() ?? '';
+                    }
+
+                    if (e.key == 'location' && value.isNotEmpty) {
+                      final mapsUrl =
+                          'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(value)}';
+
+                      return pw.Padding(
+                        padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                        child: pw.Row(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text('Location: ',
+                                style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                            pw.UrlLink(
+                              destination: mapsUrl,
+                              child: pw.Text(
+                                value,
+                                style: pw.TextStyle(
+                                  color: PdfColors.blue,
+                                  decoration: pw.TextDecoration.underline,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return pw.Padding(
+                      padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                      child: pw.Row(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text('${e.key}: ',
+                              style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                          pw.Expanded(child: pw.Text(value)),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+    }
   }
 
   final dir = await getApplicationDocumentsDirectory();
-  final file =
-      File('${dir.path}/marketing_report_${DateTime.now().millisecondsSinceEpoch}.pdf');
+  final file = File(
+      '${dir.path}/marketing_report_${DateTime.now().millisecondsSinceEpoch}.pdf');
   await file.writeAsBytes(await pdf.save());
   return file;
 }
 
 
-
-  Future<void> _notifyAndOpen(File file) async {
-    await AwesomeNotifications().createNotification(
-      content: NotificationContent(
-        id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-        channelKey: 'basic_channel',
-        title: 'Marketing Report Downloaded',
-        body: 'Tap to open the Excel file.',
-        notificationLayout: NotificationLayout.Default,
-        payload: {'filePath': file.path},
-      ),
-      actionButtons: [
-        NotificationActionButton(
-          key: 'OPEN_REPORT',
-          label: 'Open',
-          autoDismissible: true,
-        ),
-      ],
-    );
-  
+  // Helper for network image
+  Future<pw.ImageProvider> networkImage(String url) async {
+    final response = await HttpClient().getUrl(Uri.parse(url));
+    final bytes = await response.close().then((r) => r.fold<List<int>>([], (p, e) => p..addAll(e)));
+    return pw.MemoryImage(Uint8List.fromList(bytes));
   }
 
-  Future<void> _generateAndHandleReport({bool shareInstead = false}) async {
+  Future<void> _generateAndShareReport() async {
     setState(() => isLoading = true);
     final data = await _fetchReportData();
     final file = await _generatePdf(data);
     setState(() => isLoading = false);
-    if (shareInstead) {
-      await Share.shareXFiles([XFile(file.path)], text: 'Marketing Report');
-    } else {
-      await _notifyAndOpen(file);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Report downloaded: ${file.path}')),
-      );
-    }
+    await Share.shareXFiles([XFile(file.path)], text: 'Marketing Report');
+  }
+
+  Future<void> _generateAndShareExcel() async {
+    setState(() => isLoading = true);
+    final data = await _fetchReportData();
+    final file = await generateExcelMarketingReport(data);
+    setState(() => isLoading = false);
+    await Share.shareXFiles([XFile(file.path)], text: 'Marketing Excel Report');
   }
 
   @override
@@ -269,32 +328,30 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> {
                         onChanged: (val) => setState(() => selectedForms[type] = val ?? false),
                       )),
                   const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.download),
-                          label: const Text('Download Excel'),
-                          onPressed: () => _generateAndHandleReport(),
+                  Center(
+                    child: Column(
+                      children: [
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.share),
+                          label: const Text('Share Report'),
+                          onPressed: _generateAndShareReport,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF005BAC),
                             foregroundColor: Colors.white,
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.share),
+                        const SizedBox(height: 12),
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.table_chart),
                           label: const Text('Share Excel'),
-                          onPressed: () => _generateAndHandleReport(shareInstead: true),
+                          onPressed: _generateAndShareExcel,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green,
                             foregroundColor: Colors.white,
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
