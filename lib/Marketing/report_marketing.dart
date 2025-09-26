@@ -8,6 +8,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'dart:typed_data';
 import 'report_excel_marketing.dart'; // Import the Excel report generator
+import 'syncfusion_report.dart'; // Import the Syncfusion report generator
 
 class ReportMarketingPage extends StatefulWidget {
   @override
@@ -331,6 +332,16 @@ Future<File> _generatePdf(List<Map<String, dynamic>> data) async {
                   Center(
                     child: Column(
                       children: [
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.insert_drive_file),
+                          label: const Text("Share Syncfusion Report"),
+                          onPressed: () async {
+                            setState(() => isLoading = true);
+                            final data = await _fetchReportData();
+                            await SyncfusionReport.shareExcel(data);
+                            setState(() => isLoading = false);
+                          },
+                        ),
                         ElevatedButton.icon(
                           icon: const Icon(Icons.share),
                           label: const Text('Share Report'),
