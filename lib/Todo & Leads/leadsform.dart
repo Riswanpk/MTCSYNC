@@ -390,11 +390,10 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                 tooltip: 'Pick from contacts',
                                 onPressed: () async {
                                   try {
-                                    // Request permission using permission_handler first
                                     var status = await Permission.contacts.status;
                                     if (!status.isGranted) {
                                       await Permission.contacts.request();
-                                      status = await Permission.contacts.status; // <-- Check again after requesting
+                                      status = await Permission.contacts.status;
                                     }
                                     if (!status.isGranted) {
                                       ScaffoldMessenger.of(context).showSnackBar(
@@ -402,34 +401,95 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                       );
                                       return;
                                     }
-                                    
+
                                     List<Contact> contacts = await FlutterContacts.getContacts(withProperties: true);
+
                                     Contact? selectedContact = await showDialog<Contact>(
                                       context: context,
+                                      barrierDismissible: true,
                                       builder: (context) {
-                                        return AlertDialog(
-                                          title: const Text('Select Contact'),
-                                          content: SizedBox(
-                                            width: double.maxFinite,
-                                            height: 400,
-                                            child: ListView(
-                                              children: contacts
-                                                  .where((c) => c.phones.isNotEmpty)
-                                                  .map((contact) => ListTile(
-                                                        title: Text(contact.displayName ?? ''),
-                                                        subtitle: Text(contact.phones.first.number ?? ''),
-                                                        onTap: () => Navigator.pop(context, contact),
-                                                      ))
-                                                  .toList(),
-                                            ),
-                                          ),
+                                        TextEditingController searchController = TextEditingController();
+                                        List<Contact> filteredContacts = contacts;
+                                        return StatefulBuilder(
+                                          builder: (context, setState) {
+                                            return Dialog(
+                                              insetPadding: EdgeInsets.zero,
+                                              backgroundColor: Colors.white,
+                                              child: Container(
+                                                width: double.infinity,
+                                                height: MediaQuery.of(context).size.height,
+                                                padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 0),
+                                                child: Column(
+                                                  children: [
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                                      child: Row(
+                                                        children: [
+                                                          Expanded(
+                                                            child: TextField(
+                                                              controller: searchController,
+                                                              decoration: InputDecoration(
+                                                                hintText: 'Search contacts...',
+                                                                prefixIcon: Icon(Icons.search),
+                                                                border: OutlineInputBorder(
+                                                                  borderRadius: BorderRadius.circular(12),
+                                                                  borderSide: BorderSide.none,
+                                                                ),
+                                                                filled: true,
+                                                                fillColor: Colors.grey[100],
+                                                              ),
+                                                              onChanged: (value) {
+                                                                setState(() {
+                                                                  filteredContacts = contacts.where((c) =>
+                                                                    (c.displayName ?? '').toLowerCase().contains(value.toLowerCase()) ||
+                                                                    (c.phones.isNotEmpty && c.phones.first.number.toLowerCase().contains(value.toLowerCase()))
+                                                                  ).toList();
+                                                                });
+                                                              },
+                                                            ),
+                                                          ),
+                                                          IconButton(
+                                                            icon: Icon(Icons.close),
+                                                            onPressed: () => Navigator.pop(context),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    Expanded(
+                                                      child: ListView.builder(
+                                                        itemCount: filteredContacts.length,
+                                                        itemBuilder: (context, index) {
+                                                          final contact = filteredContacts[index];
+                                                          final phone = contact.phones.isNotEmpty ? contact.phones.first.number ?? '' : '';
+                                                          return ListTile(
+                                                            leading: CircleAvatar(
+                                                              child: Text(
+                                                                (contact.displayName ?? '').isNotEmpty
+                                                                  ? contact.displayName![0].toUpperCase()
+                                                                  : '?',
+                                                                style: TextStyle(fontWeight: FontWeight.bold),
+                                                              ),
+                                                              backgroundColor: Colors.blue[100],
+                                                            ),
+                                                            title: Text(contact.displayName ?? '', style: TextStyle(fontWeight: FontWeight.w500)),
+                                                            subtitle: Text(phone, style: TextStyle(color: Colors.grey[600])),
+                                                            onTap: () => Navigator.pop(context, contact),
+                                                          );
+                                                        },
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          },
                                         );
                                       },
                                     );
+
                                     if (selectedContact != null && selectedContact.phones.isNotEmpty) {
                                       final phone = selectedContact.phones.first.number ?? '';
                                       final name = selectedContact.displayName ?? '';
-                                      // Extract only digits
                                       final digits = RegExp(r'\d').allMatches(phone).map((m) => m.group(0)).join();
                                       if (digits.length >= 10) {
                                         final tenDigits = digits.substring(digits.length - 10);
@@ -441,7 +501,6 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                         if (name.isNotEmpty) {
                                           _nameController.text = name;
                                         }
-                                        // Autofill company if present in contact
                                         if (selectedContact.organizations.isNotEmpty &&
                                             selectedContact.organizations.first.company != null &&
                                             selectedContact.organizations.first.company!.isNotEmpty) {

@@ -12,21 +12,20 @@ class InsightsDetailViewerPage extends StatefulWidget {
 }
 
 class _InsightsDetailViewerPageState extends State<InsightsDetailViewerPage> {
-  int attendance = 20;
-  int dress = 20;
-  int attitude = 20;
-  int meeting = 10;
+  double attendance = 20;
+  double dress = 20;
+  double attitude = 20;
+  double meeting = 10;
   bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    fetchMonthlyScores();
+    fetchWeeklyAverages();
   }
 
-  Future<void> fetchMonthlyScores() async {
+  Future<void> fetchWeeklyAverages() async {
     final now = DateTime.now();
-    // --- Use previous month ---
     final prevMonth = now.month == 1 ? 12 : now.month - 1;
     final prevMonthYear = now.month == 1 ? now.year - 1 : now.year;
     final monthStart = DateTime(prevMonthYear, prevMonth, 1);
@@ -41,28 +40,46 @@ class _InsightsDetailViewerPageState extends State<InsightsDetailViewerPage> {
 
     final forms = formsSnapshot.docs.map((doc) => doc.data() as Map<String, dynamic>).toList();
 
-    int att = 20, drs = 20, atti = 20, meet = 10;
+    // Group forms by week of month
+    Map<int, List<Map<String, dynamic>>> weekMap = {};
     for (var form in forms) {
-      final status = form['attendance'];
-      if (status == 'late') att -= 5;
-      else if (status == 'notApproved') att -= 10;
-      if (status != 'approved' && status != 'notApproved') {
-        if (form['dressCode']?['cleanUniform'] == false) drs -= 5;
-        if (form['dressCode']?['keepInside'] == false) drs -= 5;
-        if (form['dressCode']?['neatHair'] == false) drs -= 5;
-        if (form['attitude']?['greetSmile'] == false) atti -= 2;
-        if (form['attitude']?['askNeeds'] == false) atti -= 2;
-        if (form['attitude']?['helpFindProduct'] == false) atti -= 2;
-        if (form['attitude']?['confirmPurchase'] == false) atti -= 2;
-        if (form['attitude']?['offerHelp'] == false) atti -= 2;
-        if (form['meeting']?['attended'] == false) meet -= 1;
-      }
+      final ts = form['timestamp'];
+      final date = ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
+      int weekOfMonth = ((date.day - 1) ~/ 7) + 1;
+      weekMap.putIfAbsent(weekOfMonth, () => []);
+      weekMap[weekOfMonth]!.add(form);
     }
+
+    List<int> attList = [], drsList = [], attiList = [], meetList = [];
+    for (final weekForms in weekMap.values) {
+      int att = 20, drs = 20, atti = 20, meet = 10;
+      for (var form in weekForms) {
+        final status = form['attendance'];
+        if (status == 'late') att -= 5;
+        else if (status == 'notApproved') att -= 10;
+        if (status != 'approved' && status != 'notApproved') {
+          if (form['dressCode']?['cleanUniform'] == false) drs -= 5;
+          if (form['dressCode']?['keepInside'] == false) drs -= 5;
+          if (form['dressCode']?['neatHair'] == false) drs -= 5;
+          if (form['attitude']?['greetSmile'] == false) atti -= 2;
+          if (form['attitude']?['askNeeds'] == false) atti -= 2;
+          if (form['attitude']?['helpFindProduct'] == false) atti -= 2;
+          if (form['attitude']?['confirmPurchase'] == false) atti -= 2;
+          if (form['attitude']?['offerHelp'] == false) atti -= 2;
+          if (form['meeting']?['attended'] == false) meet -= 1;
+        }
+      }
+      attList.add(att < 0 ? 0 : att);
+      drsList.add(drs < 0 ? 0 : drs);
+      attiList.add(atti < 0 ? 0 : atti);
+      meetList.add(meet < 0 ? 0 : meet);
+    }
+
     setState(() {
-      attendance = att < 0 ? 0 : att;
-      dress = drs < 0 ? 0 : drs;
-      attitude = atti < 0 ? 0 : atti;
-      meeting = meet < 0 ? 0 : meet;
+      attendance = attList.isNotEmpty ? attList.reduce((a, b) => a + b) / attList.length : 20;
+      dress = drsList.isNotEmpty ? drsList.reduce((a, b) => a + b) / drsList.length : 20;
+      attitude = attiList.isNotEmpty ? attiList.reduce((a, b) => a + b) / attiList.length : 20;
+      meeting = meetList.isNotEmpty ? meetList.reduce((a, b) => a + b) / meetList.length : 10;
       isLoading = false;
     });
   }
@@ -92,10 +109,10 @@ class _InsightsDetailViewerPageState extends State<InsightsDetailViewerPage> {
                       children: [
                         const SizedBox(height: 12),
                         PerformanceRadarChart(
-                          attendance: attendance,
-                          dress: dress,
-                          attitude: attitude,
-                          meeting: meeting,
+                          attendance: attendance.round(),
+                          dress: dress.round(),
+                          attitude: attitude.round(),
+                          meeting: meeting.round(),
                         ),
                         const SizedBox(height: 28),
                         Wrap(
@@ -105,28 +122,28 @@ class _InsightsDetailViewerPageState extends State<InsightsDetailViewerPage> {
                             _buildBreakdownCard(
                               icon: Icons.access_time,
                               label: "Attendance",
-                              value: attendance,
+                              value: attendance.round(),
                               max: 20,
                               color: Colors.blue,
                             ),
                             _buildBreakdownCard(
                               icon: Icons.checkroom,
                               label: "Dress Code",
-                              value: dress,
+                              value: dress.round(),
                               max: 20,
                               color: Colors.orange,
                             ),
                             _buildBreakdownCard(
                               icon: Icons.sentiment_satisfied,
                               label: "Attitude",
-                              value: attitude,
+                              value: attitude.round(),
                               max: 20,
                               color: Colors.deepPurple,
                             ),
                             _buildBreakdownCard(
                               icon: Icons.groups,
                               label: "Meeting",
-                              value: meeting,
+                              value: meeting.round(),
                               max: 10,
                               color: Colors.teal,
                             ),
