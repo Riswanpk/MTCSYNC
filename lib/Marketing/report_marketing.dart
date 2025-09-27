@@ -4,11 +4,9 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:share_plus/share_plus.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
+import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 import 'dart:typed_data';
-import 'report_excel_marketing.dart'; // Import the Excel report generator
-import 'syncfusion_report.dart'; // Import the Syncfusion report generator
+import 'package:http/http.dart' as http;
 
 class ReportMarketingPage extends StatefulWidget {
   @override
@@ -94,143 +92,111 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> {
 
     return filtered;
   }
-Future<File> _generatePdf(List<Map<String, dynamic>> data) async {
-  final pdf = pw.Document();
 
-  if (data.isEmpty) {
-    pdf.addPage(
-      pw.Page(
-        build: (pw.Context context) => pw.Center(
-          child: pw.Text("No data available", style: pw.TextStyle(fontSize: 18)),
-        ),
-      ),
-    );
-  } else {
-    for (var entry in data) {
-      // Load photo if available
-      pw.Widget? photoWidget;
-      if (entry['photoUrl'] != null && entry['photoUrl'].toString().isNotEmpty) {
-        final imageProvider = await networkImage(entry['photoUrl']);
-        photoWidget = pw.Container(
-          height: 180,
-          width: 180,
-          child: pw.Image(imageProvider, fit: pw.BoxFit.cover),
-        );
-      }
+  // --- Syncfusion Excel Report Generation ---
+  Future<File> _generateSyncfusionExcel(List<Map<String, dynamic>> data) async {
+    final workbook = xlsio.Workbook();
 
-      pdf.addPage(
-        pw.Page(
-          pageFormat: PdfPageFormat.a4,
-          build: (pw.Context context) {
-            return pw.Padding(
-              padding: const pw.EdgeInsets.all(24),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    'Marketing Form Entry',
-                    style: pw.TextStyle(
-                      fontSize: 20,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                  pw.SizedBox(height: 12),
-
-                  // Display photo (not clickable)
-                  if (photoWidget != null) ...[
-                    pw.Text('Photo:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                    photoWidget,
-                    pw.SizedBox(height: 12),
-                  ],
-
-                  // Display other fields
-                  ...entry.entries
-                      .where((e) => e.key != 'photoUrl' && e.key != 'Document ID')
-                      .map((e) {
-                    String value;
-                    if (e.value is DateTime) {
-                      value = DateFormat('yyyy-MM-dd HH:mm').format(e.value as DateTime);
-                    } else {
-                      value = e.value?.toString() ?? '';
-                    }
-
-                    if (e.key == 'location' && value.isNotEmpty) {
-                      final mapsUrl =
-                          'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(value)}';
-
-                      return pw.Padding(
-                        padding: const pw.EdgeInsets.symmetric(vertical: 4),
-                        child: pw.Row(
-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
-                          children: [
-                            pw.Text('Location: ',
-                                style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                            pw.UrlLink(
-                              destination: mapsUrl,
-                              child: pw.Text(
-                                value,
-                                style: pw.TextStyle(
-                                  color: PdfColors.blue,
-                                  decoration: pw.TextDecoration.underline,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-
-                    return pw.Padding(
-                      padding: const pw.EdgeInsets.symmetric(vertical: 4),
-                      child: pw.Row(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Text('${e.key}: ',
-                              style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                          pw.Expanded(child: pw.Text(value)),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ],
-              ),
-            );
-          },
-        ),
-      );
+    // Group data by 'formType'
+    final Map<String, List<Map<String, dynamic>>> grouped = {};
+    for (final row in data) {
+      final formType = row['formType']?.toString() ?? 'Unknown';
+      grouped.putIfAbsent(formType, () => []).add(row);
     }
+
+    int sheetIndex = 0;
+    for (final entry in grouped.entries) {
+      final sheet = sheetIndex == 0
+          ? workbook.worksheets[0]
+          : workbook.worksheets.addWithName(entry.key);
+      sheet.name = entry.key;
+
+      final formData = entry.value;
+      if (formData.isEmpty) {
+        sheet.getRangeByIndex(1, 1).setText("No data available");
+      } else {
+        final headers = formData.first.keys.toList();
+
+        // Add headers
+        for (int i = 0; i < headers.length; i++) {
+          final cell = sheet.getRangeByIndex(1, i + 1);
+          cell.setText(headers[i]);
+          cell.cellStyle.bold = true;
+          cell.cellStyle.backColor = "#D9E1F2";
+        }
+
+        // Add rows
+        for (int row = 0; row < formData.length; row++) {
+          final rowData = formData[row];
+          for (int col = 0; col < headers.length; col++) {
+            final key = headers[col];
+            final value = rowData[key];
+            final cell = sheet.getRangeByIndex(row + 2, col + 1);
+
+            if (key.toLowerCase().contains('image') && value is String && value.isNotEmpty) {
+              try {
+                final response = await http.get(Uri.parse(value));
+                if (response.statusCode == 200) {
+                  final bytes = response.bodyBytes;
+                  // Insert image at the cell position (row + 2, col + 1)
+                  final picture = sheet.pictures.addStream(row + 2, col + 1, bytes);
+                  picture.height = 80; // Adjust as needed
+                  picture.width = 80;  // Adjust as needed
+                  sheet.getRangeByIndex(row + 2, col + 1).rowHeight = 60;
+                  sheet.getRangeByIndex(1, col + 1).columnWidth = 15;
+                } else {
+                  cell.setText('Image not found');
+                }
+              } catch (e) {
+                cell.setText('Error loading image');
+              }
+            } else if (key == 'locationString') {
+              // Use lat/long for Google Maps link, but only show the link, not the address text
+              final lat = rowData['lat']?.toString();
+              final long = rowData['long']?.toString();
+              if (lat != null && long != null) {
+                cell.setFormula('HYPERLINK("https://www.google.com/maps?q=$lat,$long","Open in Google Maps")');
+              } else {
+                cell.setText(value?.toString() ?? '');
+              }
+            } else if (value is DateTime) {
+              cell.dateTime = value;
+              cell.numberFormat = 'yyyy-mm-dd hh:mm';
+            } else {
+              cell.setText(value?.toString() ?? '');
+            }
+          }
+        }
+
+        // Autofit columns except image columns
+        for (int i = 0; i < headers.length; i++) {
+          if (!headers[i].toLowerCase().contains('image')) {
+            sheet.autoFitColumn(i + 1);
+          }
+        }
+      }
+      sheetIndex++;
+    }
+
+    final bytes = workbook.saveAsStream();
+    workbook.dispose();
+
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File(
+        "${dir.path}/Report${DateTime.now().millisecondsSinceEpoch}.xlsx");
+    await file.writeAsBytes(bytes, flush: true);
+
+    return file;
   }
 
-  final dir = await getApplicationDocumentsDirectory();
-  final file = File(
-      '${dir.path}/marketing_report_${DateTime.now().millisecondsSinceEpoch}.pdf');
-  await file.writeAsBytes(await pdf.save());
-  return file;
-}
-
-
-  // Helper for network image
-  Future<pw.ImageProvider> networkImage(String url) async {
-    final response = await HttpClient().getUrl(Uri.parse(url));
-    final bytes = await response.close().then((r) => r.fold<List<int>>([], (p, e) => p..addAll(e)));
-    return pw.MemoryImage(Uint8List.fromList(bytes));
-  }
-
-  Future<void> _generateAndShareReport() async {
+  Future<void> _generateAndShareSyncfusionReport() async {
     setState(() => isLoading = true);
     final data = await _fetchReportData();
-    final file = await _generatePdf(data);
+    final file = await _generateSyncfusionExcel(data);
     setState(() => isLoading = false);
-    await Share.shareXFiles([XFile(file.path)], text: 'Marketing Report');
+    await Share.shareXFiles([XFile(file.path)], text: "Syncfusion Marketing Report");
   }
-
-  Future<void> _generateAndShareExcel() async {
-    setState(() => isLoading = true);
-    final data = await _fetchReportData();
-    final file = await generateExcelMarketingReport(data);
-    setState(() => isLoading = false);
-    await Share.shareXFiles([XFile(file.path)], text: 'Marketing Excel Report');
-  }
+  // --- End Syncfusion Excel Report Generation ---
 
   @override
   Widget build(BuildContext context) {
@@ -335,31 +301,7 @@ Future<File> _generatePdf(List<Map<String, dynamic>> data) async {
                         ElevatedButton.icon(
                           icon: const Icon(Icons.insert_drive_file),
                           label: const Text("Share Syncfusion Report"),
-                          onPressed: () async {
-                            setState(() => isLoading = true);
-                            final data = await _fetchReportData();
-                            await SyncfusionReport.shareExcel(data);
-                            setState(() => isLoading = false);
-                          },
-                        ),
-                        ElevatedButton.icon(
-                          icon: const Icon(Icons.share),
-                          label: const Text('Share Report'),
-                          onPressed: _generateAndShareReport,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF005BAC),
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        ElevatedButton.icon(
-                          icon: const Icon(Icons.table_chart),
-                          label: const Text('Share Excel'),
-                          onPressed: _generateAndShareExcel,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                          ),
+                          onPressed: _generateAndShareSyncfusionReport,
                         ),
                       ],
                     ),
