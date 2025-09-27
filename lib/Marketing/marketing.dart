@@ -60,19 +60,6 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
         title: const Text('Marketing Form'),
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
-        actions: [
-          if (userRole != 'sales' && userRole != 'manager')
-            IconButton(
-              icon: const Icon(Icons.insert_drive_file),
-              tooltip: 'Report',
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => ReportMarketingPage()),
-                );
-              },
-            ),
-        ],
       ),
       body: Column(
         children: [

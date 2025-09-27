@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'viewer_marketing_detail.dart';
 import 'report_marketing.dart'; // ✅ Import your ReportMarketingPage
 
+
 class ViewerMarketingPage extends StatefulWidget {
   const ViewerMarketingPage({super.key});
 
@@ -64,14 +65,34 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
     });
   }
 
+  InputDecoration _dropdownDecoration(BuildContext context, String label) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: isDark ? Colors.white70 : Colors.black54),
+      filled: true,
+      fillColor: theme.cardColor,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide.none,
+      ),
+      contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return DefaultTextStyle(
       style: const TextStyle(fontFamily: 'Electorize'),
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('View Marketing Forms'),
-          backgroundColor: const Color(0xFF2C3E50),
+          title: const Text('View Marketing Forms',selectionColor:Colors.white70),
+          backgroundColor: theme.colorScheme.primary,
+          foregroundColor: theme.colorScheme.onPrimary,
           actions: [
             IconButton(
               icon: const Icon(Icons.insert_chart_outlined),
@@ -85,7 +106,7 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
             ),
           ],
         ),
-        backgroundColor: const Color(0xFFE3E8EA),
+        backgroundColor: theme.scaffoldBackgroundColor,
         body: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
@@ -93,15 +114,11 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
               // Branch Dropdown
               DropdownButtonFormField<String>(
                 value: selectedBranch,
-                decoration: InputDecoration(
-                  labelText: 'Branch',
-                  filled: true,
-                  fillColor: const Color(0xFFF7F2F2),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                ),
+                decoration: _dropdownDecoration(context, 'Branch'),
+                dropdownColor: theme.cardColor,
                 items: branches
-                    .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                    .map((b) => DropdownMenuItem(
+                        value: b, child: Text(b, style: theme.textTheme.bodyLarge)))
                     .toList(),
                 onChanged: (val) {
                   setState(() {
@@ -116,15 +133,11 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
               // Username Dropdown
               DropdownButtonFormField<String>(
                 value: selectedUsername,
-                decoration: InputDecoration(
-                  labelText: 'Username',
-                  filled: true,
-                  fillColor: const Color(0xFFF7F2F2),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                ),
+                decoration: _dropdownDecoration(context, 'Username'),
+                dropdownColor: theme.cardColor,
                 items: usernames
-                    .map((u) => DropdownMenuItem(value: u, child: Text(u)))
+                    .map((u) => DropdownMenuItem(
+                        value: u, child: Text(u, style: theme.textTheme.bodyLarge)))
                     .toList(),
                 onChanged: (val) {
                   setState(() {
@@ -157,16 +170,16 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
                             itemBuilder: (context, i) {
                               final data = docs[i].data() as Map<String, dynamic>;
                               return Card(
-                                color: const Color(0xFFF7F2F2),
+                                color: theme.cardColor,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                                 child: ListTile(
                                   title: Text(
                                     data['shopName'] ?? 'No Shop Name',
-                                    style: const TextStyle(fontSize: 18, color: Color(0xFF2C3E50)),
+                                    style: theme.textTheme.titleMedium,
                                   ),
                                   subtitle: Text(
                                     data['formType'] ?? '',
-                                    style: const TextStyle(fontSize: 14, color: Colors.grey),
+                                    style: theme.textTheme.bodySmall,
                                   ),
                                   trailing: const Icon(Icons.arrow_forward_ios, size: 18),
                                   onTap: () {
