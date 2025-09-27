@@ -61,16 +61,17 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.insert_drive_file),
-            tooltip: 'Report',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => ReportMarketingPage()),
-              );
-            },
-          ),
+          if (userRole != 'sales' && userRole != 'manager')
+            IconButton(
+              icon: const Icon(Icons.insert_drive_file),
+              tooltip: 'Report',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => ReportMarketingPage()),
+                );
+              },
+            ),
         ],
       ),
       body: Column(

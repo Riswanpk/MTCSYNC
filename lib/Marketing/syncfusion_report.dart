@@ -8,43 +8,73 @@ class SyncfusionReport {
   /// Generate Excel report using Syncfusion XlsIO
   static Future<File> generateExcel(List<Map<String, dynamic>> data) async {
     final workbook = xlsio.Workbook();
-    final sheet = workbook.worksheets[0];
-    sheet.name = "Marketing Report";
 
-    if (data.isEmpty) {
-      sheet.getRangeByIndex(1, 1).setText("No data available");
-    } else {
-      // Extract headers from keys of first map
-      final headers = data.first.keys.toList();
+    // Group data by 'formType'
+    final Map<String, List<Map<String, dynamic>>> grouped = {};
+    for (final row in data) {
+      final formType = row['formType']?.toString() ?? 'Unknown';
+      grouped.putIfAbsent(formType, () => []).add(row);
+    }
 
-      // Add headers
-      for (int i = 0; i < headers.length; i++) {
-        final cell = sheet.getRangeByIndex(1, i + 1);
-        cell.setText(headers[i]);
-        cell.cellStyle.bold = true;
-        cell.cellStyle.backColor = "#D9E1F2"; // Light blue
-      }
+    int sheetIndex = 0;
+    for (final entry in grouped.entries) {
+      final sheet = sheetIndex == 0
+          ? workbook.worksheets[0]
+          : workbook.worksheets.addWithName(entry.key);
+      sheet.name = entry.key;
 
-      // Add rows
-      for (int row = 0; row < data.length; row++) {
-        final rowData = data[row];
-        for (int col = 0; col < headers.length; col++) {
-          final value = rowData[headers[col]];
-          final cell = sheet.getRangeByIndex(row + 2, col + 1);
+      final formData = entry.value;
+      if (formData.isEmpty) {
+        sheet.getRangeByIndex(1, 1).setText("No data available");
+      } else {
+        final headers = formData.first.keys.toList();
 
-          if (value is DateTime) {
-            cell.dateTime = value;
-            cell.numberFormat = 'yyyy-mm-dd hh:mm';
-          } else {
-            cell.setText(value?.toString() ?? '');
+        // Add headers
+        for (int i = 0; i < headers.length; i++) {
+          final cell = sheet.getRangeByIndex(1, i + 1);
+          cell.setText(headers[i]);
+          cell.cellStyle.bold = true;
+          cell.cellStyle.backColor = "#D9E1F2";
+        }
+
+        // Add rows
+        for (int row = 0; row < formData.length; row++) {
+          final rowData = formData[row];
+          for (int col = 0; col < headers.length; col++) {
+            final key = headers[col];
+            final value = rowData[key];
+            final cell = sheet.getRangeByIndex(row + 2, col + 1);
+
+            if (key.toLowerCase().contains('image') && value is String && value.isNotEmpty) {
+              final imageUrl = value.startsWith('=') ? value.substring(1) : value;
+              cell.setFormula('HYPERLINK(IMAGE("$imageUrl"))');
+              sheet.getRangeByIndex(1, col + 1).columnWidth = 30;
+              sheet.getRangeByIndex(row + 2, 1).rowHeight = 120;
+            } else if (key.toLowerCase().contains('location')) {
+              final lat = rowData['lat']?.toString();
+              final long = rowData['long']?.toString();
+              if (lat != null && long != null) {
+                cell.setFormula('HYPERLINK("https://www.google.com/maps?q=$lat,$long","Open in Google Maps")');
+              } else {
+                cell.setText(value?.toString() ?? '');
+              }
+            } else if (value is DateTime) {
+              cell.dateTime = value;
+              cell.numberFormat = 'yyyy-mm-dd hh:mm';
+            } else {
+              cell.setText(value?.toString() ?? '');
+            }
+          }
+        }
+
+        // Autofit columns except image columns
+        for (int i = 0; i < headers.length; i++) {
+          if (!headers[i].toLowerCase().contains('image')) {
+            sheet.autoFitColumn(i + 1);
           }
         }
       }
-
-      // Autofit columns
-      for (int i = 1; i <= headers.length; i++) {
-        sheet.autoFitColumn(i);
-      }
+      sheetIndex++;
     }
 
     final bytes = workbook.saveAsStream();
@@ -52,7 +82,7 @@ class SyncfusionReport {
 
     final dir = await getApplicationDocumentsDirectory();
     final file = File(
-        "${dir.path}/syncfusion_marketing_report_${DateTime.now().millisecondsSinceEpoch}.xlsx");
+        "${dir.path}/Report${DateTime.now().millisecondsSinceEpoch}.xlsx");
     await file.writeAsBytes(bytes, flush: true);
 
     return file;
