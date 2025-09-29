@@ -1,10 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'watermark_util.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
 class CameraPage extends StatefulWidget {
   const CameraPage({super.key});
@@ -19,14 +22,52 @@ class _CameraPageState extends State<CameraPage> {
   String? _dateTimeString;
   bool _isLoading = false; // Add this line
 
+  Future<File?> _compressImage(File imageFile) async {
+    try {
+      final Directory tempDir = await getTemporaryDirectory();
+      final String targetPath =
+          p.join(tempDir.path, "${DateTime.now().millisecondsSinceEpoch}.jpg");
+
+      // Compress the image
+      final XFile? compressedXFile =
+          await FlutterImageCompress.compressAndGetFile(
+        imageFile.absolute.path,
+        targetPath,
+        quality: 85, // Adjust quality as needed (0-100, 85 is a good balance)
+        minWidth: 1080, // Resize to a maximum width of 1080px
+        minHeight:
+            1080, // Maintain aspect ratio by setting a min height as well
+        format: CompressFormat.jpeg, // Specify output format
+      );
+
+      if (compressedXFile != null) {
+        return File(compressedXFile.path);
+      }
+      return null;
+    } catch (e) {
+      debugPrint("Error compressing image: $e");
+      return null;
+    }
+  }
+
   Future<void> _takePhoto() async {
     setState(() {
       _isLoading = true; // Show loading indicator
     });
     final picker = ImagePicker();
-    final pickedFile =
-        await picker.pickImage(source: ImageSource.camera, imageQuality: 90);
+    // Capture image at a higher quality, as we will compress it manually
+    final pickedFile = await picker.pickImage(source: ImageSource.camera);
+
     if (pickedFile != null) {
+      // Now, compress the captured image
+      final compressedImageFile = await _compressImage(File(pickedFile.path));
+      if (compressedImageFile == null) {
+        // Handle compression failure
+        setState(() => _isLoading = false);
+        // Optionally show an error message to the user
+        return;
+      }
+
       final position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high);
       final placemarks =
@@ -37,7 +78,7 @@ class _CameraPageState extends State<CameraPage> {
       final now = DateTime.now();
       if (!mounted) return;
       setState(() {
-        _capturedImage = File(pickedFile.path);
+        _capturedImage = compressedImageFile;
         _locationString = locationText;
         _dateTimeString =
             "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} "
