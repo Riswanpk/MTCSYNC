@@ -64,6 +64,7 @@ dependencies:
   flutter_contacts: ^1.1.9+2
   pdf: ^3.11.3
   syncfusion_flutter_xlsio: ^29.2.11
+  home_widget: ^0.8.0
   
 
   # The following adds the Cupertino Icons font to your application.

@@ -7,6 +7,8 @@ import 'package:provider/provider.dart';
 import '../Misc/theme_notifier.dart';
 import 'package:flutter_slidable/flutter_slidable.dart'; // Add this import at the top
 import 'dart:async';
+import 'dart:convert';
+import 'package:home_widget/home_widget.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
@@ -235,6 +237,27 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
     });
     WidgetsBinding.instance.addObserver(this);
   }
+
+  /// Sends the latest list of pending todos to the home widget.
+  Future<void> _updateWidget() async {
+    if (_userEmail == null) return;
+
+    final snapshot = await _firestore
+        .collection('todo')
+        .where('email', isEqualTo: _userEmail)
+        .where('status', isEqualTo: 'pending')
+        .orderBy('timestamp', descending: true)
+        .get();
+
+    final todos = snapshot.docs.map((doc) {
+      final data = doc.data();
+      return {'title': data['title'] ?? 'No Title', 'priority': data['priority'] ?? 'Medium'};
+    }).toList();
+
+    await HomeWidget.saveWidgetData<String>('todos_json', jsonEncode(todos));
+    await HomeWidget.updateWidget(name: 'TodoWidgetProvider', iOSName: 'TodoWidget');
+  }
+
 
   Future<void> _loadUserInfo() async {
     final user = _auth.currentUser;
@@ -528,6 +551,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
         'status': newStatus,
         'timestamp': Timestamp.now(), // Use full timestamp
       });
+      _updateWidget(); // Update widget when a task is completed
     } else {
       await _firestore.collection('todo').doc(doc.id).update({
         'status': newStatus,
@@ -535,6 +559,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
       });
     }
   }
+
 
   Widget _buildTodoList(String status, {bool onlySelf = false}) {
     if (_userEmail == null) {
@@ -566,6 +591,11 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
               if (snapshot.hasError) return const Center(child: Text('Error loading todos'));
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
+              }
+
+              // Update widget whenever the stream provides new data
+              if (status == 'pending') {
+                _updateWidget();
               }
 
               final todos = snapshot.data?.docs ?? [];
@@ -684,6 +714,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                             );
                             if (confirm == true) {
                               await _firestore.collection('todo').doc(doc.id).delete();
+                              _updateWidget(); // Update widget on delete
                             }
                           },
                           backgroundColor: Colors.red.shade400,
@@ -805,6 +836,11 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
               if (snapshot.hasError) return const Center(child: Text('Error loading todos'));
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
+              }
+
+              // Update widget whenever the stream provides new data
+              if (status == 'pending') {
+                _updateWidget();
               }
 
               final todos = snapshot.data?.docs ?? [];
@@ -939,6 +975,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                                 }
                               }
                               await _firestore.collection('todo').doc(doc.id).delete();
+                              _updateWidget(); // Update widget on delete
                             }
                           },
                           backgroundColor: Colors.red.shade400,
@@ -1084,6 +1121,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
         batch.delete(doc.reference);
       }
       await batch.commit();
+      _updateWidget(); // Update widget on clear all
     }
   }
 
