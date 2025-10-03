@@ -13,7 +13,7 @@ class ReportMarketingPage extends StatefulWidget {
   State<ReportMarketingPage> createState() => _ReportMarketingPageState();
 }
 
-class _ReportMarketingPageState extends State<ReportMarketingPage> {
+class _ReportMarketingPageState extends State<ReportMarketingPage> with SingleTickerProviderStateMixin {
   String? selectedBranch;
   DateTime? startDate;
   DateTime? endDate;
@@ -25,6 +25,9 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> {
   ];
   Map<String, bool> selectedForms = {};
   bool isLoading = false;
+  double progress = 0.0;
+  late AnimationController _progressController;
+  late Animation<double> _progressAnimation;
 
   @override
   void initState() {
@@ -33,6 +36,17 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> {
     for (var type in formTypes) {
       selectedForms[type] = false;
     }
+    _progressController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+    _progressAnimation = Tween<double>(begin: 0, end: 0).animate(_progressController);
+  }
+
+  @override
+  void dispose() {
+    _progressController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchBranches() async {
@@ -105,6 +119,9 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> {
     }
 
     int sheetIndex = 0;
+    int totalRows = data.isNotEmpty ? data.length : 1;
+    int processedRows = 0;
+
     for (final entry in grouped.entries) {
       final sheet = sheetIndex == 0
           ? workbook.worksheets[0]
@@ -115,11 +132,8 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> {
       if (formData.isEmpty) {
         sheet.getRangeByIndex(1, 1).setText("No data available");
       } else {
-        // Prepare ordered headers
         final allKeys = formData.first.keys.toList();
-        // Remove 'Document ID'
         allKeys.remove('Document ID');
-        // Ensure 'formType', 'username', 'timestamp' are first
         final orderedKeys = [
           'formType',
           'username',
@@ -127,7 +141,6 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> {
           ...allKeys.where((k) => k != 'formType' && k != 'username' && k != 'timestamp')
         ];
 
-        // Helper to prettify header
         String prettify(String key) {
           return key
               .replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}')
@@ -140,7 +153,6 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> {
               .join(' ');
         }
 
-        // Add headers
         for (int i = 0; i < orderedKeys.length; i++) {
           final cell = sheet.getRangeByIndex(1, i + 1);
           cell.setText(prettify(orderedKeys[i]));
@@ -148,7 +160,6 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> {
           cell.cellStyle.backColor = "#D9E1F2";
         }
 
-        // Add rows
         for (int row = 0; row < formData.length; row++) {
           final rowData = formData[row];
           for (int col = 0; col < orderedKeys.length; col++) {
@@ -187,9 +198,22 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> {
               cell.setText(value?.toString() ?? '');
             }
           }
+          // Update progress after each row
+          processedRows++;
+          double newProgress = processedRows / totalRows;
+          _progressController.stop();
+          _progressAnimation = Tween<double>(begin: progress, end: newProgress).animate(
+            CurvedAnimation(parent: _progressController, curve: Curves.easeInOutCubic),
+          );
+          _progressController
+            ..reset()
+            ..forward();
+          setState(() {
+            progress = newProgress;
+          });
+          await Future.delayed(const Duration(milliseconds: 8)); // Smooth animation
         }
 
-        // Autofit columns except image columns
         for (int i = 0; i < orderedKeys.length; i++) {
           if (!orderedKeys[i].toLowerCase().contains('image')) {
             sheet.autoFitColumn(i + 1);
@@ -202,20 +226,34 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> {
     final bytes = workbook.saveAsStream();
     workbook.dispose();
 
+    // --- File name as "Report <DATE RANGE> <BRANCH>.xlsx" ---
+    String formatDate(DateTime? d) =>
+        d == null ? 'All' : DateFormat('yyyyMMdd').format(d);
+    String branchName = (selectedBranch == null || selectedBranch == 'Select All')
+        ? 'All Branches'
+        : selectedBranch!.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    String dateRange = "${formatDate(startDate)}-${formatDate(endDate)}";
     final dir = await getApplicationDocumentsDirectory();
     final file = File(
-        "${dir.path}/Report${DateTime.now().millisecondsSinceEpoch}.xlsx");
+        "${dir.path}/Report $dateRange $branchName.xlsx");
     await file.writeAsBytes(bytes, flush: true);
 
     return file;
   }
 
   Future<void> _generateAndShareSyncfusionReport() async {
-    setState(() => isLoading = true);
+    setState(() {
+      isLoading = true;
+      progress = 0.0;
+    });
+    _progressController.value = 0;
     final data = await _fetchReportData();
     final file = await _generateSyncfusionExcel(data);
-    setState(() => isLoading = false);
-    await Share.shareXFiles([XFile(file.path)], text: "Syncfusion Marketing Report");
+    setState(() {
+      isLoading = false;
+      progress = 0.0;
+    });
+    await Share.shareXFiles([XFile(file.path)], text: "Marketing Report");
   }
   // --- End Syncfusion Excel Report Generation ---
 
@@ -228,7 +266,111 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> {
         foregroundColor: Colors.white,
       ),
       body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    "Generating Report...",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 32),
+                  Container(
+                    width: 300,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      color: Colors.grey[300],
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.green.withOpacity(0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Stack(
+                        children: [
+                          // Gradient progress bar
+                          AnimatedBuilder(
+                            animation: _progressAnimation,
+                            builder: (context, child) => FractionallySizedBox(
+                              alignment: Alignment.centerLeft,
+                              widthFactor: _progressAnimation.value,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.greenAccent.shade400,
+                                      Colors.green.shade700,
+                                      Colors.lightGreenAccent.shade100,
+                                    ],
+                                    begin: Alignment.centerLeft,
+                                    end: Alignment.centerRight,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          // Liquid shimmer overlay
+                          AnimatedBuilder(
+                            animation: _progressAnimation,
+                            builder: (context, child) {
+                              return FractionallySizedBox(
+                                alignment: Alignment.centerLeft,
+                                widthFactor: _progressAnimation.value,
+                                child: ShaderMask(
+                                  shaderCallback: (Rect bounds) {
+                                    return LinearGradient(
+                                      colors: [
+                                       Colors.greenAccent.shade400,
+                                      Colors.green.shade700,
+                                      Colors.lightGreenAccent.shade100,
+                                      ],
+                                      stops: const [0.0, 0.5, 1.0],
+                                      begin: Alignment(-1.0 + 2.0 * (_progressController.value), 0),
+                                      end: Alignment(1.0 + 2.0 * (_progressController.value), 0),
+                                      tileMode: TileMode.mirror,
+                                    ).createShader(bounds);
+                                  },
+                                  blendMode: BlendMode.srcATop,
+                                  child: Container(
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          // Progress text overlay (optional)
+                          Center(
+                            child: AnimatedBuilder(
+                              animation: _progressAnimation,
+                              builder: (context, child) => Text(
+                                "${(_progressAnimation.value * 100).toStringAsFixed(0)}%",
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  shadows: [
+                                    Shadow(
+                                      blurRadius: 4,
+                                      color: Colors.black26,
+                                      offset: Offset(0, 1),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            )
           : Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -321,7 +463,7 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> {
                       children: [
                         ElevatedButton.icon(
                           icon: const Icon(Icons.insert_drive_file),
-                          label: const Text("Share Syncfusion Report"),
+                          label: const Text("Download Report"),
                           onPressed: _generateAndShareSyncfusionReport,
                         ),
                       ],
