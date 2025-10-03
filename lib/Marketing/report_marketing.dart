@@ -115,12 +115,35 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> {
       if (formData.isEmpty) {
         sheet.getRangeByIndex(1, 1).setText("No data available");
       } else {
-        final headers = formData.first.keys.toList();
+        // Prepare ordered headers
+        final allKeys = formData.first.keys.toList();
+        // Remove 'Document ID'
+        allKeys.remove('Document ID');
+        // Ensure 'formType', 'username', 'timestamp' are first
+        final orderedKeys = [
+          'formType',
+          'username',
+          'timestamp',
+          ...allKeys.where((k) => k != 'formType' && k != 'username' && k != 'timestamp')
+        ];
+
+        // Helper to prettify header
+        String prettify(String key) {
+          return key
+              .replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}')
+              .replaceAll('_', ' ')
+              .replaceAll('formtype', 'Form Type')
+              .replaceAll('username', 'Username')
+              .replaceAll('timestamp', 'Timestamp')
+              .split(' ')
+              .map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : '')
+              .join(' ');
+        }
 
         // Add headers
-        for (int i = 0; i < headers.length; i++) {
+        for (int i = 0; i < orderedKeys.length; i++) {
           final cell = sheet.getRangeByIndex(1, i + 1);
-          cell.setText(headers[i]);
+          cell.setText(prettify(orderedKeys[i]));
           cell.cellStyle.bold = true;
           cell.cellStyle.backColor = "#D9E1F2";
         }
@@ -128,8 +151,8 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> {
         // Add rows
         for (int row = 0; row < formData.length; row++) {
           final rowData = formData[row];
-          for (int col = 0; col < headers.length; col++) {
-            final key = headers[col];
+          for (int col = 0; col < orderedKeys.length; col++) {
+            final key = orderedKeys[col];
             final value = rowData[key];
             final cell = sheet.getRangeByIndex(row + 2, col + 1);
 
@@ -138,10 +161,9 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> {
                 final response = await http.get(Uri.parse(value));
                 if (response.statusCode == 200) {
                   final bytes = response.bodyBytes;
-                  // Insert image at the cell position (row + 2, col + 1)
                   final picture = sheet.pictures.addStream(row + 2, col + 1, bytes);
-                  picture.height = 80; // Adjust as needed
-                  picture.width = 80;  // Adjust as needed
+                  picture.height = 80;
+                  picture.width = 80;
                   sheet.getRangeByIndex(row + 2, col + 1).rowHeight = 60;
                   sheet.getRangeByIndex(1, col + 1).columnWidth = 15;
                 } else {
@@ -151,7 +173,6 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> {
                 cell.setText('Error loading image');
               }
             } else if (key == 'locationString') {
-              // Use lat/long for Google Maps link, but only show the link, not the address text
               final lat = rowData['lat']?.toString();
               final long = rowData['long']?.toString();
               if (lat != null && long != null) {
@@ -169,8 +190,8 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> {
         }
 
         // Autofit columns except image columns
-        for (int i = 0; i < headers.length; i++) {
-          if (!headers[i].toLowerCase().contains('image')) {
+        for (int i = 0; i < orderedKeys.length; i++) {
+          if (!orderedKeys[i].toLowerCase().contains('image')) {
             sheet.autoFitColumn(i + 1);
           }
         }
