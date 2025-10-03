@@ -43,11 +43,30 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
   bool isLoading = false;
   File? _imageFile;
   String? locationString;
-  bool _photoError = false; // Add this line
-  int feedbackRating = 0; // Add this line
+  bool _photoError = false;
+  int feedbackRating = 0;
+  String customCategory = ''; // <-- Add this line
+
+  // Error flags for each field
+  bool _shopNameError = false;
+  bool _firmNameError = false;
+  bool _placeError = false;
+  bool _contactPersonError = false;
+  bool _contactNumberError = false;
+  bool _dateError = false;
+  bool _categoryError = false;
+  bool _currentEnquiryError = false;
+  bool _newProductSuggestionError = false;
+  bool _feedbackRatingError = false;
+  bool _customCategoryError = false; // <-- Add this line
 
   // 🔹 Unified InputDecoration (used inside reusable textfield)
-  InputDecoration _inputDecoration(String label, {bool required = false}) =>
+  InputDecoration _inputDecoration(
+    String label, {
+    bool required = false,
+    bool error = false,
+    String? errorText,
+  }) =>
       InputDecoration(
         labelText: required ? '$label *' : label,
         labelStyle: const TextStyle(
@@ -59,8 +78,9 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
             ? Colors.grey[900]
             : const Color.fromARGB(255, 255, 255, 255),
         border: InputBorder.none,
-        contentPadding:
-            const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+        errorText: error ? errorText : null,
+        errorStyle: const TextStyle(color: Colors.red, fontSize: 13, fontFamily: 'Electorize'),
       );
 
   // 🔹 Reusable styled textfield with shadow & corners
@@ -71,6 +91,9 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
     String? Function(String?)? validator,
     Function(String)? onChanged,
     List<TextInputFormatter>? inputFormatters, // Add this line
+    bool error = false,
+    String? errorText,
+    String? initialValue,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -90,10 +113,22 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
         ],
       ),
       child: TextFormField(
+        initialValue: initialValue,
         keyboardType: keyboardType,
-        decoration: _inputDecoration(label, required: required),
+        decoration: _inputDecoration(label, required: required, error: error, errorText: errorText),
         validator: validator,
-        onChanged: onChanged,
+        onChanged: (v) {
+          if (onChanged != null) onChanged(v);
+          setState(() {
+            if (label == 'SHOP NAME') _shopNameError = v.trim().isEmpty;
+            if (label == 'FIRM NAME') _firmNameError = v.trim().isEmpty;
+            if (label == 'PLACE') _placeError = v.trim().isEmpty;
+            if (label == 'CONTACT PERSON NAME') _contactPersonError = v.trim().isEmpty;
+            if (label == 'CONTACT NUMBER') _contactNumberError = v.trim().isEmpty || v.length != 10;
+            if (label == 'CURRENT ENQUIRY') _currentEnquiryError = v.trim().isEmpty;
+            if (label == 'NEW PRODUCT SUGGESTION') _newProductSuggestionError = v.trim().isEmpty;
+          });
+        },
         inputFormatters: inputFormatters, // Add this line
       ),
     );
@@ -113,14 +148,38 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
   }
 
   Future<void> _submitForm() async {
-    if (!_formKey.currentState!.validate() ||
-        category.isEmpty ||
-        date == null ||
-        _imageFile == null ||
-        feedbackRating == 0) {
-      setState(() {
-        _photoError = _imageFile == null;
-      });
+    setState(() {
+      _shopNameError = shopName.trim().isEmpty;
+      _firmNameError = firmName.trim().isEmpty;
+      _placeError = place.trim().isEmpty;
+      _contactPersonError = contactPerson.trim().isEmpty;
+      _contactNumberError = contactNumber.trim().isEmpty || contactNumber.length != 10;
+      _dateError = date == null;
+      _categoryError = category.isEmpty;
+      _customCategoryError = category == 'OTHERS' && customCategory.trim().isEmpty; // <-- Add this line
+      _currentEnquiryError = currentEnquiry.trim().isEmpty;
+      _newProductSuggestionError = newProductSuggestion.trim().isEmpty;
+      _feedbackRatingError = feedbackRating == 0;
+      _photoError = _imageFile == null;
+    });
+
+    bool hasError = _shopNameError ||
+        _firmNameError ||
+        _placeError ||
+        _contactPersonError ||
+        _contactNumberError ||
+        _dateError ||
+        _categoryError ||
+        _customCategoryError || // <-- Add this line
+        _currentEnquiryError ||
+        _newProductSuggestionError ||
+        _feedbackRatingError ||
+        _photoError;
+
+    if (hasError) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill all required fields.')),
+      );
       return;
     }
 
@@ -154,7 +213,9 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
       'place': place,
       'contactPerson': contactPerson,
       'contactNumber': contactNumber,
-      'category': category,
+      'category': category == 'OTHERS' && customCategory.trim().isNotEmpty
+          ? customCategory
+          : category, // <-- Save custom category if OTHERS
       'currentEnquiry': currentEnquiry,
       'confirmedOrder': confirmedOrder,
       'newProductSuggestion': newProductSuggestion,
@@ -170,8 +231,18 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
       _imageFile = null;
       locationString = null;
       category = '';
+      customCategory = ''; // <-- Reset custom field
       date = null;
       feedbackRating = 0;
+      shopName = '';
+      firmName = '';
+      place = '';
+      contactPerson = '';
+      contactNumber = '';
+      currentEnquiry = '';
+      confirmedOrder = '';
+      newProductSuggestion = '';
+      anySuggestion = '';
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Form submitted successfully!')),
@@ -210,30 +281,33 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                     _buildTextField(
                       label: 'SHOP NAME',
                       required: true,
-                      validator: (v) =>
-                          v == null || v.isEmpty ? 'Enter shop name' : null,
+                      error: _shopNameError,
+                      errorText: 'Enter shop name',
+                      initialValue: shopName,
                       onChanged: (v) => shopName = v,
                     ),
                     _buildTextField(
                       label: 'FIRM NAME',
                       required: true,
-                      validator: (v) =>
-                          v == null || v.isEmpty ? 'Enter firm name' : null,
+                      error: _firmNameError,
+                      errorText: 'Enter firm name',
+                      initialValue: firmName,
                       onChanged: (v) => firmName = v,
                     ),
                     _buildTextField(
                       label: 'PLACE',
                       required: true,
-                      validator: (v) =>
-                          v == null || v.isEmpty ? 'Enter place' : null,
+                      error: _placeError,
+                      errorText: 'Enter place',
+                      initialValue: place,
                       onChanged: (v) => place = v,
                     ),
                     _buildTextField(
                       label: 'CONTACT PERSON NAME',
                       required: true,
-                      validator: (v) => v == null || v.isEmpty
-                          ? 'Enter contact person name'
-                          : null,
+                      error: _contactPersonError,
+                      errorText: 'Enter contact person name',
+                      initialValue: contactPerson,
                       onChanged: (v) => contactPerson = v,
                     ),
                     _buildTextField(
@@ -244,14 +318,13 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                         FilteringTextInputFormatter.digitsOnly,
                         LengthLimitingTextInputFormatter(10),
                       ],
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return 'Enter phone number';
-                        if (v.length != 10) return 'Phone number must be 10 digits';
-                        return null;
-                      },
+                      error: _contactNumberError,
+                      errorText: contactNumber.isEmpty
+                          ? 'Enter phone number'
+                          : (contactNumber.length != 10 ? 'Phone number must be 10 digits' : null),
+                      initialValue: contactNumber,
                       onChanged: (v) => contactNumber = v,
                     ),
-                    
 
                     // DATE
                     _buildSectionTitle('Visit Date'),
@@ -261,19 +334,18 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                           context: context,
                           initialDate: date ?? DateTime.now(),
                           firstDate: DateTime(2000),
-                          lastDate:
-                              DateTime.now().add(const Duration(days: 365 * 5)),
+                          lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
                         );
                         if (picked != null) {
                           setState(() {
                             date = picked;
+                            _dateError = false;
                           });
                         }
                       },
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 16, horizontal: 16),
+                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
                         decoration: BoxDecoration(
                           color: Theme.of(context).brightness == Brightness.dark
                               ? Colors.black
@@ -304,7 +376,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                         ),
                       ),
                     ),
-                    if (date == null)
+                    if (_dateError)
                       const Padding(
                         padding: EdgeInsets.only(left: 8, bottom: 12),
                         child: Text(
@@ -324,35 +396,72 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                           title: const Text('HOTEL'),
                           value: 'HOTEL',
                           groupValue: category,
-                          onChanged: (v) => setState(() => category = v ?? ''),
+                          onChanged: (v) => setState(() {
+                            category = v ?? '';
+                            _categoryError = false;
+                            customCategory = '';
+                          }),
                         ),
                         RadioListTile<String>(
                           title: const Text('RESORT'),
                           value: 'RESORT',
                           groupValue: category,
-                          onChanged: (v) => setState(() => category = v ?? ''),
+                          onChanged: (v) => setState(() {
+                            category = v ?? '';
+                            _categoryError = false;
+                            customCategory = '';
+                          }),
                         ),
                         RadioListTile<String>(
                           title: const Text('RESTAURANT'),
                           value: 'RESTAURANT',
                           groupValue: category,
-                          onChanged: (v) => setState(() => category = v ?? ''),
+                          onChanged: (v) => setState(() {
+                            category = v ?? '';
+                            _categoryError = false;
+                            customCategory = '';
+                          }),
                         ),
                         RadioListTile<String>(
                           title: const Text('AUDITORIUM'),
                           value: 'AUDITORIUM',
                           groupValue: category,
-                          onChanged: (v) => setState(() => category = v ?? ''),
+                          onChanged: (v) => setState(() {
+                            category = v ?? '';
+                            _categoryError = false;
+                            customCategory = '';
+                          }),
                         ),
                         RadioListTile<String>(
                           title: const Text('OTHERS'),
                           value: 'OTHERS',
                           groupValue: category,
-                          onChanged: (v) => setState(() => category = v ?? ''),
+                          onChanged: (v) => setState(() {
+                            category = v ?? '';
+                            _categoryError = false;
+                          }),
                         ),
+                        if (category == 'OTHERS')
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                            child: TextFormField(
+                              decoration: _inputDecoration(
+                                'Please specify',
+                                required: true,
+                                error: _customCategoryError,
+                                errorText: 'Please specify category',
+                              ),
+                              onChanged: (v) {
+                                setState(() {
+                                  customCategory = v;
+                                  if (v.trim().isNotEmpty) _customCategoryError = false;
+                                });
+                              },
+                            ),
+                          ),
                       ],
                     ),
-                    if (category.isEmpty)
+                    if (_categoryError)
                       const Padding(
                         padding: EdgeInsets.only(left: 8, bottom: 12),
                         child: Text(
@@ -369,21 +478,22 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                     _buildTextField(
                       label: 'CURRENT ENQUIRY',
                       required: true,
-                      validator: (v) => v == null || v.isEmpty
-                          ? 'Enter current enquiry'
-                          : null,
+                      error: _currentEnquiryError,
+                      errorText: 'Enter current enquiry',
+                      initialValue: currentEnquiry,
                       onChanged: (v) => currentEnquiry = v,
                     ),
                     _buildTextField(
                       label: 'CONFIRMED ORDER',
+                      initialValue: confirmedOrder,
                       onChanged: (v) => confirmedOrder = v,
                     ),
                     _buildTextField(
                       label: 'NEW PRODUCT SUGGESTION',
                       required: true,
-                      validator: (v) => v == null || v.isEmpty
-                          ? 'Enter new product suggestion'
-                          : null,
+                      error: _newProductSuggestionError,
+                      errorText: 'Enter new product suggestion',
+                      initialValue: newProductSuggestion,
                       onChanged: (v) => newProductSuggestion = v,
                     ),
 
@@ -411,6 +521,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                                 onPressed: () {
                                   setState(() {
                                     feedbackRating = starNumber;
+                                    _feedbackRatingError = false;
                                   });
                                 },
                               ),
@@ -419,7 +530,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                         }),
                       ),
                     ),
-                    if (feedbackRating == 0)
+                    if (_feedbackRatingError)
                       const Padding(
                         padding: EdgeInsets.only(left: 8, bottom: 8),
                         child: Text(
@@ -432,6 +543,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                     _buildSectionTitle('Any Suggestion'),
                     _buildTextField(
                         label: 'ANY SUGGESTION',
+                        initialValue: anySuggestion,
                         onChanged: (v) => anySuggestion = v),
 
                     // PHOTO
@@ -443,8 +555,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                             label: const Text('Take Photo'),
                             onPressed: _openCamera,
                             style: OutlinedButton.styleFrom(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 14),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
                               side: const BorderSide(
                                   color: Color(0xFF1E3D59), width: 1.2),
                               shape: const RoundedRectangleBorder(

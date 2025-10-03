@@ -35,6 +35,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
   File? _imageFile;
   String? locationString;
   bool _photoError = false; // Add this line
+  double _uploadProgress = 0.0; // Add this line
 
   InputDecoration _inputDecoration(String label, {bool required = false}) => InputDecoration(
         labelText: required ? '$label *' : label,
@@ -77,6 +78,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
     setState(() {
       isLoading = true;
       _photoError = false;
+      _uploadProgress = 0.0; // Reset progress
     });
 
     String? imageUrl;
@@ -86,7 +88,15 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
             .ref()
             .child('marketing')
             .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
-        await ref.putFile(_imageFile!);
+        final uploadTask = ref.putFile(_imageFile!);
+
+        uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
+          setState(() {
+            _uploadProgress = snapshot.bytesTransferred / (snapshot.totalBytes == 0 ? 1 : snapshot.totalBytes);
+          });
+        });
+
+        await uploadTask;
         imageUrl = await ref.getDownloadURL();
       } catch (e) {
         imageUrl = null;
@@ -114,6 +124,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
 
     setState(() {
       isLoading = false;
+      _uploadProgress = 0.0;
       _imageFile = null;
       locationString = null;
       natureOfBusiness = '';
@@ -130,7 +141,24 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
     return DefaultTextStyle(
       style: const TextStyle(fontFamily: 'Electorize'),
       child: isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircularProgressIndicator(),
+                  if (_uploadProgress > 0 && _uploadProgress < 1)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 16),
+                      child: LinearProgressIndicator(value: _uploadProgress),
+                    ),
+                  if (_uploadProgress > 0 && _uploadProgress < 1)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text('Uploading photo... ${(_uploadProgress * 100).toStringAsFixed(0)}%'),
+                    ),
+                ],
+              ),
+            )
           : SingleChildScrollView(
               padding: const EdgeInsets.all(20.0),
               child: Form(
@@ -489,3 +517,4 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
     );
   }
 }
+//aaa

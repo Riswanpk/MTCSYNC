@@ -20,7 +20,8 @@ class _CameraPageState extends State<CameraPage> {
   File? _capturedImage;
   String? _locationString;
   String? _dateTimeString;
-  bool _isLoading = false; // Add this line
+  bool _isLoading = false;
+  bool _isUploading = false; // <-- Add this line
 
   Future<File?> _compressImage(File imageFile) async {
     try {
@@ -33,7 +34,7 @@ class _CameraPageState extends State<CameraPage> {
           await FlutterImageCompress.compressAndGetFile(
         imageFile.absolute.path,
         targetPath,
-        quality: 85, // Adjust quality as needed (0-100, 85 is a good balance)
+        quality: 60, // Adjust quality as needed (0-100, 85 is a good balance)
         minWidth: 1080, // Resize to a maximum width of 1080px
         minHeight:
             1080, // Maintain aspect ratio by setting a min height as well
@@ -119,47 +120,64 @@ class _CameraPageState extends State<CameraPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Camera')),
-      body: Center(
-        child: _isLoading
-            ? const CircularProgressIndicator() // Show loading while processing
-            : _capturedImage == null
-                ? ElevatedButton.icon(
-                    icon: const Icon(Icons.camera_alt),
-                    label: const Text('Take Photo'),
-                    onPressed: _takePhoto,
-                  )
-                : Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Image.file(_capturedImage!, height: 300),
-                      const SizedBox(height: 16),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.save),
-                        label: const Text('Use This Photo'),
-                        onPressed: () async {
-                          if (_capturedImage != null &&
-                              _locationString != null &&
-                              _dateTimeString != null) {
-                            final watermarkText = "${_locationString!}\n$_dateTimeString";
-                            final watermarkedFile = await addWatermark(
-                              imageFile: _capturedImage!,
-                              watermarkText: watermarkText,
-                            );
-                            Navigator.pop(context, {
-                              'image': watermarkedFile,
-                              'location': _locationString, // Already present
-                            });
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      ElevatedButton.icon(
+      body: Stack(
+        children: [
+          Center(
+            child: _isLoading
+                ? const CircularProgressIndicator()
+                : _capturedImage == null
+                    ? ElevatedButton.icon(
                         icon: const Icon(Icons.camera_alt),
-                        label: const Text('Retake'),
+                        label: const Text('Take Photo'),
                         onPressed: _takePhoto,
+                      )
+                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Image.file(_capturedImage!, height: 300),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.save),
+                            label: const Text('Use This Photo'),
+                            onPressed: () async {
+                              if (_capturedImage != null &&
+                                  _locationString != null &&
+                                  _dateTimeString != null) {
+                                setState(() {
+                                  _isUploading = true; // <-- Show uploading indicator
+                                });
+                                final watermarkText = "${_locationString!}\n$_dateTimeString";
+                                final watermarkedFile = await addWatermark(
+                                  imageFile: _capturedImage!,
+                                  watermarkText: watermarkText,
+                                );
+                                setState(() {
+                                  _isUploading = false; // <-- Hide uploading indicator
+                                });
+                                Navigator.pop(context, {
+                                  'image': watermarkedFile,
+                                  'location': _locationString,
+                                });
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.camera_alt),
+                            label: const Text('Retake'),
+                            onPressed: _takePhoto,
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+          ),
+          if (_isUploading)
+            Container(
+              color: Colors.black54,
+              child: const Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+        ],
       ),
     );
   }
