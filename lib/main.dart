@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:in_app_update/in_app_update.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'Misc/constant.dart';
 import 'login.dart';
@@ -188,11 +189,24 @@ class _UpdateGateState extends State<UpdateGate> {
   }
 }
 
+// Helper to mark notification as opened
+Future<void> markNotificationOpened(String docId) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool('lead_opened_$docId', true);
+}
+
+Future<bool> isNotificationOpened(String docId) async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getBool('lead_opened_$docId') ?? false;
+}
+
 class NotificationController {
   @pragma("vm:entry-point")
   static Future<void> onActionReceivedMethod(ReceivedAction receivedAction) async {
     if (receivedAction.payload?['docId'] != null) {
-      initialNotificationAction = receivedAction;
+      final docId = receivedAction.payload!['docId']!;
+      // Mark as opened
+      await markNotificationOpened(docId);
 
       Future<void> doNavigate() async {
         final navigator = navigatorKey.currentState;
@@ -249,25 +263,28 @@ class NotificationController {
     // 🔄 Reschedule in 30 mins if user swipes it away
     if (receivedAction.payload?['docId'] != null) {
       final docId = receivedAction.payload!['docId']!;
-      await AwesomeNotifications().createNotification(
-        content: NotificationContent(
-          id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-          channelKey: 'basic_channel',
-          title: 'Reminder',
-          body: 'Follow-up reminder for $docId',
-          payload: {'docId': docId},
-        ),
-        actionButtons: [
-          NotificationActionButton(
-            key: 'EDIT_FOLLOWUP',
-            label: 'Edit',
-            autoDismissible: true,
+      // Only reschedule if not opened
+      if (!await isNotificationOpened(docId)) {
+        await AwesomeNotifications().createNotification(
+          content: NotificationContent(
+            id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+            channelKey: 'basic_channel',
+            title: 'Reminder',
+            body: 'Follow-up reminder for $docId',
+            payload: {'docId': docId},
           ),
-        ],
-        schedule: NotificationCalendar.fromDate(
-          date: DateTime.now().add(const Duration(minutes: 30)),
-        ),
-      );
+          actionButtons: [
+            NotificationActionButton(
+              key: 'EDIT_FOLLOWUP',
+              label: 'Edit',
+              autoDismissible: true,
+            ),
+          ],
+          schedule: NotificationCalendar.fromDate(
+            date: DateTime.now().add(const Duration(minutes: 30)),
+          ),
+        );
+      }
     }
   }
 }

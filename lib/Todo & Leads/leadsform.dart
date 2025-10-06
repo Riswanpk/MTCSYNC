@@ -609,7 +609,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                     ),
                     items: const [
                       DropdownMenuItem(value: 'In Progress', child: Text('In Progress')),
-                      DropdownMenuItem(value: 'Completed', child: Text('Completed')),
+                      
                     ],
                     onChanged: (value) => setState(() => _status = value!),
                     validator: (value) => value == null || value.isEmpty ? 'Select status' : null,
