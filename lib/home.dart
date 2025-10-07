@@ -27,6 +27,9 @@ import 'Marketing/marketing.dart'; // Import marketing page
 import 'Marketing/viewer_marketing.dart'; // Import viewer marketing page
 import 'Performance/excel_view_performance.dart'; // <-- Add this import
 import 'Performance/insights_performance.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
+import 'dart:convert';
+import 'package:permission_handler/permission_handler.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -48,6 +51,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
 
   bool _showTodoWarning = false;
   int _logoTapCount = 0; // Add this line
+
+  // Add these fields to _HomePageState:
+  List<Contact>? _cachedContacts;
+  bool _contactsLoaded = false;
 
   @override
   void initState() {
@@ -94,6 +101,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
         }
       }
     });
+
+    _fetchAndCacheContacts();
   }
 
   Future<void> _loadProfileImage() async {
@@ -386,8 +395,41 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
 
   @override
   void didPush() {
+    _fetchAndCacheContacts();
     // Called when this page is pushed
     _checkTodoWarning();
+  }
+
+  Future<void> _fetchAndCacheContacts() async {
+    var status = await Permission.contacts.status;
+    if (!status.isGranted) {
+      await Permission.contacts.request();
+      status = await Permission.contacts.status;
+    }
+    if (!status.isGranted) return;
+
+    final prefs = await SharedPreferences.getInstance();
+
+    // Load cached contacts first
+    final cached = prefs.getString('contacts_cache');
+    if (cached != null) {
+      final List<dynamic> decoded = jsonDecode(cached);
+      _cachedContacts = decoded.map((c) => Contact.fromJson(c)).toList();
+      setState(() {
+        _contactsLoaded = true;
+      });
+    }
+
+    // Fetch latest contacts in background
+    final contacts = await FlutterContacts.getContacts(withProperties: true, withThumbnail: false);
+    // Save to cache
+    final encoded = jsonEncode(contacts.map((c) => c.toJson()).toList());
+    await prefs.setString('contacts_cache', encoded);
+
+    setState(() {
+      _cachedContacts = contacts;
+      _contactsLoaded = true;
+    });
   }
 
   @override

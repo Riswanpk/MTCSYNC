@@ -5,6 +5,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 import 'leads.dart'; // Make sure this import exists
 
@@ -20,6 +22,17 @@ Future<List<Map<String, dynamic>>> fetchCustomerSuggestions(String query, String
           (data['name'] ?? '').toString().toLowerCase().contains(query.toLowerCase()) ||
           (data['phone'] ?? '').toString().toLowerCase().contains(query.toLowerCase()))
       .toList();
+}
+
+// Add this helper:
+Future<List<Contact>> getCachedContacts() async {
+  final prefs = await SharedPreferences.getInstance();
+  final cached = prefs.getString('contacts_cache');
+  if (cached != null) {
+    final List<dynamic> decoded = jsonDecode(cached);
+    return decoded.map((c) => Contact.fromJson(c)).toList();
+  }
+  return [];
 }
 
 class FollowUpForm extends StatefulWidget {
