@@ -430,7 +430,8 @@ class _TodoFormPageState extends State<TodoFormPage> {
                   }
                 },
               ),
-              const Spacer(),
+              const SizedBox(height: 45), // Replaced Spacer with SizedBox for positioning
+              // const Spacer(), // This was pushing the button to the bottom
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(

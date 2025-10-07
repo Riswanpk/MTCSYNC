@@ -24,7 +24,6 @@ class HotelResortCustomerForm extends StatefulWidget {
 
 class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
   final _formKey = GlobalKey<FormState>();
-  String shopName = '';
   DateTime? date;
   String firmName = '';
   String place = '';
@@ -48,7 +47,6 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
   String customCategory = ''; // <-- Add this line
 
   // Error flags for each field
-  bool _shopNameError = false;
   bool _firmNameError = false;
   bool _placeError = false;
   bool _contactPersonError = false;
@@ -120,7 +118,6 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
         onChanged: (v) {
           if (onChanged != null) onChanged(v);
           setState(() {
-            if (label == 'SHOP NAME') _shopNameError = v.trim().isEmpty;
             if (label == 'FIRM NAME') _firmNameError = v.trim().isEmpty;
             if (label == 'PLACE') _placeError = v.trim().isEmpty;
             if (label == 'CONTACT PERSON NAME') _contactPersonError = v.trim().isEmpty;
@@ -149,7 +146,6 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
 
   Future<void> _submitForm() async {
     setState(() {
-      _shopNameError = shopName.trim().isEmpty;
       _firmNameError = firmName.trim().isEmpty;
       _placeError = place.trim().isEmpty;
       _contactPersonError = contactPerson.trim().isEmpty;
@@ -163,8 +159,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
       _photoError = _imageFile == null;
     });
 
-    bool hasError = _shopNameError ||
-        _firmNameError ||
+    bool hasError =_firmNameError ||
         _placeError ||
         _contactPersonError ||
         _contactNumberError ||
@@ -207,7 +202,6 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
       'username': widget.username,
       'userid': widget.userid,
       'branch': widget.branch,
-      'shopName': shopName,
       'date': date,
       'firmName': firmName,
       'place': place,
@@ -234,7 +228,6 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
       customCategory = ''; // <-- Reset custom field
       date = null;
       feedbackRating = 0;
-      shopName = '';
       firmName = '';
       place = '';
       contactPerson = '';
@@ -278,14 +271,6 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
 
                     // SECTION: CUSTOMER INFO
                     _buildSectionTitle('Customer Information'),
-                    _buildTextField(
-                      label: 'SHOP NAME',
-                      required: true,
-                      error: _shopNameError,
-                      errorText: 'Enter shop name',
-                      initialValue: shopName,
-                      onChanged: (v) => shopName = v,
-                    ),
                     _buildTextField(
                       label: 'FIRM NAME',
                       required: true,
