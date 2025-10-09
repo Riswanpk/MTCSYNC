@@ -87,9 +87,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
 
     // Only send report if today is the 1st of the month
     final now = DateTime.now();
-    if (now.day == 1) {
-      _checkAndSendMonthlyReport();
-    }
+    _checkAndSendMonthlyReport();
+    
 
     // Show performance deduction notification for sales user
     FirebaseAuth.instance.authStateChanges().listen((user) async {
@@ -257,24 +256,34 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
   Future<void> _checkAndSendMonthlyReport() async {
     try {
       final now = DateTime.now();
-      final prevMonthDate = DateTime(now.year, now.month - 1, 1);
-      final prevMonthKey = '${prevMonthDate.year}-${prevMonthDate.month}';
+
+      // Calculate previous month safely
+      int prevMonth = now.month - 1;
+      int prevYear = now.year;
+      if (prevMonth == 0) {
+        prevMonth = 12;
+        prevYear -= 1;
+      }
+      final prevMonthKey = '$prevYear-$prevMonth';
 
       final trackingDocRef = FirebaseFirestore.instance
           .collection('reportTracking')
           .doc('global');
 
-      final trackingDoc = await trackingDocRef.get();
-      final lastSentMonth = trackingDoc.data()?['lastSentMonth'];
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final trackingDoc = await transaction.get(trackingDocRef);
+        final lastSentMonth = trackingDoc.data()?['lastSentMonth'];
 
-      if (lastSentMonth != prevMonthKey) {
-        await _sendMonthlyExcelReport(year: prevMonthDate.year, month: prevMonthDate.month);
+        if (lastSentMonth != prevMonthKey) {
+          // Only send if not already sent for this month
+          await _sendMonthlyExcelReport(year: prevYear, month: prevMonth);
 
-        await trackingDocRef.set({
-          'lastSentMonth': prevMonthKey,
-          'lastUpdated': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-      }
+          transaction.set(trackingDocRef, {
+            'lastSentMonth': prevMonthKey,
+            'lastUpdated': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
+      });
     } catch (e) {
       print('Error checking monthly report: $e');
     }

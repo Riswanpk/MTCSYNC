@@ -24,7 +24,6 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
   final _formKey = GlobalKey<FormState>();
   String shopName = '';
   DateTime? lastItemPurchasedDate;
-  String lastPurchasedMonth = '';
   String lastPurchasedItem = '';
   String currentEnquiries = '';
   String confirmedOrder = '';
@@ -67,7 +66,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
     // Validate all fields manually
     setState(() {
       _shopNameError = shopName.trim().isEmpty;
-      _lastPurchaseError = (lastItemPurchasedDate == null && lastPurchasedMonth.trim().isEmpty);
+      _lastPurchaseError = (lastItemPurchasedDate == null );
       _lastPurchasedItemError = lastPurchasedItem.trim().isEmpty;
       _currentEnquiriesError = currentEnquiries.trim().isEmpty;
       _confirmedOrderError = confirmedOrder.trim().isEmpty;
@@ -118,7 +117,6 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
       'branch': widget.branch,
       'shopName': shopName,
       'lastItemPurchasedDate': lastItemPurchasedDate,
-      'lastPurchasedMonth': lastPurchasedMonth,
       'lastPurchasedItem': lastPurchasedItem,
       'currentEnquiries': currentEnquiries,
       'confirmedOrder': confirmedOrder,
@@ -136,11 +134,12 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Form submitted successfully!')),
     );
+
+    // Reset the form and all fields
     _formKey.currentState!.reset();
     setState(() {
       _imageFile = null;
       lastItemPurchasedDate = null;
-      lastPurchasedMonth = '';
       upcomingEventDate = null;
       upcomingEventDetails = '';
       locationString = null;
@@ -151,6 +150,18 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
       newProductSuggestion = '';
       upcomingTrends = '';
       feedback = '';
+      // Reset all error flags
+      _shopNameError = false;
+      _lastPurchaseError = false;
+      _lastPurchasedItemError = false;
+      _currentEnquiriesError = false;
+      _confirmedOrderError = false;
+      _upcomingEventError = false;
+      _upcomingEventDetailsError = false;
+      _newProductSuggestionError = false;
+      _upcomingTrendsError = false;
+      _feedbackError = false;
+      _photoError = false;
     });
   }
 
@@ -261,7 +272,6 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                         if (picked != null) {
                           setState(() {
                             lastItemPurchasedDate = picked;
-                            lastPurchasedMonth = '';
                             _lastPurchaseError = false;
                           });
                         }

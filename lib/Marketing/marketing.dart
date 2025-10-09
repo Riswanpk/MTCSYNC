@@ -4,6 +4,7 @@ import 'general_customer_form.dart';
 import 'hotel_resort_customer_form.dart';
 import 'viewer_marketing.dart';
 import 'report_marketing.dart'; // Import the report page
+import 'sales_marketing_daily_viewer.dart';
 
 class MarketingFormPage extends StatefulWidget {
   final String username;
@@ -50,7 +51,6 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
         );
     }
 
-    // Assume you pass user role as an argument or get it from context/provider
     final String? userRole = ModalRoute.of(context)?.settings.arguments is Map
         ? (ModalRoute.of(context)!.settings.arguments as Map)['role'] as String?
         : null;
@@ -60,6 +60,34 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
         title: const Text('Marketing Form'),
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
+        automaticallyImplyLeading: true, // Show back button
+      ),
+      endDrawer: Drawer( // Use endDrawer for right-side drawer
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(
+                color: Color(0xFF005BAC),
+              ),
+              child: Text('Marketing Menu', style: TextStyle(color: Colors.white, fontSize: 20)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.view_list),
+              title: const Text("View Today's Forms"),
+              onTap: () {
+                Navigator.of(context).pop(); // Close the drawer
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => SalesMarketingDailyViewer(
+                      userId: widget.userid,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
       body: Column(
         children: [
