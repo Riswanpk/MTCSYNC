@@ -12,9 +12,12 @@ class ViewerMarketingDetailPage extends StatelessWidget {
       style: const TextStyle(fontFamily: 'Electorize'),
       child: Scaffold(
         appBar: AppBar(
-          title: Text(data['shopName'] ?? 'Form Details'),
+          title: Text(
+            (data['formType'] == 'Hotel / Resort Customer')
+                ? (data['firmName'] ?? 'Form Details')
+                : (data['shopName'] ?? 'Form Details'),
+          ),
           backgroundColor: const Color(0xFF2C3E50),
-          // Removed actions with Google Maps icon
         ),
         backgroundColor: const Color(0xFFE3E8EA),
         body: Stack(
@@ -30,15 +33,32 @@ class ViewerMarketingDetailPage extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _detail('Form Type', data['formType']),
-                      _detail('Shop Name', data['shopName']),
+                      _detail(
+                        (data['formType'] == 'Hotel / Resort Customer')
+                            ? 'Firm Name'
+                            : 'Shop Name',
+                        (data['formType'] == 'Hotel / Resort Customer')
+                            ? data['firmName']
+                            : data['shopName'],
+                      ),
+                      if (data['formType'] == 'Hotel / Resort Customer') ...[
+                        _detail('Place', data['place']),
+                        _detail('Contact Person', data['contactPerson']),
+                        _detail('Contact Number', data['contactNumber']),
+                        _detail('Category', data['category']),
+                        _detail('Visit Date', _formatDate(data['date'])),
+                        _detail('Feedback Rating', data['feedbackRating']),
+                      ],
                       _detail('Last Item Purchased Date', _formatDateOrString(data['lastItemPurchasedDate'], data['lastPurchasedMonth'])),
                       _detail('Last Purchased Item', data['lastPurchasedItem']),
                       _detail('Current Enquiries', data['currentEnquiries']),
+                      _detail('Current Enquiry', data['currentEnquiry']), // For hotel/resort
                       _detail('Confirmed Order', data['confirmedOrder']),
                       _detail('Upcoming Big Events Date', _formatDate(data['upcomingEventDate'])),
                       _detail('Upcoming Big Events Details', data['upcomingEvents']),
                       _detail('New Product Suggestion', data['newProductSuggestion']),
                       _detail('Upcoming Trends', data['upcomingTrends']),
+                      _detail('Any Suggestion', data['anySuggestion']), // For hotel/resort
                       _detail('Feedback', data['feedback']),
                       _detail('Branch', data['branch']),
                       _detail('Username', data['username']),

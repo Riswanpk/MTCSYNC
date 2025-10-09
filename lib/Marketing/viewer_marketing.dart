@@ -231,12 +231,15 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
                             separatorBuilder: (_, __) => const SizedBox(height: 10),
                             itemBuilder: (context, i) {
                               final data = docs[i].data() as Map<String, dynamic>;
+                              final isHotelResort = data['formType'] == 'Hotel / Resort Customer';
                               return Card(
                                 color: theme.cardColor,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                                 child: ListTile(
                                   title: Text(
-                                    data['shopName'] ?? 'No Shop Name',
+                                    isHotelResort
+                                        ? (data['firmName'] ?? 'No Firm Name')
+                                        : (data['shopName'] ?? 'No Shop Name'),
                                     style: theme.textTheme.titleMedium,
                                   ),
                                   subtitle: Text(
