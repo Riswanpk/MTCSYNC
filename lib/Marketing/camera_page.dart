@@ -34,7 +34,7 @@ class _CameraPageState extends State<CameraPage> {
           await FlutterImageCompress.compressAndGetFile(
         imageFile.absolute.path,
         targetPath,
-        quality: 60, // Adjust quality as needed (0-100, 85 is a good balance)
+        quality: 40, // Adjust quality as needed (0-100, 85 is a good balance)
         minWidth: 1080, // Resize to a maximum width of 1080px
         minHeight:
             1080, // Maintain aspect ratio by setting a min height as well
