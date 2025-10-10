@@ -56,17 +56,32 @@ class _CameraPageState extends State<CameraPage> {
       _isLoading = true; // Show loading indicator
     });
     final picker = ImagePicker();
-    // Capture image at a higher quality, as we will compress it manually
     final pickedFile = await picker.pickImage(source: ImageSource.camera);
 
     if (pickedFile != null) {
-      // Now, compress the captured image
       final compressedImageFile = await _compressImage(File(pickedFile.path));
       if (compressedImageFile == null) {
-        // Handle compression failure
         setState(() => _isLoading = false);
-        // Optionally show an error message to the user
         return;
+      }
+
+      // Keep asking for location until granted
+      LocationPermission permission;
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      while (!serviceEnabled) {
+        await Geolocator.openLocationSettings();
+        serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      }
+      permission = await Geolocator.checkPermission();
+      while (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+          // Optionally show a dialog or snackbar to inform the user
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permission is required!')),
+          );
+        }
       }
 
       final position = await Geolocator.getCurrentPosition(
@@ -144,7 +159,7 @@ class _CameraPageState extends State<CameraPage> {
                                   _locationString != null &&
                                   _dateTimeString != null) {
                                 setState(() {
-                                  _isUploading = true; // <-- Show uploading indicator
+                                  _isUploading = true;
                                 });
                                 final watermarkText = "${_locationString!}\n$_dateTimeString";
                                 final watermarkedFile = await addWatermark(
@@ -152,12 +167,15 @@ class _CameraPageState extends State<CameraPage> {
                                   watermarkText: watermarkText,
                                 );
                                 setState(() {
-                                  _isUploading = false; // <-- Hide uploading indicator
+                                  _isUploading = false;
                                 });
-                                Navigator.pop(context, {
-                                  'image': watermarkedFile,
-                                  'location': _locationString,
-                                });
+                                // Return the image and location to the previous page
+                                if (mounted) {
+                                  Navigator.pop(context, {
+                                    'image': watermarkedFile,
+                                    'location': _locationString,
+                                  });
+                                }
                               }
                             },
                           ),
