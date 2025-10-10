@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:in_app_update/in_app_update.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'Misc/constant.dart';
@@ -200,9 +201,24 @@ Future<bool> isNotificationOpened(String docId) async {
   return prefs.getBool('lead_opened_$docId') ?? false;
 }
 
+// Helper to clear notification opened status
+Future<void> clearNotificationOpened(String docId) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.remove('lead_opened_$docId');
+}
+
 class NotificationController {
   @pragma("vm:entry-point")
   static Future<void> onActionReceivedMethod(ReceivedAction receivedAction) async {
+    // Ensure plugins are initialized in this background isolate
+    WidgetsFlutterBinding.ensureInitialized();
+    await Firebase.initializeApp(
+        options: FirebaseOptions(
+            apiKey: firebaseApiKey, appId: firebaseAppId, messagingSenderId: firebaseMessagingSenderId,
+            projectId: firebaseProjectId, authDomain: firebaseAuthDomain, storageBucket: firebaseStorageBucket,
+            measurementId: firebaseMeasurementId
+        )
+    );
     if (receivedAction.payload?['docId'] != null) {
       final docId = receivedAction.payload!['docId']!;
       // Mark as opened
@@ -258,20 +274,49 @@ class NotificationController {
 
   @pragma("vm:entry-point")
   static Future<void> onDismissActionReceivedMethod(ReceivedAction receivedAction) async {
-    debugPrint("Notification dismissed: ${receivedAction.id}");
+    // Ensure plugins are initialized for background execution
+    WidgetsFlutterBinding.ensureInitialized();
+    await Firebase.initializeApp(
+        options: FirebaseOptions(
+            apiKey: firebaseApiKey, appId: firebaseAppId, messagingSenderId: firebaseMessagingSenderId,
+            projectId: firebaseProjectId, authDomain: firebaseAuthDomain, storageBucket: firebaseStorageBucket,
+            measurementId: firebaseMeasurementId
+        )
+    );
 
+    debugPrint("Notification dismissed: ${receivedAction.id}");
+    
     // 🔄 Reschedule in 30 mins if user swipes it away
     if (receivedAction.payload?['docId'] != null) {
       final docId = receivedAction.payload!['docId']!;
+      final type = receivedAction.payload!['type'] ?? 'lead'; // Default to lead
+
       // Only reschedule if not opened
       if (!await isNotificationOpened(docId)) {
+        String title = 'Reminder';
+        String body = 'You have a pending item. Please check your app.';
+
+        // Fetch details from Firestore to make the notification more informative
+        try {
+            final collection = type == 'todo' ? 'todo' : 'follow_ups';
+            final doc = await FirebaseFirestore.instance.collection(collection).doc(docId).get();
+            if (doc.exists) {
+                title = type == 'todo' ? 'Task Reminder' : 'Follow-up Reminder';
+                body = 'Reminder for: ${doc.data()?['title'] ?? doc.data()?['name'] ?? '...'}';
+            }
+        } catch (e) {
+            debugPrint('Error fetching details for dismissed notification: $e');
+            // If fetching fails (e.g., no network), we still want to reschedule a generic reminder.
+            // The title and body will use the default values set above.
+        }
+
         await AwesomeNotifications().createNotification(
           content: NotificationContent(
             id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
             channelKey: 'basic_channel',
-            title: 'Reminder',
-            body: 'Follow-up reminder for $docId',
-            payload: {'docId': docId},
+            title: title,
+            body: body,
+            payload: {'docId': docId, 'type': type},
           ),
           actionButtons: [
             NotificationActionButton(
@@ -281,7 +326,7 @@ class NotificationController {
             ),
           ],
           schedule: NotificationCalendar.fromDate(
-            date: DateTime.now().add(const Duration(minutes: 30)),
+            date: DateTime.now().add(const Duration(minutes: 1)),
           ),
         );
       }

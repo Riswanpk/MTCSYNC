@@ -9,6 +9,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:excel/excel.dart' hide TextSpan;
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import 'customer_list.dart'; // Import the customer list page
@@ -716,6 +717,7 @@ class _LeadsPageState extends State<LeadsPage> {
                                       final status = data['status'] ?? 'Unknown';
                                       final date = data['date'] ?? 'No Date';
                                       final docId = filteredLeads[index].id;
+                                      final reminder = data['reminder'] ?? 'No Reminder';
                                       final createdById = data['created_by'] ?? '';
                                       final priority = data['priority'] ?? 'High'; // <-- Add this
 
@@ -735,6 +737,7 @@ class _LeadsPageState extends State<LeadsPage> {
                                             date: date,
                                             docId: docId,
                                             createdBy: creatorUsername,
+                                            reminder: reminder,
                                             priority: priority, // <-- Pass priority
                                           );
                                         },
@@ -809,6 +812,7 @@ class _LeadsPageState extends State<LeadsPage> {
                                       final status = data['status'] ?? 'Unknown';
                                       final date = data['date'] ?? 'No Date';
                                       final docId = filteredLeads[index].id;
+                                      final reminder = data['reminder'] ?? 'No Reminder';
                                       final createdById = data['created_by'] ?? '';
 
                                       return FutureBuilder<DocumentSnapshot>(
@@ -826,6 +830,7 @@ class _LeadsPageState extends State<LeadsPage> {
                                             status: status,
                                             date: date,
                                             docId: docId,
+                                            reminder: reminder,
                                             createdBy: creatorUsername,
                                             priority: data['priority'] ?? 'High',
                                           );
@@ -899,6 +904,7 @@ class _LeadsPageState extends State<LeadsPage> {
                                       final status = data['status'] ?? 'Unknown';
                                       final date = data['date'] ?? 'No Date';
                                       final docId = filteredLeads[index].id;
+                                      final reminder = data['reminder'] ?? 'No Reminder';
                                       final createdById = data['created_by'] ?? '';
 
                                       return FutureBuilder<DocumentSnapshot>(
@@ -916,6 +922,7 @@ class _LeadsPageState extends State<LeadsPage> {
                                             status: status,
                                             date: date,
                                             docId: docId,
+                                            reminder: reminder,
                                             createdBy: creatorUsername,
                                             priority: data['priority'] ?? 'High',
                                           );
@@ -997,6 +1004,7 @@ class LeadCard extends StatelessWidget {
   final String docId;
   final String createdBy;
   final String priority;
+  final String reminder;
 
   const LeadCard({
     super.key,
@@ -1006,6 +1014,7 @@ class LeadCard extends StatelessWidget {
     required this.docId,
     required this.createdBy,
     required this.priority,
+    required this.reminder,
   });
 
   Color getPriorityColor(String priority) {
@@ -1056,6 +1065,28 @@ class LeadCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+
+    String formattedDate = date;
+    try {
+      if (date.isNotEmpty) {
+        final parsedDate = DateTime.parse(date);
+        formattedDate = DateFormat('dd-MM-yyyy').format(parsedDate);
+      }
+    } catch (e) {
+      // Keep original date string if parsing fails
+    }
+
+    String formattedReminder = reminder;
+    try {
+      if (reminder.isNotEmpty && reminder != 'No Reminder') {
+        // Assuming reminder format is 'YYYY-MM-DD ...'
+        final datePart = reminder.split(' ')[0];
+        final parsedReminderDate = DateTime.parse(datePart);
+        formattedReminder = DateFormat('dd-MM-yyyy').format(parsedReminderDate);
+      }
+    } catch (e) {
+      // Keep original reminder string if parsing fails
+    }
 
     return Slidable(
       key: ValueKey(docId),
@@ -1216,7 +1247,7 @@ class LeadCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Date: $date',
+                      'Date: $formattedDate',
                       style: theme.textTheme.bodySmall?.copyWith(fontSize: 13, color: theme.hintColor),
                     ),
                     const SizedBox(height: 2),
@@ -1224,21 +1255,10 @@ class LeadCard extends StatelessWidget {
                       'Created by: $createdBy',
                       style: theme.textTheme.bodySmall?.copyWith(fontSize: 12, color: Colors.grey),
                     ),
-                    Row(
-                      children: [
-                        Text(
-                          'Priority: ',
-                          style: theme.textTheme.bodySmall?.copyWith(fontSize: 12, color: Colors.grey),
-                        ),
-                        Text(
-                          priority,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontSize: 12,
-                            color: getPriorityColor(priority),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
+                    const SizedBox(height: 2),
+                    Text(
+                      'Reminder: $formattedReminder',
+                      style: theme.textTheme.bodySmall?.copyWith(fontSize: 12, color: Colors.blueGrey),
                     ),
                   ],
                 ),

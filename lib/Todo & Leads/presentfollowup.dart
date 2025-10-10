@@ -2,6 +2,7 @@ import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../main.dart'; // Import to use clearNotificationOpened
 class PresentFollowUp extends StatefulWidget {
   final String docId;
   final bool editMode; // <-- Add this
@@ -148,6 +149,9 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
           minute,
         );
 
+        // Clear the 'opened' flag so it can be rescheduled if dismissed
+        await clearNotificationOpened(widget.docId);
+
         // Cancel previous notification for this follow-up (if any)
         await AwesomeNotifications().cancelSchedule(int.tryParse(widget.docId.hashCode.toString().substring(0, 7)) ?? 0);
 
@@ -160,7 +164,8 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
             body: 'Reminder for ${_nameController.text}',
             notificationLayout: NotificationLayout.Default,
             payload: {
-              'docId': widget.docId,
+              'docId': widget.docId, // This is a lead
+              'type': 'lead',
               'action': 'edit_followup'
             },
           ),

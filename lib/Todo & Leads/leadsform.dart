@@ -158,6 +158,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
             notificationLayout: NotificationLayout.Default,
             payload: {
               'docId': followUpRef.id,
+              'type': 'lead', // Specify that this is a lead
             },
           ),
           actionButtons: [
