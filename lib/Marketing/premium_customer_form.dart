@@ -136,7 +136,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
     );
 
     // Reset the form and all fields
-    _formKey.currentState!.reset();
+_formKey.currentState?.reset();
     setState(() {
       _imageFile = null;
       lastItemPurchasedDate = null;

@@ -133,8 +133,8 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Form submitted successfully!')),
     );
-    _formKey.currentState!.reset();
-  }
+_formKey.currentState?.reset();
+}
 
   @override
   Widget build(BuildContext context) {
