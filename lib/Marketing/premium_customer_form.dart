@@ -3,6 +3,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
 import 'camera_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 
 class PremiumCustomerForm extends StatefulWidget {
   final String username;
@@ -16,12 +20,26 @@ class PremiumCustomerForm extends StatefulWidget {
     required this.branch,
   });
 
+  static const String DRAFT_KEY = 'premium_form_draft';
+
   @override
   State<PremiumCustomerForm> createState() => _PremiumCustomerFormState();
 }
 
 class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
   final _formKey = GlobalKey<FormState>();
+
+  // Controllers for text fields
+  late TextEditingController _shopNameController;
+  late TextEditingController _lastPurchasedItemController;
+  late TextEditingController _currentEnquiriesController;
+  late TextEditingController _confirmedOrderController;
+  late TextEditingController _upcomingEventDetailsController;
+  late TextEditingController _newProductSuggestionController;
+  late TextEditingController _upcomingTrendsController;
+  late TextEditingController _feedbackController;
+
+
   String shopName = '';
   DateTime? lastItemPurchasedDate;
   String lastPurchasedItem = '';
@@ -59,10 +77,116 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
         _imageFile = result['image'];
         locationString = result['location']; // <-- Capture location here
       });
+      _saveDraft();
     }
   }
 
+  @override
+  void initState() {
+    super.initState();
+    _shopNameController = TextEditingController();
+    _lastPurchasedItemController = TextEditingController();
+    _currentEnquiriesController = TextEditingController();
+    _confirmedOrderController = TextEditingController();
+    _upcomingEventDetailsController = TextEditingController();
+    _newProductSuggestionController = TextEditingController();
+    _upcomingTrendsController = TextEditingController();
+    _feedbackController = TextEditingController();
+    _loadDraft();
+  }
+
+  @override
+  void dispose() {
+    _shopNameController.dispose();
+    _lastPurchasedItemController.dispose();
+    _currentEnquiriesController.dispose();
+    _confirmedOrderController.dispose();
+    _upcomingEventDetailsController.dispose();
+    _newProductSuggestionController.dispose();
+    _upcomingTrendsController.dispose();
+    _feedbackController.dispose();
+    super.dispose();
+  }
+
+  Map<String, dynamic> _toDraftMap() {
+    return {
+      'shopName': _shopNameController.text,
+      'lastItemPurchasedDate': lastItemPurchasedDate?.toIso8601String(),
+      'lastPurchasedItem': _lastPurchasedItemController.text,
+      'currentEnquiries': _currentEnquiriesController.text,
+      'confirmedOrder': _confirmedOrderController.text,
+      'upcomingEventDate': upcomingEventDate?.toIso8601String(),
+      'upcomingEventDetails': _upcomingEventDetailsController.text,
+      'newProductSuggestion': _newProductSuggestionController.text,
+      'upcomingTrends': _upcomingTrendsController.text,
+      'feedback': _feedbackController.text,
+      'locationString': locationString,
+    };
+  }
+
+  Future<void> _saveDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    Map<String, dynamic> draftData = _toDraftMap();
+
+    if (_imageFile != null) {
+      final appDir = await getApplicationDocumentsDirectory();
+      final fileName = path.basename(_imageFile!.path);
+      final savedImage = await _imageFile!.copy('${appDir.path}/$fileName');
+      draftData['imagePath'] = savedImage.path;
+    } else {
+      draftData.remove('imagePath');
+    }
+
+    String draftJson = jsonEncode(draftData);
+    await prefs.setString(PremiumCustomerForm.DRAFT_KEY, draftJson);
+  }
+
+  Future<void> _loadDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? draftJson = prefs.getString(PremiumCustomerForm.DRAFT_KEY);
+
+    if (draftJson == null) return;
+
+    final Map<String, dynamic> draftData = jsonDecode(draftJson);
+
+    setState(() {
+      _shopNameController.text = draftData['shopName'] ?? '';
+      lastItemPurchasedDate = draftData['lastItemPurchasedDate'] != null ? DateTime.parse(draftData['lastItemPurchasedDate']) : null;
+      _lastPurchasedItemController.text = draftData['lastPurchasedItem'] ?? '';
+      _currentEnquiriesController.text = draftData['currentEnquiries'] ?? '';
+      _confirmedOrderController.text = draftData['confirmedOrder'] ?? '';
+      upcomingEventDate = draftData['upcomingEventDate'] != null ? DateTime.parse(draftData['upcomingEventDate']) : null;
+      _upcomingEventDetailsController.text = draftData['upcomingEventDetails'] ?? '';
+      _newProductSuggestionController.text = draftData['newProductSuggestion'] ?? '';
+      _upcomingTrendsController.text = draftData['upcomingTrends'] ?? '';
+      _feedbackController.text = draftData['feedback'] ?? '';
+      locationString = draftData['locationString'];
+
+      if (draftData['imagePath'] != null) {
+        final imageFile = File(draftData['imagePath']);
+        if (imageFile.existsSync()) {
+          _imageFile = imageFile;
+        }
+      }
+    });
+  }
+
+  Future<void> _clearDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(PremiumCustomerForm.DRAFT_KEY);
+  }
+
   Future<void> _submitForm() async {
+    // Update state variables from controllers before validation
+    shopName = _shopNameController.text;
+    lastPurchasedItem = _lastPurchasedItemController.text;
+    currentEnquiries = _currentEnquiriesController.text;
+    confirmedOrder = _confirmedOrderController.text;
+    upcomingEventDetails = _upcomingEventDetailsController.text;
+    newProductSuggestion = _newProductSuggestionController.text;
+    upcomingTrends = _upcomingTrendsController.text;
+    feedback = _feedbackController.text;
+
     // Validate all fields manually
     setState(() {
       _shopNameError = shopName.trim().isEmpty;
@@ -130,6 +254,8 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
       'timestamp': FieldValue.serverTimestamp(),
     });
 
+    await _clearDraft();
+
     setState(() => isLoading = false);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Form submitted successfully!')),
@@ -137,7 +263,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
 
     // Reset the form and all fields
 _formKey.currentState?.reset();
-    setState(() {
+    setState(() { // This setState is now for clearing UI state and controllers
       _imageFile = null;
       lastItemPurchasedDate = null;
       upcomingEventDate = null;
@@ -150,6 +276,16 @@ _formKey.currentState?.reset();
       newProductSuggestion = '';
       upcomingTrends = '';
       feedback = '';
+
+      _shopNameController.clear();
+      _lastPurchasedItemController.clear();
+      _currentEnquiriesController.clear();
+      _confirmedOrderController.clear();
+      _upcomingEventDetailsController.clear();
+      _newProductSuggestionController.clear();
+      _upcomingTrendsController.clear();
+      _feedbackController.clear();
+
       // Reset all error flags
       _shopNameError = false;
       _lastPurchaseError = false;
@@ -174,7 +310,7 @@ _formKey.currentState?.reset();
         filled: true,
         fillColor: Theme.of(context).brightness == Brightness.dark
             ? Colors.grey[900]
-            : const Color.fromARGB(255, 241, 235, 188),
+            : const Color.fromARGB(255, 238, 232, 205),
         border: const OutlineInputBorder(
           borderRadius: BorderRadius.only(
             topRight: Radius.circular(22),
@@ -210,7 +346,7 @@ _formKey.currentState?.reset();
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
                         fontFamily: 'Electorize',
-                        color: Color(0xFF1E3D59),
+                        color: Color.fromARGB(255, 255, 192, 18),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -238,13 +374,14 @@ _formKey.currentState?.reset();
                         ],
                       ),
                       child: TextFormField(
-                        initialValue: shopName,
+                        controller: _shopNameController,
                         decoration: _inputDecoration(
                           'Shop Name',
                           error: _shopNameError,
                           errorText: 'Enter shop name',
                         ),
                         onChanged: (v) {
+                          _saveDraft();
                           setState(() {
                             shopName = v;
                             if (v.trim().isNotEmpty) _shopNameError = false;
@@ -273,6 +410,7 @@ _formKey.currentState?.reset();
                           setState(() {
                             lastItemPurchasedDate = picked;
                             _lastPurchaseError = false;
+                            _saveDraft();
                           });
                         }
                       },
@@ -297,13 +435,14 @@ _formKey.currentState?.reset();
                         ],
                       ),
                       child: TextFormField(
-                        initialValue: lastPurchasedItem,
+                        controller: _lastPurchasedItemController,
                         decoration: _inputDecoration(
                           'Last Purchased Item',
                           error: _lastPurchasedItemError,
                           errorText: 'Enter last purchased item',
                         ),
                         onChanged: (v) {
+                          _saveDraft();
                           setState(() {
                             lastPurchasedItem = v;
                             if (v.trim().isNotEmpty) _lastPurchasedItemError = false;
@@ -335,13 +474,14 @@ _formKey.currentState?.reset();
                         ],
                       ),
                       child: TextFormField(
-                        initialValue: currentEnquiries,
+                        controller: _currentEnquiriesController,
                         decoration: _inputDecoration(
                           'Current Enquiries',
                           error: _currentEnquiriesError,
                           errorText: 'Enter current enquiries',
                         ),
                         onChanged: (v) {
+                          _saveDraft();
                           setState(() {
                             currentEnquiries = v;
                             if (v.trim().isNotEmpty) _currentEnquiriesError = false;
@@ -369,13 +509,14 @@ _formKey.currentState?.reset();
                         ],
                       ),
                       child: TextFormField(
-                        initialValue: confirmedOrder,
+                        controller: _confirmedOrderController,
                         decoration: _inputDecoration(
                           'Confirmed Order',
                           error: _confirmedOrderError,
                           errorText: 'Enter confirmed order',
                         ),
                         onChanged: (v) {
+                          _saveDraft();
                           setState(() {
                             confirmedOrder = v;
                             if (v.trim().isNotEmpty) _confirmedOrderError = false;
@@ -404,6 +545,7 @@ _formKey.currentState?.reset();
                           setState(() {
                             upcomingEventDate = picked;
                             _upcomingEventError = false;
+                            _saveDraft();
                           });
                         }
                       },
@@ -428,13 +570,14 @@ _formKey.currentState?.reset();
                         ],
                       ),
                       child: TextFormField(
-                        initialValue: upcomingEventDetails,
+                        controller: _upcomingEventDetailsController,
                         decoration: _inputDecoration(
                           'Upcoming Big Events Details',
                           error: _upcomingEventDetailsError,
                           errorText: 'Enter event details',
                         ),
                         onChanged: (v) {
+                          _saveDraft();
                           setState(() {
                             upcomingEventDetails = v;
                             if (v.trim().isNotEmpty) _upcomingEventDetailsError = false;
@@ -466,13 +609,14 @@ _formKey.currentState?.reset();
                         ],
                       ),
                       child: TextFormField(
-                        initialValue: newProductSuggestion,
+                        controller: _newProductSuggestionController,
                         decoration: _inputDecoration(
                           'New Product Suggestion',
                           error: _newProductSuggestionError,
                           errorText: 'Enter new product suggestion',
                         ),
                         onChanged: (v) {
+                          _saveDraft();
                           setState(() {
                             newProductSuggestion = v;
                             if (v.trim().isNotEmpty) _newProductSuggestionError = false;
@@ -500,13 +644,14 @@ _formKey.currentState?.reset();
                         ],
                       ),
                       child: TextFormField(
-                        initialValue: upcomingTrends,
+                        controller: _upcomingTrendsController,
                         decoration: _inputDecoration(
                           'Upcoming Trends',
                           error: _upcomingTrendsError,
                           errorText: 'Enter upcoming trends',
                         ),
                         onChanged: (v) {
+                          _saveDraft();
                           setState(() {
                             upcomingTrends = v;
                             if (v.trim().isNotEmpty) _upcomingTrendsError = false;
@@ -534,7 +679,7 @@ _formKey.currentState?.reset();
                         ],
                       ),
                       child: TextFormField(
-                        initialValue: feedback,
+                        controller: _feedbackController,
                         maxLines: 3,
                         decoration: _inputDecoration(
                           'Feedback About Our Product & Services',
@@ -542,6 +687,7 @@ _formKey.currentState?.reset();
                           errorText: 'Enter feedback',
                         ),
                         onChanged: (v) {
+                          _saveDraft();
                           setState(() {
                             feedback = v;
                             if (v.trim().isNotEmpty) _feedbackError = false;
@@ -578,7 +724,10 @@ _formKey.currentState?.reset();
                                 child: Image.file(_imageFile!, height: 150, fit: BoxFit.cover),
                               ),
                               TextButton(
-                                onPressed: () => setState(() => _imageFile = null),
+                                onPressed: () {
+                                  setState(() => _imageFile = null);
+                                  _saveDraft();
+                                },
                                 child: const Text('Remove Photo'),
                               ),
                             ],

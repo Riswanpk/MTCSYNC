@@ -4,6 +4,10 @@ import 'camera_page.dart';
 import 'dart:io';
 import 'package:flutter/services.dart'; // Add this import
 import 'package:firebase_storage/firebase_storage.dart'; // Add this import
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 
 class HotelResortCustomerForm extends StatefulWidget {
   final String username;
@@ -17,6 +21,8 @@ class HotelResortCustomerForm extends StatefulWidget {
     required this.branch,
   });
 
+  static const String DRAFT_KEY = 'hotel_form_draft';
+
   @override
   State<HotelResortCustomerForm> createState() =>
       _HotelResortCustomerFormState();
@@ -24,6 +30,19 @@ class HotelResortCustomerForm extends StatefulWidget {
 
 class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
   final _formKey = GlobalKey<FormState>();
+
+  // Controllers for text fields
+  late TextEditingController _firmNameController;
+  late TextEditingController _placeController;
+  late TextEditingController _contactPersonController;
+  late TextEditingController _contactNumberController;
+  late TextEditingController _currentEnquiryController;
+  late TextEditingController _confirmedOrderController;
+  late TextEditingController _newProductSuggestionController;
+  late TextEditingController _anySuggestionController;
+  late TextEditingController _customCategoryController;
+
+
   DateTime? date;
   String firmName = '';
   String place = '';
@@ -89,6 +108,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
     String? Function(String?)? validator,
     Function(String)? onChanged,
     List<TextInputFormatter>? inputFormatters, // Add this line
+    TextEditingController? controller,
     bool error = false,
     String? errorText,
     String? initialValue,
@@ -111,11 +131,12 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
         ],
       ),
       child: TextFormField(
-        initialValue: initialValue,
+        controller: controller,
         keyboardType: keyboardType,
         decoration: _inputDecoration(label, required: required, error: error, errorText: errorText),
         validator: validator,
         onChanged: (v) {
+          _saveDraft();
           if (onChanged != null) onChanged(v);
           setState(() {
             if (label == 'FIRM NAME') _firmNameError = v.trim().isEmpty;
@@ -140,11 +161,125 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
       setState(() {
         _imageFile = result['image'];
         locationString = result['location'];
+        _photoError = false;
       });
+      _saveDraft();
     }
   }
 
+  @override
+  void initState() {
+    super.initState();
+    _firmNameController = TextEditingController();
+    _placeController = TextEditingController();
+    _contactPersonController = TextEditingController();
+    _contactNumberController = TextEditingController();
+    _currentEnquiryController = TextEditingController();
+    _confirmedOrderController = TextEditingController();
+    _newProductSuggestionController = TextEditingController();
+    _anySuggestionController = TextEditingController();
+    _customCategoryController = TextEditingController();
+    _loadDraft();
+  }
+
+  @override
+  void dispose() {
+    _firmNameController.dispose();
+    _placeController.dispose();
+    _contactPersonController.dispose();
+    _contactNumberController.dispose();
+    _currentEnquiryController.dispose();
+    _confirmedOrderController.dispose();
+    _newProductSuggestionController.dispose();
+    _anySuggestionController.dispose();
+    _customCategoryController.dispose();
+    super.dispose();
+  }
+
+  Map<String, dynamic> _toDraftMap() {
+    return {
+      'firmName': _firmNameController.text,
+      'place': _placeController.text,
+      'contactPerson': _contactPersonController.text,
+      'contactNumber': _contactNumberController.text,
+      'date': date?.toIso8601String(),
+      'category': category,
+      'customCategory': _customCategoryController.text,
+      'currentEnquiry': _currentEnquiryController.text,
+      'confirmedOrder': _confirmedOrderController.text,
+      'newProductSuggestion': _newProductSuggestionController.text,
+      'feedbackRating': feedbackRating,
+      'anySuggestion': _anySuggestionController.text,
+      'locationString': locationString,
+    };
+  }
+
+  Future<void> _saveDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    Map<String, dynamic> draftData = _toDraftMap();
+
+    if (_imageFile != null) {
+      final appDir = await getApplicationDocumentsDirectory();
+      final fileName = path.basename(_imageFile!.path);
+      final savedImage = await _imageFile!.copy('${appDir.path}/$fileName');
+      draftData['imagePath'] = savedImage.path;
+    } else {
+      draftData.remove('imagePath');
+    }
+
+    String draftJson = jsonEncode(draftData);
+    await prefs.setString(HotelResortCustomerForm.DRAFT_KEY, draftJson);
+  }
+
+  Future<void> _loadDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? draftJson = prefs.getString(HotelResortCustomerForm.DRAFT_KEY);
+
+    if (draftJson == null) return;
+
+    final Map<String, dynamic> draftData = jsonDecode(draftJson);
+
+    setState(() {
+      _firmNameController.text = draftData['firmName'] ?? '';
+      _placeController.text = draftData['place'] ?? '';
+      _contactPersonController.text = draftData['contactPerson'] ?? '';
+      _contactNumberController.text = draftData['contactNumber'] ?? '';
+      date = draftData['date'] != null ? DateTime.parse(draftData['date']) : null;
+      category = draftData['category'] ?? '';
+      _customCategoryController.text = draftData['customCategory'] ?? '';
+      _currentEnquiryController.text = draftData['currentEnquiry'] ?? '';
+      _confirmedOrderController.text = draftData['confirmedOrder'] ?? '';
+      _newProductSuggestionController.text = draftData['newProductSuggestion'] ?? '';
+      feedbackRating = draftData['feedbackRating'] ?? 0;
+      _anySuggestionController.text = draftData['anySuggestion'] ?? '';
+      locationString = draftData['locationString'];
+
+      if (draftData['imagePath'] != null) {
+        final imageFile = File(draftData['imagePath']);
+        if (imageFile.existsSync()) {
+          _imageFile = imageFile;
+        }
+      }
+    });
+  }
+
+  Future<void> _clearDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(HotelResortCustomerForm.DRAFT_KEY);
+  }
+
   Future<void> _submitForm() async {
+    // Update state variables from controllers before validation
+    firmName = _firmNameController.text;
+    place = _placeController.text;
+    contactPerson = _contactPersonController.text;
+    contactNumber = _contactNumberController.text;
+    customCategory = _customCategoryController.text;
+    currentEnquiry = _currentEnquiryController.text;
+    confirmedOrder = _confirmedOrderController.text;
+    newProductSuggestion = _newProductSuggestionController.text;
+    anySuggestion = _anySuggestionController.text;
+
     setState(() {
       _firmNameError = firmName.trim().isEmpty;
       _placeError = place.trim().isEmpty;
@@ -220,6 +355,8 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
       'timestamp': FieldValue.serverTimestamp(),
     });
 
+    await _clearDraft();
+
     setState(() {
       isLoading = false;
       _imageFile = null;
@@ -236,12 +373,21 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
       confirmedOrder = '';
       newProductSuggestion = '';
       anySuggestion = '';
+      _firmNameController.clear();
+      _placeController.clear();
+      _contactPersonController.clear();
+      _contactNumberController.clear();
+      _currentEnquiryController.clear();
+      _confirmedOrderController.clear();
+      _newProductSuggestionController.clear();
+      _anySuggestionController.clear();
+      _customCategoryController.clear();
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Form submitted successfully!')),
     );
-_formKey.currentState?.reset();
-}
+    _formKey.currentState!.reset();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -276,7 +422,7 @@ _formKey.currentState?.reset();
                       required: true,
                       error: _firmNameError,
                       errorText: 'Enter firm name',
-                      initialValue: firmName,
+                      controller: _firmNameController,
                       onChanged: (v) => firmName = v,
                     ),
                     _buildTextField(
@@ -284,7 +430,7 @@ _formKey.currentState?.reset();
                       required: true,
                       error: _placeError,
                       errorText: 'Enter place',
-                      initialValue: place,
+                      controller: _placeController,
                       onChanged: (v) => place = v,
                     ),
                     _buildTextField(
@@ -292,11 +438,12 @@ _formKey.currentState?.reset();
                       required: true,
                       error: _contactPersonError,
                       errorText: 'Enter contact person name',
-                      initialValue: contactPerson,
+                      controller: _contactPersonController,
                       onChanged: (v) => contactPerson = v,
                     ),
                     _buildTextField(
                       label: 'CONTACT NUMBER',
+                      controller: _contactNumberController,
                       required: true,
                       keyboardType: TextInputType.phone,
                       inputFormatters: [
@@ -307,7 +454,6 @@ _formKey.currentState?.reset();
                       errorText: contactNumber.isEmpty
                           ? 'Enter phone number'
                           : (contactNumber.length != 10 ? 'Phone number must be 10 digits' : null),
-                      initialValue: contactNumber,
                       onChanged: (v) => contactNumber = v,
                     ),
 
@@ -325,6 +471,7 @@ _formKey.currentState?.reset();
                           setState(() {
                             date = picked;
                             _dateError = false;
+                            _saveDraft();
                           });
                         }
                       },
@@ -385,6 +532,7 @@ _formKey.currentState?.reset();
                             category = v ?? '';
                             _categoryError = false;
                             customCategory = '';
+                            _saveDraft();
                           }),
                         ),
                         RadioListTile<String>(
@@ -395,6 +543,7 @@ _formKey.currentState?.reset();
                             category = v ?? '';
                             _categoryError = false;
                             customCategory = '';
+                            _saveDraft();
                           }),
                         ),
                         RadioListTile<String>(
@@ -405,6 +554,7 @@ _formKey.currentState?.reset();
                             category = v ?? '';
                             _categoryError = false;
                             customCategory = '';
+                            _saveDraft();
                           }),
                         ),
                         RadioListTile<String>(
@@ -415,6 +565,7 @@ _formKey.currentState?.reset();
                             category = v ?? '';
                             _categoryError = false;
                             customCategory = '';
+                            _saveDraft();
                           }),
                         ),
                         RadioListTile<String>(
@@ -424,12 +575,14 @@ _formKey.currentState?.reset();
                           onChanged: (v) => setState(() {
                             category = v ?? '';
                             _categoryError = false;
+                            _saveDraft();
                           }),
                         ),
                         if (category == 'OTHERS')
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                            child: TextFormField(
+                            child: TextFormField( // This is not using _buildTextField, so needs manual controller
+                              controller: _customCategoryController,
                               decoration: _inputDecoration(
                                 'Please specify',
                                 required: true,
@@ -440,6 +593,7 @@ _formKey.currentState?.reset();
                                 setState(() {
                                   customCategory = v;
                                   if (v.trim().isNotEmpty) _customCategoryError = false;
+                                  _saveDraft();
                                 });
                               },
                             ),
@@ -465,12 +619,12 @@ _formKey.currentState?.reset();
                       required: true,
                       error: _currentEnquiryError,
                       errorText: 'Enter current enquiry',
-                      initialValue: currentEnquiry,
+                      controller: _currentEnquiryController,
                       onChanged: (v) => currentEnquiry = v,
                     ),
                     _buildTextField(
                       label: 'CONFIRMED ORDER',
-                      initialValue: confirmedOrder,
+                      controller: _confirmedOrderController,
                       onChanged: (v) => confirmedOrder = v,
                     ),
                     _buildTextField(
@@ -478,7 +632,7 @@ _formKey.currentState?.reset();
                       required: true,
                       error: _newProductSuggestionError,
                       errorText: 'Enter new product suggestion',
-                      initialValue: newProductSuggestion,
+                      controller: _newProductSuggestionController,
                       onChanged: (v) => newProductSuggestion = v,
                     ),
 
@@ -507,6 +661,7 @@ _formKey.currentState?.reset();
                                   setState(() {
                                     feedbackRating = starNumber;
                                     _feedbackRatingError = false;
+                                    _saveDraft();
                                   });
                                 },
                               ),
@@ -528,8 +683,9 @@ _formKey.currentState?.reset();
                     _buildSectionTitle('Any Suggestion'),
                     _buildTextField(
                         label: 'ANY SUGGESTION',
-                        initialValue: anySuggestion,
-                        onChanged: (v) => anySuggestion = v),
+                        controller: _anySuggestionController,
+                        onChanged: (v) => anySuggestion = v,
+                    ),
 
                     // PHOTO
                     _buildSectionTitle('Attach Shop Photo'),
@@ -575,6 +731,14 @@ _formKey.currentState?.reset();
                                   height: 150, fit: BoxFit.cover),
                             ),
                           ),
+                    if (_imageFile != null)
+                      TextButton(
+                        onPressed: () {
+                          setState(() => _imageFile = null);
+                          _saveDraft();
+                        },
+                        child: const Text('Remove Photo'),
+                      ),
                     if (_photoError)
                       const Padding(
                         padding: EdgeInsets.only(top: 8),

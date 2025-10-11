@@ -4,6 +4,10 @@ import 'camera_page.dart'; // Add this import
 import 'dart:io'; // Add this import
 import 'package:flutter/services.dart'; // Add this import
 import 'package:firebase_storage/firebase_storage.dart'; // Add this import
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 
 class GeneralCustomerForm extends StatefulWidget {
   final String username;
@@ -17,11 +21,21 @@ class GeneralCustomerForm extends StatefulWidget {
     required this.branch,
   });
 
+  static const String DRAFT_KEY = 'general_form_draft';
+
   @override
   State<GeneralCustomerForm> createState() => _GeneralCustomerFormState();
 }
 
 class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
+  // Controllers for text fields to manage state for drafts
+  late TextEditingController _shopNameController;
+  late TextEditingController _placeController;
+  late TextEditingController _phoneNoController;
+  late TextEditingController _customNatureOfBusinessController;
+  late TextEditingController _currentEnquiriesController;
+  late TextEditingController _confirmedOrderController;
+  late TextEditingController _newProductSuggestionController;
   final _formKey = GlobalKey<FormState>();
   String shopName = '';
   String place = '';
@@ -62,9 +76,99 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
     if (result != null && result is Map && result['image'] != null) {
       setState(() {
         _imageFile = result['image'];
-        locationString = result['location'];
+        locationString = result['location']; // <-- Capture location here
       });
+      _saveDraft();
     }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _shopNameController = TextEditingController();
+    _placeController = TextEditingController();
+    _phoneNoController = TextEditingController();
+    _customNatureOfBusinessController = TextEditingController();
+    _currentEnquiriesController = TextEditingController();
+    _confirmedOrderController = TextEditingController();
+    _newProductSuggestionController = TextEditingController();
+    _loadDraft();
+  }
+
+  @override
+  void dispose() {
+    _shopNameController.dispose();
+    _placeController.dispose();
+    _phoneNoController.dispose();
+    _customNatureOfBusinessController.dispose();
+    _currentEnquiriesController.dispose();
+    _confirmedOrderController.dispose();
+    _newProductSuggestionController.dispose();
+    super.dispose();
+  }
+
+  Map<String, dynamic> _toDraftMap() {
+    return {
+      'shopName': _shopNameController.text,
+      'place': _placeController.text,
+      'phoneNo': _phoneNoController.text,
+      'natureOfBusiness': natureOfBusiness,
+      'customNatureOfBusiness': _customNatureOfBusinessController.text,
+      'currentEnquiries': _currentEnquiriesController.text,
+      'confirmedOrder': _confirmedOrderController.text,
+      'newProductSuggestion': _newProductSuggestionController.text,
+      'locationString': locationString,
+    };
+  }
+
+  Future<void> _saveDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    Map<String, dynamic> draftData = _toDraftMap();
+
+    if (_imageFile != null) {
+      final appDir = await getApplicationDocumentsDirectory();
+      final fileName = path.basename(_imageFile!.path);
+      final savedImage = await _imageFile!.copy('${appDir.path}/$fileName');
+      draftData['imagePath'] = savedImage.path;
+    } else {
+      draftData.remove('imagePath');
+    }
+
+    String draftJson = jsonEncode(draftData);
+    await prefs.setString(GeneralCustomerForm.DRAFT_KEY, draftJson);
+  }
+
+  Future<void> _loadDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? draftJson = prefs.getString(GeneralCustomerForm.DRAFT_KEY);
+
+    if (draftJson == null) return;
+
+    final Map<String, dynamic> draftData = jsonDecode(draftJson);
+
+    setState(() {
+      _shopNameController.text = draftData['shopName'] ?? '';
+      _placeController.text = draftData['place'] ?? '';
+      _phoneNoController.text = draftData['phoneNo'] ?? '';
+      natureOfBusiness = draftData['natureOfBusiness'] ?? '';
+      _customNatureOfBusinessController.text = draftData['customNatureOfBusiness'] ?? '';
+      _currentEnquiriesController.text = draftData['currentEnquiries'] ?? '';
+      _confirmedOrderController.text = draftData['confirmedOrder'] ?? '';
+      _newProductSuggestionController.text = draftData['newProductSuggestion'] ?? '';
+      locationString = draftData['locationString'];
+
+      if (draftData['imagePath'] != null) {
+        final imageFile = File(draftData['imagePath']);
+        if (imageFile.existsSync()) {
+          _imageFile = imageFile;
+        }
+      }
+    });
+  }
+
+  Future<void> _clearDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(GeneralCustomerForm.DRAFT_KEY);
   }
 
   Future<void> _submitForm() async {
@@ -74,6 +178,15 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
       });
       return;
     }
+
+    _formKey.currentState!.save(); // Make sure to save all fields to their variables
+    shopName = _shopNameController.text;
+    place = _placeController.text;
+    phoneNo = _phoneNoController.text;
+    customNatureOfBusiness = _customNatureOfBusinessController.text;
+    currentEnquiries = _currentEnquiriesController.text;
+    confirmedOrder = _confirmedOrderController.text;
+    newProductSuggestion = _newProductSuggestionController.text;
 
     setState(() {
       isLoading = true;
@@ -122,6 +235,8 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
       'timestamp': FieldValue.serverTimestamp(),
     });
 
+    await _clearDraft();
+
     setState(() {
       isLoading = false;
       _uploadProgress = 0.0;
@@ -129,12 +244,19 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
       locationString = null;
       natureOfBusiness = '';
       customNatureOfBusiness = '';
+      _shopNameController.clear();
+      _placeController.clear();
+      _phoneNoController.clear();
+      _customNatureOfBusinessController.clear();
+      _currentEnquiriesController.clear();
+      _confirmedOrderController.clear();
+      _newProductSuggestionController.clear();
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Form submitted successfully!')),
     );
-_formKey.currentState?.reset();
-}
+    _formKey.currentState!.reset();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -202,9 +324,10 @@ _formKey.currentState?.reset();
                         ],
                       ),
                       child: TextFormField(
+                        controller: _shopNameController,
                         decoration: _inputDecoration('SHOP NAME', required: true),
                         validator: (v) => v == null || v.isEmpty ? 'Enter shop name' : null,
-                        onChanged: (v) => shopName = v,
+                        onChanged: (v) => _saveDraft(),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -229,8 +352,9 @@ _formKey.currentState?.reset();
                         ],
                       ),
                       child: TextFormField(
+                        controller: _placeController,
                         decoration: _inputDecoration('PLACE', required: true),
-                        onChanged: (v) => place = v,
+                        onChanged: (v) => _saveDraft(),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -255,6 +379,7 @@ _formKey.currentState?.reset();
                         ],
                       ),
                       child: TextFormField(
+                        controller: _phoneNoController,
                         decoration: _inputDecoration('PHONE NO', required: true),
                         keyboardType: TextInputType.phone,
                         inputFormatters: [
@@ -266,7 +391,7 @@ _formKey.currentState?.reset();
                           if (v.length != 10) return 'Phone number must be 10 digits';
                           return null;
                         },
-                        onChanged: (v) => phoneNo = v,
+                        onChanged: (v) => _saveDraft(),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -295,6 +420,7 @@ _formKey.currentState?.reset();
                           onChanged: (v) => setState(() {
                             natureOfBusiness = v ?? '';
                             customNatureOfBusiness = '';
+                            _saveDraft();
                           }),
                         ),
                         RadioListTile<String>(
@@ -304,6 +430,7 @@ _formKey.currentState?.reset();
                           onChanged: (v) => setState(() {
                             natureOfBusiness = v ?? '';
                             customNatureOfBusiness = '';
+                            _saveDraft();
                           }),
                         ),
                         RadioListTile<String>(
@@ -313,6 +440,7 @@ _formKey.currentState?.reset();
                           onChanged: (v) => setState(() {
                             natureOfBusiness = v ?? '';
                             customNatureOfBusiness = '';
+                            _saveDraft();
                           }),
                         ),
                         RadioListTile<String>(
@@ -322,6 +450,7 @@ _formKey.currentState?.reset();
                           onChanged: (v) => setState(() {
                             natureOfBusiness = v ?? '';
                             customNatureOfBusiness = '';
+                            _saveDraft();
                           }),
                         ),
                         RadioListTile<String>(
@@ -330,13 +459,15 @@ _formKey.currentState?.reset();
                           groupValue: natureOfBusiness,
                           onChanged: (v) => setState(() {
                             natureOfBusiness = v ?? '';
+                            _saveDraft();
                           }),
                         ),
                         if (natureOfBusiness == 'OTHERS')
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 8.0),
                             child: TextFormField(
-                              decoration: _inputDecoration('Please specify'),
+                              controller: _customNatureOfBusinessController,
+                              decoration: _inputDecoration('Please specify', required: true),
                               onChanged: (v) => customNatureOfBusiness = v,
                               validator: (v) {
                                 if (natureOfBusiness == 'OTHERS' && (v == null || v.isEmpty)) {
@@ -381,8 +512,9 @@ _formKey.currentState?.reset();
                         ],
                       ),
                       child: TextFormField(
+                        controller: _currentEnquiriesController,
                         decoration: _inputDecoration('CURRENT ENQUIRIES',required: true),
-                        onChanged: (v) => currentEnquiries = v,
+                        onChanged: (v) => _saveDraft(),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -407,9 +539,10 @@ _formKey.currentState?.reset();
                         ],
                       ),
                       child: TextFormField(
+                        controller: _confirmedOrderController,
                         decoration: _inputDecoration('CONFIRMED ORDER', required: true),
                         validator: (v) => v == null || v.isEmpty ? 'Enter confirmed order' : null,
-                        onChanged: (v) => confirmedOrder = v,
+                        onChanged: (v) => _saveDraft(),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -434,8 +567,9 @@ _formKey.currentState?.reset();
                         ],
                       ),
                       child: TextFormField(
+                        controller: _newProductSuggestionController,
                         decoration: _inputDecoration('NEW PRODUCT SUGGESTION'),
-                        onChanged: (v) => newProductSuggestion = v,
+                        onChanged: (v) => _saveDraft(),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -466,7 +600,10 @@ _formKey.currentState?.reset();
                                 child: Image.file(_imageFile!, height: 120, fit: BoxFit.cover),
                               ),
                               TextButton(
-                                onPressed: () => setState(() => _imageFile = null),
+                                onPressed: () {
+                                  setState(() => _imageFile = null);
+                                  _saveDraft();
+                                },
                                 child: const Text('Remove Photo'),
                               ),
                             ],
