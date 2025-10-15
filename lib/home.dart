@@ -55,7 +55,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
   // Add these fields to _HomePageState:
   List<Contact>? _cachedContacts;
   bool _contactsLoaded = false;
-  final String _appVersion = 'Version 1.2.74'; // <-- Display version from pubspec
 
   @override
   void initState() {
@@ -721,20 +720,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                         (Route<dynamic> route) => false,
                       );
                     },
-                  ),
-                  // Spacer to push the version number to the bottom
-                  const Spacer(),
-                  // Version number at the bottom
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(
-                      _appVersion,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 12,
-                      ),
-                    ),
                   ),
                 ],
               ),

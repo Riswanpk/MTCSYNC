@@ -14,8 +14,9 @@ import 'package:path_provider/path_provider.dart';
 
 class SettingsPage extends StatelessWidget {
   final String userRole;
+  final String _appVersion = 'Version 1.2.76';
 
-  const SettingsPage({Key? key, required this.userRole}) : super(key: key);
+  const SettingsPage({super.key, required this.userRole});
 
   void _openNotificationToneSettings(BuildContext context) async {
     if (Platform.isAndroid) {
@@ -668,64 +669,74 @@ class SettingsPage extends StatelessWidget {
           backgroundColor: theme.colorScheme.primary,
           foregroundColor: Colors.white,
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Appearance',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                SwitchListTile(
-                  title: const Text('Dark Mode'),
-                  value: themeNotifier.isDarkMode,
-                  onChanged: (val) {
-                    themeNotifier.toggleTheme(val);
-                  },
-                  secondary: Icon(
-                    themeNotifier.isDarkMode ? Icons.dark_mode : Icons.light_mode,
-                    color: theme.colorScheme.primary,
+        body: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Appearance',
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      SwitchListTile(
+                        title: const Text('Dark Mode'),
+                        value: themeNotifier.isDarkMode,
+                        onChanged: (val) {
+                          themeNotifier.toggleTheme(val);
+                        },
+                        secondary: Icon(
+                          themeNotifier.isDarkMode ? Icons.dark_mode : Icons.light_mode,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      const Text(
+                        'Notifications',
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.music_note),
+                        title: const Text('Notification Tone'),
+                        subtitle: const Text('Change your notification sound'),
+                        onTap: () => _openNotificationToneSettings(context),
+                        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                      ),
+                      const SizedBox(height: 32),
+                      if (userRole == 'admin')
+                        ElevatedButton(
+                          onPressed: () => _generateRegistrationCode(context),
+                          child: const Text('Generate Registration Code'),
+                        ),
+                      const SizedBox(height: 32),
+                      FutureBuilder<bool>(
+                        future: isAdmin(),
+                        builder: (context, snapshot) {
+                          if (snapshot.data == true) {
+                            return ElevatedButton(
+                              onPressed: () => _pickMonthAndSendExcel(context),
+                              child: const Text('Send Monthly Excel Report'),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 32),
-                const Text(
-                  'Notifications',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.music_note),
-                  title: const Text('Notification Tone'),
-                  subtitle: const Text('Change your notification sound'),
-                  onTap: () => _openNotificationToneSettings(context),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                ),
-                const SizedBox(height: 32),
-                if (userRole == 'admin')
-                  ElevatedButton(
-                    onPressed: () => _generateRegistrationCode(context),
-                    child: const Text('Generate Registration Code'),
-                  ),
-                const SizedBox(height: 32),
-                FutureBuilder<bool>(
-                  future: isAdmin(),
-                  builder: (context, snapshot) {
-                    final isAdminUser = snapshot.data ?? false;
-                    return Column(
-                      children: [
-                        if (isAdminUser)
-                          ElevatedButton(
-                            onPressed: () => _pickMonthAndSendExcel(context),
-                            child: const Text('Send Monthly Excel Report'),
-                          ),
-                      ],
-                    );
-                  },
-                ),
-              ],
+              ),
             ),
-          ),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                _appVersion,
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              ),
+            ),
+          ],
         ),
       ),
     );
