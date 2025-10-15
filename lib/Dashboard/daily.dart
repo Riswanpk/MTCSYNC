@@ -61,8 +61,8 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final windowStart = today.subtract(const Duration(days: 1)).add(const Duration(hours: 19)); // yesterday 7pm
-    final windowEnd = today.add(const Duration(hours: 12)); // today 12pm
+    final windowStart = today.subtract(const Duration(days: 1)).add(const Duration(hours: 12)); // yesterday 12pm
+    final windowEnd = today.add(const Duration(hours: 12)); // today 11:59:59 AM
 
     for (var user in users) {
       final userId = user['uid'];
@@ -77,13 +77,13 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
           .get();
       user['lead'] = leadsQuery.docs.isNotEmpty;
 
-      // Check for todos created between yesterday 7pm and today 12pm
+      // Check for todos created between yesterday 12pm and today 11:59am
       final todoQuery = await FirebaseFirestore.instance
           .collection('daily_report')
           .where('userId', isEqualTo: userId)
           .where('type', isEqualTo: 'todo')
-          .where('timestamp', isGreaterThanOrEqualTo: windowStart)
-          .where('timestamp', isLessThanOrEqualTo: windowEnd)
+          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(windowStart))
+          .where('timestamp', isLessThan: Timestamp.fromDate(windowEnd))
           .get();
       user['todo'] = todoQuery.docs.isNotEmpty;
     }

@@ -222,7 +222,7 @@ class _LeadsPageState extends State<LeadsPage> {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('CRM - Leads Follow Up'),
+            title: const Text('Leads Follow Up'),
             backgroundColor: const Color(0xFF005BAC),
             foregroundColor: Colors.white,
             actions: [

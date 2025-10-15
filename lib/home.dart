@@ -55,6 +55,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
   // Add these fields to _HomePageState:
   List<Contact>? _cachedContacts;
   bool _contactsLoaded = false;
+  final String _appVersion = 'Version 1.2.74'; // <-- Display version from pubspec
 
   @override
   void initState() {
@@ -84,7 +85,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
     _checkForUpdate();
     _loadProfileImage();
     _checkTodoWarning();
-
+    _checkPendingTodosReminder();
     // Only send report if today is the 1st of the month
     final now = DateTime.now();
     _checkAndSendMonthlyReport();
@@ -149,32 +150,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
       return;
     }
 
-    final now = DateTime.now();
-    final hour = now.hour;
-
-    // If after 12pm, do not show warning
-    if (hour >= 12 && hour < 19) {
-      setState(() {
-        _showTodoWarning = false;
-      });
-      return;
-    }
-
-    // If between 7pm and midnight, check for ToDo between 7pm today and now
-    // If between midnight and 12pm, check for ToDo between 7pm previous day and 12pm today
+    // The window for "today's" ToDo is from 12:00 PM today to 11:59 AM tomorrow.
     DateTime windowStart;
     DateTime windowEnd;
 
-    if (hour >= 19) {
-      // 7pm to midnight: check for ToDo between 7pm today and now
-      windowStart = DateTime(now.year, now.month, now.day, 19, 0, 0);
-      windowEnd = now;
-    } else {
-      // midnight to 12pm: check for ToDo between 7pm previous day and 12pm today
-      final today = DateTime(now.year, now.month, now.day);
-      windowStart = today.subtract(const Duration(days: 1)).add(const Duration(hours: 19)); // 7pm previous day
-      windowEnd = DateTime(now.year, now.month, now.day, 12, 0, 0); // 12pm today
-    }
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    // Today 12:00 PM
+    windowStart = today.add(const Duration(hours: 12));
+    // Tomorrow 11:59:59 AM
+    windowEnd = today.add(const Duration(days: 1, hours: 12));
 
     final todosSnapshot = await FirebaseFirestore.instance
         .collection('todo')
@@ -186,6 +171,48 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
     setState(() {
       _showTodoWarning = todosSnapshot.docs.isEmpty;
     });
+  }
+
+  Future<void> _checkPendingTodosReminder() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    // Only for sales users
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final role = userDoc.data()?['role'];
+    if (role != 'sales') return;
+
+    final now = DateTime.now();
+
+    // Query for pending todos
+    final pendingTodosSnapshot = await FirebaseFirestore.instance
+        .collection('todo')
+        .where('email', isEqualTo: user.email)
+        .where('status', isEqualTo: 'pending')
+        .get();
+
+    bool hasOverdueTask = false;
+    for (var doc in pendingTodosSnapshot.docs) {
+      final timestamp = doc.data()['timestamp'] as Timestamp?;
+      if (timestamp != null) {
+        if (now.difference(timestamp.toDate()).inHours >= 24) {
+          hasOverdueTask = true;
+          break; // Found one, no need to check more
+        }
+      }
+    }
+
+    if (hasOverdueTask) {
+      await AwesomeNotifications().createNotification(
+        content: NotificationContent(
+          id: 2003, // A unique ID for this type of notification
+          channelKey: 'reminder_channel',
+          title: 'Overdue Tasks!',
+          body: 'You have pending tasks that are more than a day old. Please complete them.',
+          payload: {'page': 'todo'}, // Navigate to TodoPage
+        ),
+      );
+    }
   }
 
   Future<void> _scheduleScoreUpdateNotificationIfNeeded() async {
@@ -694,6 +721,20 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                         (Route<dynamic> route) => false,
                       );
                     },
+                  ),
+                  // Spacer to push the version number to the bottom
+                  const Spacer(),
+                  // Version number at the bottom
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                      _appVersion,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 12,
+                      ),
+                    ),
                   ),
                 ],
               ),

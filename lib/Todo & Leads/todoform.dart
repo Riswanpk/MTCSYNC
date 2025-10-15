@@ -72,9 +72,12 @@ class _TodoFormPageState extends State<TodoFormPage> {
   }
 
   Future<void> _scheduleNotification(DateTime dateTime, String title, String docId) async {
+    // Use a consistent ID based on the docId to allow for cancellation/rescheduling
+    final notificationId = docId.hashCode & 0x7FFFFFFF;
+
     await AwesomeNotifications().createNotification(
       content: NotificationContent(
-        id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+        id: notificationId,
         channelKey: 'reminder_channel',
         title: 'Task Reminder',
         body: 'Reminder for: $title',
@@ -104,6 +107,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
       _titleController.text = data['title'] ?? '';
       _descController.text = data['description'] ?? '';
       _priority = data['priority'] ?? 'High';
+      _selectedSalesUserId = data['assigned_to']; // Retain assigned user
       if (data['reminder'] != null) {
         final reminderDate = DateTime.tryParse(data['reminder']);
         if (reminderDate != null) {
@@ -181,13 +185,28 @@ class _TodoFormPageState extends State<TodoFormPage> {
 
     if (widget.docId != null) {
       // Update existing todo
-      await FirebaseFirestore.instance.collection('todo').doc(widget.docId).update({
+      await FirebaseFirestore.instance.collection('todo').doc(widget.docId!).update({
         'title': title,
         'description': desc,
         'priority': _priority,
         'reminder': scheduledDate.toIso8601String(),
+        'email': email,
+        'created_by': createdBy,
+        'assigned_by': assignedBy,
+        'assigned_by_name': assignedByName,
+        'assigned_to': assignedTo,
+        'assigned_to_name': assignedToName,
+        if (assignedBy != null) 'assignment_seen': false,
         // Optionally update other fields as needed
       });
+
+      // Reschedule notification if the reminder was changed
+      // Only schedule for self-assigned tasks
+      if (_currentUserRole != 'manager' || (_currentUserRole == 'manager' && (_selectedSalesUserId == null || _selectedSalesUserId == user.uid))) {
+        await AwesomeNotifications().cancel(widget.docId!.hashCode & 0x7FFFFFFF); // Cancel old one
+        await _scheduleNotification(scheduledDate, title, widget.docId!); // Schedule new one
+      }
+
       if (mounted) Navigator.pop(context);
       return;
     }
@@ -211,7 +230,8 @@ class _TodoFormPageState extends State<TodoFormPage> {
     // Daily report logic
     final now = DateTime.now();
     final hour = now.hour;
-    if ((hour >= 13 && hour <= 23) || (hour >= 0 && hour < 12)) {
+    // Check if created between 12pm-11:59pm or 12am-11:59am
+    if ((hour >= 12 && hour <= 23) || (hour >= 0 && hour < 12)) {
       await FirebaseFirestore.instance.collection('daily_report').add({
         'timestamp': now,
         'userId': createdBy,

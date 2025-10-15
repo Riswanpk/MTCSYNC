@@ -8,13 +8,13 @@ import 'package:in_app_update/in_app_update.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import 'Misc/constant.dart';
 import 'login.dart';
 import 'home.dart';
 import 'Misc/splash_screen.dart';
 import 'Misc/theme_notifier.dart';
 import 'Todo & Leads/presentfollowup.dart';
+import 'Todo & Leads/todo.dart';
 import 'Todo & Leads/todo.dart'; // <-- Already present
 
 void main() async {
@@ -37,6 +37,10 @@ void main() async {
     ),
   );
 
+  // Enable Firestore offline persistence
+  FirebaseFirestore.instance.settings = const Settings(
+    persistenceEnabled: true,
+  );
   // Initialize Awesome Notifications
   await AwesomeNotifications().initialize(
     null,
@@ -127,27 +131,38 @@ class MyApp extends StatelessWidget {
           navigatorObservers: [routeObserver],
           navigatorKey: navigatorKey,
 
-          /// ✅ Direct notification routing: skip splash/home if notification is present
+          /// Direct notification/widget routing: skip splash/home if needed
           home: Builder(
             builder: (context) {
-              if (initialNotificationAction != null &&
-                  initialNotificationAction!.payload?['docId'] != null) {
-                final docId = initialNotificationAction!.payload!['docId']!;
-                final isEdit = initialNotificationAction!.buttonKeyPressed == 'EDIT_FOLLOWUP';
-                final channelKey = initialNotificationAction!.channelKey;
-                final isTodo = initialNotificationAction!.payload?['type'] == 'todo';
-                initialNotificationAction = null; // Clear after handling
+              // Handle navigation for overdue tasks notification
+              if (initialNotificationAction != null && FirebaseAuth.instance.currentUser != null) {
+                final payload = initialNotificationAction!.payload;
+                final docId = payload?['docId'];
+                final page = payload?['page'];
+                final isTodo = payload?['type'] == 'todo';
 
-                if (isEdit) {
-                  return PresentFollowUp(docId: docId, editMode: true);
-                }
-                if ((channelKey == 'reminder_channel' || channelKey == 'basic_channel') && isTodo) {
-                  return TaskDetailPageFromId(docId: docId);
-                }
-                if ((channelKey == 'reminder_channel' || channelKey == 'basic_channel') && !isTodo) {
-                  return PresentFollowUp(docId: docId);
-                }
-                return PresentFollowUp(docId: docId);
+                // If launched from notification, go to HomePage first, then push the target page.
+                // This ensures the back button from the target page goes to HomePage.
+                Future.microtask(() {
+                  final navigator = navigatorKey.currentState;
+                  if (navigator == null) return;
+
+                  if (page == 'todo') {
+                    navigator.push(MaterialPageRoute(builder: (_) => const TodoPage()));
+                  } else if (docId != null) {
+                    final isEdit = initialNotificationAction!.buttonKeyPressed == 'EDIT_FOLLOWUP';
+                    if (isEdit) {
+                      navigator.push(MaterialPageRoute(builder: (_) => PresentFollowUp(docId: docId, editMode: true)));
+                    } else if (isTodo) {
+                      navigator.push(MaterialPageRoute(builder: (_) => TaskDetailPageFromId(docId: docId)));
+                    } else {
+                      navigator.push(MaterialPageRoute(builder: (_) => PresentFollowUp(docId: docId)));
+                    }
+                  }
+                });
+
+                initialNotificationAction = null; // Clear after handling
+                return const HomePage();
               }
               // Otherwise → go through SplashScreen
               return const SplashScreen();
@@ -156,6 +171,20 @@ class MyApp extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class AuthGate extends StatefulWidget {
+  const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  @override
+  Widget build(BuildContext context) {
+    return const Placeholder();
   }
 }
 
@@ -210,6 +239,17 @@ Future<void> clearNotificationOpened(String docId) async {
 class NotificationController {
   @pragma("vm:entry-point")
   static Future<void> onActionReceivedMethod(ReceivedAction receivedAction) async {
+    // Handle navigation for overdue tasks notification
+    if (receivedAction.payload?['page'] == 'todo') {
+      final navigator = navigatorKey.currentState;
+      if (navigator != null) {
+        navigator.push(
+          MaterialPageRoute(builder: (_) => const TodoPage()),
+        );
+      }
+      return;
+    }
+
     // Ensure plugins are initialized in this background isolate
     WidgetsFlutterBinding.ensureInitialized();
     await Firebase.initializeApp(
@@ -233,20 +273,18 @@ class NotificationController {
           final isTodo = receivedAction.payload?['type'] == 'todo';
 
           // Use same logic as edit followup for todo: open in view for normal, edit for edit button
+          // Simple push ensures the back button works correctly.
           if (isEdit) {
-            navigator.pushAndRemoveUntil(
+            navigator.push(
               MaterialPageRoute(builder: (_) => PresentFollowUp(docId: docId, editMode: true)),
-              (route) => false,
             );
           } else if ((channelKey == 'reminder_channel' || channelKey == 'basic_channel') && isTodo) {
-            navigator.pushAndRemoveUntil(
+            navigator.push(
               MaterialPageRoute(builder: (_) => TaskDetailPageFromId(docId: docId)),
-              (route) => false,
             );
           } else {
-            navigator.pushAndRemoveUntil(
+            navigator.push(
               MaterialPageRoute(builder: (_) => PresentFollowUp(docId: docId)),
-              (route) => false,
             );
           }
           initialNotificationAction = null; // Clear after handling

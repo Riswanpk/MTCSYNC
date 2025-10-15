@@ -1,14 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'todoform.dart';
 import 'package:provider/provider.dart';
 import '../Misc/theme_notifier.dart';
 import 'package:flutter_slidable/flutter_slidable.dart'; // Add this import at the top
 import 'dart:async';
-import 'dart:convert';
-import 'package:home_widget/home_widget.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
@@ -18,7 +15,13 @@ class TaskDetailPage extends StatelessWidget {
   final Map<String, dynamic> data;
   final String dateStr;
 
-  const TaskDetailPage({Key? key, required this.data, required this.dateStr}) : super(key: key);
+  const TaskDetailPage({
+    Key? key,
+    required this.data,
+    required this.dateStr,
+  }) : super(key: key);
+
+  bool get isAssignedByManager => data['assigned_by_name'] != null;
 
   Color getPriorityColor(String priority) {
     switch (priority) {
@@ -71,19 +74,36 @@ class TaskDetailPage extends StatelessWidget {
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
         elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit, color: Colors.white),
-            tooltip: 'Edit Task',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => TodoFormPage(docId: data['id'] ?? data['docId']),
-                ),
-              );
+        actions: [ // Conditionally show edit button
+          FutureBuilder<DocumentSnapshot>(
+            future: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid).get(),
+            builder: (context, userSnapshot) {
+              if (!userSnapshot.hasData) return const SizedBox.shrink();
+
+              final currentUserData = userSnapshot.data!.data() as Map<String, dynamic>;
+              final currentUserRole = currentUserData['role'];
+              final currentUserId = FirebaseAuth.instance.currentUser!.uid;
+
+              // Conditions to show the edit button:
+              // 1. User is a manager AND they are the one who assigned the task.
+              // 2. The task was NOT assigned by a manager (i.e., it's a self-created task).
+              final bool canEdit = (currentUserRole == 'manager' && data['assigned_by'] == currentUserId) || !isAssignedByManager;
+
+              if (canEdit) {
+                return IconButton(
+                  icon: const Icon(Icons.edit, color: Colors.white),
+                  tooltip: 'Edit Task',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => TodoFormPage(docId: data['docId'])),
+                    );
+                  },
+                );
+              }
+              return const SizedBox.shrink();
             },
-          ),
+          )
         ],
       ),
       body: Padding(
@@ -197,7 +217,10 @@ class TaskDetailPageFromId extends StatelessWidget {
         if (data == null) {
           return const Scaffold(body: Center(child: Text('Task not found')));
         }
-        final timestamp = data['timestamp'];
+        // Add docId to data map for TaskDetailPage
+        data['docId'] = docId;
+
+        final timestamp = data['timestamp'] as Timestamp?;
         String dateStr = '';
         if (timestamp is Timestamp) {
           dateStr = timestamp.toDate().toLocal().toString().split(' ')[0];
@@ -235,29 +258,9 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
       _initLocalNotifications();
       _setupAssignmentListener();
     });
+
     WidgetsBinding.instance.addObserver(this);
   }
-
-  /// Sends the latest list of pending todos to the home widget.
-  Future<void> _updateWidget() async {
-    if (_userEmail == null) return;
-
-    final snapshot = await _firestore
-        .collection('todo')
-        .where('email', isEqualTo: _userEmail)
-        .where('status', isEqualTo: 'pending')
-        .orderBy('timestamp', descending: true)
-        .get();
-
-    final todos = snapshot.docs.map((doc) {
-      final data = doc.data();
-      return {'title': data['title'] ?? 'No Title', 'priority': data['priority'] ?? 'Medium'};
-    }).toList();
-
-    await HomeWidget.saveWidgetData<String>('todos_json', jsonEncode(todos));
-    await HomeWidget.updateWidget(name: 'TodoWidgetProvider', iOSName: 'TodoWidget');
-  }
-
 
   Future<void> _loadUserInfo() async {
     final user = _auth.currentUser;
@@ -551,7 +554,6 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
         'status': newStatus,
         'timestamp': Timestamp.now(), // Use full timestamp
       });
-      _updateWidget(); // Update widget when a task is completed
     } else {
       await _firestore.collection('todo').doc(doc.id).update({
         'status': newStatus,
@@ -591,11 +593,6 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
               if (snapshot.hasError) return const Center(child: Text('Error loading todos'));
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
-              }
-
-              // Update widget whenever the stream provides new data
-              if (status == 'pending') {
-                _updateWidget();
               }
 
               final todos = snapshot.data?.docs ?? [];
@@ -714,7 +711,6 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                             );
                             if (confirm == true) {
                               await _firestore.collection('todo').doc(doc.id).delete();
-                              _updateWidget(); // Update widget on delete
                             }
                           },
                           backgroundColor: Colors.red.shade400,
@@ -809,7 +805,10 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                             context,
                             MaterialPageRoute(
                               builder: (context) => TaskDetailPage(
-                                data: data,
+                                data: {
+                                  ...data,
+                                  'docId': doc.id, // Ensure docId is passed
+                                },
                                 dateStr: timestamp != null
                                     ? timestamp.toDate().toLocal().toString().split(' ')[0]
                                     : '',
@@ -836,11 +835,6 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
               if (snapshot.hasError) return const Center(child: Text('Error loading todos'));
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
-              }
-
-              // Update widget whenever the stream provides new data
-              if (status == 'pending') {
-                _updateWidget();
               }
 
               final todos = snapshot.data?.docs ?? [];
@@ -964,8 +958,8 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                               if (timestamp != null && userId != null) {
                                 final created = timestamp.toDate();
                                 final hour = created.hour;
-                                // Only write daily_report if created between 7pm-11:59pm or 12am-12pm
-                                if ((hour >= 18 && hour <= 23) || (hour >= 0 && hour < 12)) {
+                                // Only write daily_report if created between 12pm-11:59pm or 12am-11:59am
+                                if ((hour >= 12 && hour <= 23) || (hour >= 0 && hour < 12)) {
                                   await FirebaseFirestore.instance.collection('daily_report').add({
                                     'timestamp': created,
                                     'userId': userId,
@@ -975,7 +969,6 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                                 }
                               }
                               await _firestore.collection('todo').doc(doc.id).delete();
-                              _updateWidget(); // Update widget on delete
                             }
                           },
                           backgroundColor: Colors.red.shade400,
@@ -1073,7 +1066,10 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                             context,
                             MaterialPageRoute(
                               builder: (context) => TaskDetailPage(
-                                data: data,
+                                data: {
+                                  ...data,
+                                  'docId': doc.id, // Ensure docId is passed
+                                },
                                 dateStr: timestamp != null
                                     ? timestamp.toDate().toLocal().toString().split(' ')[0]
                                     : '',
@@ -1121,7 +1117,6 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
         batch.delete(doc.reference);
       }
       await batch.commit();
-      _updateWidget(); // Update widget on clear all
     }
   }
 
@@ -1380,7 +1375,10 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                                       context,
                                       MaterialPageRoute(
                                         builder: (context) => TaskDetailPage(
-                                          data: data,
+                                          data: {
+                                            ...data,
+                                            'docId': doc.id, // Ensure docId is passed
+                                          },
                                           dateStr: timestamp != null
                                               ? timestamp.toDate().toLocal().toString().split(' ')[0]
                                               : '',

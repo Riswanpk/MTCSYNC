@@ -413,14 +413,14 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
           .get();
       final leadTick = leadQuery.docs.isNotEmpty;
 
-      final todoWindowStart = dayStart.subtract(const Duration(days: 1)).add(const Duration(hours: 19));
-      final todoWindowEnd = dayStart.add(const Duration(hours: 12));
+      final todoWindowStart = dayStart.subtract(const Duration(days: 1)).add(const Duration(hours: 12)); // Previous day 12 PM
+      final todoWindowEnd = dayStart.add(const Duration(hours: 12)); // Current day 11:59:59 AM
       final todoQuery = await FirebaseFirestore.instance
           .collection('daily_report')
           .where('userId', isEqualTo: uid)
           .where('type', isEqualTo: 'todo')
-          .where('timestamp', isGreaterThanOrEqualTo: todoWindowStart)
-          .where('timestamp', isLessThanOrEqualTo: todoWindowEnd)
+          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(todoWindowStart))
+          .where('timestamp', isLessThan: Timestamp.fromDate(todoWindowEnd))
           .get();
       final todoTick = todoQuery.docs.isNotEmpty;
 
