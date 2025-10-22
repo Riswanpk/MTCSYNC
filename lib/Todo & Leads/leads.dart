@@ -722,16 +722,29 @@ class _LeadsPageState extends State<LeadsPage> {
                                     final bData = b.data() as Map<String, dynamic>;
                                     DateTime aDate = DateTime(2000);
                                     DateTime bDate = DateTime(2000);
-                                    try {
-                                      aDate = DateFormat('dd-MM-yyyy').parse(aData['date'] ?? '');
-                                    } catch (e) { /* ignore */ }
-                                    try {
-                                      bDate = DateFormat('dd-MM-yyyy').parse(bData['date'] ?? '');
-                                    } catch (e) { /* ignore */ }
 
-                                    return sortAscending
-                                        ? aDate.compareTo(bDate)
-                                        : bDate.compareTo(aDate);
+                                    // Handle Timestamp or String
+                                    if (aData['date'] is Timestamp) {
+                                      aDate = (aData['date'] as Timestamp).toDate();
+                                    } else if (aData['date'] is String) {
+                                      try {
+                                        aDate = DateFormat('dd-MM-yyyy').parse(aData['date']);
+                                      } catch (e) {}
+                                    } else if (aData['date'] is DateTime) {
+                                      aDate = aData['date'];
+                                    }
+
+                                    if (bData['date'] is Timestamp) {
+                                      bDate = (bData['date'] as Timestamp).toDate();
+                                    } else if (bData['date'] is String) {
+                                      try {
+                                        bDate = DateFormat('dd-MM-yyyy').parse(bData['date']);
+                                      } catch (e) {}
+                                    } else if (bData['date'] is DateTime) {
+                                      bDate = bData['date'];
+                                    }
+
+                                    return sortAscending ? aDate.compareTo(bDate) : bDate.compareTo(aDate);
                                   });
 
                                   if (filteredLeads.isEmpty) {
@@ -824,16 +837,29 @@ class _LeadsPageState extends State<LeadsPage> {
                                     final bData = b.data() as Map<String, dynamic>;
                                     DateTime aDate = DateTime(2000);
                                     DateTime bDate = DateTime(2000);
-                                    try {
-                                      aDate = DateFormat('dd-MM-yyyy').parse(aData['date'] ?? '');
-                                    } catch (e) { /* ignore */ }
-                                    try {
-                                      bDate = DateFormat('dd-MM-yyyy').parse(bData['date'] ?? '');
-                                    } catch (e) { /* ignore */ }
 
-                                    return sortAscending
-                                        ? aDate.compareTo(bDate)
-                                        : bDate.compareTo(aDate);
+                                    // Handle Timestamp or String
+                                    if (aData['date'] is Timestamp) {
+                                      aDate = (aData['date'] as Timestamp).toDate();
+                                    } else if (aData['date'] is String) {
+                                      try {
+                                        aDate = DateFormat('dd-MM-yyyy').parse(aData['date']);
+                                      } catch (e) {}
+                                    } else if (aData['date'] is DateTime) {
+                                      aDate = aData['date'];
+                                    }
+
+                                    if (bData['date'] is Timestamp) {
+                                      bDate = (bData['date'] as Timestamp).toDate();
+                                    } else if (bData['date'] is String) {
+                                      try {
+                                        bDate = DateFormat('dd-MM-yyyy').parse(bData['date']);
+                                      } catch (e) {}
+                                    } else if (bData['date'] is DateTime) {
+                                      bDate = bData['date'];
+                                    }
+
+                                    return sortAscending ? aDate.compareTo(bDate) : bDate.compareTo(aDate);
                                   });
 
                                   if (filteredLeads.isEmpty) {
@@ -923,16 +949,29 @@ class _LeadsPageState extends State<LeadsPage> {
                                     final bData = b.data() as Map<String, dynamic>;
                                     DateTime aDate = DateTime(2000);
                                     DateTime bDate = DateTime(2000);
-                                    try {
-                                      aDate = DateFormat('dd-MM-yyyy').parse(aData['date'] ?? '');
-                                    } catch (e) { /* ignore */ }
-                                    try {
-                                      bDate = DateFormat('dd-MM-yyyy').parse(bData['date'] ?? '');
-                                    } catch (e) { /* ignore */ }
 
-                                    return sortAscending
-                                        ? aDate.compareTo(bDate)
-                                        : bDate.compareTo(aDate);
+                                    // Handle Timestamp or String
+                                    if (aData['date'] is Timestamp) {
+                                      aDate = (aData['date'] as Timestamp).toDate();
+                                    } else if (aData['date'] is String) {
+                                      try {
+                                        aDate = DateFormat('dd-MM-yyyy').parse(aData['date']);
+                                      } catch (e) {}
+                                    } else if (aData['date'] is DateTime) {
+                                      aDate = aData['date'];
+                                    }
+
+                                    if (bData['date'] is Timestamp) {
+                                      bDate = (bData['date'] as Timestamp).toDate();
+                                    } else if (bData['date'] is String) {
+                                      try {
+                                        bDate = DateFormat('dd-MM-yyyy').parse(bData['date']);
+                                      } catch (e) {}
+                                    } else if (bData['date'] is DateTime) {
+                                      bDate = bData['date'];
+                                    }
+
+                                    return sortAscending ? aDate.compareTo(bDate) : bDate.compareTo(aDate);
                                   });
 
                                   if (filteredLeads.isEmpty) {
@@ -1044,7 +1083,7 @@ class _LeadsPageState extends State<LeadsPage> {
 class LeadCard extends StatelessWidget {
   final String name;
   final String status;
-  final String date;
+  final dynamic date;
   final String docId;
   final String createdBy;
   final String priority;
@@ -1110,23 +1149,47 @@ class LeadCard extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    String formattedDate = date;
-    try {
-      if (date.isNotEmpty) {
-        final parsedDate = DateTime.parse(date);
-        formattedDate = DateFormat('dd-MM-yyyy').format(parsedDate);
+    String formattedDate = '';
+    DateTime? parsedDate;
+    if (date is Timestamp) { // Handle Firestore Timestamp
+      parsedDate = date.toDate();
+    } else if (date is DateTime) { // Handle DateTime object
+      parsedDate = date;
+    } else if (date is String && date.isNotEmpty) { // Handle String
+      try {
+        // Try parsing as ISO first, fallback to dd-MM-yyyy
+        try {
+          parsedDate = DateTime.parse(date);
+        } catch (_) {
+          parsedDate = DateFormat('dd-MM-yyyy').parse(date);
+        }
+      } catch (e) {
+        parsedDate = null;
       }
-    } catch (e) {
-      // Keep original date string if parsing fails
+    }
+
+    if (parsedDate != null) {
+      formattedDate = DateFormat('dd-MM-yyyy').format(parsedDate);
+    } else {
+      formattedDate = 'No Date';
     }
 
     String formattedReminder = reminder;
     try {
       if (reminder.isNotEmpty && reminder != 'No Reminder') {
-        // Assuming reminder format is 'YYYY-MM-DD ...'
-        final datePart = reminder.split(' ')[0];
-        final parsedReminderDate = DateTime.parse(datePart);
-        formattedReminder = DateFormat('dd-MM-yyyy').format(parsedReminderDate);
+        // Try parsing reminder as date
+        DateTime? reminderDate;
+        try {
+          reminderDate = DateTime.parse(reminder.split(' ')[0]);
+        } catch (_) {
+          final parts = reminder.split(' ');
+          if (parts.isNotEmpty) {
+            reminderDate = DateFormat('dd-MM-yyyy').parse(parts[0]);
+          }
+        }
+        if (reminderDate != null) {
+          formattedReminder = DateFormat('dd-MM-yyyy').format(reminderDate);
+        }
       }
     } catch (e) {
       // Keep original reminder string if parsing fails

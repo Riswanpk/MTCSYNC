@@ -45,19 +45,18 @@ class FollowUpForm extends StatefulWidget {
 class _FollowUpFormState extends State<FollowUpForm> {
   final _formKey = GlobalKey<FormState>();
 
-  final TextEditingController _dateController = TextEditingController();
+  // REMOVE date controller
+  // final TextEditingController _dateController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _companyController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController(text: '+91 ');
   final TextEditingController _commentsController = TextEditingController();
   final TextEditingController _reminderController = TextEditingController();
 
   String _status = 'In Progress';
-  String _priority = 'High'; // <-- Add this
+  String _priority = 'High';
   TimeOfDay? _selectedReminderTime;
-  bool _isSaving = false; // <-- Add this
-
+  bool _isSaving = false;
 
   Future<void> _scheduleNotification(DateTime dateTime) async {
     await AwesomeNotifications().createNotification(
@@ -82,7 +81,6 @@ class _FollowUpFormState extends State<FollowUpForm> {
     );
   }
 
-
   Future<void> _saveFollowUp() async {
     setState(() => _isSaving = true);
     try {
@@ -99,13 +97,13 @@ class _FollowUpFormState extends State<FollowUpForm> {
 
       // Save follow up and get document reference
       final followUpRef = await FirebaseFirestore.instance.collection('follow_ups').add({
-        'date': _dateController.text.trim(),
+        // REMOVE 'date': _dateController.text.trim(),
+        'date': DateTime.now(), // <-- Add date automatically
         'name': _nameController.text.trim(),
-        'company': _companyController.text.trim(),
         'address': _addressController.text.trim(),
         'phone': _phoneController.text.trim(),
         'status': _status,
-        'priority': _priority, // <-- Save priority
+        'priority': _priority,
         'comments': _commentsController.text.trim(),
         'reminder': _reminderController.text.trim(),
         'branch': branch,
@@ -119,7 +117,6 @@ class _FollowUpFormState extends State<FollowUpForm> {
           .doc(_phoneController.text)
           .set({
         'name': _nameController.text,
-        'company': _companyController.text,
         'address': _addressController.text,
         'phone': _phoneController.text,
         'branch': branch,
@@ -154,7 +151,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
             id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
             channelKey: 'basic_channel', // Use basic_channel for consistency
             title: 'Follow-Up Reminder',
-            body: 'Reminder for ${_nameController.text.trim()} - ${_companyController.text.trim()}',
+            body: 'Reminder for ${_nameController.text.trim()}',
             notificationLayout: NotificationLayout.Default,
             payload: {
               'docId': followUpRef.id,
@@ -181,7 +178,6 @@ class _FollowUpFormState extends State<FollowUpForm> {
           ),
         );
       }
-
 
       Navigator.pop(context);
 
@@ -221,7 +217,6 @@ class _FollowUpFormState extends State<FollowUpForm> {
       final data = snap.docs.first.data();
       setState(() {
         _nameController.text = data['name'] ?? '';
-        _companyController.text = data['company'] ?? '';
         _addressController.text = data['address'] ?? '';
         // You can add more fields if needed
       });
@@ -231,16 +226,11 @@ class _FollowUpFormState extends State<FollowUpForm> {
   @override
   void initState() {
     super.initState();
-    // Set the date field to today's date in yyyy-mm-dd format
-    final now = DateTime.now();
-    final dateStr = "${now.day.toString().padLeft(2, '0')}-${now.month.toString().padLeft(2, '0')}-${now.year}";
-    _dateController.text = dateStr;
-    // Ensure "+91 " is present at the start of the phone field
+    // REMOVE date field logic
     if (!_phoneController.text.startsWith('+91 ')) {
       _phoneController.text = '+91 ';
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -249,7 +239,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
         Scaffold(
           appBar: AppBar(
             title: const Text('New Follow Up'),
-            backgroundColor: Color(0xFF005BAC),
+            backgroundColor: const Color(0xFF005BAC),
             foregroundColor: Colors.white,
           ),
           body: Padding(
@@ -258,31 +248,38 @@ class _FollowUpFormState extends State<FollowUpForm> {
               key: _formKey,
               child: ListView(
                 children: [
-                  TextFormField(
-                    controller: _dateController,
-                    readOnly: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Date',
-                      prefixIcon: Icon(Icons.calendar_today),
-                    ),
-                    // Remove the onTap and validator for date selection
-                  ),
-                  const SizedBox(height: 16),
-
+                  // REMOVE date field from form
+                  // TextFormField(
+                  //   controller: _dateController,
+                  //   readOnly: true,
+                  //   decoration: const InputDecoration(
+                  //     labelText: 'Date',
+                  //     prefixIcon: Icon(Icons.calendar_today),
+                  //   ),
+                  // ),
+                  // const SizedBox(height: 16),
                   FutureBuilder<DocumentSnapshot>(
-                    future: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid).get(),
+                    future: FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(FirebaseAuth.instance.currentUser!.uid)
+                        .get(),
                     builder: (context, userSnap) {
                       if (!userSnap.hasData) return const SizedBox();
                       final branch = userSnap.data!.get('branch') ?? '';
                       return RawAutocomplete<Map<String, dynamic>>(
                         textEditingController: _nameController,
                         focusNode: FocusNode(),
-                        optionsBuilder: (TextEditingValue textEditingValue) async {
-                          if (textEditingValue.text.isEmpty) return const Iterable<Map<String, dynamic>>.empty();
-                          return await fetchCustomerSuggestions(textEditingValue.text, branch);
+                        optionsBuilder:
+                            (TextEditingValue textEditingValue) async {
+                          if (textEditingValue.text.isEmpty) {
+                            return const Iterable<Map<String, dynamic>>.empty();
+                          }
+                          return await fetchCustomerSuggestions(
+                              textEditingValue.text, branch);
                         },
                         displayStringForOption: (option) => option['name'] ?? '',
-                        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                        fieldViewBuilder:
+                            (context, controller, focusNode, onFieldSubmitted) {
                           return TextFormField(
                             controller: controller,
                             focusNode: focusNode,
@@ -290,7 +287,8 @@ class _FollowUpFormState extends State<FollowUpForm> {
                               labelText: 'Customer Name',
                               prefixIcon: Icon(Icons.person),
                             ),
-                            validator: (value) => value!.isEmpty ? 'Enter name' : null,
+                            validator: (value) =>
+                                value!.isEmpty ? 'Enter name' : null,
                           );
                         },
                         optionsViewBuilder: (context, onSelected, options) {
@@ -308,9 +306,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                     return ListTile(
                                       title: Text(option['name'] ?? ''),
                                       subtitle: Text(option['phone'] ?? ''),
-                                      onTap: () {
-                                        onSelected(option);
-                                      },
+                                      onTap: () => onSelected(option),
                                     );
                                   },
                                 ),
@@ -320,27 +316,18 @@ class _FollowUpFormState extends State<FollowUpForm> {
                         },
                         onSelected: (selectedCustomer) {
                           setState(() {
-                            _nameController.text = selectedCustomer['name'] ?? '';
-                            _companyController.text = selectedCustomer['company'] ?? '';
-                            _addressController.text = selectedCustomer['address'] ?? '';
-                            _phoneController.text = selectedCustomer['phone'] ?? '';
+                            _nameController.text =
+                                selectedCustomer['name'] ?? '';
+                            _addressController.text =
+                                selectedCustomer['address'] ?? '';
+                            _phoneController.text =
+                                selectedCustomer['phone'] ?? '';
                           });
                         },
                       );
                     },
                   ),
                   const SizedBox(height: 16),
-
-                  TextFormField(
-                    controller: _companyController,
-                    decoration: const InputDecoration(
-                      labelText: 'Company',
-                      prefixIcon: Icon(Icons.business),
-                    ),
-                    validator: (value) => value!.isEmpty ? 'Enter company' : null,
-                  ),
-                  const SizedBox(height: 16),
-
                   TextFormField(
                     controller: _addressController,
                     decoration: const InputDecoration(
@@ -350,21 +337,27 @@ class _FollowUpFormState extends State<FollowUpForm> {
                     validator: (value) => value!.isEmpty ? 'Enter address' : null,
                   ),
                   const SizedBox(height: 16),
-
                   RawAutocomplete<Map<String, dynamic>>(
                     textEditingController: _phoneController,
                     focusNode: FocusNode(),
-                    optionsBuilder: (TextEditingValue textEditingValue) async {
-                      if (textEditingValue.text.isEmpty) return const Iterable<Map<String, dynamic>>.empty();
-                      // Use the same branch logic as before
+                    optionsBuilder:
+                        (TextEditingValue textEditingValue) async {
+                      if (textEditingValue.text.isEmpty) {
+                        return const Iterable<Map<String, dynamic>>.empty();
+                      }
                       final user = FirebaseAuth.instance.currentUser;
                       if (user == null) return const Iterable<Map<String, dynamic>>.empty();
-                      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+                      final userDoc = await FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(user.uid)
+                          .get();
                       final branch = userDoc.data()?['branch'] ?? '';
-                      return await fetchCustomerSuggestions(textEditingValue.text, branch);
+                      return await fetchCustomerSuggestions(
+                          textEditingValue.text, branch);
                     },
                     displayStringForOption: (option) => option['phone'] ?? '',
-                    fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                    fieldViewBuilder:
+                        (context, controller, focusNode, onFieldSubmitted) {
                       return TextFormField(
                         controller: controller,
                         focusNode: focusNode,
@@ -378,23 +371,29 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                 icon: const Icon(Icons.paste),
                                 tooltip: 'Paste from clipboard',
                                 onPressed: () async {
-                                  final clipboardData = await Clipboard.getData('text/plain');
-                                  if (clipboardData != null && clipboardData.text != null) {
-                                    // Extract only digits
-                                    final digits = RegExp(r'\d').allMatches(clipboardData.text!).map((m) => m.group(0)).join();
+                                  final clipboardData =
+                                      await Clipboard.getData('text/plain');
+                                  if (clipboardData != null &&
+                                      clipboardData.text != null) {
+                                    final digits = RegExp(r'\d')
+                                        .allMatches(clipboardData.text!)
+                                        .map((m) => m.group(0))
+                                        .join();
                                     if (digits.length >= 10) {
-                                      // Take the last 10 digits (to ignore country code)
-                                      final tenDigits = digits.substring(digits.length - 10);
-                                      // Format as "+91 XXXXX YYYYY"
-                                      final formatted = '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
+                                      final tenDigits =
+                                          digits.substring(digits.length - 10);
+                                      final formatted =
+                                          '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
                                       _phoneController.text = formatted;
-                                      _phoneController.selection = TextSelection.fromPosition(
+                                      _phoneController.selection =
+                                          TextSelection.fromPosition(
                                         TextPosition(offset: formatted.length),
                                       );
                                     } else {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Clipboard does not contain 10 digits')),
-                                      );
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(const SnackBar(
+                                              content: Text(
+                                                  'Clipboard does not contain 10 digits')));
                                     }
                                   }
                                 },
@@ -410,19 +409,24 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                       status = await Permission.contacts.status;
                                     }
                                     if (!status.isGranted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Contact permission denied')),
-                                      );
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(const SnackBar(
+                                              content: Text(
+                                                  'Contact permission denied')));
                                       return;
                                     }
 
-                                    List<Contact> contacts = await FlutterContacts.getContacts(withProperties: true);
+                                    List<Contact> contacts =
+                                        await FlutterContacts.getContacts(
+                                            withProperties: true);
 
-                                    Contact? selectedContact = await showDialog<Contact>(
+                                    Contact? selectedContact =
+                                        await showDialog<Contact>(
                                       context: context,
                                       barrierDismissible: true,
                                       builder: (context) {
-                                        TextEditingController searchController = TextEditingController();
+                                        TextEditingController searchController =
+                                            TextEditingController();
                                         List<Contact> filteredContacts = contacts;
                                         return StatefulBuilder(
                                           builder: (context, setState) {
@@ -431,63 +435,111 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                               backgroundColor: Colors.white,
                                               child: Container(
                                                 width: double.infinity,
-                                                height: MediaQuery.of(context).size.height,
-                                                padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 0),
+                                                height: MediaQuery.of(context)
+                                                    .size
+                                                    .height,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 0, vertical: 0),
                                                 child: Column(
                                                   children: [
                                                     Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                              horizontal: 16,
+                                                              vertical: 16),
                                                       child: Row(
                                                         children: [
                                                           Expanded(
                                                             child: TextField(
-                                                              controller: searchController,
-                                                              decoration: InputDecoration(
-                                                                hintText: 'Search contacts...',
-                                                                prefixIcon: Icon(Icons.search),
-                                                                border: OutlineInputBorder(
-                                                                  borderRadius: BorderRadius.circular(12),
-                                                                  borderSide: BorderSide.none,
+                                                              controller:
+                                                                  searchController,
+                                                              decoration:
+                                                                  InputDecoration(
+                                                                hintText:
+                                                                    'Search contacts...',
+                                                                prefixIcon:
+                                                                    const Icon(
+                                                                        Icons.search),
+                                                                border:
+                                                                    OutlineInputBorder(
+                                                                  borderRadius:
+                                                                      BorderRadius
+                                                                          .circular(
+                                                                              12),
+                                                                  borderSide:
+                                                                      BorderSide.none,
                                                                 ),
                                                                 filled: true,
-                                                                fillColor: Colors.grey[100],
+                                                                fillColor:
+                                                                    Colors.grey[100],
                                                               ),
                                                               onChanged: (value) {
                                                                 setState(() {
-                                                                  filteredContacts = contacts.where((c) =>
-                                                                    (c.displayName ?? '').toLowerCase().contains(value.toLowerCase()) ||
-                                                                    (c.phones.isNotEmpty && c.phones.first.number.toLowerCase().contains(value.toLowerCase()))
-                                                                  ).toList();
+                                                                  filteredContacts =
+                                                                      contacts
+                                                                          .where((c) =>
+                                                                              (c.displayName ?? '')
+                                                                                  .toLowerCase()
+                                                                                  .contains(value.toLowerCase()) ||
+                                                                              (c.phones.isNotEmpty &&
+                                                                                  c.phones.first.number
+                                                                                      .toLowerCase()
+                                                                                      .contains(value.toLowerCase())))
+                                                                          .toList();
                                                                 });
                                                               },
                                                             ),
                                                           ),
                                                           IconButton(
-                                                            icon: Icon(Icons.close),
-                                                            onPressed: () => Navigator.pop(context),
+                                                            icon: const Icon(Icons.close),
+                                                            onPressed: () =>
+                                                                Navigator.pop(context),
                                                           ),
                                                         ],
                                                       ),
                                                     ),
                                                     Expanded(
                                                       child: ListView.builder(
-                                                        itemCount: filteredContacts.length,
-                                                        itemBuilder: (context, index) {
-                                                          final contact = filteredContacts[index];
-                                                          final phone = contact.phones.isNotEmpty ? contact.phones.first.number ?? '' : '';
+                                                        itemCount:
+                                                            filteredContacts.length,
+                                                        itemBuilder:
+                                                            (context, index) {
+                                                          final contact =
+                                                              filteredContacts[index];
+                                                          final phone = contact.phones
+                                                                  .isNotEmpty
+                                                              ? contact.phones.first.number ??
+                                                                  ''
+                                                              : '';
                                                           return ListTile(
                                                             leading: CircleAvatar(
                                                               child: Text(
-                                                                (contact.displayName ?? '').isNotEmpty
-                                                                  ? contact.displayName![0].toUpperCase()
-                                                                  : '?',
-                                                                style: TextStyle(fontWeight: FontWeight.bold),
+                                                                (contact.displayName ??
+                                                                            '')
+                                                                        .isNotEmpty
+                                                                    ? contact
+                                                                        .displayName![0]
+                                                                        .toUpperCase()
+                                                                    : '?',
+                                                                style: const TextStyle(
+                                                                    fontWeight:
+                                                                        FontWeight.bold),
                                                               ),
-                                                              backgroundColor: Colors.blue[100],
+                                                              backgroundColor:
+                                                                  Colors.blue[100],
                                                             ),
-                                                            title: Text(contact.displayName ?? '', style: TextStyle(fontWeight: FontWeight.w500)),
-                                                            subtitle: Text(phone, style: TextStyle(color: Colors.grey[600])),
-                                                            onTap: () => Navigator.pop(context, contact),
+                                                            title: Text(
+                                                              contact.displayName ?? '',
+                                                              style: const TextStyle(
+                                                                  fontWeight:
+                                                                      FontWeight.w500),
+                                                            ),
+                                                            subtitle:
+                                                                Text(phone, style: TextStyle(color: Colors.grey[600])),
+                                                            onTap: () =>
+                                                                Navigator.pop(
+                                                                    context, contact),
                                                           );
                                                         },
                                                       ),
@@ -501,29 +553,33 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                       },
                                     );
 
-                                    if (selectedContact != null && selectedContact.phones.isNotEmpty) {
-                                      final phone = selectedContact.phones.first.number ?? '';
+                                    if (selectedContact != null &&
+                                        selectedContact.phones.isNotEmpty) {
+                                      final phone =
+                                          selectedContact.phones.first.number ?? '';
                                       final name = selectedContact.displayName ?? '';
-                                      final digits = RegExp(r'\d').allMatches(phone).map((m) => m.group(0)).join();
+                                      final digits = RegExp(r'\d')
+                                          .allMatches(phone)
+                                          .map((m) => m.group(0))
+                                          .join();
                                       if (digits.length >= 10) {
-                                        final tenDigits = digits.substring(digits.length - 10);
-                                        final formatted = '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
+                                        final tenDigits =
+                                            digits.substring(digits.length - 10);
+                                        final formatted =
+                                            '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
                                         _phoneController.text = formatted;
-                                        _phoneController.selection = TextSelection.fromPosition(
+                                        _phoneController.selection =
+                                            TextSelection.fromPosition(
                                           TextPosition(offset: formatted.length),
                                         );
                                         if (name.isNotEmpty) {
                                           _nameController.text = name;
                                         }
-                                        if (selectedContact.organizations.isNotEmpty &&
-                                            selectedContact.organizations.first.company != null &&
-                                            selectedContact.organizations.first.company!.isNotEmpty) {
-                                          _companyController.text = selectedContact.organizations.first.company!;
-                                        }
                                       } else {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('Contact does not contain a valid 10-digit phone number')),
-                                        );
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(const SnackBar(
+                                                content: Text(
+                                                    'Contact does not contain a valid 10-digit phone number')));
                                       }
                                     }
                                   } catch (e) {
@@ -544,7 +600,6 @@ class _FollowUpFormState extends State<FollowUpForm> {
                           if (value.trim() == '+91') {
                             return 'Enter phone number';
                           }
-                          // Check for 10 digits after +91 (excluding spaces)
                           final digits = value.replaceAll(RegExp(r'\D'), '');
                           if (digits.length != 12) {
                             return 'Enter a valid 10-digit number after +91';
@@ -552,7 +607,6 @@ class _FollowUpFormState extends State<FollowUpForm> {
                           return null;
                         },
                         onChanged: (val) {
-                          // Always start with "+91 "
                           if (!val.startsWith('+91 ')) {
                             controller.text = '+91 ';
                             controller.selection = TextSelection.fromPosition(
@@ -560,13 +614,8 @@ class _FollowUpFormState extends State<FollowUpForm> {
                             );
                             return;
                           }
-                          // Remove "+91 " and spaces to get only digits
                           String raw = val.replaceAll('+91 ', '').replaceAll(' ', '');
-                          // Limit to 10 digits max
-                          if (raw.length > 10) {
-                            raw = raw.substring(0, 10);
-                          }
-                          // Add space after first 5 digits if applicable
+                          if (raw.length > 10) raw = raw.substring(0, 10);
                           String formatted = raw.length > 5
                               ? '+91 ${raw.substring(0, 5)} ${raw.substring(5)}'
                               : '+91 $raw';
@@ -594,9 +643,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                 return ListTile(
                                   title: Text(option['phone'] ?? ''),
                                   subtitle: Text(option['name'] ?? ''),
-                                  onTap: () {
-                                    onSelected(option);
-                                  },
+                                  onTap: () => onSelected(option),
                                 );
                               },
                             ),
@@ -607,97 +654,91 @@ class _FollowUpFormState extends State<FollowUpForm> {
                     onSelected: (selectedCustomer) {
                       setState(() {
                         _nameController.text = selectedCustomer['name'] ?? '';
-                        _companyController.text = selectedCustomer['company'] ?? '';
                         _addressController.text = selectedCustomer['address'] ?? '';
                         _phoneController.text = selectedCustomer['phone'] ?? '';
                       });
                     },
                   ),
                   const SizedBox(height: 16),
-
-                  DropdownButtonFormField<String>(
-                    value: _status,
-                    decoration: const InputDecoration(
-                      labelText: 'Status',
-                      prefixIcon: Icon(Icons.assignment_turned_in),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'In Progress', child: Text('In Progress')),
-                      
-                    ],
-                    onChanged: (value) => setState(() => _status = value!),
-                    validator: (value) => value == null || value.isEmpty ? 'Select status' : null,
-                  ),
-                  const SizedBox(height: 16),
-
-                  DropdownButtonFormField<String>(
-                    value: _priority,
-                    decoration: const InputDecoration(
-                      labelText: 'Priority',
-                      prefixIcon: Icon(Icons.flag),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'High', child: Text('High')),
-                      DropdownMenuItem(value: 'Medium', child: Text('Medium')),
-                      DropdownMenuItem(value: 'Low', child: Text('Low')),
-                    ],
-                    onChanged: (value) => setState(() => _priority = value!),
-                    validator: (value) => value == null || value.isEmpty ? 'Select priority' : null,
-                  ),
-                  const SizedBox(height: 16),
-
                   TextFormField(
                     controller: _commentsController,
                     maxLines: 4,
                     decoration: const InputDecoration(
                       labelText: 'Comments',
                       alignLabelWithHint: true,
-                      prefixIcon: Icon(Icons.comment),
+                      prefixIcon: Padding(
+                        padding: EdgeInsets.only(bottom: 60.0),
+                        child: Icon(Icons.comment),
+                      ),
                     ),
                     validator: (value) => value!.isEmpty ? 'Enter comments' : null,
                   ),
                   const SizedBox(height: 16),
-
-                  TextFormField(
-                    controller: _reminderController,
-                    readOnly: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Reminder (max 15 days)',
-                      prefixIcon: Icon(Icons.alarm),
-                    ),
-                    onTap: () async {
-                      final pickedDate = await showDatePicker(
-                        context: context,
-                        initialDate: DateTime.now(),
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(const Duration(days: 15)),
-                      );
-                      if (pickedDate != null) {
-                        final pickedTime = await showTimePicker(
-                          context: context,
-                          initialTime: TimeOfDay.now(),
-                        );
-                        if (pickedTime != null) {
-                          _selectedReminderTime = pickedTime;
-                          final formatted = DateTime(
-                            pickedDate.year,
-                            pickedDate.month,
-                            pickedDate.day,
-                            pickedTime.hour,
-                            pickedTime.minute,
-                          );
-                          _reminderController.text = "${formatted.day.toString().padLeft(2, '0')}-${formatted.month.toString().padLeft(2, '0')}-${formatted.year} ${pickedTime.format(context)}";
-                        }
-                      }
-                    },
-                    validator: (value) => value!.isEmpty ? 'Select a reminder date & time' : null,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: DropdownButtonFormField<String>(
+                          value: _priority,
+                          decoration: const InputDecoration(
+                            labelText: 'Priority',
+                            prefixIcon: Icon(Icons.flag),
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: 'High', child: Text('High')),
+                            DropdownMenuItem(value: 'Medium', child: Text('Medium')),
+                            DropdownMenuItem(value: 'Low', child: Text('Low')),
+                          ],
+                          onChanged: (value) => setState(() => _priority = value!),
+                          validator: (value) => value == null || value.isEmpty ? 'Select priority' : null,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        flex: 3,
+                        child: TextFormField(
+                          controller: _reminderController,
+                          readOnly: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Reminder',
+                            prefixIcon: Icon(Icons.alarm),
+                          ),
+                          onTap: () async {
+                            final pickedDate = await showDatePicker(
+                              context: context,
+                              initialDate: DateTime.now(),
+                              firstDate: DateTime.now(),
+                              lastDate: DateTime.now().add(const Duration(days: 15)),
+                            );
+                            if (pickedDate == null) return;
+                            final pickedTime = await showTimePicker(
+                              context: context,
+                              initialTime: TimeOfDay.now(),
+                            );
+                            if (pickedTime != null) {
+                              _selectedReminderTime = pickedTime;
+                              final formatted = DateTime(
+                                pickedDate.year,
+                                pickedDate.month,
+                                pickedDate.day,
+                                pickedTime.hour,
+                                pickedTime.minute,
+                              );
+                              _reminderController.text =
+                                  "${formatted.day.toString().padLeft(2, '0')}-${formatted.month.toString().padLeft(2, '0')}-${formatted.year} ${pickedTime.format(context)}";
+                            }
+                          },
+                          validator: (value) => value!.isEmpty ? 'Select reminder' : null,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 30),
-
                   ElevatedButton(
                     onPressed: _saveFollowUp,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFF005BAC),
+                      backgroundColor: const Color(0xFF005BAC),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -705,7 +746,8 @@ class _FollowUpFormState extends State<FollowUpForm> {
                     ),
                     child: const Text(
                       'Save Follow Up',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                      style: TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
                   ),
                 ],

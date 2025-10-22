@@ -1,5 +1,6 @@
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../main.dart'; // Import to use clearNotificationOpened
@@ -49,14 +50,39 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
     _companyController = TextEditingController(text: data['company'] ?? '');
     _addressController = TextEditingController(text: data['address'] ?? '');
     _phoneController = TextEditingController(text: data['phone'] ?? '');
-    _reminderController = TextEditingController(text: data['reminder'] ?? '');
     _commentsController = TextEditingController(text: data['comments'] ?? '');
     _status = data['status'];
     _branch = data['branch'];
-    _date = data['date'];
-    if (_date != null && _date!.isNotEmpty) {
-      _selectedDate = DateTime.tryParse(_date!);
+
+    // Handle different date types from Firestore
+    final dynamic dateValue = data['date'];
+    if (dateValue is Timestamp) {
+      _selectedDate = dateValue.toDate();
+    } else if (dateValue is String && dateValue.isNotEmpty) {
+      try {
+        _selectedDate = DateTime.parse(dateValue);
+      } catch (_) {
+        // Fallback for other formats if needed
+      }
     }
+
+    if (_selectedDate != null) {
+      _date = DateFormat('yyyy-MM-dd').format(_selectedDate!);
+    }
+
+    // Handle different reminder types from Firestore
+    final dynamic reminderValue = data['reminder'];
+    String reminderText = '';
+    if (reminderValue is Timestamp) {
+      // If it's a Timestamp, format it.
+      reminderText = DateFormat('yyyy-MM-dd hh:mm a').format(reminderValue.toDate());
+    } else if (reminderValue is String) {
+      // If it's already a string, use it directly.
+      reminderText = reminderValue;
+    }
+    _reminderController = TextEditingController(text: reminderText);
+
+
   }
 
   Future<void> _pickReminderTime(BuildContext context) async {
@@ -401,8 +427,8 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
                     ),
                   ],
                 ),
-                _buildInfoTile(Icons.calendar_today, 'Date', Text(_data?['date'] ?? 'N/A', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
-                _buildInfoTile(Icons.alarm, 'Reminder', Text(_data?['reminder'] ?? 'N/A', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
+                _buildInfoTile(Icons.calendar_today, 'Date', Text(_formatDisplayDate(_data?['date']), style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
+                _buildInfoTile(Icons.alarm, 'Reminder', Text(_formatDisplayDate(_data?['reminder'], isReminder: true), style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
                 _buildInfoTile(Icons.comment, 'Comments', Text(_data?['comments'] ?? 'N/A', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
                 _buildInfoTile(Icons.location_city, 'Branch', Text(_data?['branch'] ?? 'N/A', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
               ],
@@ -411,6 +437,15 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
         },
       ),
     );
+  }
+
+  String _formatDisplayDate(dynamic value, {bool isReminder = false}) {
+    if (value == null) return 'N/A';
+    if (value is Timestamp) {
+      final format = isReminder ? 'yyyy-MM-dd hh:mm a' : 'yyyy-MM-dd';
+      return DateFormat(format).format(value.toDate());
+    }
+    return value.toString();
   }
 
   Widget _editField(
