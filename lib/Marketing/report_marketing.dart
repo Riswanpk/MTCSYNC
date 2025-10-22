@@ -228,7 +228,7 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> with SingleTi
 
     // --- File name as "Report <DATE RANGE> <BRANCH>.xlsx" ---
     String formatDate(DateTime? d) =>
-        d == null ? 'All' : DateFormat('yyyyMMdd').format(d);
+        d == null ? 'All' : DateFormat('dd-MM-yyyy').format(d);
     String branchName = (selectedBranch == null || selectedBranch == 'Select All')
         ? 'All Branches'
         : selectedBranch!.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
@@ -408,7 +408,7 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> with SingleTi
                                 ),
                                 child: Text(
                                   startDate != null
-                                      ? DateFormat('yyyy-MM-dd').format(startDate!)
+                                      ? DateFormat('dd-MM-yyyy').format(startDate!)
                                       : 'Select',
                                 ),
                               ),
@@ -440,7 +440,7 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> with SingleTi
                                 ),
                                 child: Text(
                                   endDate != null
-                                      ? DateFormat('yyyy-MM-dd').format(endDate!)
+                                      ? DateFormat('dd-MM-yyyy').format(endDate!)
                                       : 'Select',
                                 ),
                               ),

@@ -140,10 +140,10 @@ class _FollowUpFormState extends State<FollowUpForm> {
         final reminderParts = _reminderController.text.split(' ');
         final datePart = reminderParts[0].split('-');
 
-        final scheduledDate = DateTime(
-          int.parse(datePart[0]),
-          int.parse(datePart[1]),
+        final scheduledDate = DateTime( // Swapped year and day
           int.parse(datePart[2]),
+          int.parse(datePart[1]),
+          int.parse(datePart[0]),
           _selectedReminderTime!.hour,
           _selectedReminderTime!.minute,
         );
@@ -233,7 +233,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
     super.initState();
     // Set the date field to today's date in yyyy-mm-dd format
     final now = DateTime.now();
-    final dateStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    final dateStr = "${now.day.toString().padLeft(2, '0')}-${now.month.toString().padLeft(2, '0')}-${now.year}";
     _dateController.text = dateStr;
     // Ensure "+91 " is present at the start of the phone field
     if (!_phoneController.text.startsWith('+91 ')) {
@@ -686,7 +686,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                             pickedTime.hour,
                             pickedTime.minute,
                           );
-                          _reminderController.text = "${formatted.year}-${formatted.month.toString().padLeft(2, '0')}-${formatted.day.toString().padLeft(2, '0')} ${pickedTime.format(context)}";
+                          _reminderController.text = "${formatted.day.toString().padLeft(2, '0')}-${formatted.month.toString().padLeft(2, '0')}-${formatted.year} ${pickedTime.format(context)}";
                         }
                       }
                     },

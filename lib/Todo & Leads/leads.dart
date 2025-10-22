@@ -720,8 +720,15 @@ class _LeadsPageState extends State<LeadsPage> {
                                   filteredLeads.sort((a, b) {
                                     final aData = a.data() as Map<String, dynamic>;
                                     final bData = b.data() as Map<String, dynamic>;
-                                    final aDate = DateTime.tryParse(aData['date'] ?? '') ?? DateTime(2000);
-                                    final bDate = DateTime.tryParse(bData['date'] ?? '') ?? DateTime(2000);
+                                    DateTime aDate = DateTime(2000);
+                                    DateTime bDate = DateTime(2000);
+                                    try {
+                                      aDate = DateFormat('dd-MM-yyyy').parse(aData['date'] ?? '');
+                                    } catch (e) { /* ignore */ }
+                                    try {
+                                      bDate = DateFormat('dd-MM-yyyy').parse(bData['date'] ?? '');
+                                    } catch (e) { /* ignore */ }
+
                                     return sortAscending
                                         ? aDate.compareTo(bDate)
                                         : bDate.compareTo(aDate);
@@ -815,8 +822,15 @@ class _LeadsPageState extends State<LeadsPage> {
                                   filteredLeads.sort((a, b) {
                                     final aData = a.data() as Map<String, dynamic>;
                                     final bData = b.data() as Map<String, dynamic>;
-                                    final aDate = DateTime.tryParse(aData['date'] ?? '') ?? DateTime(2000);
-                                    final bDate = DateTime.tryParse(bData['date'] ?? '') ?? DateTime(2000);
+                                    DateTime aDate = DateTime(2000);
+                                    DateTime bDate = DateTime(2000);
+                                    try {
+                                      aDate = DateFormat('dd-MM-yyyy').parse(aData['date'] ?? '');
+                                    } catch (e) { /* ignore */ }
+                                    try {
+                                      bDate = DateFormat('dd-MM-yyyy').parse(bData['date'] ?? '');
+                                    } catch (e) { /* ignore */ }
+
                                     return sortAscending
                                         ? aDate.compareTo(bDate)
                                         : bDate.compareTo(aDate);
@@ -907,8 +921,15 @@ class _LeadsPageState extends State<LeadsPage> {
                                   filteredLeads.sort((a, b) {
                                     final aData = a.data() as Map<String, dynamic>;
                                     final bData = b.data() as Map<String, dynamic>;
-                                    final aDate = DateTime.tryParse(aData['date'] ?? '') ?? DateTime(2000);
-                                    final bDate = DateTime.tryParse(bData['date'] ?? '') ?? DateTime(2000);
+                                    DateTime aDate = DateTime(2000);
+                                    DateTime bDate = DateTime(2000);
+                                    try {
+                                      aDate = DateFormat('dd-MM-yyyy').parse(aData['date'] ?? '');
+                                    } catch (e) { /* ignore */ }
+                                    try {
+                                      bDate = DateFormat('dd-MM-yyyy').parse(bData['date'] ?? '');
+                                    } catch (e) { /* ignore */ }
+
                                     return sortAscending
                                         ? aDate.compareTo(bDate)
                                         : bDate.compareTo(aDate);

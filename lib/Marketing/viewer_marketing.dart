@@ -190,10 +190,10 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
                             text: selectedDateRange == null
                                 ? ''
                                 : selectedDateRange!.start == selectedDateRange!.end
-                                    ? DateFormat('yyyy-MM-dd').format(selectedDateRange!.start)
-                                    : '${DateFormat('yyyy-MM-dd').format(selectedDateRange!.start)}'
+                                    ? DateFormat('dd-MM-yyyy').format(selectedDateRange!.start)
+                                    : '${DateFormat('dd-MM-yyyy').format(selectedDateRange!.start)}'
                                       ' to '
-                                      '${DateFormat('yyyy-MM-dd').format(selectedDateRange!.end)}',
+                                      '${DateFormat('dd-MM-yyyy').format(selectedDateRange!.end)}',
                           ),
                           style: theme.textTheme.bodyMedium,
                         ),
