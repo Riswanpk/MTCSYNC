@@ -74,34 +74,72 @@ class TaskDetailPage extends StatelessWidget {
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
         elevation: 0,
-        actions: [ // Conditionally show edit button
+        actions: [
           FutureBuilder<DocumentSnapshot>(
             future: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid).get(),
             builder: (context, userSnapshot) {
               if (!userSnapshot.hasData) return const SizedBox.shrink();
-
+ 
               final currentUserData = userSnapshot.data!.data() as Map<String, dynamic>;
               final currentUserRole = currentUserData['role'];
               final currentUserId = FirebaseAuth.instance.currentUser!.uid;
-
+ 
               // Conditions to show the edit button:
               // 1. User is a manager AND they are the one who assigned the task.
               // 2. The task was NOT assigned by a manager (i.e., it's a self-created task).
               final bool canEdit = (currentUserRole == 'manager' && data['assigned_by'] == currentUserId) || !isAssignedByManager;
-
-              if (canEdit) {
-                return IconButton(
-                  icon: const Icon(Icons.edit, color: Colors.white),
-                  tooltip: 'Edit Task',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => TodoFormPage(docId: data['docId'])),
-                    );
-                  },
-                );
-              }
-              return const SizedBox.shrink();
+ 
+              return Row(
+                children: [
+                  if (canEdit)
+                    IconButton(
+                      icon: const Icon(Icons.edit, color: Colors.white),
+                      tooltip: 'Edit Task',
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => TodoFormPage(docId: data['docId'])),
+                        );
+                      },
+                    ),
+                  if (data['status'] != 'done')
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: TextButton(
+                        onPressed: () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Mark as Done?'),
+                              content: const Text('Are you sure you want to mark this task as done?'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(context).pop(false),
+                                  child: const Text('Cancel'),
+                                ),
+                                TextButton(
+                                  onPressed: () => Navigator.of(context).pop(true),
+                                  child: const Text('Yes', style: TextStyle(color: Colors.green)),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirm == true && data['docId'] != null) {
+                            await FirebaseFirestore.instance.collection('todo').doc(data['docId']).update({
+                              'status': 'done',
+                              'timestamp': Timestamp.now(),
+                            });
+                            // Optionally pop back to the list page
+                            if (Navigator.canPop(context)) {
+                              Navigator.pop(context);
+                            }
+                          }
+                        },
+                        child: const Text('DONE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                ],
+              );
             },
           )
         ],

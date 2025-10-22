@@ -128,6 +128,11 @@ class MarketingFormDetailsPage extends StatelessWidget {
     required this.displayName,
   });
 
+  bool _isPhoneNumberKey(String key) {
+    final lowerKey = key.toLowerCase();
+    return lowerKey.contains('phone') || lowerKey.contains('contact');
+  }
+
   String _formatIfDate(dynamic value) {
     if (value is Timestamp) {
       return DateFormat('dd MMM yyyy').format(value.toDate());
@@ -218,7 +223,7 @@ class MarketingFormDetailsPage extends StatelessWidget {
                           Expanded(
                             flex: 3,
                             child: Text(
-                              _formatIfDate(e.value),
+                              _isPhoneNumberKey(e.key) ? e.value.toString() : _formatIfDate(e.value),
                               style: const TextStyle(fontSize: 16),
                             ),
                           ),
@@ -263,6 +268,12 @@ class _EditMarketingFormPageState extends State<EditMarketingFormPage> {
     fieldTypes = {};
 
     widget.formData.forEach((key, value) {
+      final lowerKey = key.toLowerCase();
+      if (lowerKey.contains('phone') || lowerKey.contains('contact')) {
+        controllers[key] = TextEditingController(text: value?.toString() ?? '');
+        fieldTypes[key] = 'phone';
+        return;
+      }
       if (value is Timestamp || value is DateTime) {
         final dt = value is Timestamp ? value.toDate() : value;
         controllers[key] = TextEditingController(text: DateFormat('dd MMM yyyy').format(dt));
@@ -332,8 +343,8 @@ class _EditMarketingFormPageState extends State<EditMarketingFormPage> {
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8.0),
                 child: TextFormField(
-                  controller: entry.value,
-                  readOnly: fieldTypes[key] == 'date',
+                  controller: entry.value,                  readOnly: fieldTypes[key] == 'date',
+                  keyboardType: fieldTypes[key] == 'phone' ? TextInputType.phone : TextInputType.text,
                   decoration: InputDecoration(
                     labelText: _beautifyKey(key),
                     border: OutlineInputBorder(
@@ -341,7 +352,9 @@ class _EditMarketingFormPageState extends State<EditMarketingFormPage> {
                     ),
                     suffixIcon: fieldTypes[key] == 'date'
                         ? const Icon(Icons.calendar_today_rounded)
-                        : const Icon(Icons.edit_rounded),
+                        : fieldTypes[key] == 'phone'
+                            ? const Icon(Icons.phone_rounded)
+                            : const Icon(Icons.edit_rounded),
                   ),
                   onTap: fieldTypes[key] == 'date'
                       ? () => _pickDate(context, key)
@@ -355,7 +368,9 @@ class _EditMarketingFormPageState extends State<EditMarketingFormPage> {
                 final updatedData = <String, dynamic>{};
 
                 controllers.forEach((key, controller) {
-                  if (fieldTypes[key] == 'date') {
+                  if (fieldTypes[key] == 'phone') {
+                    updatedData[key] = controller.text;
+                  } else if (fieldTypes[key] == 'date') {
                     try {
                       final dt = DateFormat('dd MMM yyyy').parse(controller.text);
                       updatedData[key] = Timestamp.fromDate(dt);

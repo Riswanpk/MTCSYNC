@@ -51,6 +51,7 @@ void main() async {
         channelDescription: 'Notification channel for basic tests',
         defaultColor: const Color(0xFF005BAC),
         ledColor: Colors.white,
+        soundSource: 'resource://raw/leadsreminder',
         importance: NotificationImportance.High,
         channelShowBadge: true,
       ),
@@ -60,6 +61,7 @@ void main() async {
         channelDescription: 'Channel for task reminders',
         defaultColor: const Color(0xFF8CC63F),
         ledColor: Colors.green,
+        soundSource: 'resource://raw/taskreminder',
         importance: NotificationImportance.High,
         channelShowBadge: true,
       ),
@@ -348,10 +350,11 @@ class NotificationController {
             // The title and body will use the default values set above.
         }
 
+        final channelKey = type == 'todo' ? 'reminder_channel' : 'basic_channel';
         await AwesomeNotifications().createNotification(
           content: NotificationContent(
             id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-            channelKey: 'basic_channel',
+            channelKey: channelKey,
             title: title,
             body: body,
             payload: {'docId': docId, 'type': type},

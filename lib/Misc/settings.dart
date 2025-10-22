@@ -14,7 +14,7 @@ import 'package:path_provider/path_provider.dart';
 
 class SettingsPage extends StatelessWidget {
   final String userRole;
-  final String _appVersion = 'Version 1.2.76';
+  final String _appVersion = 'Version 1.2.77';
 
   const SettingsPage({super.key, required this.userRole});
 

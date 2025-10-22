@@ -62,9 +62,17 @@ class _LeadsPageState extends State<LeadsPage> {
           // Do NOT fetch users here for admin, wait for branch selection
           // _fetchUsers(); <-- REMOVE THIS LINE
         } else {
-          _fetchUsers(branch); // manager/sales: only fetch for their branch
-          setState(() {
-            selectedBranch = branch;
+          // Ensure the current user appears in the users list before setting selectedUser
+          _fetchUsers(branch, uid).then((_) {
+            setState(() {
+              selectedBranch = branch;
+              // Default filters for non-admin users (manager & sales)
+              if (uid != null) {
+                selectedUser = uid;           // User = current user
+              }
+              selectedStatus = 'In Progress'; // Status = In Progress
+              sortAscending = false;          // Sort = Newest (false == Newest in UI)
+            });
           });
         }
       }
@@ -95,19 +103,34 @@ class _LeadsPageState extends State<LeadsPage> {
   }
 
   // NEW: Fetch users for filter dropdown
-  Future<void> _fetchUsers([String? branch]) async {
+  Future<void> _fetchUsers([String? branch, String? ensureUserId]) async {
     Query query = FirebaseFirestore.instance.collection('users');
     if (branch != null && branch.isNotEmpty) {
       query = query.where('branch', isEqualTo: branch);
     }
     final snapshot = await query.get();
+    final users = snapshot.docs
+        .map((doc) => {
+              'id': doc.id,
+              'username': (doc.data() as Map<String, dynamic>)['username'] ?? 'Unknown'
+            })
+        .toList();
+
+    // If we need to ensure a specific user (current user) appears in the list,
+    // and they weren't returned by the branch-limited query, fetch and insert them.
+    if (ensureUserId != null && !users.any((u) => u['id'] == ensureUserId)) {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(ensureUserId).get();
+      if (doc.exists) {
+        final d = doc.data() as Map<String, dynamic>?;
+        users.insert(0, {
+          'id': doc.id,
+          'username': d?['username'] ?? 'You',
+        });
+      }
+    }
+
     setState(() {
-      availableUsers = snapshot.docs
-          .map((doc) => {
-                'id': doc.id,
-                'username': (doc.data() as Map<String, dynamic>)['username'] ?? 'Unknown'
-              })
-          .toList();
+      availableUsers = users;
     });
   }
 
