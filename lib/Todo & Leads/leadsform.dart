@@ -36,6 +36,8 @@ Future<List<Contact>> getCachedContacts() async {
 }
 
 class FollowUpForm extends StatefulWidget {
+  static const String DRAFT_KEY = 'leads_form_draft';
+
   const FollowUpForm({super.key});
 
   @override
@@ -110,6 +112,8 @@ class _FollowUpFormState extends State<FollowUpForm> {
         'created_by': user.uid,
         'created_at': FieldValue.serverTimestamp(),
       });
+
+      await _clearDraft(); // Clear draft on successful save
 
       // Upsert customer profile
       await FirebaseFirestore.instance
@@ -207,6 +211,64 @@ class _FollowUpFormState extends State<FollowUpForm> {
     }
   }
 
+  Future<void> _saveDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final draftData = {
+      'name': _nameController.text,
+      'address': _addressController.text,
+      'phone': _phoneController.text,
+      'comments': _commentsController.text,
+      'reminder': _reminderController.text,
+      'status': _status,
+      'priority': _priority,
+      'reminder_hour': _selectedReminderTime?.hour,
+      'reminder_minute': _selectedReminderTime?.minute,
+    };
+    await prefs.setString(FollowUpForm.DRAFT_KEY, jsonEncode(draftData));
+  }
+
+  Future<void> _loadDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final draftJson = prefs.getString(FollowUpForm.DRAFT_KEY);
+
+    if (draftJson == null) return;
+
+    final draftData = jsonDecode(draftJson) as Map<String, dynamic>;
+
+    final hasData = (draftData['name'] as String? ?? '').isNotEmpty ||
+                    (draftData['phone'] as String? ?? '').isNotEmpty ||
+                    (draftData['comments'] as String? ?? '').isNotEmpty;
+
+    if (hasData && mounted) {
+      final load = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Draft Found'),
+          content: const Text('An unsaved follow-up form was found. Would you like to load it?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Start New')),
+            ElevatedButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Load Draft')),
+          ],
+        ),
+      );
+
+      if (load == true) {
+        setState(() {
+          _nameController.text = draftData['name'] ?? '';
+          _addressController.text = draftData['address'] ?? '';
+          _phoneController.text = draftData['phone'] ?? '+91 ';
+          _commentsController.text = draftData['comments'] ?? '';
+          _reminderController.text = draftData['reminder'] ?? '';
+          _status = draftData['status'] ?? 'In Progress';
+          _priority = draftData['priority'] ?? 'High';
+          if (draftData['reminder_hour'] != null && draftData['reminder_minute'] != null) {
+            _selectedReminderTime = TimeOfDay(hour: draftData['reminder_hour'], minute: draftData['reminder_minute']);
+          }
+        });
+      }
+    }
+  }
+
   Future<void> _autoFillFromCustomer(String phone) async {
     final snap = await FirebaseFirestore.instance
         .collection('customer')
@@ -223,6 +285,11 @@ class _FollowUpFormState extends State<FollowUpForm> {
     }
   }
 
+  Future<void> _clearDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(FollowUpForm.DRAFT_KEY);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -230,6 +297,8 @@ class _FollowUpFormState extends State<FollowUpForm> {
     if (!_phoneController.text.startsWith('+91 ')) {
       _phoneController.text = '+91 ';
     }
+    // Check for a draft when the form loads
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadDraft());
   }
 
   @override
@@ -289,6 +358,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                             ),
                             validator: (value) =>
                                 value!.isEmpty ? 'Enter name' : null,
+                            onChanged: (_) => _saveDraft(),
                           );
                         },
                         optionsViewBuilder: (context, onSelected, options) {
@@ -335,6 +405,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                       prefixIcon: Icon(Icons.location_on),
                     ),
                     validator: (value) => value!.isEmpty ? 'Enter address' : null,
+                    onChanged: (_) => _saveDraft(),
                   ),
                   const SizedBox(height: 16),
                   RawAutocomplete<Map<String, dynamic>>(
@@ -475,6 +546,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                                                     Colors.grey[100],
                                                               ),
                                                               onChanged: (value) {
+                                                                _saveDraft();
                                                                 setState(() {
                                                                   filteredContacts =
                                                                       contacts
@@ -607,6 +679,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                           return null;
                         },
                         onChanged: (val) {
+                          _saveDraft();
                           if (!val.startsWith('+91 ')) {
                             controller.text = '+91 ';
                             controller.selection = TextSelection.fromPosition(
@@ -672,6 +745,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                       ),
                     ),
                     validator: (value) => value!.isEmpty ? 'Enter comments' : null,
+                    onChanged: (_) => _saveDraft(),
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -690,7 +764,10 @@ class _FollowUpFormState extends State<FollowUpForm> {
                             DropdownMenuItem(value: 'Medium', child: Text('Medium')),
                             DropdownMenuItem(value: 'Low', child: Text('Low')),
                           ],
-                          onChanged: (value) => setState(() => _priority = value!),
+                          onChanged: (value) {
+                            setState(() => _priority = value!);
+                            _saveDraft();
+                          },
                           validator: (value) => value == null || value.isEmpty ? 'Select priority' : null,
                         ),
                       ),
@@ -727,6 +804,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                               );
                               _reminderController.text =
                                   "${formatted.day.toString().padLeft(2, '0')}-${formatted.month.toString().padLeft(2, '0')}-${formatted.year} ${pickedTime.format(context)}";
+                              _saveDraft();
                             }
                           },
                           validator: (value) => value!.isEmpty ? 'Select reminder' : null,

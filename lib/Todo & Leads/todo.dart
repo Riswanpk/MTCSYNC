@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'todoform.dart';
+import 'report_todo.dart'; // Import the new report page
 import 'package:provider/provider.dart';
 import '../Misc/theme_notifier.dart';
 import 'package:flutter_slidable/flutter_slidable.dart'; // Add this import at the top
@@ -440,6 +441,17 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                 foregroundColor: Colors.white,
                 elevation: 0,
                 actions: [
+                  if (_userRole == 'admin')
+                    IconButton(
+                      icon: const Icon(Icons.bar_chart_rounded, color: Colors.white),
+                      tooltip: 'Todo Report',
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const ReportTodoPage()),
+                        );
+                      },
+                    ),
                   IconButton(
                     icon: const Icon(Icons.delete_sweep_rounded, color: Colors.white),
                     tooltip: 'Clear All Tasks',

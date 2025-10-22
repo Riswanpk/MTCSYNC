@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -10,6 +12,8 @@ const Color primaryGreen = Color(0xFF8CC63F);
 class TodoFormPage extends StatefulWidget {
   final String? docId; // <-- Add this
   const TodoFormPage({Key? key, this.docId}) : super(key: key);
+
+  static const String DRAFT_KEY = 'todo_form_draft';
 
   @override
   State<TodoFormPage> createState() => _TodoFormPageState();
@@ -37,6 +41,10 @@ class _TodoFormPageState extends State<TodoFormPage> {
     if (widget.docId != null) {
       _loadTodoForEdit(widget.docId!);
     }
+    // Check for a draft when the form loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.docId == null) _loadDraft();
+    });
   }
 
   Future<void> _fetchCurrentUserRoleAndBranch() async {
@@ -187,6 +195,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
       // Update existing todo
       await FirebaseFirestore.instance.collection('todo').doc(widget.docId!).update({
         'title': title,
+        'userId': user.uid, // Add userId for daily_report
         'description': desc,
         'priority': _priority,
         'reminder': scheduledDate.toIso8601String(),
@@ -199,6 +208,8 @@ class _TodoFormPageState extends State<TodoFormPage> {
         if (assignedBy != null) 'assignment_seen': false,
         // Optionally update other fields as needed
       });
+
+      await _clearDraft();
 
       // Reschedule notification if the reminder was changed
       // Only schedule for self-assigned tasks
@@ -227,6 +238,8 @@ class _TodoFormPageState extends State<TodoFormPage> {
       if (assignedBy != null) 'assignment_seen': false,
     });
 
+    await _clearDraft();
+
     // Daily report logic
     final now = DateTime.now();
     final hour = now.hour;
@@ -249,6 +262,68 @@ class _TodoFormPageState extends State<TodoFormPage> {
       Navigator.pop(context);
     }
     // Don't call setState after pop, as the widget is disposed
+  }
+
+  Future<void> _saveDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final draftData = {
+      'title': _titleController.text,
+      'description': _descController.text,
+      'priority': _priority,
+      'reminder': _reminderController.text,
+      'selectedSalesUserId': _selectedSalesUserId,
+      'reminder_date': _selectedReminderDate?.toIso8601String(),
+      'reminder_hour': _selectedReminderTime?.hour,
+      'reminder_minute': _selectedReminderTime?.minute,
+    };
+    await prefs.setString(TodoFormPage.DRAFT_KEY, jsonEncode(draftData));
+  }
+
+  Future<void> _loadDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final draftJson = prefs.getString(TodoFormPage.DRAFT_KEY);
+
+    if (draftJson == null) return;
+
+    final draftData = jsonDecode(draftJson) as Map<String, dynamic>;
+
+    final hasData = (draftData['title'] as String? ?? '').isNotEmpty ||
+                    (draftData['description'] as String? ?? '').isNotEmpty;
+
+    if (hasData && mounted) {
+      final load = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Draft Found'),
+          content: const Text('An unsaved To-Do was found. Would you like to load it?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Start New')),
+            ElevatedButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Load Draft')),
+          ],
+        ),
+      );
+
+      if (load == true) {
+        setState(() {
+          _titleController.text = draftData['title'] ?? '';
+          _descController.text = draftData['description'] ?? '';
+          _priority = draftData['priority'] ?? 'High';
+          _reminderController.text = draftData['reminder'] ?? '';
+          _selectedSalesUserId = draftData['selectedSalesUserId'];
+          if (draftData['reminder_date'] != null) {
+            _selectedReminderDate = DateTime.tryParse(draftData['reminder_date']);
+          }
+          if (draftData['reminder_hour'] != null && draftData['reminder_minute'] != null) {
+            _selectedReminderTime = TimeOfDay(hour: draftData['reminder_hour'], minute: draftData['reminder_minute']);
+          }
+        });
+      }
+    }
+  }
+
+  Future<void> _clearDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(TodoFormPage.DRAFT_KEY);
   }
 
   @override
@@ -311,12 +386,14 @@ class _TodoFormPageState extends State<TodoFormPage> {
               TextField(
                 controller: _titleController,
                 style: TextStyle(color: inputTextColor),
+                onChanged: (_) => _saveDraft(),
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: inputFillColor,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   hintText: 'Enter task title',
                   hintStyle: TextStyle(color: isDark ? Colors.white38 : Colors.grey),
+                  errorText: _titleController.text.isEmpty ? 'Title is required' : null,
                 ),
               ),
               const SizedBox(height: 18),
@@ -325,6 +402,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
               TextField(
                 controller: _descController,
                 style: TextStyle(color: inputTextColor),
+                onChanged: (_) => _saveDraft(),
                 maxLines: 3,
                 decoration: InputDecoration(
                   filled: true,
@@ -353,7 +431,10 @@ class _TodoFormPageState extends State<TodoFormPage> {
                               child: Text(user['username'] as String),
                             )),
                       ],
-                      onChanged: (val) => setState(() => _selectedSalesUserId = val),
+                      onChanged: (val) {
+                        setState(() => _selectedSalesUserId = val);
+                        _saveDraft();
+                      },
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
                         hintText: 'Select Sales User',
@@ -405,7 +486,10 @@ class _TodoFormPageState extends State<TodoFormPage> {
                     ),
                   ),
                 ],
-                onChanged: (val) => setState(() => _priority = val!),
+                onChanged: (val) {
+                  setState(() => _priority = val!);
+                  _saveDraft();
+                },
               ),
               const SizedBox(height: 18),
               Text('Reminder (required)', style: TextStyle(color: labelColor, fontWeight: FontWeight.bold)),
@@ -446,6 +530,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
                       _reminderController.text =
                           "${formatted.year}-${formatted.month.toString().padLeft(2, '0')}-${formatted.day.toString().padLeft(2, '0')} ${pickedTime.format(context)}";
                       setState(() {});
+                      _saveDraft();
                     }
                   }
                 },
