@@ -14,7 +14,6 @@ import 'home.dart';
 import 'Misc/splash_screen.dart';
 import 'Misc/theme_notifier.dart';
 import 'Todo & Leads/presentfollowup.dart';
-import 'Todo & Leads/todo.dart';
 import 'Todo & Leads/todo.dart'; // <-- Already present
 
 void main() async {
@@ -101,6 +100,9 @@ void main() async {
     onDismissActionReceivedMethod: NotificationController.onDismissActionReceivedMethod,
   );
 
+  // Get initial notification action if app was launched by a notification
+  initialNotificationAction = await AwesomeNotifications().getInitialNotificationAction();
+
   runApp(
     ChangeNotifierProvider(
       create: (_) => ThemeNotifier(),
@@ -133,43 +135,7 @@ class MyApp extends StatelessWidget {
           navigatorObservers: [routeObserver],
           navigatorKey: navigatorKey,
 
-          /// Direct notification/widget routing: skip splash/home if needed
-          home: Builder(
-            builder: (context) {
-              // Handle navigation for overdue tasks notification
-              if (initialNotificationAction != null && FirebaseAuth.instance.currentUser != null) {
-                final payload = initialNotificationAction!.payload;
-                final docId = payload?['docId'];
-                final page = payload?['page'];
-                final isTodo = payload?['type'] == 'todo';
-
-                // If launched from notification, go to HomePage first, then push the target page.
-                // This ensures the back button from the target page goes to HomePage.
-                Future.microtask(() {
-                  final navigator = navigatorKey.currentState;
-                  if (navigator == null) return;
-
-                  if (page == 'todo') {
-                    navigator.push(MaterialPageRoute(builder: (_) => const TodoPage()));
-                  } else if (docId != null) {
-                    final isEdit = initialNotificationAction!.buttonKeyPressed == 'EDIT_FOLLOWUP';
-                    if (isEdit) {
-                      navigator.push(MaterialPageRoute(builder: (_) => PresentFollowUp(docId: docId, editMode: true)));
-                    } else if (isTodo) {
-                      navigator.push(MaterialPageRoute(builder: (_) => TaskDetailPageFromId(docId: docId)));
-                    } else {
-                      navigator.push(MaterialPageRoute(builder: (_) => PresentFollowUp(docId: docId)));
-                    }
-                  }
-                });
-
-                initialNotificationAction = null; // Clear after handling
-                return const HomePage();
-              }
-              // Otherwise → go through SplashScreen
-              return const SplashScreen();
-            },
-          ),
+          home: const SplashScreen(),
         );
       },
     );
@@ -289,7 +255,6 @@ class NotificationController {
               MaterialPageRoute(builder: (_) => PresentFollowUp(docId: docId)),
             );
           }
-          initialNotificationAction = null; // Clear after handling
         } else {
           // If navigator is not ready, try again shortly
           await Future.delayed(const Duration(milliseconds: 300));
