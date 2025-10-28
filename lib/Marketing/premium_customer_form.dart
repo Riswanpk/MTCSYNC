@@ -54,18 +54,11 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
   bool isLoading = false;
   String? locationString;
   bool _photoError = false; // Add this line
-  bool _lastPurchaseError = false;
-  bool _upcomingEventError = false;
 
   // Add error flags for all fields
   bool _shopNameError = false;
-  bool _lastPurchasedItemError = false;
   bool _currentEnquiriesError = false;
   bool _confirmedOrderError = false;
-  bool _upcomingEventDetailsError = false;
-  bool _newProductSuggestionError = false;
-  bool _upcomingTrendsError = false;
-  bool _feedbackError = false;
 
   Future<void> _openCamera() async {
     final result = await Navigator.push(
@@ -190,28 +183,14 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
     // Validate all fields manually
     setState(() {
       _shopNameError = shopName.trim().isEmpty;
-      _lastPurchaseError = (lastItemPurchasedDate == null );
-      _lastPurchasedItemError = lastPurchasedItem.trim().isEmpty;
       _currentEnquiriesError = currentEnquiries.trim().isEmpty;
       _confirmedOrderError = confirmedOrder.trim().isEmpty;
-      _upcomingEventError = (upcomingEventDate == null);
-      _upcomingEventDetailsError = upcomingEventDetails.trim().isEmpty;
-      _newProductSuggestionError = newProductSuggestion.trim().isEmpty;
-      _upcomingTrendsError = upcomingTrends.trim().isEmpty;
-      _feedbackError = feedback.trim().isEmpty;
       _photoError = _imageFile == null;
     });
 
     bool hasError = _shopNameError ||
-        _lastPurchaseError ||
-        _lastPurchasedItemError ||
         _currentEnquiriesError ||
         _confirmedOrderError ||
-        _upcomingEventError ||
-        _upcomingEventDetailsError ||
-        _newProductSuggestionError ||
-        _upcomingTrendsError ||
-        _feedbackError ||
         _photoError;
 
     if (hasError) {
@@ -288,15 +267,8 @@ _formKey.currentState?.reset();
 
       // Reset all error flags
       _shopNameError = false;
-      _lastPurchaseError = false;
-      _lastPurchasedItemError = false;
       _currentEnquiriesError = false;
       _confirmedOrderError = false;
-      _upcomingEventError = false;
-      _upcomingEventDetailsError = false;
-      _newProductSuggestionError = false;
-      _upcomingTrendsError = false;
-      _feedbackError = false;
       _photoError = false;
     });
   }
@@ -397,8 +369,6 @@ _formKey.currentState?.reset();
                     _buildDatePickerField(
                       label: 'Last Item Purchased Date',
                       date: lastItemPurchasedDate,
-                      error: _lastPurchaseError,
-                      errorText: 'Please select last purchase date or month',
                       onTap: () async {
                         final picked = await showDatePicker(
                           context: context,
@@ -409,7 +379,6 @@ _formKey.currentState?.reset();
                         if (picked != null) {
                           setState(() {
                             lastItemPurchasedDate = picked;
-                            _lastPurchaseError = false;
                             _saveDraft();
                           });
                         }
@@ -436,16 +405,11 @@ _formKey.currentState?.reset();
                       ),
                       child: TextFormField(
                         controller: _lastPurchasedItemController,
-                        decoration: _inputDecoration(
-                          'Last Purchased Item',
-                          error: _lastPurchasedItemError,
-                          errorText: 'Enter last purchased item',
-                        ),
+                        decoration: _inputDecoration('Last Purchased Item'),
                         onChanged: (v) {
                           _saveDraft();
                           setState(() {
                             lastPurchasedItem = v;
-                            if (v.trim().isNotEmpty) _lastPurchasedItemError = false;
                           });
                         },
                       ),
@@ -532,8 +496,6 @@ _formKey.currentState?.reset();
                     _buildDatePickerField(
                       label: 'Upcoming Big Events Date',
                       date: upcomingEventDate,
-                      error: _upcomingEventError,
-                      errorText: 'Please select upcoming event date',
                       onTap: () async {
                         final picked = await showDatePicker(
                           context: context,
@@ -544,7 +506,6 @@ _formKey.currentState?.reset();
                         if (picked != null) {
                           setState(() {
                             upcomingEventDate = picked;
-                            _upcomingEventError = false;
                             _saveDraft();
                           });
                         }
@@ -571,16 +532,11 @@ _formKey.currentState?.reset();
                       ),
                       child: TextFormField(
                         controller: _upcomingEventDetailsController,
-                        decoration: _inputDecoration(
-                          'Upcoming Big Events Details',
-                          error: _upcomingEventDetailsError,
-                          errorText: 'Enter event details',
-                        ),
+                        decoration: _inputDecoration('Upcoming Big Events Details'),
                         onChanged: (v) {
                           _saveDraft();
                           setState(() {
                             upcomingEventDetails = v;
-                            if (v.trim().isNotEmpty) _upcomingEventDetailsError = false;
                           });
                         },
                       ),
@@ -610,16 +566,11 @@ _formKey.currentState?.reset();
                       ),
                       child: TextFormField(
                         controller: _newProductSuggestionController,
-                        decoration: _inputDecoration(
-                          'New Product Suggestion',
-                          error: _newProductSuggestionError,
-                          errorText: 'Enter new product suggestion',
-                        ),
+                        decoration: _inputDecoration('New Product Suggestion'),
                         onChanged: (v) {
                           _saveDraft();
                           setState(() {
                             newProductSuggestion = v;
-                            if (v.trim().isNotEmpty) _newProductSuggestionError = false;
                           });
                         },
                       ),
@@ -645,16 +596,11 @@ _formKey.currentState?.reset();
                       ),
                       child: TextFormField(
                         controller: _upcomingTrendsController,
-                        decoration: _inputDecoration(
-                          'Upcoming Trends',
-                          error: _upcomingTrendsError,
-                          errorText: 'Enter upcoming trends',
-                        ),
+                        decoration: _inputDecoration('Upcoming Trends'),
                         onChanged: (v) {
                           _saveDraft();
                           setState(() {
                             upcomingTrends = v;
-                            if (v.trim().isNotEmpty) _upcomingTrendsError = false;
                           });
                         },
                       ),
@@ -681,16 +627,11 @@ _formKey.currentState?.reset();
                       child: TextFormField(
                         controller: _feedbackController,
                         maxLines: 3,
-                        decoration: _inputDecoration(
-                          'Feedback About Our Product & Services',
-                          error: _feedbackError,
-                          errorText: 'Enter feedback',
-                        ),
+                        decoration: _inputDecoration('Feedback About Our Product & Services'),
                         onChanged: (v) {
                           _saveDraft();
                           setState(() {
                             feedback = v;
-                            if (v.trim().isNotEmpty) _feedbackError = false;
                           });
                         },
                       ),

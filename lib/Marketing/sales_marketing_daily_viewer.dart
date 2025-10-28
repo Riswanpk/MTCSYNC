@@ -171,7 +171,9 @@ class MarketingFormDetailsPage extends StatelessWidget {
                 MaterialPageRoute(
                   builder: (context) => EditMarketingFormPage(
                     docId: docId,
-                    formData: filteredData,
+                    formData: Map.of(filteredData)
+                      ..remove('username')
+                      ..remove('userid'),
                   ),
                 ),
               );

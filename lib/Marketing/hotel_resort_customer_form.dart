@@ -43,7 +43,6 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
   late TextEditingController _customCategoryController;
 
 
-  DateTime? date;
   String firmName = '';
   String place = '';
   String contactPerson = '';
@@ -68,15 +67,13 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
   // Error flags for each field
   bool _firmNameError = false;
   bool _placeError = false;
-  bool _contactPersonError = false;
   bool _contactNumberError = false;
-  bool _dateError = false;
+  bool _contactPersonError = false;
   bool _categoryError = false;
-  bool _currentEnquiryError = false;
-  bool _newProductSuggestionError = false;
-  bool _feedbackRatingError = false;
+  bool _currentEnquiryError = false; // This was already here, but ensure it's not affected by date removal
   bool _customCategoryError = false; // <-- Add this line
 
+  // No _feedbackRatingError needed as it's not a required field.
   // 🔹 Unified InputDecoration (used inside reusable textfield)
   InputDecoration _inputDecoration(
     String label, {
@@ -143,8 +140,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
             if (label == 'PLACE') _placeError = v.trim().isEmpty;
             if (label == 'CONTACT PERSON NAME') _contactPersonError = v.trim().isEmpty;
             if (label == 'CONTACT NUMBER') _contactNumberError = v.trim().isEmpty || v.length != 10;
-            if (label == 'CURRENT ENQUIRY') _currentEnquiryError = v.trim().isEmpty;
-            if (label == 'NEW PRODUCT SUGGESTION') _newProductSuggestionError = v.trim().isEmpty;
+            if (label == 'CURRENT ENQUIRY') _currentEnquiryError = v.trim().isEmpty; // This was already here, but ensure it's not affected by date removal
           });
         },
         inputFormatters: inputFormatters, // Add this line
@@ -202,7 +198,6 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
       'place': _placeController.text,
       'contactPerson': _contactPersonController.text,
       'contactNumber': _contactNumberController.text,
-      'date': date?.toIso8601String(),
       'category': category,
       'customCategory': _customCategoryController.text,
       'currentEnquiry': _currentEnquiryController.text,
@@ -244,7 +239,6 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
       _placeController.text = draftData['place'] ?? '';
       _contactPersonController.text = draftData['contactPerson'] ?? '';
       _contactNumberController.text = draftData['contactNumber'] ?? '';
-      date = draftData['date'] != null ? DateTime.parse(draftData['date']) : null;
       category = draftData['category'] ?? '';
       _customCategoryController.text = draftData['customCategory'] ?? '';
       _currentEnquiryController.text = draftData['currentEnquiry'] ?? '';
@@ -283,27 +277,19 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
     setState(() {
       _firmNameError = firmName.trim().isEmpty;
       _placeError = place.trim().isEmpty;
-      _contactPersonError = contactPerson.trim().isEmpty;
       _contactNumberError = contactNumber.trim().isEmpty || contactNumber.length != 10;
-      _dateError = date == null;
-      _categoryError = category.isEmpty;
+      _categoryError = category.isEmpty; // This was already here, but ensure it's not affected by date removal
       _customCategoryError = category == 'OTHERS' && customCategory.trim().isEmpty; // <-- Add this line
-      _currentEnquiryError = currentEnquiry.trim().isEmpty;
-      _newProductSuggestionError = newProductSuggestion.trim().isEmpty;
-      _feedbackRatingError = feedbackRating == 0;
+      _currentEnquiryError = currentEnquiry.trim().isEmpty; // This was already here, but ensure it's not affected by date removal
       _photoError = _imageFile == null;
     });
 
     bool hasError =_firmNameError ||
         _placeError ||
-        _contactPersonError ||
         _contactNumberError ||
-        _dateError ||
-        _categoryError ||
+        _categoryError || // This was already here, but ensure it's not affected by date removal
         _customCategoryError || // <-- Add this line
-        _currentEnquiryError ||
-        _newProductSuggestionError ||
-        _feedbackRatingError ||
+        _currentEnquiryError || // This was already here, but ensure it's not affected by date removal
         _photoError;
 
     if (hasError) {
@@ -337,7 +323,6 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
       'username': widget.username,
       'userid': widget.userid,
       'branch': widget.branch,
-      'date': date,
       'firmName': firmName,
       'place': place,
       'contactPerson': contactPerson,
@@ -363,7 +348,6 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
       locationString = null;
       category = '';
       customCategory = ''; // <-- Reset custom field
-      date = null;
       feedbackRating = 0;
       firmName = '';
       place = '';
@@ -404,7 +388,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                   children: [
                     const SizedBox(height: 12),
                     Text(
-                      'Hotel/Resort Customer Visit Form',
+                      'Hotel/Resort Visit Form',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 24,
@@ -456,69 +440,6 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                           : (contactNumber.length != 10 ? 'Phone number must be 10 digits' : null),
                       onChanged: (v) => contactNumber = v,
                     ),
-
-                    // DATE
-                    _buildSectionTitle('Visit Date'),
-                    InkWell(
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: date ?? DateTime.now(),
-                          firstDate: DateTime(2000),
-                          lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
-                        );
-                        if (picked != null) {
-                          setState(() {
-                            date = picked;
-                            _dateError = false;
-                            _saveDraft();
-                          });
-                        }
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? Colors.black
-                              : Colors.white,
-                          borderRadius: const BorderRadius.only(
-                            topRight: Radius.circular(22),
-                            bottomLeft: Radius.circular(22),
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.08),
-                              spreadRadius: 1,
-                              blurRadius: 8,
-                              offset: const Offset(2, 4),
-                            ),
-                          ],
-                        ),
-                        child: Text(
-                          date != null
-                              ? "${date!.day}/${date!.month}/${date!.year}"
-                              : 'Select date',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Theme.of(context).brightness == Brightness.dark
-                                ? Colors.white
-                                : Colors.black,
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (_dateError)
-                      const Padding(
-                        padding: EdgeInsets.only(left: 8, bottom: 12),
-                        child: Text(
-                          'Please select a date',
-                          style: TextStyle(
-                              color: Colors.red,
-                              fontSize: 12,
-                              fontFamily: 'Electorize'),
-                        ),
-                      ),
 
                     // CATEGORY
                     _buildSectionTitle('Category'),
@@ -617,10 +538,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                     _buildTextField(
                       label: 'CURRENT ENQUIRY',
                       required: true,
-                      error: _currentEnquiryError,
-                      errorText: 'Enter current enquiry',
                       controller: _currentEnquiryController,
-                      onChanged: (v) => currentEnquiry = v,
                     ),
                     _buildTextField(
                       label: 'CONFIRMED ORDER',
@@ -629,11 +547,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                     ),
                     _buildTextField(
                       label: 'NEW PRODUCT SUGGESTION',
-                      required: true,
-                      error: _newProductSuggestionError,
-                      errorText: 'Enter new product suggestion',
                       controller: _newProductSuggestionController,
-                      onChanged: (v) => newProductSuggestion = v,
                     ),
 
                     // FEEDBACK
@@ -660,7 +574,6 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                                 onPressed: () {
                                   setState(() {
                                     feedbackRating = starNumber;
-                                    _feedbackRatingError = false;
                                     _saveDraft();
                                   });
                                 },
@@ -670,14 +583,6 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                         }),
                       ),
                     ),
-                    if (_feedbackRatingError)
-                      const Padding(
-                        padding: EdgeInsets.only(left: 8, bottom: 8),
-                        child: Text(
-                          'Please select a rating',
-                          style: TextStyle(color: Colors.red, fontSize: 13, fontFamily: 'Electorize'),
-                        ),
-                      ),
 
                     // ANY SUGGESTION
                     _buildSectionTitle('Any Suggestion'),

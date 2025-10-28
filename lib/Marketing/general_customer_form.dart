@@ -290,7 +290,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                   children: [
                     const SizedBox(height: 12),
                     Text(
-                      'General Customer Visit Form',
+                      'General Marketing Visit Form',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 24,
@@ -540,8 +540,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                       ),
                       child: TextFormField(
                         controller: _confirmedOrderController,
-                        decoration: _inputDecoration('CONFIRMED ORDER', required: true),
-                        validator: (v) => v == null || v.isEmpty ? 'Enter confirmed order' : null,
+                        decoration: _inputDecoration('CONFIRMED ORDER'),
                         onChanged: (v) => _saveDraft(),
                       ),
                     ),

@@ -202,9 +202,9 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
             child: DropdownButtonFormField<String>(
               value: _selectedForm,
               items: const [
-                DropdownMenuItem(value: 'General Customer', child: Text('General Customer')),
+                DropdownMenuItem(value: 'General Customer', child: Text('General Marketing')),
                 DropdownMenuItem(value: 'Premium Customer', child: Text('Premium Customer')),
-                DropdownMenuItem(value: 'Hotel / Resort Customer', child: Text('Hotel / Resort Customer')),
+                DropdownMenuItem(value: 'Hotel / Resort Customer', child: Text('Hotel / Resort')),
               ],
               onChanged: _handleFormChange,
               decoration: const InputDecoration(
