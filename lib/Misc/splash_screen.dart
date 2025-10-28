@@ -22,29 +22,24 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _checkAuthAndNavigate() async {
-    // Wait for Firebase Auth to determine the initial user state.
-    // This stream emits null if no user is logged in, or a User object if logged in.
-    // It emits the *initial* state immediately after Firebase is ready.
-    FirebaseAuth.instance.authStateChanges().listen((User? user) {
-      if (mounted) {
-        if (user == null) {
-          // No user logged in, go to login page
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const LoginPage()),
-          );
-        } else {
-          // User is logged in, go to home page
-          // Handle initial notification action if present
-          if (initialNotificationAction != null) {
-            _handleInitialNotification(initialNotificationAction!);
-            initialNotificationAction = null; // Clear after handling
-          }
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const HomePage()),
-          );
-        }
+    // Await the first authentication state and then navigate.
+    // Using `first` ensures we only get one event and the subscription is closed,
+    // preventing calls on a disposed widget.
+    final user = await FirebaseAuth.instance.authStateChanges().first;
+
+    // Ensure the widget is still mounted before navigating.
+    if (!mounted) return;
+
+    if (user == null) {
+      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => const LoginPage()));
+    } else {
+      // Handle initial notification action if the app was opened from a notification.
+      if (initialNotificationAction != null) {
+        _handleInitialNotification(initialNotificationAction!);
+        initialNotificationAction = null; // Clear after handling
       }
-    });
+      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => const HomePage()));
+    }
   }
 
   void _handleInitialNotification(ReceivedAction action) {

@@ -48,6 +48,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final now = DateTime.now();
     final monthStart = DateTime(now.year, now.month, 1);
     final todayStart = DateTime(now.year, now.month, now.day);
+    final todayEnd = todayStart.add(const Duration(days: 1));
 
     Query followUps = FirebaseFirestore.instance.collection('follow_ups');
     Query todos = FirebaseFirestore.instance.collection('todo');
@@ -68,42 +69,52 @@ class _DashboardPageState extends State<DashboardPage> {
           .toList();
     }
 
-    // Total leads
-    final totalLeadsSnap = await followUps.get();
-    // Leads this month
-    final monthLeadsSnap = await followUps
-        .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
-        .get();
-    // Leads today
-    final todayLeadsSnap = await followUps
-        .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
-        .get();
+    // --- OPTIMIZATION: Fetch leads and todos concurrently ---
+    final results = await Future.wait([
+      // Query 1: Get all leads (with branch filter if needed)
+      followUps.get(),
+      // Query 2: Get pending todos
+      (() async {
+        Query pendingTodosQuery = todos.where('status', isEqualTo: 'pending');
+        if (branchEmails.isNotEmpty) {
+          // Firestore 'whereIn' supports up to 10 items, so batch if needed, but run in parallel
+          int pendingCount = 0;
+          List<Future<QuerySnapshot>> futures = [];
+          for (var i = 0; i < branchEmails.length; i += 10) {
+            final batch = branchEmails.sublist(i, i + 10 > branchEmails.length ? branchEmails.length : i + 10);
+            futures.add(pendingTodosQuery.where('email', whereIn: batch).get());
+          }
+          final snapshots = await Future.wait(futures);
+          for (final snap in snapshots) {
+            pendingCount += snap.size;
+          }
+          return pendingCount;
+        } else {
+          final pendingTodosSnap = await pendingTodosQuery.get();
+          return pendingTodosSnap.size;
+        }
+      })(),
+    ]);
 
-    // Pending todos (filtered by branch emails if manager)
-    Query pendingTodosQuery = todos.where('status', isEqualTo: 'pending');
-    if (branchEmails.isNotEmpty) {
-      // Firestore 'whereIn' supports up to 10 items, so batch if needed
-      int pendingCount = 0;
-      for (var i = 0; i < branchEmails.length; i += 10) {
-        final batch = branchEmails.sublist(i, i + 10 > branchEmails.length ? branchEmails.length : i + 10);
-        final snap = await pendingTodosQuery.where('email', whereIn: batch).get();
-        pendingCount += snap.size;
-      }
-      return {
-        'totalLeads': totalLeadsSnap.size,
-        'monthLeads': monthLeadsSnap.size,
-        'todayLeads': todayLeadsSnap.size,
-        'pendingTodos': pendingCount,
-      };
-    } else {
-      final pendingTodosSnap = await pendingTodosQuery.get();
-      return {
-        'totalLeads': totalLeadsSnap.size,
-        'monthLeads': monthLeadsSnap.size,
-        'todayLeads': todayLeadsSnap.size,
-        'pendingTodos': pendingTodosSnap.size,
-      };
+    final allLeadsSnap = results[0] as QuerySnapshot;
+    final pendingTodosCount = results[1] as int;
+
+    // --- OPTIMIZATION: Process counts in-memory from a single leads query ---
+    int monthLeadsCount = 0;
+    int todayLeadsCount = 0;
+
+    for (var doc in allLeadsSnap.docs) {
+      final createdAt = (doc['created_at'] as Timestamp).toDate();
+      if (createdAt.isAfter(monthStart)) monthLeadsCount++;
+      if (createdAt.isAfter(todayStart) && createdAt.isBefore(todayEnd)) todayLeadsCount++;
     }
+
+    return {
+      'totalLeads': allLeadsSnap.size,
+      'monthLeads': monthLeadsCount,
+      'todayLeads': todayLeadsCount,
+      'pendingTodos': pendingTodosCount,
+    };
   }
 
   @override
@@ -545,7 +556,7 @@ class LeadsPerMonthChart extends StatelessWidget {
     final snapshot = await query.get();
 
     for (var doc in snapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
+      final data = doc.data() as Map<String, dynamic>? ?? {};
       final ts = data['created_at'];
       if (ts is Timestamp) {
         final dt = ts.toDate();

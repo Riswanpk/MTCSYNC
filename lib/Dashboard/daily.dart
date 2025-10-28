@@ -61,32 +61,53 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final windowStart = today.subtract(const Duration(days: 1)).add(const Duration(hours: 12)); // yesterday 12pm
-    final windowEnd = today.add(const Duration(hours: 12)); // today 11:59:59 AM
 
-    for (var user in users) {
-      final userId = user['uid'];
-
-      // Check for leads created today
-      final leadsQuery = await FirebaseFirestore.instance
-          .collection('daily_report')
-          .where('userId', isEqualTo: userId)
-          .where('type', isEqualTo: 'leads')
-          .where('timestamp', isGreaterThanOrEqualTo: today)
-          .where('timestamp', isLessThan: today.add(const Duration(days: 1)))
-          .get();
-      user['lead'] = leadsQuery.docs.isNotEmpty;
-
-      // Check for todos created between yesterday 12pm and today 11:59am
-      final todoQuery = await FirebaseFirestore.instance
-          .collection('daily_report')
-          .where('userId', isEqualTo: userId)
-          .where('type', isEqualTo: 'todo')
-          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(windowStart))
-          .where('timestamp', isLessThan: Timestamp.fromDate(windowEnd))
-          .get();
-      user['todo'] = todoQuery.docs.isNotEmpty;
+    // New logic for todo window
+    DateTime todoWindowStart;
+    if (today.weekday == DateTime.monday) {
+      todoWindowStart = today.subtract(const Duration(days: 2)).add(const Duration(hours: 12)); // Saturday 12 PM
+    } else {
+      todoWindowStart = today.subtract(const Duration(days: 1)).add(const Duration(hours: 12)); // Previous day 12 PM
     }
+    final todoWindowEnd = today.add(const Duration(hours: 12)); // Today 11:59:59 AM
+
+    // --- OPTIMIZATION: Use Future.wait to run queries for all users in parallel ---
+    await Future.wait(users.map((user) async {
+        final userId = user['uid'];
+
+        // New logic for lead window
+        DateTime leadWindowStart;
+        if (today.weekday == DateTime.monday) {
+            leadWindowStart = today.subtract(const Duration(days: 1)); // Sunday
+        } else {
+            leadWindowStart = today; // Today
+        }
+        final leadWindowEnd = today.add(const Duration(days: 1)); // Up to end of today
+
+        // Run both queries for a user concurrently
+        final results = await Future.wait([
+            FirebaseFirestore.instance
+                .collection('daily_report')
+                .where('userId', isEqualTo: userId)
+                .where('type', isEqualTo: 'leads')
+                .where('timestamp', isGreaterThanOrEqualTo: leadWindowStart)
+                .where('timestamp', isLessThan: leadWindowEnd)
+                .limit(1) // We only need to know if one exists
+                .get(),
+            FirebaseFirestore.instance
+                .collection('daily_report')
+                .where('userId', isEqualTo: userId)
+                .where('type', isEqualTo: 'todo')
+                .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(todoWindowStart))
+                .where('timestamp', isLessThan: Timestamp.fromDate(todoWindowEnd))
+                .limit(1) // We only need to know if one exists
+                .get(),
+        ]);
+
+        user['lead'] = (results[0] as QuerySnapshot).docs.isNotEmpty;
+        user['todo'] = (results[1] as QuerySnapshot).docs.isNotEmpty;
+    }));
+    // --- END OPTIMIZATION ---
 
     return users;
   }

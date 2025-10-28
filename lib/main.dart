@@ -134,6 +134,14 @@ class MyApp extends StatelessWidget {
           theme: themeNotifier.currentTheme,
           navigatorObservers: [routeObserver],
           navigatorKey: navigatorKey,
+          // Ensure content stays above system navigation bar
+          builder: (context, child) {
+            return SafeArea(
+              top: false, // keep existing top behaviour, but protect bottom
+              bottom: true,
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
 
           home: const SplashScreen(),
         );

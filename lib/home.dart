@@ -436,11 +436,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
   }
 
   Future<void> _fetchAndCacheContacts() async {
-    var status = await Permission.contacts.status;
-    if (!status.isGranted) {
-      await Permission.contacts.request();
-      status = await Permission.contacts.status;
-    }
+    var status = await Permission.contacts.status; // Check status, assuming main.dart requested it
     if (!status.isGranted) return;
 
     final prefs = await SharedPreferences.getInstance();
@@ -899,7 +895,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                                         .get();
                                     branch = userDoc.data()?['branch'];
                                   }
-                                  await Future.delayed(const Duration(milliseconds: 800)); // Ensure loading animation is visible
+                                  await Future.delayed(const Duration(milliseconds: 200)); // Ensure loading animation is visible
 
                                   if (branch != null) {
                                     Navigator.of(context).pushReplacement(fadeRoute(LeadsPage(branch: branch)));
@@ -929,7 +925,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                               child: NeumorphicButton(
                                 onTap: () async {
                                   Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoadingPage()));
-                                  await Future.delayed(const Duration(milliseconds: 800)); // Simulate loading
+                                  await Future.delayed(const Duration(milliseconds: 500)); // Simulate loading
                                   Navigator.of(context).pushReplacement(fadeRoute(const TodoPage()));
                                 },
                                 text: 'ToDo List',
@@ -953,7 +949,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                                 child: NeumorphicButton(
                                   onTap: () async {
                                     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoadingPage()));
-                                    await Future.delayed(const Duration(milliseconds: 800)); // Simulate loading
+                                    await Future.delayed(const Duration(milliseconds: 500)); // Simulate loading
                                     Navigator.of(context).pushReplacement(
                                       MaterialPageRoute(builder: (_) => const DashboardPage()),
                                     );
@@ -973,7 +969,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                                 onTap: () async {
                                   // Show loading page for 1 second before navigating to Marketing
                                   Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoadingPage()));
-                                  await Future.delayed(const Duration(milliseconds: 1000)); // Reduced to 1 second
+                                  await Future.delayed(const Duration(milliseconds: 500)); // Reduced to 1 second
 
                                   // Fetch branch, username, userid for current user
                                   final user = FirebaseAuth.instance.currentUser;
@@ -1118,7 +1114,7 @@ Future<void> showLoadingDialog(BuildContext context) async {
       return const _RotatingLogoDialog();
     },
   );
-  await Future.delayed(const Duration(milliseconds: 800)); // 1.5 seconds
+  await Future.delayed(const Duration(milliseconds: 200)); // 1.5 seconds
   Navigator.of(context, rootNavigator: true).pop();
 }
 
@@ -1152,7 +1148,7 @@ class _RotatingLogoState extends State<_RotatingLogo> with SingleTickerProviderS
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800), // Slow rotation
+      duration: const Duration(milliseconds: 500), // Slow rotation
     )..repeat();
   }
 
@@ -1194,6 +1190,6 @@ Route fadeRoute(Widget page) {
         child: child,
       );
     },
-    transitionDuration: const Duration(milliseconds: 400),
+    transitionDuration: const Duration(milliseconds: 500),
   );
 }

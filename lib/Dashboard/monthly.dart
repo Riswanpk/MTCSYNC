@@ -397,32 +397,56 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
     final today = DateTime.now();
     final lastDay = (nextMonth.isAfter(today) ? today : nextMonth.subtract(const Duration(days: 1))).day;
 
+    // --- OPTIMIZATION: Fetch all data for the month in two queries ---
+    final leadsSnapshot = await FirebaseFirestore.instance
+        .collection('daily_report')
+        .where('userId', isEqualTo: uid)
+        .where('type', isEqualTo: 'leads')
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
+        .where('timestamp', isLessThan: Timestamp.fromDate(nextMonth))
+        .get();
+
+    // Fetch todos for the entire month. The window needs to start earlier to catch todos for the 1st of the month.
+    final todosSnapshot = await FirebaseFirestore.instance
+        .collection('daily_report')
+        .where('userId', isEqualTo: uid)
+        .where('type', isEqualTo: 'todo')
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart.subtract(const Duration(days: 2))))
+        .where('timestamp', isLessThan: Timestamp.fromDate(nextMonth.add(const Duration(hours: 12))))
+        .get();
+
+    final leadDates = leadsSnapshot.docs.map((doc) => (doc['timestamp'] as Timestamp).toDate()).toSet();
+    final todoDates = todosSnapshot.docs.map((doc) => (doc['timestamp'] as Timestamp).toDate()).toSet();
+    // --- END OPTIMIZATION ---
+
     List<Map<String, dynamic>> missedReport = [];
 
     for (int i = 0; i < lastDay; i++) {
       final date = monthStart.add(Duration(days: i));
+      if (date.weekday == DateTime.sunday) continue; // Skip Sundays
+
       final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
       final dayStart = DateTime(date.year, date.month, date.day);
-      final dayEnd = dayStart.add(const Duration(days: 1));
-      final leadQuery = await FirebaseFirestore.instance
-          .collection('daily_report')
-          .where('userId', isEqualTo: uid)
-          .where('type', isEqualTo: 'leads')
-          .where('timestamp', isGreaterThanOrEqualTo: dayStart)
-          .where('timestamp', isLessThan: dayEnd)
-          .get();
-      final leadTick = leadQuery.docs.isNotEmpty;
 
-      final todoWindowStart = dayStart.subtract(const Duration(days: 1)).add(const Duration(hours: 12)); // Previous day 12 PM
-      final todoWindowEnd = dayStart.add(const Duration(hours: 12)); // Current day 11:59:59 AM
-      final todoQuery = await FirebaseFirestore.instance
-          .collection('daily_report')
-          .where('userId', isEqualTo: uid)
-          .where('type', isEqualTo: 'todo')
-          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(todoWindowStart))
-          .where('timestamp', isLessThan: Timestamp.fromDate(todoWindowEnd))
-          .get();
-      final todoTick = todoQuery.docs.isNotEmpty;
+      // --- OPTIMIZATION: Check against the fetched data instead of querying ---
+      final leadTick = leadDates.any((leadDate) {
+        if (dayStart.weekday == DateTime.monday) {
+          // For Monday, check if lead is from Sunday or Monday
+          return leadDate.isAfter(dayStart.subtract(const Duration(days: 1))) && leadDate.isBefore(dayStart.add(const Duration(days: 1)));
+        }
+        return leadDate.isAfter(dayStart) && leadDate.isBefore(dayStart.add(const Duration(days: 1)));
+      });
+
+      DateTime todoWindowStart;
+      if (dayStart.weekday == DateTime.monday) {
+        todoWindowStart = dayStart.subtract(const Duration(days: 2)).add(const Duration(hours: 12)); // Saturday 12 PM
+      } else {
+        todoWindowStart = dayStart.subtract(const Duration(days: 1)).add(const Duration(hours: 12)); // Previous day 12 PM
+      }
+      final todoWindowEnd = dayStart.add(const Duration(hours: 12));
+
+      final todoTick = todoDates.any((todoDate) => todoDate.isAfter(todoWindowStart) && todoDate.isBefore(todoWindowEnd));
+      // --- END OPTIMIZATION ---
 
       missedReport.add({
         'date': dateStr,

@@ -58,6 +58,8 @@ class _FollowUpFormState extends State<FollowUpForm> {
   String _status = 'In Progress';
   String _priority = 'High';
   TimeOfDay? _selectedReminderTime;
+  List<Contact>? _deviceContacts; // Cache device contacts in memory
+  bool _deviceContactsLoading = false;
   bool _isSaving = false;
 
   Future<void> _scheduleNotification(DateTime dateTime) async {
@@ -301,6 +303,51 @@ class _FollowUpFormState extends State<FollowUpForm> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadDraft());
   }
 
+  Future<void> _loadDeviceContacts() async {
+    if (_deviceContactsLoading || (_deviceContacts != null && _deviceContacts!.isNotEmpty)) {
+      // Already loading or already loaded contacts, no need to fetch again immediately
+      return;
+    }
+
+    setState(() {
+      _deviceContactsLoading = true;
+    });
+
+    try {
+      var status = await Permission.contacts.status;
+      if (!status.isGranted) {
+        await Permission.contacts.request(); // Request if not granted (fallback)
+        status = await Permission.contacts.status;
+      }
+      if (!status.isGranted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Contact permission denied')));
+        }
+        return;
+      }
+
+      // Load from cache first for immediate display
+      List<Contact> cached = await getCachedContacts();
+      if (cached.isNotEmpty && mounted) {
+        setState(() {
+          _deviceContacts = cached;
+        });
+      }
+
+      // Fetch latest contacts in background and update cache/state
+      final latestContacts = await FlutterContacts.getContacts(withProperties: true, withThumbnail: false);
+      final encoded = jsonEncode(latestContacts.map((c) => c.toJson()).toList());
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('contacts_cache', encoded);
+      if (mounted) {
+        setState(() => _deviceContacts = latestContacts);
+      }
+    } finally {
+      if (mounted) setState(() => _deviceContactsLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Stack(
@@ -473,6 +520,10 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                 icon: const Icon(Icons.contacts),
                                 tooltip: 'Pick from contacts',
                                 onPressed: () async {
+                                  if (_deviceContacts == null && !_deviceContactsLoading) {
+                                    await _loadDeviceContacts(); // Ensure contacts are loaded
+                                  }
+
                                   try {
                                     var status = await Permission.contacts.status;
                                     if (!status.isGranted) {
@@ -487,10 +538,14 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                       return;
                                     }
 
-                                    List<Contact> contacts =
-                                        await FlutterContacts.getContacts(
-                                            withProperties: true);
+                                    if (_deviceContacts == null) {
+                                      // Fallback if _loadDeviceContacts failed or returned empty
+                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                                          content: Text('Could not load contacts')));
+                                      return;
+                                    }
 
+                                    List<Contact> contactsToDisplay = List.from(_deviceContacts!);
                                     Contact? selectedContact =
                                         await showDialog<Contact>(
                                       context: context,
@@ -498,7 +553,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                       builder: (context) {
                                         TextEditingController searchController =
                                             TextEditingController();
-                                        List<Contact> filteredContacts = contacts;
+                                        List<Contact> filteredContacts = contactsToDisplay;
                                         return StatefulBuilder(
                                           builder: (context, setState) {
                                             return Dialog(
@@ -548,8 +603,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                                               onChanged: (value) {
                                                                 _saveDraft();
                                                                 setState(() {
-                                                                  filteredContacts =
-                                                                      contacts
+                                                                  filteredContacts = contactsToDisplay
                                                                           .where((c) =>
                                                                               (c.displayName ?? '')
                                                                                   .toLowerCase()
