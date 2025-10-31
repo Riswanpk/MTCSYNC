@@ -10,7 +10,7 @@ import 'Feedback/feedback.dart'; // Add this import
 import 'Feedback/feedback_admin.dart'; // Add this import
 import 'Dashboard/dashboard.dart'; // Import the dashboard page
 import 'Misc/manageusers.dart'; // Add this import
-import 'Todo & Leads/customer_list.dart'; // Import the customer list page
+ // Import the customer list page
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -30,7 +30,8 @@ import 'Performance/insights_performance.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'dart:convert';
 import 'package:permission_handler/permission_handler.dart';
-
+import '../Misc/theme_notifier.dart';
+import 'package:provider/provider.dart';
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -39,8 +40,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin, RouteAware {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
+  // Remove bubble animation controller fields
 
   // Add swing animation variables
   late AnimationController _swingController;
@@ -59,14 +59,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 4000), // Slower bubbles (was 500)
-    )..repeat(reverse: true);
-
-    _scaleAnimation = Tween<double>(begin: 0.9, end: 1.1).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    // Bubble animation removed — bubbles will be static now.
 
     // Update swing controller and animation for left-right-center swing
     _swingController = AnimationController(
@@ -323,7 +316,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
           .doc(uid)
           .get();
       final role = userDoc.data()?['role']?.toString().toLowerCase() ?? 'unknown';
-      final settingsPage = SettingsPage(userRole: role);
+      final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+      final settingsPage = SettingsPage(userRole: role, themeProvider: themeProvider);
       await settingsPage.exportAndSendExcel(context, year: year, month: month);
       print('Monthly Excel Report Sent!');
     } catch (e) {
@@ -417,7 +411,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
   @override
   void dispose() {
     routeObserver.unsubscribe(this);
-    _controller.dispose();
     _swingController.dispose(); // Dispose swing controller
     super.dispose();
   }
@@ -561,11 +554,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                     leading: const Icon(Icons.settings, color: Color(0xFF005BAC)),
                     title: const Text('Settings'),
                     onTap: () {
+                      final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
                       Navigator.pop(context); // Close the drawer
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => SettingsPage(userRole: role ?? ''),
+                          builder: (context) =>
+                              SettingsPage(userRole: role ?? '', themeProvider: themeProvider),
                         ),
                       );
                     },
@@ -726,18 +721,15 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                 Positioned(
                   top: -120,
                   right: -120,
-                  child: ScaleTransition(
-                    scale: _scaleAnimation,
-                    child: Container(
-                      width: 260,
-                      height: 260,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: [Color(0xFF8CC63F), Color(0xFFB2E85F)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
+                  child: Container(
+                    width: 260,
+                    height: 260,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF8CC63F), Color(0xFFB2E85F)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
                     ),
                   ),
@@ -747,18 +739,15 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                 Positioned(
                   bottom: -120,
                   left: -120,
-                  child: ScaleTransition(
-                    scale: _scaleAnimation,
-                    child: Container(
-                      width: 260,
-                      height: 260,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: [Color(0xFF005BAC), Color(0xFF3383C7)],
-                          begin: Alignment.topRight,
-                          end: Alignment.bottomLeft,
-                        ),
+                  child: Container(
+                    width: 260,
+                    height: 260,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF005BAC), Color(0xFF3383C7)],
+                        begin: Alignment.topRight,
+                        end: Alignment.bottomLeft,
                       ),
                     ),
                   ),

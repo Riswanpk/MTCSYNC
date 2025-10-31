@@ -12,7 +12,7 @@ import 'Misc/constant.dart';
 import 'login.dart';
 import 'home.dart';
 import 'Misc/splash_screen.dart';
-import 'Misc/theme_notifier.dart';
+import 'Misc/theme_notifier.dart'; // Now imports ThemeProvider
 import 'Todo & Leads/presentfollowup.dart';
 import 'Todo & Leads/todo.dart'; // <-- Already present
 
@@ -105,7 +105,7 @@ void main() async {
 
   runApp(
     ChangeNotifierProvider(
-      create: (_) => ThemeNotifier(),
+      create: (_) => ThemeProvider(),
       child: Builder(
         builder: (context) => MediaQuery(
           data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
@@ -126,12 +126,21 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<ThemeNotifier>(
-      builder: (context, themeNotifier, child) {
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, child) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'MTC Sync',
-          theme: themeNotifier.currentTheme,
+          themeMode: themeProvider.themeMode,
+          theme: ThemeData(
+            brightness: Brightness.light,
+            primarySwatch: Colors.blue,
+            // Define other light theme properties
+          ),
+          darkTheme: ThemeData(
+            brightness: Brightness.dark,
+            // Define other dark theme properties
+          ),
           navigatorObservers: [routeObserver],
           navigatorKey: navigatorKey,
           // Ensure content stays above system navigation bar

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'theme_notifier.dart';
+import 'theme_notifier.dart'; // Now imports ThemeProvider
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:android_intent_plus/android_intent.dart';
 import 'dart:io';
@@ -14,9 +14,10 @@ import 'package:path_provider/path_provider.dart';
 
 class SettingsPage extends StatelessWidget {
   final String userRole;
-  final String _appVersion = 'Version 1.2.80';
+  final ThemeProvider themeProvider;
+  final String _appVersion = 'Version 1.2.81';
 
-  const SettingsPage({super.key, required this.userRole});
+  const SettingsPage({super.key, required this.userRole, required this.themeProvider});
 
   void _openNotificationToneSettings(BuildContext context) async {
     if (Platform.isAndroid) {
@@ -658,15 +659,15 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeNotifier = Provider.of<ThemeNotifier>(context);
-    final theme = themeNotifier.currentTheme;
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final theme = Theme.of(context);
 
     return Theme(
       data: theme,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Settings'),
-          backgroundColor: theme.colorScheme.primary,
+          backgroundColor: const Color(0xFF005BAC),
           foregroundColor: Colors.white,
         ),
         body: Column(
@@ -682,15 +683,37 @@ class SettingsPage extends StatelessWidget {
                         'Appearance',
                         style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                       ),
-                      SwitchListTile(
-                        title: const Text('Dark Mode'),
-                        value: themeNotifier.isDarkMode,
-                        onChanged: (val) {
-                          themeNotifier.toggleTheme(val);
-                        },
-                        secondary: Icon(
-                          themeNotifier.isDarkMode ? Icons.dark_mode : Icons.light_mode,
-                          color: theme.colorScheme.primary,
+                      ListTile(
+                        title: const Text('Theme'),
+                        trailing: DropdownButton<ThemeMode>(
+                          value: themeProvider.themeMode,
+                          items: const [
+                            DropdownMenuItem(
+                              value: ThemeMode.system,
+                              child: Text('System'),
+                            ),
+                            DropdownMenuItem(
+                              value: ThemeMode.light,
+                              child: Text('Light'),
+                            ),
+                            DropdownMenuItem(
+                              value: ThemeMode.dark,
+                              child: Text('Dark'),
+                            ),
+                          ],
+                          onChanged: (ThemeMode? newMode) {
+                            if (newMode != null) {
+                              themeProvider.setTheme(newMode);
+                            }
+                          },
+                        ),
+                        leading: Icon(
+                          themeProvider.themeMode == ThemeMode.dark
+                              ? Icons.dark_mode
+                              : themeProvider.themeMode == ThemeMode.light
+                                  ? Icons.light_mode
+                                  : Icons.settings_system_daydream,
+                          color: const Color(0xFF005BAC),
                         ),
                       ),
                       const SizedBox(height: 32),

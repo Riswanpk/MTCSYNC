@@ -1,50 +1,63 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class ThemeNotifier extends ChangeNotifier {
-  bool _isDarkMode = false;
+class ThemeProvider with ChangeNotifier {
+  static const String _themePrefKey = 'theme_mode';
+  ThemeMode _themeMode = ThemeMode.system;
 
-  ThemeNotifier() {
+  ThemeProvider() {
     _loadTheme();
   }
 
-  bool get isDarkMode => _isDarkMode;
+  ThemeMode get themeMode => _themeMode;
 
-  ThemeData get currentTheme => _isDarkMode
-      ? ThemeData.dark().copyWith(
-          colorScheme: ThemeData.dark().colorScheme.copyWith(
-                primary: const Color(0xFF005BAC),
-                secondary: const Color(0xFF8CC63F),
-              ),
-          scaffoldBackgroundColor: const Color(0xFF181A20),
-        )
-      : ThemeData.light().copyWith(
-          colorScheme: ThemeData.light().colorScheme.copyWith(
-                primary: const Color(0xFF005BAC),
-                secondary: const Color(0xFF8CC63F),
-              ),
-          scaffoldBackgroundColor: const Color(0xFFF5F6FA),
-        );
-
-  void toggleTheme(bool isDark) async {
-    _isDarkMode = isDark;
-    notifyListeners();
+  Future<void> _loadTheme() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isDarkMode', _isDarkMode);
+    final themeString = prefs.getString(_themePrefKey);
+    switch (themeString) {
+      case 'light':
+        _themeMode = ThemeMode.light;
+        break;
+      case 'dark':
+        _themeMode = ThemeMode.dark;
+        break;
+      case 'system':
+      default:
+        _themeMode = ThemeMode.system;
+        break;
+    }
+    notifyListeners();
   }
 
-  void _loadTheme() async {
-    final prefs = await SharedPreferences.getInstance();
-    _isDarkMode = prefs.getBool('isDarkMode') ?? false;
+  Future<void> setTheme(ThemeMode themeMode) async {
+    if (_themeMode == themeMode) return;
+
+    _themeMode = themeMode;
     notifyListeners();
+
+    final prefs = await SharedPreferences.getInstance();
+    String themeString;
+    switch (themeMode) {
+      case ThemeMode.light:
+        themeString = 'light';
+        break;
+      case ThemeMode.dark:
+        themeString = 'dark';
+        break;
+      case ThemeMode.system:
+      default:
+        themeString = 'system';
+        break;
+    }
+    await prefs.setString(_themePrefKey, themeString);
   }
 }
 
-final ThemeData lightTheme = ThemeData.light();
-final ThemeData darkTheme = ThemeData.dark().copyWith(
-      colorScheme: ColorScheme.dark(
-        background: Color(0xFF181A20),
-        onBackground: Colors.white,
-      ),
-    );
-final ThemeMode themeMode = ThemeMode.system;
+// The existing ThemeNotifier can be removed or replaced by the class above.
+// For this example, I'll assume it's replaced.
+
+class ThemeNotifier with ChangeNotifier {
+  final darkTheme = ThemeData(
+    // This part seems incomplete from your request, but I've included it as provided.
+  );
+}

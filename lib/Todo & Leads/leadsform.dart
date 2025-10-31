@@ -301,6 +301,10 @@ class _FollowUpFormState extends State<FollowUpForm> {
     }
     // Check for a draft when the form loads
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadDraft());
+
+    // PREFETCH device contacts to warm cache and speed up picker
+    // (do not await here so UI startup is not blocked)
+    _loadDeviceContacts();
   }
 
   Future<void> _loadDeviceContacts() async {
@@ -520,199 +524,65 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                 icon: const Icon(Icons.contacts),
                                 tooltip: 'Pick from contacts',
                                 onPressed: () async {
+                                  // Trigger background refresh if not already loading
                                   if (_deviceContacts == null && !_deviceContactsLoading) {
-                                    await _loadDeviceContacts(); // Ensure contacts are loaded
+                                    _loadDeviceContacts(); // do not await - open modal immediately
                                   }
 
-                                  try {
-                                    var status = await Permission.contacts.status;
-                                    if (!status.isGranted) {
-                                      await Permission.contacts.request();
-                                      status = await Permission.contacts.status;
-                                    }
-                                    if (!status.isGranted) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(const SnackBar(
-                                              content: Text(
-                                                  'Contact permission denied')));
+                                  var status = await Permission.contacts.status;
+                                  if (!status.isGranted) {
+                                    final granted = await FlutterContacts.requestPermission();
+                                    if (!granted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Contact permission denied')),
+                                      );
                                       return;
                                     }
-
-                                    if (_deviceContacts == null) {
-                                      // Fallback if _loadDeviceContacts failed or returned empty
-                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                                          content: Text('Could not load contacts')));
-                                      return;
-                                    }
-
-                                    List<Contact> contactsToDisplay = List.from(_deviceContacts!);
-                                    Contact? selectedContact =
-                                        await showDialog<Contact>(
-                                      context: context,
-                                      barrierDismissible: true,
-                                      builder: (context) {
-                                        TextEditingController searchController =
-                                            TextEditingController();
-                                        List<Contact> filteredContacts = contactsToDisplay;
-                                        return StatefulBuilder(
-                                          builder: (context, setState) {
-                                            return Dialog(
-                                              insetPadding: EdgeInsets.zero,
-                                              backgroundColor: Colors.white,
-                                              child: Container(
-                                                width: double.infinity,
-                                                height: MediaQuery.of(context)
-                                                    .size
-                                                    .height,
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 0, vertical: 0),
-                                                child: Column(
-                                                  children: [
-                                                    Container(
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                              horizontal: 16,
-                                                              vertical: 16),
-                                                      child: Row(
-                                                        children: [
-                                                          Expanded(
-                                                            child: TextField(
-                                                              controller:
-                                                                  searchController,
-                                                              decoration:
-                                                                  InputDecoration(
-                                                                hintText:
-                                                                    'Search contacts...',
-                                                                prefixIcon:
-                                                                    const Icon(
-                                                                        Icons.search),
-                                                                border:
-                                                                    OutlineInputBorder(
-                                                                  borderRadius:
-                                                                      BorderRadius
-                                                                          .circular(
-                                                                              12),
-                                                                  borderSide:
-                                                                      BorderSide.none,
-                                                                ),
-                                                                filled: true,
-                                                                fillColor:
-                                                                    Colors.grey[100],
-                                                              ),
-                                                              onChanged: (value) {
-                                                                _saveDraft();
-                                                                setState(() {
-                                                                  filteredContacts = contactsToDisplay
-                                                                          .where((c) =>
-                                                                              (c.displayName ?? '')
-                                                                                  .toLowerCase()
-                                                                                  .contains(value.toLowerCase()) ||
-                                                                              (c.phones.isNotEmpty &&
-                                                                                  c.phones.first.number
-                                                                                      .toLowerCase()
-                                                                                      .contains(value.toLowerCase())))
-                                                                          .toList();
-                                                                });
-                                                              },
-                                                            ),
-                                                          ),
-                                                          IconButton(
-                                                            icon: const Icon(Icons.close),
-                                                            onPressed: () =>
-                                                                Navigator.pop(context),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                    Expanded(
-                                                      child: ListView.builder(
-                                                        itemCount:
-                                                            filteredContacts.length,
-                                                        itemBuilder:
-                                                            (context, index) {
-                                                          final contact =
-                                                              filteredContacts[index];
-                                                          final phone = contact.phones
-                                                                  .isNotEmpty
-                                                              ? contact.phones.first.number ??
-                                                                  ''
-                                                              : '';
-                                                          return ListTile(
-                                                            leading: CircleAvatar(
-                                                              child: Text(
-                                                                (contact.displayName ??
-                                                                            '')
-                                                                        .isNotEmpty
-                                                                    ? contact
-                                                                        .displayName![0]
-                                                                        .toUpperCase()
-                                                                    : '?',
-                                                                style: const TextStyle(
-                                                                    fontWeight:
-                                                                        FontWeight.bold),
-                                                              ),
-                                                              backgroundColor:
-                                                                  Colors.blue[100],
-                                                            ),
-                                                            title: Text(
-                                                              contact.displayName ?? '',
-                                                              style: const TextStyle(
-                                                                  fontWeight:
-                                                                      FontWeight.w500),
-                                                            ),
-                                                            subtitle:
-                                                                Text(phone, style: TextStyle(color: Colors.grey[600])),
-                                                            onTap: () =>
-                                                                Navigator.pop(
-                                                                    context, contact),
-                                                          );
-                                                        },
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        );
-                                      },
-                                    );
-
-                                    if (selectedContact != null &&
-                                        selectedContact.phones.isNotEmpty) {
-                                      final phone =
-                                          selectedContact.phones.first.number ?? '';
-                                      final name = selectedContact.displayName ?? '';
-                                      final digits = RegExp(r'\d')
-                                          .allMatches(phone)
-                                          .map((m) => m.group(0))
-                                          .join();
-                                      if (digits.length >= 10) {
-                                        final tenDigits =
-                                            digits.substring(digits.length - 10);
-                                        final formatted =
-                                            '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
-                                        _phoneController.text = formatted;
-                                        _phoneController.selection =
-                                            TextSelection.fromPosition(
-                                          TextPosition(offset: formatted.length),
-                                        );
-                                        if (name.isNotEmpty) {
-                                          _nameController.text = name;
-                                        }
-                                      } else {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(const SnackBar(
-                                                content: Text(
-                                                    'Contact does not contain a valid 10-digit phone number')));
-                                      }
-                                    }
-                                  } catch (e) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Failed to pick contact: $e')),
-                                    );
                                   }
+
+                                  // Open modal immediately with whatever we have in memory (may be cached)
+                                  showModalBottomSheet(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    backgroundColor: Colors.transparent,
+                                    builder: (context) {
+                                      return DraggableScrollableSheet(
+                                        initialChildSize: 0.85,
+                                        minChildSize: 0.4,
+                                        maxChildSize: 0.95,
+                                        expand: false,
+                                        builder: (context, scrollController) {
+                                          return ContactPickerModal(
+                                            initialContacts: _deviceContacts,
+                                            initialLoading: _deviceContactsLoading,
+                                            scrollController: scrollController,
+                                            onSelect: (name, phone) {
+                                              final digits = RegExp(r'\d')
+                                                  .allMatches(phone)
+                                                  .map((m) => m.group(0))
+                                                  .join();
+                                              if (digits.length >= 10) {
+                                                final tenDigits = digits.substring(digits.length - 10);
+                                                final formatted =
+                                                    '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
+                                                setState(() {
+                                                  _phoneController.text = formatted;
+                                                  _phoneController.selection = TextSelection.fromPosition(
+                                                    TextPosition(offset: formatted.length),
+                                                  );
+                                                  if (name.isNotEmpty) _nameController.text = name;
+                                                });
+                                              } else {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(content: Text('Contact does not contain a valid 10-digit phone number')),
+                                                );
+                                              }
+                                            },
+                                          );
+                                        },
+                                      );
+                                    },
+                                  );
                                 },
                               ),
                             ],
@@ -895,6 +765,173 @@ class _FollowUpFormState extends State<FollowUpForm> {
             ),
           ),
       ],
+    );
+  }
+}
+
+// Add the modal widget below the class (or near the end of the file)
+class ContactPickerModal extends StatefulWidget {
+  final List<Contact>? initialContacts;
+  final bool initialLoading;
+  final ScrollController scrollController;
+  final void Function(String name, String phone) onSelect;
+
+  const ContactPickerModal({
+    super.key,
+    required this.initialContacts,
+    required this.initialLoading,
+    required this.scrollController,
+    required this.onSelect,
+  });
+
+  @override
+  State<ContactPickerModal> createState() => _ContactPickerModalState();
+}
+
+class _ContactPickerModalState extends State<ContactPickerModal> {
+  List<Contact> _contacts = [];
+  List<Contact> _filtered = [];
+  bool _loading = true;
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _contacts = widget.initialContacts ?? [];
+    _filtered = List.from(_contacts);
+    _loading = widget.initialLoading;
+    // If no contacts available immediately, load cached contacts fast
+    if (_contacts.isEmpty) {
+      _loadCachedThenFresh();
+    } else {
+      // even if we have some in-memory contacts, still refresh in background for freshness
+      _refreshContactsInBackground();
+      setState(() {
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _loadCachedThenFresh() async {
+    setState(() => _loading = true);
+    try {
+      // Try cached first (fast)
+      final cached = await getCachedContacts();
+      if (cached.isNotEmpty && mounted) {
+        setState(() {
+          _contacts = cached;
+          _filtered = List.from(_contacts);
+          _loading = false;
+        });
+      }
+      // Fetch latest contacts in background and update cache & UI when ready
+      await _refreshContactsInBackground();
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _refreshContactsInBackground() async {
+    try {
+      final granted = await FlutterContacts.requestPermission();
+      if (!granted) return;
+      final latest = await FlutterContacts.getContacts(withProperties: true, withPhoto: false);
+      if (!mounted) return;
+      // update shared prefs cache
+      final prefs = await SharedPreferences.getInstance();
+      final encoded = jsonEncode(latest.map((c) => c.toJson()).toList());
+      await prefs.setString('contacts_cache', encoded);
+
+      setState(() {
+        _contacts = latest;
+        _applyFilter(_searchController.text);
+        _loading = false;
+      });
+    } catch (e) {
+      // ignore errors - leave whatever we have
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _applyFilter(String q) {
+    final qLower = q.toLowerCase();
+    final qDigits = RegExp(r'\d').allMatches(q).map((m) => m.group(0)).join();
+    setState(() {
+      if (q.isEmpty) {
+        _filtered = List.from(_contacts);
+        return;
+      }
+      _filtered = _contacts.where((c) {
+        final name = (c.displayName ?? '').toLowerCase();
+        final phoneRaw = c.phones.isNotEmpty ? (c.phones.first.number ?? '') : '';
+        final phoneDigits = RegExp(r'\d').allMatches(phoneRaw).map((m) => m.group(0)).join();
+        final matchesName = name.contains(qLower);
+        final matchesPhone = qDigits.isNotEmpty ? phoneDigits.contains(qDigits) : phoneRaw.toLowerCase().contains(qLower);
+        return matchesName || matchesPhone;
+      }).toList();
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search contacts...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () {
+                    _searchController.clear();
+                    _applyFilter('');
+                  },
+                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onChanged: (v) => _applyFilter(v), // filter on each keypress
+            ),
+          ),
+          Expanded(
+            child: _loading && _contacts.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : (_filtered.isEmpty
+                    ? Center(child: Text(_contacts.isEmpty ? 'No contacts found' : 'No matching contacts'))
+                    : ListView.builder(
+                        controller: widget.scrollController,
+                        itemCount: _filtered.length,
+                        itemBuilder: (context, index) {
+                          final contact = _filtered[index];
+                          final phone = contact.phones.isNotEmpty ? (contact.phones.first.number ?? 'No number') : 'No number';
+                          return ListTile(
+                            leading: const Icon(Icons.person_outline),
+                            title: Text(contact.displayName ?? ''),
+                            subtitle: Text(phone),
+                            onTap: () {
+                              widget.onSelect(contact.displayName ?? '', phone);
+                              Navigator.pop(context);
+                            },
+                          );
+                        },
+                      )),
+          ),
+        ],
+      ),
     );
   }
 }
