@@ -69,51 +69,47 @@ class _DashboardPageState extends State<DashboardPage> {
           .toList();
     }
 
-    // --- OPTIMIZATION: Fetch leads and todos concurrently ---
+    // --- OPTIMIZATION: Use count() aggregation and run queries concurrently ---
     final results = await Future.wait([
-      // Query 1: Get all leads (with branch filter if needed)
-      followUps.get(),
-      // Query 2: Get pending todos
+      // Query 1: Total leads count
+      followUps.count().get(),
+      // Query 2: Leads this month count
+      followUps.where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart)).count().get(),
+      // Query 3: Leads today count
+      followUps
+          .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
+          .where('created_at', isLessThan: Timestamp.fromDate(todayEnd))
+          .count()
+          .get(),
+      // Query 4: Pending todos count
       (() async {
         Query pendingTodosQuery = todos.where('status', isEqualTo: 'pending');
         if (branchEmails.isNotEmpty) {
-          // Firestore 'whereIn' supports up to 10 items, so batch if needed, but run in parallel
+          // Firestore 'whereIn' supports up to 30 items in a query.
+          // We batch requests to stay within this limit and run them in parallel.
           int pendingCount = 0;
-          List<Future<QuerySnapshot>> futures = [];
-          for (var i = 0; i < branchEmails.length; i += 10) {
-            final batch = branchEmails.sublist(i, i + 10 > branchEmails.length ? branchEmails.length : i + 10);
-            futures.add(pendingTodosQuery.where('email', whereIn: batch).get());
+          List<Future<AggregateQuerySnapshot>> futures = [];
+          for (var i = 0; i < branchEmails.length; i += 30) {
+            final batch = branchEmails.sublist(i, i + 30 > branchEmails.length ? branchEmails.length : i + 30);
+            futures.add(pendingTodosQuery.where('email', whereIn: batch).count().get());
           }
           final snapshots = await Future.wait(futures);
           for (final snap in snapshots) {
-            pendingCount += snap.size;
+            pendingCount += snap.count ?? 0;
           }
           return pendingCount;
         } else {
-          final pendingTodosSnap = await pendingTodosQuery.get();
-          return pendingTodosSnap.size;
+          final pendingTodosSnap = await pendingTodosQuery.count().get();
+          return pendingTodosSnap.count ?? 0;
         }
       })(),
     ]);
-
-    final allLeadsSnap = results[0] as QuerySnapshot;
-    final pendingTodosCount = results[1] as int;
-
-    // --- OPTIMIZATION: Process counts in-memory from a single leads query ---
-    int monthLeadsCount = 0;
-    int todayLeadsCount = 0;
-
-    for (var doc in allLeadsSnap.docs) {
-      final createdAt = (doc['created_at'] as Timestamp).toDate();
-      if (createdAt.isAfter(monthStart)) monthLeadsCount++;
-      if (createdAt.isAfter(todayStart) && createdAt.isBefore(todayEnd)) todayLeadsCount++;
-    }
-
+    
     return {
-      'totalLeads': allLeadsSnap.size,
-      'monthLeads': monthLeadsCount,
-      'todayLeads': todayLeadsCount,
-      'pendingTodos': pendingTodosCount,
+ 'totalLeads': (results[0] as AggregateQuerySnapshot).count ?? 0,
+ 'monthLeads': (results[1] as AggregateQuerySnapshot).count ?? 0,
+ 'todayLeads': (results[2] as AggregateQuerySnapshot).count ?? 0,
+      'pendingTodos': results[3] as int,
     };
   }
 
