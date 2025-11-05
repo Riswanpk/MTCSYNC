@@ -5,6 +5,7 @@ import 'hotel_resort_customer_form.dart';
 import 'viewer_marketing.dart';
 import 'report_marketing.dart'; // Import the report page
 import 'sales_marketing_daily_viewer.dart';
+import 'sales_marketing_monthly_viewer.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
@@ -186,6 +187,20 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => SalesMarketingDailyViewer(
+                      userId: widget.userid,
+                    ),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.calendar_month_rounded),
+              title: const Text("View This Month's Forms"),
+              onTap: () {
+                Navigator.of(context).pop(); // Close the drawer
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => SalesMarketingMonthlyViewer(
                       userId: widget.userid,
                     ),
                   ),
