@@ -103,9 +103,11 @@ void main() async {
   // Get initial notification action if app was launched by a notification
   initialNotificationAction = await AwesomeNotifications().getInitialNotificationAction();
 
+  final prefs = await SharedPreferences.getInstance();
+
   runApp(
     ChangeNotifierProvider(
-      create: (_) => ThemeProvider(),
+      create: (_) => ThemeProvider(prefs: prefs),
       child: Builder(
         builder: (context) => MediaQuery(
           data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),

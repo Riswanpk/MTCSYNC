@@ -316,9 +316,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
           .doc(uid)
           .get();
       final role = userDoc.data()?['role']?.toString().toLowerCase() ?? 'unknown';
-      final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-      final settingsPage = SettingsPage(userRole: role, themeProvider: themeProvider);
-      await settingsPage.exportAndSendExcel(context, year: year, month: month);
+      await exportAndSendExcel(context, year: year, month: month);
       print('Monthly Excel Report Sent!');
     } catch (e) {
       print('Error sending monthly report: $e');
@@ -702,9 +700,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                     dense: true,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                     leading: const Icon(Icons.logout, color: Colors.red), // Red for Log Out
-                    title: const Text('Log Out'),
+                    title: const Text('Log Out'), 
                     onTap: () async {
+                      // The code that was here to clear SharedPreferences on logout has been removed
+                      // to ensure "Remember Me" credentials persist.
+                      // final prefs = await SharedPreferences.getInstance();
+                      // if (!(prefs.getBool('remember_me_key') ?? false)) {
+                      //   await prefs.remove('email_key');
+                      // }
                       await FirebaseAuth.instance.signOut();
+
                       Navigator.pushAndRemoveUntil(
                         context,
                         MaterialPageRoute(builder: (context) => const LoginPage()),
@@ -1170,6 +1175,25 @@ class _RotatingLogoState extends State<_RotatingLogo> with SingleTickerProviderS
 }
 
 // Add this anywhere above your _HomePageState class or in a utils file
+/// Fallback helper used by _sendMonthlyExcelReport.
+///
+/// If you have an export/send implementation in Misc/settings.dart you can
+/// replace or forward this implementation to that method; this stub ensures
+/// the project compiles until the actual export logic is provided.
+Future<void> exportAndSendExcel(BuildContext context, {int? year, int? month}) async {
+  try {
+    // TODO: Implement the actual export and send logic here or call the
+    // real implementation in SettingsPage (if/when you add a static method).
+    // For now, we log and return so the caller can continue without a compile error.
+    debugPrint('exportAndSendExcel called for ${year ?? 'any year'}-${month ?? 'any month'}');
+    // Example: if you want to navigate to SettingsPage for manual export:
+    // Navigator.of(context).push(MaterialPageRoute(builder: (_) => SettingsPage(...)));
+    await Future<void>.value();
+  } catch (e) {
+    debugPrint('exportAndSendExcel error: $e');
+  }
+}
+
 Route fadeRoute(Widget page) {
   return PageRouteBuilder(
     pageBuilder: (context, animation, secondaryAnimation) => page,

@@ -5,7 +5,7 @@ class ThemeProvider with ChangeNotifier {
   static const String _themePrefKey = 'theme_mode';
   ThemeMode _themeMode = ThemeMode.system;
 
-  ThemeProvider() {
+  ThemeProvider({required SharedPreferences prefs}) {
     _loadTheme();
   }
 
