@@ -30,6 +30,7 @@ class _LeadsPageState extends State<LeadsPage> {
   String? selectedBranch;
   String? selectedUser; // <-- NEW: selected user for filter
   List<String> availableBranches = [];
+  bool _isSearching = false;
   List<Map<String, dynamic>> availableUsers = []; // <-- NEW: list of users for dropdown
   final ValueNotifier<bool> _isHovering = ValueNotifier(false);
 
@@ -45,6 +46,14 @@ class _LeadsPageState extends State<LeadsPage> {
   // Add this for sort order
   bool sortAscending = false;
 
+  // --- NEW: State for Pagination ---
+  List<DocumentSnapshot> _leads = [];
+  DocumentSnapshot? _lastDocument; // Cursor for the next page
+  bool _isLoading = false;
+  int _currentPage = 1;
+  final int _leadsPerPage = 15; // Number of leads per page
+  final Map<int, DocumentSnapshot?> _pageStartCursors = {1: null}; // To enable "Previous"
+
   late Future<Map<String, dynamic>?> _currentUserData;
 
   @override
@@ -52,31 +61,29 @@ class _LeadsPageState extends State<LeadsPage> {
     super.initState();
     final uid = FirebaseAuth.instance.currentUser?.uid;
     _currentUserData = FirebaseFirestore.instance.collection('users').doc(uid).get().then((doc) => doc.data());
-    _fetchBranches();
-    // Only fetch users for the current branch for manager/sales
-    _currentUserData.then((userData) {
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    await _fetchBranches();
+    final userData = await _currentUserData;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
+    if (mounted) {
       if (userData != null) {
         final role = userData['role'] ?? 'sales';
         final branch = userData['branch'] ?? '';
         if (role == 'admin') {
-          // Do NOT fetch users here for admin, wait for branch selection
-          // _fetchUsers(); <-- REMOVE THIS LINE
+          // For admin, fetch users for the first available branch
+          if (availableBranches.isNotEmpty) {
+            await _fetchUsers(availableBranches.first);
+          }
         } else {
-          // Ensure the current user appears in the users list before setting selectedUser
-          _fetchUsers(branch, uid).then((_) {
-            setState(() {
-              selectedBranch = branch;
-              // Default filters for non-admin users (manager & sales)
-              if (uid != null) {
-                selectedUser = uid;           // User = current user
-              }
-              selectedStatus = 'In Progress'; // Status = In Progress
-              sortAscending = false;          // Sort = Newest (false == Newest in UI)
-            });
-          });
+          await _fetchUsers(branch, uid);
         }
+        _applyDefaultFiltersAndFetch(role, branch, uid);
       }
-    });
+    }
     // Auto delete completed leads at end of month
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final userData = await _currentUserData;
@@ -84,6 +91,21 @@ class _LeadsPageState extends State<LeadsPage> {
         await autoDeleteCompletedLeads(userData['branch'] ?? '');
       }
     });
+  }
+
+  void _applyDefaultFiltersAndFetch(String role, String branch, String? uid) {
+    if (role != 'admin') {
+      setState(() {
+        selectedBranch = branch;
+        if (uid != null) {
+          selectedUser = uid;
+        }
+        selectedStatus = 'In Progress';
+        sortAscending = false;
+      });
+    }
+    // Initial fetch
+    _fetchLeadsPage();
   }
 
   Future<void> _fetchBranches() async {
@@ -131,6 +153,91 @@ class _LeadsPageState extends State<LeadsPage> {
 
     setState(() {
       availableUsers = users;
+    });
+  }
+
+  // --- NEW: Pagination Logic ---
+  Future<void> _fetchLeadsPage({bool nextPage = false, bool prevPage = false, bool isSearch = false}) async {
+    if (_isLoading) return;
+    setState(() {
+      _isLoading = true;
+    });
+
+    final userData = await _currentUserData;
+    final role = userData?['role'] ?? 'sales';
+    final branch = role == 'admin' ? selectedBranch : userData?['branch'];
+
+    if (branch == null || branch.isEmpty) {
+      setState(() {
+        _isLoading = false;
+        _leads = [];
+      });
+      return;
+    }
+
+    Query query = FirebaseFirestore.instance.collection('follow_ups').where('branch', isEqualTo: branch);
+
+    // If searching, we will do a client-side filter after fetching all data for the branch.
+    if (isSearch && searchQuery.isNotEmpty) {
+      // No server-side filters when searching, except for branch
+    } else {
+
+    // Apply filters
+    if (selectedUser != null) {
+      query = query.where('created_by', isEqualTo: selectedUser);
+    }
+    if (selectedStatus != 'All') {
+      if (['In Progress', 'Completed'].contains(selectedStatus)) {
+        query = query.where('status', isEqualTo: selectedStatus);
+      } else {
+        query = query.where('priority', isEqualTo: selectedStatus);
+      }
+    }
+    }
+
+    // Apply sorting
+    query = query.orderBy('created_at', descending: !sortAscending);
+
+    QuerySnapshot snapshot;
+
+    if (isSearch && searchQuery.isNotEmpty) {
+      // For search, fetch all documents for the branch and filter locally
+      snapshot = await query.get();
+    } else {
+      // For normal browsing, use pagination
+      DocumentSnapshot? cursor;
+      if (nextPage) {
+        cursor = _lastDocument;
+        _currentPage++;
+      } else if (prevPage) {
+        if (_currentPage > 1) {
+          _currentPage--;
+        }
+        cursor = _pageStartCursors[_currentPage];
+      }
+
+      if (cursor != null) {
+        query = query.startAfterDocument(cursor);
+      }
+
+      snapshot = await query.limit(_leadsPerPage).get();
+    }
+
+    if (snapshot.docs.isNotEmpty) {
+      // Only update pagination cursors if not in search mode
+      if (!isSearch || searchQuery.isEmpty) {
+        _lastDocument = snapshot.docs.last;
+        _pageStartCursors[_currentPage + 1] = _lastDocument;
+      } else {
+        _lastDocument = null;
+      }
+    } else {
+      _lastDocument = null;
+    }
+
+    setState(() {
+      _leads = snapshot.docs;
+      _isLoading = false;
     });
   }
 
@@ -245,11 +352,41 @@ class _LeadsPageState extends State<LeadsPage> {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Leads Follow Up'),
+            title: _isSearching
+                ? TextField(
+                    autofocus: true,
+                    style: const TextStyle(color: Colors.white),
+                    cursorColor: Colors.white,
+                    decoration: const InputDecoration(
+                      hintText: 'Search by name...',
+                      hintStyle: TextStyle(color: Colors.white54),
+                      border: InputBorder.none,
+                    ),
+                    onChanged: (val) {
+                      String trimmedVal = val.toLowerCase().trim();
+                      setState(() {
+                        searchQuery = trimmedVal;
+                      });
+                      _fetchLeadsPage(isSearch: true);
+                    },
+                  )
+                : const Text('Leads Follow Up'),
             backgroundColor: const Color(0xFF005BAC),
             foregroundColor: Colors.white,
             actions: [
-              // Move Customer List button to right-side burger menu for all roles
+              IconButton(
+                icon: Icon(_isSearching ? Icons.close : Icons.search),
+                tooltip: 'Search',
+                onPressed: () {
+                  setState(() {
+                    _isSearching = !_isSearching;
+                    if (!_isSearching) {
+                      searchQuery = '';
+                      _fetchLeadsPage(isSearch: true); // Refresh list
+                    }
+                  });
+                },
+              ),
               Builder(
                 builder: (context) => IconButton(
                   icon: const Icon(Icons.menu),
@@ -383,14 +520,20 @@ class _LeadsPageState extends State<LeadsPage> {
                                         onChanged: (val) {
                                           setState(() {
                                             selectedBranch = val;
-                                            selectedUser = null;
+                                             selectedUser = null; // Reset user filter
+             _pageStartCursors.clear();
+             _pageStartCursors[1] = null;
+                                             _currentPage = 1; // Reset page
                                           });
                                           // Only fetch users after branch is selected
                                           if (val != null) {
-                                            _fetchUsers(val);
+                                            _fetchUsers(val).then((_) => _fetchLeadsPage());
                                           } else {
-                                            setState(() {
+                                            setState(() { // Clear users if no branch
                                               availableUsers = [];
+               _leads = [];
+               _lastDocument = null;
+               _currentPage = 1;
                                             });
                                           }
                                         },
@@ -434,7 +577,11 @@ class _LeadsPageState extends State<LeadsPage> {
                                         onChanged: (val) {
                                           setState(() {
                                             selectedUser = val;
+                                            _pageStartCursors.clear();
+                                            _pageStartCursors[1] = null;
+                                           _currentPage = 1;
                                           });
+                                          _fetchLeadsPage();
                                         },
                                         decoration: InputDecoration(
                                           labelText: 'User',
@@ -476,7 +623,11 @@ class _LeadsPageState extends State<LeadsPage> {
                                         onChanged: (val) {
                                           setState(() {
                                             selectedStatus = val!;
+                                            _pageStartCursors.clear();
+                                            _pageStartCursors[1] = null;
+                                           _currentPage = 1;
                                           });
+                                          _fetchLeadsPage();
                                         },
                                         decoration: InputDecoration(
                                           labelText: 'Status',
@@ -515,7 +666,11 @@ class _LeadsPageState extends State<LeadsPage> {
                                         onChanged: (val) {
                                           setState(() {
                                             sortAscending = val!;
+                                            _pageStartCursors.clear();
+                                            _pageStartCursors[1] = null;
+                                           _currentPage = 1;
                                           });
+                                          _fetchLeadsPage();
                                         },
                                         decoration: InputDecoration(
                                           labelText: 'Sort',
@@ -563,7 +718,11 @@ class _LeadsPageState extends State<LeadsPage> {
                                     onChanged: (val) {
                                       setState(() {
                                         selectedUser = val;
+                                        _pageStartCursors.clear();
+                                        _pageStartCursors[1] = null;
+                                       _currentPage = 1;
                                       });
+                                      _fetchLeadsPage();
                                     },
                                     decoration: InputDecoration(
                                       labelText: 'User',
@@ -601,7 +760,11 @@ class _LeadsPageState extends State<LeadsPage> {
                                     onChanged: (val) {
                                       setState(() {
                                         selectedStatus = val!;
+                                        _pageStartCursors.clear();
+                                        _pageStartCursors[1] = null;
+                                       _currentPage = 1;
                                       });
+                                      _fetchLeadsPage();
                                     },
                                     decoration: InputDecoration(
                                       labelText: 'Status',
@@ -640,7 +803,11 @@ class _LeadsPageState extends State<LeadsPage> {
                                     onChanged: (val) {
                                       setState(() {
                                         sortAscending = val!;
+                                        _pageStartCursors.clear();
+                                        _pageStartCursors[1] = null;
+                                       _currentPage = 1;
                                       });
+                                      _fetchLeadsPage();
                                     },
                                     decoration: InputDecoration(
                                       labelText: 'Sort',
@@ -664,352 +831,48 @@ class _LeadsPageState extends State<LeadsPage> {
                   ),
                   // --- LEADS LIST ---
                   Expanded(
-                    child: role == 'manager'
-                        ? FutureBuilder<QuerySnapshot>(
-                            future: FirebaseFirestore.instance
-                                .collection('users')
-                                .where('branch', isEqualTo: managerBranch)
-                                .get(),
-                            builder: (context, usersSnapshot) {
-                              if (!usersSnapshot.hasData) {
-                                return const Center(child: CircularProgressIndicator());
-                              }
-                              final branchUserIds = usersSnapshot.data!.docs.map((doc) => doc.id).toSet();
+                    child: _isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : _leads.isEmpty
+                            ? const Center(child: Text("No leads match your criteria."))
+                            : ListView.builder(
+                                padding: const EdgeInsets.all(16),
+                                itemCount: _leads.length,
+                                itemBuilder: (context, index) {
+                                  final doc = _leads[index];
+                                  final data = doc.data() as Map<String, dynamic>;
+                                  final name = data['name'] ?? 'No Name';
+                                  final status = data['status'] ?? 'Unknown';
+                                  final date = data['date'] ?? 'No Date';
+                                  final docId = doc.id;
+                                  final reminder = data['reminder'] ?? 'No Reminder';
+                                  final createdById = data['created_by'] ?? '';
+                                  final priority = data['priority'] ?? 'High';
 
-                              return StreamBuilder<QuerySnapshot>(
-                                stream: FirebaseFirestore.instance
-                                    .collection('follow_ups')
-                                    .where('branch', isEqualTo: widget.branch)
-                                    .snapshots(),
-                                builder: (context, snapshot) {
-                                  if (snapshot.connectionState == ConnectionState.waiting) {
-                                    return const Center(child: CircularProgressIndicator());
-                                  }
-                                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                                    return const Center(child: Text("No leads available."));
-                                  }
-                                  final allLeads = snapshot.data!.docs;
-
-                                  // Show only leads created by users in the same branch
-                                  final visibleLeads = allLeads.where((doc) {
-                                    final data = doc.data() as Map<String, dynamic>;
-                                    return branchUserIds.contains(data['created_by']);
-                                  }).toList();
-
-                                  // --- USER FILTER ---
-                                  final userFilteredLeads = selectedUser == null
-                                      ? visibleLeads
-                                      : visibleLeads.where((doc) {
-                                          final data = doc.data() as Map<String, dynamic>;
-                                          return data['created_by'] == selectedUser;
-                                        }).toList();
-
-                                  final filteredLeads = userFilteredLeads.where((doc) {
-                                    final data = doc.data() as Map<String, dynamic>;
-                                    final name = (data['name'] ?? '').toString().toLowerCase();
-                                    final status = (data['status'] ?? 'Unknown').toString();
-                                    final priority = (data['priority'] ?? 'High').toString();
-                                    final matchesSearch = name.contains(searchQuery);
-                                    final matchesStatus = selectedStatus == 'All'
-                                        || status == selectedStatus
-                                        || priority == selectedStatus;
-                                    return matchesSearch && matchesStatus;
-                                  }).toList();
-
-                                  // Add sorting here
-                                  filteredLeads.sort((a, b) {
-                                    final aData = a.data() as Map<String, dynamic>;
-                                    final bData = b.data() as Map<String, dynamic>;
-                                    DateTime aDate = DateTime(2000);
-                                    DateTime bDate = DateTime(2000);
-
-                                    // Handle Timestamp or String
-                                    if (aData['date'] is Timestamp) {
-                                      aDate = (aData['date'] as Timestamp).toDate();
-                                    } else if (aData['date'] is String) {
-                                      try {
-                                        aDate = DateFormat('dd-MM-yyyy').parse(aData['date']);
-                                      } catch (e) {}
-                                    } else if (aData['date'] is DateTime) {
-                                      aDate = aData['date'];
-                                    }
-
-                                    if (bData['date'] is Timestamp) {
-                                      bDate = (bData['date'] as Timestamp).toDate();
-                                    } else if (bData['date'] is String) {
-                                      try {
-                                        bDate = DateFormat('dd-MM-yyyy').parse(bData['date']);
-                                      } catch (e) {}
-                                    } else if (bData['date'] is DateTime) {
-                                      bDate = bData['date'];
-                                    }
-
-                                    return sortAscending ? aDate.compareTo(bDate) : bDate.compareTo(aDate);
-                                  });
-
-                                  if (filteredLeads.isEmpty) {
-                                    return const Center(child: Text("No leads match your criteria."));
+                                  // Client-side search filtering
+                                  if (searchQuery.isNotEmpty &&
+                                      !name.toLowerCase().contains(searchQuery)) {
+                                    return const SizedBox.shrink();
                                   }
 
-                                  return ListView.builder(
-                                    padding: const EdgeInsets.all(16),
-                                    itemCount: filteredLeads.length,
-                                    itemBuilder: (context, index) {
-                                      final data = filteredLeads[index].data() as Map<String, dynamic>;
-                                      final name = data['name'] ?? 'No Name';
-                                      final status = data['status'] ?? 'Unknown';
-                                      final date = data['date'] ?? 'No Date';
-                                      final docId = filteredLeads[index].id;
-                                      final reminder = data['reminder'] ?? 'No Reminder';
-                                      final createdById = data['created_by'] ?? '';
-                                      final priority = data['priority'] ?? 'High'; // <-- Add this
-
-                                      return FutureBuilder<DocumentSnapshot>(
-                                        future: FirebaseFirestore.instance.collection('users').doc(createdById).get(),
-                                        builder: (context, userSnapshot) {
-                                          String creatorUsername = 'Unknown';
-                                          if (userSnapshot.connectionState == ConnectionState.done && userSnapshot.hasData) {
-                                            final userData = userSnapshot.data!.data() as Map<String, dynamic>?;
-                                            if (userData != null && userData['username'] != null) {
-                                              creatorUsername = userData['username'];
-                                            }
-                                          }
-                                          return LeadCard(
-                                            name: name,
-                                            status: status,
-                                            date: date,
-                                            docId: docId,
-                                            createdBy: creatorUsername,
-                                            reminder: reminder,
-                                            priority: priority, // <-- Pass priority
-                                          );
-                                        },
-                                      );
-                                    },
-                                  );
-                                },
-                              );
-                            },
-                          )
-                        : role == 'admin'
-                            ? StreamBuilder<QuerySnapshot>(
-                                stream: branchToShow.isNotEmpty
-                                    ? FirebaseFirestore.instance
-                                        .collection('follow_ups')
-                                        .where('branch', isEqualTo: branchToShow)
-                                        .snapshots()
-                                    : const Stream.empty(), // Prevent loading until branch selected
-                                builder: (context, snapshot) {
-                                  if (branchToShow.isEmpty) {
-                                    return const Center(child: Text("Please select a branch."));
-                                  }
-                                  if (snapshot.connectionState == ConnectionState.waiting) {
-                                    return const Center(child: CircularProgressIndicator());
-                                  }
-                                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                                    return const Center(child: Text("No leads available."));
-                                  }
-                                  final allLeads = snapshot.data!.docs;
-
-                                  // --- USER FILTER ---
-                                  final userFilteredLeads = selectedUser == null
-                                      ? allLeads
-                                      : allLeads.where((doc) {
-                                          final data = doc.data() as Map<String, dynamic>;
-                                          return data['created_by'] == selectedUser;
-                                        }).toList();
-
-                                  final filteredLeads = userFilteredLeads.where((doc) {
-                                    final data = doc.data() as Map<String, dynamic>;
-                                    final name = (data['name'] ?? '').toString().toLowerCase();
-                                    final status = (data['status'] ?? 'Unknown').toString();
-                                    final priority = (data['priority'] ?? 'High').toString();
-                                    final matchesSearch = name.contains(searchQuery);
-                                    final matchesStatus = selectedStatus == 'All'
-                                        || status == selectedStatus
-                                        || priority == selectedStatus;
-                                    return matchesSearch && matchesStatus;
-                                  }).toList();
-
-                                  // Add sorting here
-                                  filteredLeads.sort((a, b) {
-                                    final aData = a.data() as Map<String, dynamic>;
-                                    final bData = b.data() as Map<String, dynamic>;
-                                    DateTime aDate = DateTime(2000);
-                                    DateTime bDate = DateTime(2000);
-
-                                    // Handle Timestamp or String
-                                    if (aData['date'] is Timestamp) {
-                                      aDate = (aData['date'] as Timestamp).toDate();
-                                    } else if (aData['date'] is String) {
-                                      try {
-                                        aDate = DateFormat('dd-MM-yyyy').parse(aData['date']);
-                                      } catch (e) {}
-                                    } else if (aData['date'] is DateTime) {
-                                      aDate = aData['date'];
-                                    }
-
-                                    if (bData['date'] is Timestamp) {
-                                      bDate = (bData['date'] as Timestamp).toDate();
-                                    } else if (bData['date'] is String) {
-                                      try {
-                                        bDate = DateFormat('dd-MM-yyyy').parse(bData['date']);
-                                      } catch (e) {}
-                                    } else if (bData['date'] is DateTime) {
-                                      bDate = bData['date'];
-                                    }
-
-                                    return sortAscending ? aDate.compareTo(bDate) : bDate.compareTo(aDate);
-                                  });
-
-                                  if (filteredLeads.isEmpty) {
-                                    return const Center(child: Text("No leads match your criteria."));
-                                  }
-
-                                  return ListView.builder(
-                                    padding: const EdgeInsets.all(16),
-                                    itemCount: filteredLeads.length,
-                                    itemBuilder: (context, index) {
-                                      final data = filteredLeads[index].data() as Map<String, dynamic>;
-                                      final name = data['name'] ?? 'No Name';
-                                      final status = data['status'] ?? 'Unknown';
-                                      final date = data['date'] ?? 'No Date';
-                                      final docId = filteredLeads[index].id;
-                                      final reminder = data['reminder'] ?? 'No Reminder';
-                                      final createdById = data['created_by'] ?? '';
-
-                                      return FutureBuilder<DocumentSnapshot>(
-                                        future: FirebaseFirestore.instance.collection('users').doc(createdById).get(),
-                                        builder: (context, userSnapshot) {
-                                          String creatorUsername = 'Unknown';
-                                          if (userSnapshot.connectionState == ConnectionState.done && userSnapshot.hasData) {
-                                            final userData = userSnapshot.data!.data() as Map<String, dynamic>?;
-                                            if (userData != null && userData['username'] != null) {
-                                              creatorUsername = userData['username'];
-                                            }
-                                          }
-                                          return LeadCard(
-                                            name: name,
-                                            status: status,
-                                            date: date,
-                                            docId: docId,
-                                            reminder: reminder,
-                                            createdBy: creatorUsername,
-                                            priority: data['priority'] ?? 'High',
-                                          );
-                                        },
-                                      );
-                                    },
-                                  );
-                                },
-                              )
-                            : StreamBuilder<QuerySnapshot>(
-                                stream: FirebaseFirestore.instance
-                                    .collection('follow_ups')
-                                    .where('branch', isEqualTo: widget.branch)
-                                    .snapshots(),
-                                builder: (context, snapshot) {
-                                  if (snapshot.connectionState == ConnectionState.waiting) {
-                                    return const Center(child: CircularProgressIndicator());
-                                  }
-                                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                                    return const Center(child: Text("No leads available."));
-                                  }
-                                  final allLeads = snapshot.data!.docs;
-
-                                  // Only leads created by current sales user
-                                  final visibleLeads = allLeads.where((doc) {
-                                    final data = doc.data() as Map<String, dynamic>;
-                                    return data['branch'] == widget.branch;
-                                  }).toList();
-
-                                  // --- USER FILTER ---
-                                  final userFilteredLeads = selectedUser == null
-                                      ? visibleLeads
-                                      : visibleLeads.where((doc) {
-                                          final data = doc.data() as Map<String, dynamic>;
-                                          return data['created_by'] == selectedUser;
-                                        }).toList();
-
-                                  final filteredLeads = userFilteredLeads.where((doc) {
-                                    final data = doc.data() as Map<String, dynamic>;
-                                    final name = (data['name'] ?? '').toString().toLowerCase();
-                                    final status = (data['status'] ?? 'Unknown').toString();
-                                    final priority = (data['priority'] ?? 'High').toString();
-                                    final matchesSearch = name.contains(searchQuery);
-                                    final matchesStatus = selectedStatus == 'All'
-                                        || status == selectedStatus
-                                        || priority == selectedStatus;
-                                    return matchesSearch && matchesStatus;
-                                  }).toList();
-
-                                  // Add sorting here
-                                  filteredLeads.sort((a, b) {
-                                    final aData = a.data() as Map<String, dynamic>;
-                                    final bData = b.data() as Map<String, dynamic>;
-                                    DateTime aDate = DateTime(2000);
-                                    DateTime bDate = DateTime(2000);
-
-                                    // Handle Timestamp or String
-                                    if (aData['date'] is Timestamp) {
-                                      aDate = (aData['date'] as Timestamp).toDate();
-                                    } else if (aData['date'] is String) {
-                                      try {
-                                        aDate = DateFormat('dd-MM-yyyy').parse(aData['date']);
-                                      } catch (e) {}
-                                    } else if (aData['date'] is DateTime) {
-                                      aDate = aData['date'];
-                                    }
-
-                                    if (bData['date'] is Timestamp) {
-                                      bDate = (bData['date'] as Timestamp).toDate();
-                                    } else if (bData['date'] is String) {
-                                      try {
-                                        bDate = DateFormat('dd-MM-yyyy').parse(bData['date']);
-                                      } catch (e) {}
-                                    } else if (bData['date'] is DateTime) {
-                                      bDate = bData['date'];
-                                    }
-
-                                    return sortAscending ? aDate.compareTo(bDate) : bDate.compareTo(aDate);
-                                  });
-
-                                  if (filteredLeads.isEmpty) {
-                                    return const Center(child: Text("No leads match your criteria."));
-                                  }
-
-                                  return ListView.builder(
-                                    padding: const EdgeInsets.all(16),
-                                    itemCount: filteredLeads.length,
-                                    itemBuilder: (context, index) {
-                                      final data = filteredLeads[index].data() as Map<String, dynamic>;
-                                      final name = data['name'] ?? 'No Name';
-                                      final status = data['status'] ?? 'Unknown';
-                                      final date = data['date'] ?? 'No Date';
-                                      final docId = filteredLeads[index].id;
-                                      final reminder = data['reminder'] ?? 'No Reminder';
-                                      final createdById = data['created_by'] ?? '';
-
-                                      return FutureBuilder<DocumentSnapshot>(
-                                        future: FirebaseFirestore.instance.collection('users').doc(createdById).get(),
-                                        builder: (context, userSnapshot) {
-                                          String creatorUsername = 'Unknown';
-                                          if (userSnapshot.connectionState == ConnectionState.done && userSnapshot.hasData) {
-                                            final userData = userSnapshot.data!.data() as Map<String, dynamic>?;
-                                            if (userData != null && userData['username'] != null) {
-                                              creatorUsername = userData['username'];
-                                            }
-                                          }
-                                          return LeadCard(
-                                            name: name,
-                                            status: status,
-                                            date: date,
-                                            docId: docId,
-                                            reminder: reminder,
-                                            createdBy: creatorUsername,
-                                            priority: data['priority'] ?? 'High',
-                                          );
-                                        },
+                                  return FutureBuilder<DocumentSnapshot>(
+                                    future: FirebaseFirestore.instance.collection('users').doc(createdById).get(),
+                                    builder: (context, userSnapshot) {
+                                      String creatorUsername = 'Unknown';
+                                      if (userSnapshot.connectionState == ConnectionState.done && userSnapshot.hasData) {
+                                        final userData = userSnapshot.data!.data() as Map<String, dynamic>?;
+                                        if (userData != null && userData['username'] != null) {
+                                          creatorUsername = userData['username'];
+                                        }
+                                      }
+                                      return LeadCard(
+                                        name: name,
+                                        status: status,
+                                        date: date,
+                                        docId: docId,
+                                        createdBy: creatorUsername,
+                                        reminder: reminder,
+                                        priority: priority,
                                       );
                                     },
                                   );
@@ -1017,26 +880,28 @@ class _LeadsPageState extends State<LeadsPage> {
                               ),
                   ),
                   // --- SEARCH BAR AT BOTTOM ---
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-                    child: TextField(
-                      onChanged: (val) {
-                        setState(() {
-                          searchQuery = val.toLowerCase();
-                        });
-                      },
-                      decoration: InputDecoration(
-                        hintText: 'Search by name...',
-                        hintStyle: const TextStyle(color: Colors.green),
-                        prefixIcon: const Icon(Icons.search, color: Colors.green),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                  // --- NEW: Pagination Controls ---
+                  if (!_isLoading && searchQuery.isEmpty) // Hide pagination when searching
+                    Padding( 
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.arrow_back),
+                            onPressed: _currentPage > 1
+                                ? () => _fetchLeadsPage(prevPage: true)
+                                : null,
+                          ),
+                          Text('$_currentPage', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          IconButton(
+                            icon: const Icon(Icons.arrow_forward),
+                            onPressed: _lastDocument != null && _leads.length == _leadsPerPage
+                                ? () => _fetchLeadsPage(nextPage: true) : null,
+                          ),
+                        ],
                       ),
-                      style: const TextStyle(color: Colors.green),
                     ),
-                  ),
                 ],
               ),
             ],
