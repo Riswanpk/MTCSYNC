@@ -2,6 +2,7 @@ import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../main.dart'; // Import to use clearNotificationOpened
 class PresentFollowUp extends StatefulWidget {
@@ -30,7 +31,6 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
 
   String? _status;
   String? _branch;
-  String? _date;
 
   DateTime? _selectedDate;
 
@@ -54,61 +54,89 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
     _status = data['status'];
     _branch = data['branch'];
 
-    // Handle different date types from Firestore
-    final dynamic dateValue = data['date'];
-    if (dateValue is Timestamp) {
-      _selectedDate = dateValue.toDate();
-    } else if (dateValue is String && dateValue.isNotEmpty) {
-      try {
-        _selectedDate = DateTime.parse(dateValue);
-      } catch (_) {
-        // Fallback for other formats if needed
-      }
-    }
-
-    if (_selectedDate != null) {
-      _date = DateFormat('yyyy-MM-dd').format(_selectedDate!);
-    }
-
-    // Handle different reminder types from Firestore
+    // Handle reminder
     final dynamic reminderValue = data['reminder'];
     String reminderText = '';
-    if (reminderValue is Timestamp) {
-      // If it's a Timestamp, format it.
-      reminderText = DateFormat('yyyy-MM-dd hh:mm a').format(reminderValue.toDate());
-    } else if (reminderValue is String) {
-      // If it's already a string, use it directly.
+
+    if (reminderValue is String && reminderValue.isNotEmpty) {
       reminderText = reminderValue;
+      try {
+        // Try to parse it to set the initial date for the picker
+        _selectedDate = DateFormat('dd-MM-yyyy hh:mm a').parse(reminderValue);
+      } catch (e) {
+        // If it fails, it's probably an old format (e.g., just time).
+        // Let's try to get the date from the 'date' field.
+        final dynamic dateValue = data['date'];
+        if (dateValue is Timestamp) {
+          _selectedDate = dateValue.toDate();
+        } else if (dateValue is String) {
+          try {
+            _selectedDate = DateTime.parse(dateValue);
+          } catch (_) {}
+        }
+      }
+    } else if (reminderValue is Timestamp) {
+      _selectedDate = reminderValue.toDate();
+      reminderText = DateFormat('dd-MM-yyyy hh:mm a').format(_selectedDate!);
+    } else {
+      // No reminder, but maybe a date?
+      final dynamic dateValue = data['date'];
+      if (dateValue is Timestamp) {
+        _selectedDate = dateValue.toDate();
+      } else if (dateValue is String) {
+        try {
+          _selectedDate = DateTime.parse(dateValue);
+        } catch (_) {}
+      }
     }
     _reminderController = TextEditingController(text: reminderText);
-
-
   }
 
-  Future<void> _pickReminderTime(BuildContext context) async {
-    final initialTime = TimeOfDay.now();
-    final picked = await showTimePicker(
+  Future<void> _pickDateTime(BuildContext context) async {
+    final now = DateTime.now();
+    final initialDate = _selectedDate ?? now;
+
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: now.subtract(const Duration(days: 365)), // Allow past dates
+      lastDate: now.add(const Duration(days: 365)),
+    );
+    if (pickedDate == null) return;
+
+    final initialTime = TimeOfDay.fromDateTime(initialDate);
+    final pickedTime = await showTimePicker(
       context: context,
       initialTime: initialTime,
     );
-    if (picked != null) {
-      _reminderController.text = picked.format(context);
+
+    if (pickedTime != null) {
+      setState(() {
+        _selectedDate = DateTime(
+          pickedDate.year,
+          pickedDate.month,
+          pickedDate.day,
+          pickedTime.hour,
+          pickedTime.minute,
+        );
+        _reminderController.text = DateFormat('dd-MM-yyyy hh:mm a').format(_selectedDate!);
+      });
     }
   }
 
-  Future<void> _pickDate(BuildContext context) async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate ?? now,
-      firstDate: DateTime(now.year - 2),
-      lastDate: DateTime(now.year + 2),
+  Future<void> _launchDialer(String phoneNumber) async {
+    final Uri launchUri = Uri(
+      scheme: 'tel',
+      path: phoneNumber,
     );
-    if (picked != null) {
-      setState(() {
-        _selectedDate = picked;
-        _date = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
-      });
+    if (await canLaunchUrl(launchUri)) {
+      await launchUrl(launchUri);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not launch dialer for $phoneNumber')),
+        );
+      }
     }
   }
 
@@ -125,7 +153,7 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
       'comments': _commentsController.text.trim(),
       'status': _status,
       'branch': _branch,
-      'date': _date,
+      'date': _selectedDate != null ? Timestamp.fromDate(_selectedDate!) : FieldValue.serverTimestamp(),
     };
 
     try {
@@ -137,7 +165,7 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
 
       // Also update in customer collection if phone exists
       final phone = updatedData['phone'];
-      if (phone != null && phone.isNotEmpty) {
+      if (phone != null && phone is String && phone.isNotEmpty) {
         final customerQuery = await FirebaseFirestore.instance
             .collection('customer')
             .where('phone', isEqualTo: phone)
@@ -155,25 +183,7 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
 
       // --- Schedule or reschedule local notification for reminder ---
       if (_reminderController.text.isNotEmpty && _selectedDate != null) {
-        final reminderTime = _reminderController.text;
-        final timeParts = reminderTime.split(':');
-        int hour = 9;
-        int minute = 0;
-        if (timeParts.length >= 2) {
-          hour = int.tryParse(timeParts[0]) ?? 9;
-          minute = int.tryParse(timeParts[1].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-        }
-        // If AM/PM format, adjust hour
-        if (reminderTime.toLowerCase().contains('pm') && hour < 12) hour += 12;
-        if (reminderTime.toLowerCase().contains('am') && hour == 12) hour = 0;
-
-        final scheduledDateTime = DateTime(
-          _selectedDate!.year,
-          _selectedDate!.month,
-          _selectedDate!.day,
-          hour,
-          minute,
-        );
+        final scheduledDateTime = _selectedDate!;
 
         // Clear the 'opened' flag so it can be rescheduled if dismissed
         await clearNotificationOpened(widget.docId);
@@ -308,21 +318,8 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
                           _reminderController,
                           Theme.of(context).brightness == Brightness.dark,
                           readOnly: true,
-                          onTap: () => _pickReminderTime(context),
-                          suffixIcon: const Icon(Icons.access_time),
-                        ),
-                        const SizedBox(height: 12),
-                        GestureDetector(
-                          onTap: () => _pickDate(context),
-                          child: AbsorbPointer(
-                            child: _editField(
-                              'Date',
-                              TextEditingController(text: _date ?? ''),
-                              Theme.of(context).brightness == Brightness.dark,
-                              readOnly: true,
-                              suffixIcon: const Icon(Icons.calendar_today),
-                            ),
-                          ),
+                          onTap: () => _pickDateTime(context),
+                          suffixIcon: const Icon(Icons.calendar_today),
                         ),
                         _editField('Branch', TextEditingController(text: _branch ?? ''), Theme.of(context).brightness == Brightness.dark, enabled: false),
                         const SizedBox(height: 24),
@@ -378,7 +375,15 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
                     _buildInfoCard(Icons.person, 'Name', _data?['name'], isDark),
                     _buildInfoCard(Icons.apartment, 'Company', _data?['company'], isDark),
                     _buildInfoCard(Icons.location_on, 'Address', _data?['address'], isDark),
-                    _buildInfoCard(Icons.phone, 'Phone', _data?['phone'], isDark),
+                    GestureDetector(
+                      onTap: () {
+                        final phoneNumber = _data?['phone'];
+                        if (phoneNumber != null && phoneNumber.isNotEmpty) {
+                          _launchDialer(phoneNumber);
+                        }
+                      },
+                      child: _buildInfoCard(Icons.phone, 'Phone', _data?['phone'], isDark),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 32),
