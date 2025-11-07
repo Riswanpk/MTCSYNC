@@ -6,7 +6,7 @@ import 'viewer_marketing.dart';
 import 'report_marketing.dart'; // Import the report page
 import 'sales_marketing_daily_viewer.dart';
 import 'sales_marketing_monthly_viewer.dart';
-
+import 'package:showcaseview/showcaseview.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
@@ -34,17 +34,21 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
   String _selectedForm = 'General Customer';
   bool _draftChecked = false;
 
+  final GlobalKey _drawerShowcaseKey = GlobalKey();
+  final GlobalKey _todayShowcaseKey = GlobalKey();
+  final GlobalKey _monthShowcaseKey = GlobalKey();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
   @override
   void initState() {
     super.initState();
-    // If we are explicitly told to load a draft, set the form type and skip the check.
     if (widget.loadDraft && widget.formToLoad != null) {
       _selectedForm = widget.formToLoad!;
       _draftChecked = true;
     } else {
-      // Otherwise, check for drafts on initial load.
       WidgetsBinding.instance.addPostFrameCallback((_) => _checkAndPromptForDraft());
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showShowcaseIfNeeded());
   }
 
   Future<void> _checkAndPromptForDraft() async {
@@ -121,6 +125,38 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
     });
   }
 
+  Future<void> _showShowcaseIfNeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    dynamic raw = prefs.get('seen_marketing_drawer_hint');
+    int seenCount = 0;
+    if (raw is int) {
+      seenCount = raw;
+    } else if (raw is bool && raw == true) {
+      seenCount = 1;
+      await prefs.remove('seen_marketing_drawer_hint'); // Clean up old bool value
+      await prefs.setInt('seen_marketing_drawer_hint', seenCount);
+    }
+
+    if (seenCount < 2 && mounted) {
+      ShowCaseWidget.of(context).startShowCase([_drawerShowcaseKey]);
+      await Future.delayed(const Duration(seconds: 2));
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Opening menu for you...')),
+      );
+      _scaffoldKey.currentState?.openEndDrawer(); // <-- Use the key here
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      ShowCaseWidget.of(context).startShowCase([_todayShowcaseKey]);
+      await Future.delayed(const Duration(seconds: 1));
+
+      ShowCaseWidget.of(context).startShowCase([_monthShowcaseKey]);
+      await Future.delayed(const Duration(seconds: 1));
+
+      await prefs.setInt('seen_marketing_drawer_hint', seenCount + 1);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_draftChecked) {
@@ -163,13 +199,28 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
         : null;
 
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         title: const Text('Marketing Form'),
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
-        automaticallyImplyLeading: true, // Show back button
+        automaticallyImplyLeading: true,
+        actions: [
+          Builder(
+            builder: (context) => Showcase(
+              key: _drawerShowcaseKey,
+              description: "Tap here to open the marketing menu.",
+              child: IconButton(
+                icon: const Icon(Icons.menu),
+                onPressed: () {
+                  _scaffoldKey.currentState?.openEndDrawer();
+                },
+              ),
+            ),
+          ),
+        ],
       ),
-      endDrawer: Drawer( // Use endDrawer for right-side drawer
+      endDrawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
@@ -179,33 +230,41 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
               ),
               child: Text('Marketing Menu', style: TextStyle(color: Colors.white, fontSize: 20)),
             ),
-            ListTile(
-              leading: const Icon(Icons.view_list),
-              title: const Text("View Today's Forms"),
-              onTap: () {
-                Navigator.of(context).pop(); // Close the drawer
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => SalesMarketingDailyViewer(
-                      userId: widget.userid,
+            Showcase(
+              key: _todayShowcaseKey,
+              description: "Tap here to view today's submitted marketing forms.",
+              child: ListTile(
+                leading: const Icon(Icons.view_list),
+                title: const Text("View Today's Forms"),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => SalesMarketingDailyViewer(
+                        userId: widget.userid,
+                      ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
-            ListTile(
-              leading: const Icon(Icons.calendar_month_rounded),
-              title: const Text("View This Month's Forms"),
-              onTap: () {
-                Navigator.of(context).pop(); // Close the drawer
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => SalesMarketingMonthlyViewer(
-                      userId: widget.userid,
+            Showcase(
+              key: _monthShowcaseKey,
+              description: "Tap here to view all forms submitted this month.",
+              child: ListTile(
+                leading: const Icon(Icons.calendar_month_rounded),
+                title: const Text("View This Month's Forms"),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => SalesMarketingMonthlyViewer(
+                        userId: widget.userid,
+                      ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ],
         ),
