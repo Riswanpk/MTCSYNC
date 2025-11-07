@@ -1,9 +1,10 @@
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
+import 'package:showcaseview/showcaseview.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart'; // Import to use clearNotificationOpened
 class PresentFollowUp extends StatefulWidget {
   final String docId;
@@ -33,6 +34,8 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
   String? _branch;
 
   DateTime? _selectedDate;
+
+  final GlobalKey _phoneShowcaseKey = GlobalKey();
 
   @override
   void dispose() {
@@ -246,10 +249,24 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
     }
   }
 
+  // Temporarily reset the flag in initState for testing
   @override
   void initState() {
     super.initState();
-    _isEditing = widget.editMode; // <-- Set edit mode from widget
+    _isEditing = widget.editMode;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showPhoneShowcaseIfNeeded());
+  }
+
+  Future<void> _showPhoneShowcaseIfNeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    final seen = prefs.getBool('seen_phone_showcase') ?? false;
+    print('Showcase seen value: $seen');
+    if (!seen && mounted) {
+      await Future.delayed(const Duration(seconds: 1));
+      print('Showing showcase for phone card');
+      ShowCaseWidget.of(context).startShowCase([_phoneShowcaseKey]);
+      await prefs.setBool('seen_phone_showcase', true);
+    }
   }
 
   @override
@@ -375,14 +392,18 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
                     _buildInfoCard(Icons.person, 'Name', _data?['name'], isDark),
                     _buildInfoCard(Icons.apartment, 'Company', _data?['company'], isDark),
                     _buildInfoCard(Icons.location_on, 'Address', _data?['address'], isDark),
-                    GestureDetector(
-                      onTap: () {
-                        final phoneNumber = _data?['phone'];
-                        if (phoneNumber != null && phoneNumber.isNotEmpty) {
-                          _launchDialer(phoneNumber);
-                        }
-                      },
-                      child: _buildInfoCard(Icons.phone, 'Phone', _data?['phone'], isDark),
+                    Showcase(
+                      key: _phoneShowcaseKey,
+                      description: 'Tap here to quickly call this lead!',
+                      child: GestureDetector(
+                        onTap: () {
+                          final phoneNumber = _data?['phone'];
+                          if (phoneNumber != null && phoneNumber.isNotEmpty) {
+                            _launchDialer(phoneNumber);
+                          }
+                        },
+                        child: _buildInfoCard(Icons.phone, 'Phone', _data?['phone'], isDark),
+                      ),
                     ),
                   ],
                 ),

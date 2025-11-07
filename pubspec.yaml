@@ -67,6 +67,7 @@ dependencies:
   syncfusion_flutter_xlsio: ^29.2.11
   open_file: ^3.5.10
   file_picker: ^10.3.3
+  showcaseview: ^5.0.1
   
 
   # The following adds the Cupertino Icons font to your application.

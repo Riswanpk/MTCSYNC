@@ -15,6 +15,7 @@ import 'Misc/splash_screen.dart';
 import 'Misc/theme_notifier.dart'; // Now imports ThemeProvider
 import 'Todo & Leads/presentfollowup.dart';
 import 'Todo & Leads/todo.dart'; // <-- Already present
+import 'package:showcaseview/showcaseview.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -108,7 +109,7 @@ void main() async {
   runApp(
     ChangeNotifierProvider(
       create: (_) => ThemeProvider(prefs: prefs),
-      child: Builder(
+      child: ShowCaseWidget(
         builder: (context) => MediaQuery(
           data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
           child: const MyApp(),
