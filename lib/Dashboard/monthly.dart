@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:excel/excel.dart' hide TextSpan;
+import 'package:excel/excel.dart' hide TextSpan, Border;
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:share_plus/share_plus.dart';
 import 'dart:async';
+import '../widgets/loading_progress_bar.dart';
 
 class MonthlyReportPage extends StatefulWidget {
   final String? branch;
@@ -25,7 +26,7 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
   List<String> _branches = [];
   List<Map<String, dynamic>> _usersForBranch = [];
   bool _isLoading = false;
-  double _progress = 0.0; // Add this line
+  double _progress = 0.0;
 
   @override
   void initState() {
@@ -113,12 +114,17 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return FutureBuilder<DocumentSnapshot>(
+    if (_isLoading) {
+      return Scaffold(
+        body: LoadingProgressBar(progress: _progress, text: "Generating Monthly Report..."),
+      );
+    }
+
+    Widget mainScaffold = FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid).get(),
       builder: (context, snapshot) {
         String role = 'sales';
         if (snapshot.connectionState == ConnectionState.waiting) {
-          // Center the loading indicator both vertically and horizontally
           return const Scaffold(
             body: Center(
               child: CircularProgressIndicator(),
@@ -130,264 +136,155 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
           role = data['role'] ?? 'sales';
         }
 
-        return Stack(
-          children: [
-            Scaffold(
-              appBar: AppBar(
-                title: const Text('Monthly Missed Report'),
-                backgroundColor: const Color(0xFF005BAC),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                actions: [
-                  IconButton(
-                    icon: const Icon(Icons.download),
-                    tooltip: 'Export Excel',
-                    onPressed: _isLoading ? null : () async {
-                      setState(() => _isLoading = true);
-                      await _generateAndShareExcel(role);
-                      setState(() => _isLoading = false);
-                    },
-                  ),
-                ],
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Monthly Missed Report'),
+            backgroundColor: const Color(0xFF005BAC),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.download),
+                tooltip: 'Export Excel',
+                onPressed: () async {
+                  await _generateAndShareExcel(role);
+                },
               ),
-              backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
-              body: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 24),
-                  child: Column(
+            ],
+          ),
+          backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
+          body: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 24),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (role == 'admin' && _branches.isNotEmpty)
-                            DropdownButton<String>(
-                              value: _selectedBranch,
-                              items: _branches
-                                  .map((b) => DropdownMenuItem(value: b, child: Text(b)))
-                                  .toList(),
-                              onChanged: (val) async {
-                                setState(() {
-                                  _selectedBranch = val;
-                                });
-                                await _fetchUsersForBranch(val);
-                              },
-                              hint: const Text("Select Branch"),
-                            ),
-                          DropdownButton<Map<String, dynamic>>(
-                            value: _selectedUser,
-                            items: _usersForBranch
-                                .map((u) => DropdownMenuItem(
-                                      value: u,
-                                      child: Text(u['username']),
-                                    ))
-                                .toList(),
-                            onChanged: (val) {
-                              setState(() {
-                                _selectedUser = val;
-                              });
-                            },
-                            hint: const Text("Select User"),
-                          ),
-                          DropdownButton<int>(
-                            value: _selectedMonth,
-                            items: List.generate(12, (i) => i + 1)
-                                .map((m) => DropdownMenuItem(
-                                      value: m,
-                                      child: Text(
-                                        [
-                                          'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                                          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-                                        ][m - 1],
-                                      ),
-                                    ))
-                                .toList(),
-                            onChanged: (val) {
-                              setState(() {
-                                _selectedMonth = val!;
-                              });
-                            },
-                          ),
-                          DropdownButton<int>(
-                            value: _selectedYear,
-                            items: List.generate(5, (i) => DateTime.now().year - i)
-                                .map((y) => DropdownMenuItem(value: y, child: Text('$y')))
-                                .toList(),
-                            onChanged: (val) {
-                              setState(() {
-                                _selectedYear = val!;
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                      if (_selectedUser != null)
-                        FutureBuilder<List<Map<String, dynamic>>>(
-                          future: _generateUserMonthlyReport(
-                            _selectedUser!['uid'],
-                            _selectedUser!['email'],
-                            _selectedMonth,
-                            _selectedYear,
-                          ),
-                          builder: (context, snap) {
-                            if (snap.connectionState == ConnectionState.waiting) {
-                              return const Center(child: CircularProgressIndicator());
-                            }
-                            if (snap.hasError) {
-                              return Center(child: Text('Error: ${snap.error}'));
-                            }
-                            if (!snap.hasData || snap.data!.isEmpty) {
-                              return const Center(child: Text('No missed entries this month.'));
-                            }
-                            final missed = snap.data!;
-                            return SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: DataTable(
-                                columns: const [
-                                  DataColumn(label: Text('Date')),
-                                  DataColumn(label: Text('Todo')),
-                                  DataColumn(label: Text('Lead')),
-                                ],
-                                rows: missed.map((m) => DataRow(cells: [
-                                  DataCell(Text(m['date'])),
-                                  DataCell(
-                                    Text(
-                                      m['todo'] ? '✓' : '⭕',
-                                      style: TextStyle(
-                                        color: m['todo'] ? Colors.green : Colors.red,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    Text(
-                                      m['lead'] ? '✓' : '⭕',
-                                      style: TextStyle(
-                                        color: m['lead'] ? Colors.green : Colors.red,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                  ),
-                                ])).toList(),
-                              )
-                            );
-                            },
+                      if (role == 'admin' && _branches.isNotEmpty)
+                        DropdownButton<String>(
+                          value: _selectedBranch,
+                          items: _branches
+                              .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                              .toList(),
+                          onChanged: (val) async {
+                            setState(() {
+                              _selectedBranch = val;
+                            });
+                            await _fetchUsersForBranch(val);
+                          },
+                          hint: const Text("Select Branch"),
                         ),
+                      DropdownButton<Map<String, dynamic>>(
+                        value: _selectedUser,
+                        items: _usersForBranch
+                            .map((u) => DropdownMenuItem(
+                                  value: u,
+                                  child: Text(u['username']),
+                                ))
+                            .toList(),
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedUser = val;
+                          });
+                        },
+                        hint: const Text("Select User"),
+                      ),
+                      DropdownButton<int>(
+                        value: _selectedMonth,
+                        items: List.generate(12, (i) => i + 1)
+                            .map((m) => DropdownMenuItem(
+                                  value: m,
+                                  child: Text(
+                                    [
+                                      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+                                    ][m - 1],
+                                  ),
+                                ))
+                            .toList(),
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedMonth = val!;
+                          });
+                        },
+                      ),
+                      DropdownButton<int>(
+                        value: _selectedYear,
+                        items: List.generate(5, (i) => DateTime.now().year - i)
+                            .map((y) => DropdownMenuItem(value: y, child: Text('$y')))
+                            .toList(),
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedYear = val!;
+                          });
+                        },
+                      ),
                     ],
                   ),
-                ),
-              ),
-            ),
-            if (_isLoading)
-              Container(
-                color: Colors.black.withOpacity(0.3),
-                child: Center(
-                  child: SizedBox(
-                    width: 260,
-                    child: Card(
-                      color: Colors.white,
-                      elevation: 12,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      child: Padding(
-                        padding: const EdgeInsets.all(28.0),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text(
-                              "Generating Excel...",
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                            ),
-                            const SizedBox(height: 28),
-                            Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                // Glossy background
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Container(
-                                    height: 22,
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: [
-                                          Colors.blue.shade200.withOpacity(0.5),
-                                          Colors.blue.shade50.withOpacity(0.2),
-                                          Colors.white.withOpacity(0.6),
-                                        ],
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                      ),
-                                    ),
-                                    child: const SizedBox(width: double.infinity, height: 22),
-                                  ),
-                                ),
-                                // Progress bar
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: TweenAnimationBuilder<double>(
-                                    tween: Tween<double>(begin: 0, end: _progress),
-                                    duration: const Duration(milliseconds: 400),
-                                    curve: Curves.easeInOutCubic,
-                                    builder: (context, value, child) {
-                                      return LinearProgressIndicator(
-                                        value: value,
-                                        minHeight: 22,
-                                        backgroundColor: Colors.transparent,
-                                        valueColor: AlwaysStoppedAnimation<Color>(
-                                          Colors.blueAccent.shade700,
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                                // Glossy highlight overlay
-                                Positioned.fill(
-                                  child: IgnorePointer(
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(12),
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            Colors.white.withOpacity(0.25),
-                                            Colors.transparent,
-                                          ],
-                                          begin: Alignment.topCenter,
-                                          end: Alignment.bottomCenter,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 18),
-                            TweenAnimationBuilder<double>(
-                              tween: Tween<double>(begin: 0, end: _progress),
-                              duration: const Duration(milliseconds: 400),
-                              curve: Curves.easeInOutCubic,
-                              builder: (context, value, child) {
-                                return Text(
-                                  "${(value * 100).toInt()} %",
-                                  style: const TextStyle(
+                  if (_selectedUser != null)
+                    FutureBuilder<List<Map<String, dynamic>>>(
+                      future: _generateUserMonthlyReport(
+                        _selectedUser!['uid'],
+                        _selectedUser!['email'],
+                        _selectedMonth,
+                        _selectedYear,
+                      ),
+                      builder: (context, snap) {
+                        if (snap.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        if (snap.hasError) {
+                          return Center(child: Text('Error: ${snap.error}'));
+                        }
+                        if (!snap.hasData || snap.data!.isEmpty) {
+                          return const Center(child: Text('No missed entries this month.'));
+                        }
+                        final missed = snap.data!;
+                        return SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: DataTable(
+                            columns: const [
+                              DataColumn(label: Text('Date')),
+                              DataColumn(label: Text('Todo')),
+                              DataColumn(label: Text('Lead')),
+                            ],
+                            rows: missed.map((m) => DataRow(cells: [
+                              DataCell(Text(m['date'])),
+                              DataCell(
+                                Text(
+                                  m['todo'] ? '✓' : '⭕',
+                                  style: TextStyle(
+                                    color: m['todo'] ? Colors.green : Colors.red,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 16,
-                                    color: Colors.blueAccent,
-                                    letterSpacing: 1.2,
                                   ),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  m['lead'] ? '✓' : '⭕',
+                                  style: TextStyle(
+                                    color: m['lead'] ? Colors.green : Colors.red,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                            ])).toList(),
+                          )
+                        );
+                        },
                     ),
-                  ),
-                ),
+                ],
               ),
-          ],
+            ),
+          ),
         );
       },
     );
+
+    return mainScaffold;
   }
 
   Future<List<Map<String, dynamic>>> _generateUserMonthlyReport(
@@ -458,12 +355,11 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
   }
 
   Future<void> _generateAndShareExcel(String role) async {
+    setState(() {
+      _isLoading = true;
+      _progress = 0.0;
+    });
     try {
-      setState(() {
-        _isLoading = true;
-        _progress = 0.0;
-      });
-
       // Determine branch to use
       String branchToUse = '';
       if (role == 'admin') {
@@ -531,9 +427,6 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
           TextCellValue(createdCount.toString()),
           TextCellValue(completedCount.toString()),
         ]);
-        setState(() {
-          _progress = (i + 1) / (users.length * 2); // First half for table 1
-        });
       }
 
       // Table 2: Username, Date, Todo, Lead (with space after each user, colored Yes/No)
@@ -584,9 +477,6 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
           TextCellValue(''),
           TextCellValue(''),
         ]);
-        setState(() {
-          _progress = 0.5 + ((i + 1) / (users.length * 2)); // Second half for table 2
-        });
       }
 
       // Save and share
@@ -601,22 +491,14 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
       await file.writeAsBytes(fileBytes!);
 
       await Share.shareXFiles([XFile(file.path)], text: 'Monthly Report Excel');
-
-      setState(() {
-        _progress = 1.0;
-      });
-
-      // Optionally, wait a moment to show 100%
-      await Future.delayed(const Duration(milliseconds: 400));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to generate Excel: $e')),
       );
-    } finally {
-      setState(() {
-        _isLoading = false;
-        _progress = 0.0;
-      });
     }
+    setState(() {
+      _isLoading = false;
+      _progress = 0.0;
+    });
   }
 }
