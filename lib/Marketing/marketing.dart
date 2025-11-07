@@ -148,10 +148,10 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
       await Future.delayed(const Duration(milliseconds: 500));
 
       ShowCaseWidget.of(context).startShowCase([_todayShowcaseKey]);
-      await Future.delayed(const Duration(seconds: 1));
+      await Future.delayed(const Duration(seconds: 2));
 
       ShowCaseWidget.of(context).startShowCase([_monthShowcaseKey]);
-      await Future.delayed(const Duration(seconds: 1));
+      await Future.delayed(const Duration(seconds: 2));
 
       await prefs.setInt('seen_marketing_drawer_hint', seenCount + 1);
     }
