@@ -139,7 +139,7 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
     final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
     final message = Message()
       ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
-      ..recipients.addAll(['crmmalabar@gmail.com'])
+      ..recipients.addAll(['crmmalabar@gmail.com','performancemtc@gmail.com'])
       ..subject = 'Daily Leads & Todo Report for ${yesterday.day}-${yesterday.month}-${yesterday.year}'
       ..text = 'Please find attached the daily leads and todo report for yesterday.'
       ..attachments = [FileAttachment(file)];

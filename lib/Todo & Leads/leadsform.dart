@@ -131,17 +131,6 @@ class _FollowUpFormState extends State<FollowUpForm> {
         'branch': branch,
       }, SetOptions(merge: true));
 
-      // ✅ Trigger immediate notification
-      // REMOVE THIS BLOCK:
-      // await AwesomeNotifications().createNotification(
-      //   content: NotificationContent(
-      //     id: DateTime.now().millisecondsSinceEpoch.remainder(100000), // unique ID
-      //     channelKey: 'reminder_channel',
-      //     title: 'Follow-Up Saved',
-      //     body: 'Reminder for ${_nameController.text.trim()} saved successfully.',
-      //     notificationLayout: NotificationLayout.Default,
-      //   ),
-      // );
       if (_selectedReminderTime != null && _reminderController.text.isNotEmpty) {
         final reminderParts = _reminderController.text.split(' ');
         final datePart = reminderParts[0].split('-');
