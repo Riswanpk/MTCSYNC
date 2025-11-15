@@ -133,26 +133,25 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
       seenCount = raw;
     } else if (raw is bool && raw == true) {
       seenCount = 1;
-      await prefs.remove('seen_marketing_drawer_hint'); // Clean up old bool value
+      await prefs.remove('seen_marketing_drawer_hint');
       await prefs.setInt('seen_marketing_drawer_hint', seenCount);
     }
 
-    if (seenCount < 2 && mounted) {
-      ShowCaseWidget.of(context).startShowCase([_drawerShowcaseKey]);
-      await Future.delayed(const Duration(seconds: 2));
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Opening menu for you...')),
-      );
-      _scaffoldKey.currentState?.openEndDrawer(); // <-- Use the key here
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      ShowCaseWidget.of(context).startShowCase([_todayShowcaseKey]);
-      await Future.delayed(const Duration(seconds: 2));
-
-      ShowCaseWidget.of(context).startShowCase([_monthShowcaseKey]);
-      await Future.delayed(const Duration(seconds: 2));
-
+    if (seenCount < 3 && mounted) {
+      if (seenCount == 0) {
+        ShowCaseWidget.of(context).startShowCase([_drawerShowcaseKey]);
+        await Future.delayed(const Duration(seconds: 2));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Opening menu for you...')),
+        );
+        _scaffoldKey.currentState?.openEndDrawer();
+      } else if (seenCount == 1) {
+        ShowCaseWidget.of(context).startShowCase([_todayShowcaseKey]);
+        await Future.delayed(const Duration(seconds: 2));
+      } else if (seenCount == 2) {
+        ShowCaseWidget.of(context).startShowCase([_monthShowcaseKey]);
+        await Future.delayed(const Duration(seconds: 2));
+      }
       await prefs.setInt('seen_marketing_drawer_hint', seenCount + 1);
     }
   }

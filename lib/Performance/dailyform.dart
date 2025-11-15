@@ -17,11 +17,14 @@ class _PerformanceFormState extends State<PerformanceForm> {
   bool neatHair = false;
 
   // Attitude
-  bool greetSmile = false;
-  bool askNeeds = false;
-  bool helpFindProduct = false;
-  bool confirmPurchase = false;
-  bool offerHelp = false;
+  bool? greetSmile; // null = unselected, true = Excellent, false = Average
+  bool? askNeeds; // null = unselected, true = Excellent, false = Average
+  bool? helpFindProduct; // null = unselected, true = Excellent, false = Average
+  bool? confirmPurchase; // null = unselected, true = Excellent, false = Average
+  bool? offerHelp; // null = unselected, true = Excellent, false = Average
+  bool attitudeExcellent = false;
+  bool attitudeAverage = false;
+  
 
   // Meeting
   bool meetingAttended = false;
@@ -155,11 +158,11 @@ class _PerformanceFormState extends State<PerformanceForm> {
       cleanUniform = false;
       keepInside = false;
       neatHair = false;  
-      greetSmile = false;
-      askNeeds = false;
-      helpFindProduct = false;
-      confirmPurchase = false;
-      offerHelp = false;
+      greetSmile = null;
+      askNeeds = null;
+      helpFindProduct = null;
+      confirmPurchase = null;
+      offerHelp = null;
       meetingAttended = false;
       selectedUserId = null;
       selectedUserName = null;
@@ -218,13 +221,13 @@ class _PerformanceFormState extends State<PerformanceForm> {
                         title: Text('Punching time'),
                         value: 'punching',
                         groupValue: attendanceStatus,
-                        onChanged: (isApprovedLeave || isUnapprovedLeave) ? null : (val) => setState(() => attendanceStatus = val),
+                        onChanged: (val) => setState(() => attendanceStatus = val),
                       ),
                       RadioListTile<String>(
                         title: Text('Late time'),
                         value: 'late',
                         groupValue: attendanceStatus,
-                        onChanged: (isApprovedLeave || isUnapprovedLeave) ? null : (val) => setState(() => attendanceStatus = val),
+                        onChanged: (val) => setState(() => attendanceStatus = val),
                       ),
                       RadioListTile<String>(
                         title: Text('Approved leave'),
@@ -236,7 +239,7 @@ class _PerformanceFormState extends State<PerformanceForm> {
                         title: Text('Not Approved'),
                         value: 'notApproved',
                         groupValue: attendanceStatus,
-                        onChanged: (isApprovedLeave || isUnapprovedLeave) ? null : (val) => setState(() => attendanceStatus = val),
+                        onChanged: (val) => setState(() => attendanceStatus = val),
                       ),
                       Divider(),
 
@@ -259,33 +262,38 @@ class _PerformanceFormState extends State<PerformanceForm> {
                       Divider(),
 
                       Text('3) Attitude', style: TextStyle(fontWeight: FontWeight.bold)),
-                      CheckboxListTile(
-                        title: Text('Greet with a warm smile'),
+                      _attitudeCheckboxRow(
+                        label: 'Greet with a warm smile',
                         value: greetSmile,
-                        onChanged: (isApprovedLeave || isUnapprovedLeave) ? null : (val) => setState(() => greetSmile = val!),
+                        onChanged: (val) => setState(() => greetSmile = val),
+                        enabled: !(isApprovedLeave || isUnapprovedLeave),
                       ),
-                      CheckboxListTile(
-                        title: Text('Ask about their needs'),
+                      _attitudeCheckboxRow(
+                        label: 'Ask about their needs',
                         value: askNeeds,
-                        onChanged: (isApprovedLeave || isUnapprovedLeave) ? null : (val) => setState(() => askNeeds = val!),
+                        onChanged: (val) => setState(() => askNeeds = val),
+                        enabled: !(isApprovedLeave || isUnapprovedLeave),
                       ),
-                      CheckboxListTile(
-                        title: Text('Help find the right product'),
+                      _attitudeCheckboxRow(
+                        label: 'Help find the right product',
                         value: helpFindProduct,
-                        onChanged: (isApprovedLeave || isUnapprovedLeave) ? null : (val) => setState(() => helpFindProduct = val!),
+                        onChanged: (val) => setState(() => helpFindProduct = val),
+                        enabled: !(isApprovedLeave || isUnapprovedLeave),
                       ),
-                      CheckboxListTile(
-                        title: Text('Confirm the purchase'),
+                      _attitudeCheckboxRow(
+                        label: 'Confirm the purchase',
                         value: confirmPurchase,
-                        onChanged: (isApprovedLeave || isUnapprovedLeave) ? null : (val) => setState(() => confirmPurchase = val!),
+                        onChanged: (val) => setState(() => confirmPurchase = val),
+                        enabled: !(isApprovedLeave || isUnapprovedLeave),
                       ),
-                      CheckboxListTile(
-                        title: Text('Offer carry or delivery help'),
+                      _attitudeCheckboxRow(
+                        label: 'Offer carry or delivery help',
                         value: offerHelp,
-                        onChanged: (isApprovedLeave || isUnapprovedLeave) ? null : (val) => setState(() => offerHelp = val!),
+                        onChanged: (val) => setState(() => offerHelp = val),
+                        enabled: !(isApprovedLeave || isUnapprovedLeave),
                       ),
-                      Divider(),
 
+                      Divider(),
                       Text('4) Meeting', style: TextStyle(fontWeight: FontWeight.bold)),
                       CheckboxListTile(
                         title: Text('Attended'),
@@ -305,6 +313,66 @@ class _PerformanceFormState extends State<PerformanceForm> {
                     ],
                   ),
                 ),
+    );
+  }
+
+  // Helper widget for attitude items
+  Widget _attitudeCheckboxRow({
+    required String label,
+    required bool? value, // null = unselected, true = Excellent, false = Average
+    required ValueChanged<bool?> onChanged,
+    required bool enabled,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(label),
+          ),
+          Expanded(
+            child: Column(
+              children: [
+                Text('Excellent', style: TextStyle(fontSize: 12)),
+                Checkbox(
+                  value: value == true,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  onChanged: enabled
+                      ? (val) {
+                          if (val == true) {
+                            onChanged(true);
+                          } else {
+                            onChanged(null);
+                          }
+                        }
+                      : null,
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Column(
+              children: [
+                Text('Average', style: TextStyle(fontSize: 12)),
+                Checkbox(
+                  value: value == false,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  onChanged: enabled
+                      ? (val) {
+                          if (val == true) {
+                            onChanged(false);
+                          } else {
+                            onChanged(null);
+                          }
+                        }
+                      : null,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
