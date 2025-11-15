@@ -24,7 +24,11 @@ class _PerformanceFormState extends State<PerformanceForm> {
   bool? offerHelp; // null = unselected, true = Excellent, false = Average
   bool attitudeExcellent = false;
   bool attitudeAverage = false;
-  
+  String? greetSmileLevel;
+  String? askNeedsLevel;
+  String? helpFindProductLevel;
+  String? confirmPurchaseLevel;
+  String? offerHelpLevel;
 
   // Meeting
   bool meetingAttended = false;
@@ -138,11 +142,16 @@ class _PerformanceFormState extends State<PerformanceForm> {
         'neatHair': isLeave ? true : neatHair,
       },
       'attitude': {
-        'greetSmile': isLeave ? true : greetSmile,
-        'askNeeds': isLeave ? true : askNeeds,
-        'helpFindProduct': isLeave ? true : helpFindProduct,
-        'confirmPurchase': isLeave ? true : confirmPurchase,
-        'offerHelp': isLeave ? true : offerHelp,
+        'greetSmile': isLeave ? true : (greetSmile != null ? true : false),
+        'greetSmileLevel': isLeave ? 'excellent' : greetSmileLevel,
+        'askNeeds': isLeave ? true : (askNeeds != null ? true : false),
+        'askNeedsLevel': isLeave ? 'excellent' : askNeedsLevel,
+        'helpFindProduct': isLeave ? true : (helpFindProduct != null ? true : false),
+        'helpFindProductLevel': isLeave ? 'excellent' : helpFindProductLevel,
+        'confirmPurchase': isLeave ? true : (confirmPurchase != null ? true : false),
+        'confirmPurchaseLevel': isLeave ? 'excellent' : confirmPurchaseLevel,
+        'offerHelp': isLeave ? true : (offerHelp != null ? true : false),
+        'offerHelpLevel': isLeave ? 'excellent' : offerHelpLevel,
       },
       'meeting': {
         'attended': isLeave ? true : meetingAttended,
@@ -265,31 +274,56 @@ class _PerformanceFormState extends State<PerformanceForm> {
                       _attitudeCheckboxRow(
                         label: 'Greet with a warm smile',
                         value: greetSmile,
-                        onChanged: (val) => setState(() => greetSmile = val),
+                        onChanged: (val) {
+                          setState(() {
+                            greetSmile = val;
+                            greetSmileLevel = val == true ? 'excellent' : val == false ? 'average' : null;
+                          });
+                        },
                         enabled: !(isApprovedLeave || isUnapprovedLeave),
                       ),
                       _attitudeCheckboxRow(
                         label: 'Ask about their needs',
                         value: askNeeds,
-                        onChanged: (val) => setState(() => askNeeds = val),
+                        onChanged: (val) {
+                          setState(() {
+                            askNeeds = val;
+                            askNeedsLevel = val == true ? 'excellent' : val == false ? 'average' : null;
+                          });
+                        },
                         enabled: !(isApprovedLeave || isUnapprovedLeave),
                       ),
                       _attitudeCheckboxRow(
                         label: 'Help find the right product',
                         value: helpFindProduct,
-                        onChanged: (val) => setState(() => helpFindProduct = val),
+                        onChanged: (val) {
+                          setState(() {
+                            helpFindProduct = val;
+                            helpFindProductLevel = val == true ? 'excellent' : val == false ? 'average' : null;
+                          });
+                        },
                         enabled: !(isApprovedLeave || isUnapprovedLeave),
                       ),
                       _attitudeCheckboxRow(
                         label: 'Confirm the purchase',
                         value: confirmPurchase,
-                        onChanged: (val) => setState(() => confirmPurchase = val),
+                        onChanged: (val) {
+                          setState(() {
+                            confirmPurchase = val;
+                            confirmPurchaseLevel = val == true ? 'excellent' : val == false ? 'average' : null;
+                          });
+                        },
                         enabled: !(isApprovedLeave || isUnapprovedLeave),
                       ),
                       _attitudeCheckboxRow(
                         label: 'Offer carry or delivery help',
                         value: offerHelp,
-                        onChanged: (val) => setState(() => offerHelp = val),
+                        onChanged: (val) {
+                          setState(() {
+                            offerHelp = val;
+                            offerHelpLevel = val == true ? 'excellent' : val == false ? 'average' : null;
+                          });
+                        },
                         enabled: !(isApprovedLeave || isUnapprovedLeave),
                       ),
 

@@ -356,6 +356,13 @@ class _AdminEditFormState extends State<_AdminEditForm> {
   // late bool? targetAchieved;
   // late bool? otherPerformance;
 
+  // Add these fields:
+  late String? greetSmileLevel;
+  late String? askNeedsLevel;
+  late String? helpFindProductLevel;
+  late String? confirmPurchaseLevel;
+  late String? offerHelpLevel;
+
   @override
   void initState() {
     super.initState();
@@ -366,10 +373,15 @@ class _AdminEditFormState extends State<_AdminEditForm> {
     keepInside = f['dressCode']?['keepInside'] ?? false;
     neatHair = f['dressCode']?['neatHair'] ?? false;
     greetSmile = f['attitude']?['greetSmile'] ?? false;
+    greetSmileLevel = f['attitude']?['greetSmileLevel'];
     askNeeds = f['attitude']?['askNeeds'] ?? false;
+    askNeedsLevel = f['attitude']?['askNeedsLevel'];
     helpFindProduct = f['attitude']?['helpFindProduct'] ?? false;
+    helpFindProductLevel = f['attitude']?['helpFindProductLevel'];
     confirmPurchase = f['attitude']?['confirmPurchase'] ?? false;
+    confirmPurchaseLevel = f['attitude']?['confirmPurchaseLevel'];
     offerHelp = f['attitude']?['offerHelp'] ?? false;
+    offerHelpLevel = f['attitude']?['offerHelpLevel'];
     meetingAttended = f['meeting']?['attended'] ?? false;
     // REMOVE performance fields
     // targetAchieved = f['performance']?['target'];
@@ -386,10 +398,15 @@ class _AdminEditFormState extends State<_AdminEditForm> {
       },
       'attitude': {
         'greetSmile': greetSmile,
+        'greetSmileLevel': greetSmileLevel,
         'askNeeds': askNeeds,
+        'askNeedsLevel': askNeedsLevel,
         'helpFindProduct': helpFindProduct,
+        'helpFindProductLevel': helpFindProductLevel,
         'confirmPurchase': confirmPurchase,
+        'confirmPurchaseLevel': confirmPurchaseLevel,
         'offerHelp': offerHelp,
+        'offerHelpLevel': offerHelpLevel,
       },
       'meeting': {
         'attended': meetingAttended,
@@ -490,48 +507,58 @@ class _AdminEditFormState extends State<_AdminEditForm> {
               'Attitude',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: theme.colorScheme.secondary, // Green from theme
+                color: theme.colorScheme.secondary,
               ),
             ),
-            CheckboxListTile(
-              title: const Text('Greet with a warm smile'),
+            _attitudeAdminRow(
+              label: 'Greet with a warm smile',
               value: greetSmile,
-              onChanged: (isApprovedLeave || isUnapprovedLeave)
-                  ? null
-                  : (val) => setState(() => greetSmile = val!),
-              activeColor: colorScheme.primary,
+              level: greetSmileLevel,
+              onChanged: (val, level) => setState(() {
+                greetSmile = val;
+                greetSmileLevel = level;
+              }),
+              enabled: !(isApprovedLeave || isUnapprovedLeave),
             ),
-            CheckboxListTile(
-              title: const Text('Ask about their needs'),
+            _attitudeAdminRow(
+              label: 'Ask about their needs',
               value: askNeeds,
-              onChanged: (isApprovedLeave || isUnapprovedLeave)
-                  ? null
-                  : (val) => setState(() => askNeeds = val!),
-              activeColor: colorScheme.primary,
+              level: askNeedsLevel,
+              onChanged: (val, level) => setState(() {
+                askNeeds = val;
+                askNeedsLevel = level;
+              }),
+              enabled: !(isApprovedLeave || isUnapprovedLeave),
             ),
-            CheckboxListTile(
-              title: const Text('Help find the right product'),
+            _attitudeAdminRow(
+              label: 'Help find the right product',
               value: helpFindProduct,
-              onChanged: (isApprovedLeave || isUnapprovedLeave)
-                  ? null
-                  : (val) => setState(() => helpFindProduct = val!),
-              activeColor: colorScheme.primary,
+              level: helpFindProductLevel,
+              onChanged: (val, level) => setState(() {
+                helpFindProduct = val;
+                helpFindProductLevel = level;
+              }),
+              enabled: !(isApprovedLeave || isUnapprovedLeave),
             ),
-            CheckboxListTile(
-              title: const Text('Confirm the purchase'),
+            _attitudeAdminRow(
+              label: 'Confirm the purchase',
               value: confirmPurchase,
-              onChanged: (isApprovedLeave || isUnapprovedLeave)
-                  ? null
-                  : (val) => setState(() => confirmPurchase = val!),
-              activeColor: colorScheme.primary,
+              level: confirmPurchaseLevel,
+              onChanged: (val, level) => setState(() {
+                confirmPurchase = val;
+                confirmPurchaseLevel = level;
+              }),
+              enabled: !(isApprovedLeave || isUnapprovedLeave),
             ),
-            CheckboxListTile(
-              title: const Text('Offer carry or delivery help'),
+            _attitudeAdminRow(
+              label: 'Offer carry or delivery help',
               value: offerHelp,
-              onChanged: (isApprovedLeave || isUnapprovedLeave)
-                  ? null
-                  : (val) => setState(() => offerHelp = val!),
-              activeColor: colorScheme.primary,
+              level: offerHelpLevel,
+              onChanged: (val, level) => setState(() {
+                offerHelp = val;
+                offerHelpLevel = level;
+              }),
+              enabled: !(isApprovedLeave || isUnapprovedLeave),
             ),
             Divider(color: theme.dividerColor),
             // Meeting
@@ -576,5 +603,65 @@ class _AdminEditFormState extends State<_AdminEditForm> {
     final now = DateTime.now();
     final lastDay = DateTime(now.year, now.month + 1, 0).day;
     return now.day >= lastDay - 2; // Allow last 3 days of month
+  }
+
+  Widget _attitudeAdminRow({
+    required String label,
+    required bool value,
+    required String? level,
+    required Function(bool, String?) onChanged,
+    required bool enabled,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(label),
+          ),
+          Expanded(
+            child: Column(
+              children: [
+                Text('Excellent', style: TextStyle(fontSize: 12)),
+                Checkbox(
+                  value: level == 'excellent',
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  onChanged: enabled
+                      ? (val) {
+                          if (val == true) {
+                            onChanged(true, 'excellent');
+                          } else {
+                            onChanged(false, null);
+                          }
+                        }
+                      : null,
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Column(
+              children: [
+                Text('Average', style: TextStyle(fontSize: 12)),
+                Checkbox(
+                  value: level == 'average',
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  onChanged: enabled
+                      ? (val) {
+                          if (val == true) {
+                            onChanged(true, 'average');
+                          } else {
+                            onChanged(false, null);
+                          }
+                        }
+                      : null,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
