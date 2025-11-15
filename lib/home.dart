@@ -95,6 +95,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
     });
 
     _fetchAndCacheContacts();
+    _printCustomClaims(); // <-- Add this line
   }
 
   Future<void> _loadProfileImage() async {
@@ -454,6 +455,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
     });
   }
 
+  Future<void> _printCustomClaims() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      print("No user signed in.");
+    } else {
+      final idTokenResult = await user.getIdTokenResult();
+      print("Custom claims: ${idTokenResult.claims}");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     const Color primaryBlue = Color(0xFF005BAC);
@@ -603,7 +614,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                         Navigator.pop(context); // Close the drawer
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => const ManageUsersPage()),
+                          MaterialPageRoute(builder: (context) => const ManageUsersPage(userRole: 'admin',)),
                         );
                       },
                     ),
