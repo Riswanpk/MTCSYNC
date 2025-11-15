@@ -2,10 +2,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'monthly.dart';
 import '../Todo & Leads/leads.dart';
 import 'daily.dart';
 import 'insights.dart';
+import 'leadsdailyreport.dart';
 
 // Add your theme colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -27,6 +29,21 @@ class _DashboardPageState extends State<DashboardPage> {
   void initState() {
     super.initState();
     _fetchBranches();
+    _autoSendDailyReport();
+  }
+
+  Future<void> _autoSendDailyReport() async {
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateTime.now();
+    final key = 'last_daily_report_sent';
+    final lastSent = prefs.getString(key);
+
+    // Only send if not sent today
+    final todayString = '${today.year}-${today.month}-${today.day}';
+    if (lastSent != todayString) {
+      await sendDailyLeadsReport(context);
+      await prefs.setString(key, todayString);
+    }
   }
 
   Future<void> _fetchBranches() async {
@@ -135,6 +152,22 @@ class _DashboardPageState extends State<DashboardPage> {
             backgroundColor: Theme.of(context).colorScheme.background,
             foregroundColor: Theme.of(context).colorScheme.onBackground,
             elevation: 0,
+            actions: [
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.menu),
+                onSelected: (value) async {
+                  if (value == 'send_daily_report') {
+                    await sendDailyLeadsReport(context);
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem<String>(
+                    value: 'send_daily_report',
+                    child: Text('Send Daily Leads & Todo Report'),
+                  ),
+                ],
+              ),
+            ],
           ),
           body: SingleChildScrollView(
             padding: const EdgeInsets.all(12),
