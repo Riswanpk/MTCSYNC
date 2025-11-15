@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
 import 'leads.dart'; // Make sure this import exists
+import '../../Dashboard/leadscount.dart'; // <-- Add this import
 
 // Update fetchCustomerSuggestions to search by name OR phone:
 Future<List<Map<String, dynamic>>> fetchCustomerSuggestions(String query, String branch) async {
@@ -101,8 +102,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
 
       // Save follow up and get document reference
       final followUpRef = await FirebaseFirestore.instance.collection('follow_ups').add({
-        // REMOVE 'date': _dateController.text.trim(),
-        'date': DateTime.now(), // <-- Add date automatically
+        'date': DateTime.now(),
         'name': _nameController.text.trim(),
         'address': _addressController.text.trim(),
         'phone': _phoneController.text.trim(),
@@ -114,6 +114,9 @@ class _FollowUpFormState extends State<FollowUpForm> {
         'created_by': user.uid,
         'created_at': FieldValue.serverTimestamp(),
       });
+
+      // Increment global leads count
+      await LeadCountService.incrementLeadCount(branch: branch);
 
       await _clearDraft(); // Clear draft on successful save
 

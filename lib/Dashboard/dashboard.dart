@@ -8,6 +8,7 @@ import '../Todo & Leads/leads.dart';
 import 'daily.dart';
 import 'insights.dart';
 import 'leadsdailyreport.dart';
+import 'leadscount.dart'; // <-- Add this import
 
 // Add your theme colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -89,10 +90,15 @@ class _DashboardPageState extends State<DashboardPage> {
           .toList();
     }
 
-    // --- OPTIMIZATION: Use count() aggregation and run queries concurrently ---
     final results = await Future.wait([
       // Query 1: Total leads count
-      followUps.count().get(),
+      branch == null
+          ? FirebaseFirestore.instance
+              .collection('leadscount')
+              .doc('admin')
+              .get()
+              .then((snap) => (snap.data()?['totalLeads'] ?? 0) as int)
+          : followUps.count().get(),
       // Query 2: Leads this month count
       followUps.where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart)).count().get(),
       // Query 3: Leads today count
@@ -105,8 +111,6 @@ class _DashboardPageState extends State<DashboardPage> {
       (() async {
         Query pendingTodosQuery = todos.where('status', isEqualTo: 'pending');
         if (branchEmails.isNotEmpty) {
-          // Firestore 'whereIn' supports up to 30 items in a query.
-          // We batch requests to stay within this limit and run them in parallel.
           int pendingCount = 0;
           List<Future<AggregateQuerySnapshot>> futures = [];
           for (var i = 0; i < branchEmails.length; i += 30) {
@@ -126,9 +130,11 @@ class _DashboardPageState extends State<DashboardPage> {
     ]);
     
     return {
- 'totalLeads': (results[0] as AggregateQuerySnapshot).count ?? 0,
- 'monthLeads': (results[1] as AggregateQuerySnapshot).count ?? 0,
- 'todayLeads': (results[2] as AggregateQuerySnapshot).count ?? 0,
+      'totalLeads': branch == null
+          ? results[0] as int
+          : (results[0] as AggregateQuerySnapshot).count ?? 0,
+      'monthLeads': (results[1] as AggregateQuerySnapshot).count ?? 0,
+      'todayLeads': (results[2] as AggregateQuerySnapshot).count ?? 0,
       'pendingTodos': results[3] as int,
     };
   }
