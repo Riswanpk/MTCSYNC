@@ -73,10 +73,25 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
       }
     }
 
+    // --- Fetch todos created by each user on that day ---
+    final todosByUser = <String, List<Map<String, dynamic>>>{};
+    for (var userId in userMap.keys) {
+      final userEmail = userMap[userId]?['email'];
+      if (userEmail == null) continue;
+      final todosSnap = await FirebaseFirestore.instance
+          .collection('todo')
+          .where('email', isEqualTo: userEmail)
+          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+          .where('timestamp', isLessThan: Timestamp.fromDate(start.add(const Duration(days: 1))))
+          .get();
+      todosByUser[userId] = todosSnap.docs.map((d) => d.data()).toList();
+    }
+
     // Generate Excel
     final excel = ex.Excel.createExcel();
     branchUserStatus.forEach((branch, users) {
       final sheet = excel[branch];
+      // Summary table
       sheet.appendRow([
         ex.TextCellValue('Username'),
         ex.TextCellValue('Leads'),
@@ -89,6 +104,27 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
           ex.TextCellValue(status['lead'] == true ? 'Yes' : 'No'),
           ex.TextCellValue(status['todo'] == true ? 'Yes' : 'No'),
         ]);
+      });
+
+      // Add a blank row for visual separation
+      sheet.appendRow([ex.TextCellValue(''), ex.TextCellValue(''), ex.TextCellValue('')]);
+
+      // Todos Table: Username, Title, Description
+      sheet.appendRow([
+        ex.TextCellValue('Username'),
+        ex.TextCellValue('Title'),
+        ex.TextCellValue('Description'),
+      ]);
+      users.forEach((userId, status) {
+        final user = userMap[userId]!;
+        final todos = todosByUser[userId] ?? [];
+        for (var todo in todos) {
+          sheet.appendRow([
+            ex.TextCellValue(user['username'] ?? ''),
+            ex.TextCellValue(todo['title'] ?? ''),
+            ex.TextCellValue(todo['description'] ?? ''),
+          ]);
+        }
       });
     });
 
@@ -103,7 +139,7 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
     final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
     final message = Message()
       ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
-      ..recipients.addAll(['crmmalabar@gmail.com','performancemtc@gmail.com'])
+      ..recipients.addAll(['crmmalabar@gmail.com'])
       ..subject = 'Daily Leads & Todo Report for ${yesterday.day}-${yesterday.month}-${yesterday.year}'
       ..text = 'Please find attached the daily leads and todo report for yesterday.'
       ..attachments = [FileAttachment(file)];

@@ -33,16 +33,19 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _autoSendDailyReport() async {
-    final prefs = await SharedPreferences.getInstance();
     final today = DateTime.now();
-    final key = 'last_daily_report_sent';
-    final lastSent = prefs.getString(key);
-
-    // Only send if not sent today
     final todayString = '${today.year}-${today.month}-${today.day}';
-    if (lastSent != todayString) {
+    final reportDoc = await FirebaseFirestore.instance
+        .collection('reportTracking')
+        .doc(todayString)
+        .get();
+
+    if (!reportDoc.exists) {
       await sendDailyLeadsReport(context);
-      await prefs.setString(key, todayString);
+      await FirebaseFirestore.instance
+          .collection('reportTracking')
+          .doc(todayString)
+          .set({'sentAt': FieldValue.serverTimestamp()});
     }
   }
 
@@ -153,20 +156,21 @@ class _DashboardPageState extends State<DashboardPage> {
             foregroundColor: Theme.of(context).colorScheme.onBackground,
             elevation: 0,
             actions: [
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.menu),
-                onSelected: (value) async {
-                  if (value == 'send_daily_report') {
-                    await sendDailyLeadsReport(context);
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem<String>(
-                    value: 'send_daily_report',
-                    child: Text('Send Daily Leads & Todo Report'),
-                  ),
-                ],
-              ),
+              if (role == 'admin') // Only show for admin
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.menu),
+                  onSelected: (value) async {
+                    if (value == 'send_daily_report') {
+                      await sendDailyLeadsReport(context);
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem<String>(
+                      value: 'send_daily_report',
+                      child: Text('Send Daily Leads & Todo Report'),
+                    ),
+                  ],
+                ),
             ],
           ),
           body: SingleChildScrollView(
