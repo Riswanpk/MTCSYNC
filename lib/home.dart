@@ -46,6 +46,67 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
   late AnimationController _swingController;
   late Animation<double> _swingAnimation;
 
+  Future<void> _checkAndShowPerformanceDeductionNotification() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month, 1);
+    final monthEnd = DateTime(now.year, now.month + 1, 1);
+
+    final formsSnapshot = await FirebaseFirestore.instance
+        .collection('dailyform')
+        .where('userId', isEqualTo: user.uid)
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
+        .where('timestamp', isLessThan: Timestamp.fromDate(monthEnd))
+        .get();
+
+    final forms = formsSnapshot.docs.map((doc) => doc.data() as Map<String, dynamic>).toList();
+
+    final today = DateTime(now.year, now.month, now.day);
+    final currentWeekNum = isoWeekNumber(today);
+    final weekForms = forms.where((form) {
+      final ts = form['timestamp'];
+      final date = ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
+      return isoWeekNumber(date) == currentWeekNum && date.year == today.year;
+    }).toList();
+
+    bool deduction = false;
+    for (var form in weekForms) {
+      final att = form['attendance'];
+      if (att == 'late' || att == 'notApproved') deduction = true;
+      if (att != 'approved' && att != 'notApproved') {
+        if (form['dressCode']?['cleanUniform'] == false ||
+            form['dressCode']?['keepInside'] == false ||
+            form['dressCode']?['neatHair'] == false ||
+            form['attitude']?['greetSmile'] == false ||
+            form['attitude']?['askNeeds'] == false ||
+            form['attitude']?['helpFindProduct'] == false ||
+            form['attitude']?['confirmPurchase'] == false ||
+            form['attitude']?['offerHelp'] == false ||
+            form['meeting']?['attended'] == false) {
+          deduction = true;
+        }
+      }
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final lastNotified = prefs.getString('last_perf_deduction_notify');
+    final todayStr = "${now.year}-${now.month}-${now.day}";
+    if (deduction && lastNotified != todayStr) {
+      await AwesomeNotifications().createNotification(
+        content: NotificationContent(
+          id: 2002,
+          channelKey: 'reminder_channel',
+          title: 'Performance Deduction',
+          body: 'Your performance score was reduced. Check the Performance page for details.',
+          notificationLayout: NotificationLayout.Default,
+        ),
+      );
+      await prefs.setString('last_perf_deduction_notify', todayStr);
+    }
+  }
+
   File? _profileImage;
   String? _profileImagePath;
 
@@ -80,7 +141,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
     _checkPendingTodosReminder();
     // Only send report if today is the 1st of the month
     final now = DateTime.now();
-    _checkAndSendMonthlyReport();
+    // _checkAndSendMonthlyReport(); // <-- REMOVE this line to disable auto send
     
 
     // Show performance deduction notification for sales user
@@ -273,58 +334,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
     }
   }
 
-  Future<void> _checkAndSendMonthlyReport() async {
-    try {
-      final now = DateTime.now();
-
-      // Calculate previous month safely
-      int prevMonth = now.month - 1;
-      int prevYear = now.year;
-      if (prevMonth == 0) {
-        prevMonth = 12;
-        prevYear -= 1;
-      }
-      final prevMonthKey = '$prevYear-$prevMonth';
-
-      final trackingDocRef = FirebaseFirestore.instance
-          .collection('reportTracking')
-          .doc('global');
-
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final trackingDoc = await transaction.get(trackingDocRef);
-        final lastSentMonth = trackingDoc.data()?['lastSentMonth'];
-
-        if (lastSentMonth != prevMonthKey) {
-          // Only send if not already sent for this month
-          await _sendMonthlyExcelReport(year: prevYear, month: prevMonth);
-
-          transaction.set(trackingDocRef, {
-            'lastSentMonth': prevMonthKey,
-            'lastUpdated': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-        }
-      });
-    } catch (e) {
-      print('Error checking monthly report: $e');
-    }
-  }
-
-  Future<void> _sendMonthlyExcelReport({int? year, int? month}) async {
-    try {
-      final uid = FirebaseAuth.instance.currentUser!.uid;
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .get();
-      final role = userDoc.data()?['role']?.toString().toLowerCase() ?? 'unknown';
-      await exportAndSendExcel(context, year: year, month: month);
-      print('Monthly Excel Report Sent!');
-    } catch (e) {
-      print('Error sending monthly report: $e');
-    }
-  }
-
-  Future<void> _checkAndShowPerformanceDeductionNotification() async {
+  Future<void> _checkAndShowMonthlyReport() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
