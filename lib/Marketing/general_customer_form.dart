@@ -6,6 +6,7 @@ import 'package:flutter/services.dart'; // Add this import
 import 'package:firebase_storage/firebase_storage.dart'; // Add this import
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 
@@ -179,7 +180,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
       return;
     }
 
-    _formKey.currentState!.save(); // Make sure to save all fields to their variables
+    _formKey.currentState!.save();
     shopName = _shopNameController.text;
     place = _placeController.text;
     phoneNo = _phoneNoController.text;
@@ -191,7 +192,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
     setState(() {
       isLoading = true;
       _photoError = false;
-      _uploadProgress = 0.0; // Reset progress
+      _uploadProgress = 0.0;
     });
 
     String? imageUrl;
@@ -216,7 +217,8 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
       }
     }
 
-    await FirebaseFirestore.instance.collection('marketing').add({
+    // Submit marketing form
+    final marketingDoc = await FirebaseFirestore.instance.collection('marketing').add({
       'formType': 'General Customer',
       'username': widget.username,
       'userid': widget.userid,
@@ -234,6 +236,57 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
       'imageUrl': imageUrl,
       'timestamp': FieldValue.serverTimestamp(),
     });
+
+    // --- INSTANT LEAD CREATION ---
+    final reminderDate = DateTime.now().add(const Duration(days: 15));
+    final leadDoc = await FirebaseFirestore.instance.collection('follow_ups').add({
+      'date': DateTime.now(), // Use current date for the lead
+      'name': shopName,
+      'address': place, // Use place as address
+      'phone': phoneNo,
+      'comments': currentEnquiries,
+      'priority': 'Low',
+      'status': 'In Progress',
+      'reminder': reminderDate.toIso8601String(),
+      'branch': widget.branch,
+      'created_by': widget.userid,
+      'created_at': FieldValue.serverTimestamp(),
+      'source': 'marketing',
+      'marketing_doc_id': marketingDoc.id,
+    });
+
+    // Schedule local notification using basic_channel
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+        channelKey: 'basic_channel',
+        title: 'Follow-Up Reminder',
+        body: 'Reminder for $shopName',
+        notificationLayout: NotificationLayout.Default,
+        payload: {
+          'docId': leadDoc.id,
+          'type': 'lead',
+        },
+      ),
+      actionButtons: [
+        NotificationActionButton(
+          key: 'EDIT_FOLLOWUP',
+          label: 'Edit',
+          autoDismissible: true,
+        ),
+      ],
+      schedule: NotificationCalendar(
+        year: reminderDate.year,
+        month: reminderDate.month,
+        day: reminderDate.day,
+        hour: 9, // Default to 9 AM
+        minute: 0,
+        second: 0,
+        millisecond: 0,
+        timeZone: await AwesomeNotifications().getLocalTimeZoneIdentifier(),
+        preciseAlarm: true,
+      ),
+    );
 
     await _clearDraft();
 

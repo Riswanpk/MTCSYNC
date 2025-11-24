@@ -15,7 +15,7 @@ import 'package:path_provider/path_provider.dart';
 class SettingsPage extends StatelessWidget {
   final String userRole;
   final ThemeProvider themeProvider;
-  final String _appVersion = 'Version 1.2.85';
+  final String _appVersion = 'Version 1.2.86';
 
   const SettingsPage({super.key, required this.userRole, required this.themeProvider});
 
