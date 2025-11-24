@@ -38,6 +38,15 @@ class _PerformanceFormState extends State<PerformanceForm> {
   List<Map<String, dynamic>> branchUsers = [];
   bool isLoadingUsers = true;
 
+  // Reasons for attitude selections
+  Map<String, String> attitudeReasons = {
+    'greetSmile': '',
+    'askNeeds': '',
+    'helpFindProduct': '',
+    'confirmPurchase': '',
+    'offerHelp': '',
+  };
+
   @override
   void initState() {
     super.initState();
@@ -144,14 +153,19 @@ class _PerformanceFormState extends State<PerformanceForm> {
       'attitude': {
         'greetSmile': isLeave ? true : (greetSmile != null ? true : false),
         'greetSmileLevel': isLeave ? 'excellent' : greetSmileLevel,
+        'greetSmileReason': attitudeReasons['greetSmile'] ?? '',
         'askNeeds': isLeave ? true : (askNeeds != null ? true : false),
         'askNeedsLevel': isLeave ? 'excellent' : askNeedsLevel,
+        'askNeedsReason': attitudeReasons['askNeeds'] ?? '',
         'helpFindProduct': isLeave ? true : (helpFindProduct != null ? true : false),
         'helpFindProductLevel': isLeave ? 'excellent' : helpFindProductLevel,
+        'helpFindProductReason': attitudeReasons['helpFindProduct'] ?? '',
         'confirmPurchase': isLeave ? true : (confirmPurchase != null ? true : false),
         'confirmPurchaseLevel': isLeave ? 'excellent' : confirmPurchaseLevel,
+        'confirmPurchaseReason': attitudeReasons['confirmPurchase'] ?? '',
         'offerHelp': isLeave ? true : (offerHelp != null ? true : false),
         'offerHelpLevel': isLeave ? 'excellent' : offerHelpLevel,
+        'offerHelpReason': attitudeReasons['offerHelp'] ?? '',
       },
       'meeting': {
         'attended': isLeave ? true : meetingAttended,
@@ -282,6 +296,12 @@ class _PerformanceFormState extends State<PerformanceForm> {
                         },
                         enabled: !(isApprovedLeave || isUnapprovedLeave),
                       ),
+                      TextFormField(
+                        decoration: InputDecoration(labelText: 'Reason'),
+                        onChanged: (val) {
+                          attitudeReasons['greetSmile'] = val;
+                        },
+                      ),
                       _attitudeCheckboxRow(
                         label: 'Ask about their needs',
                         value: askNeeds,
@@ -292,6 +312,12 @@ class _PerformanceFormState extends State<PerformanceForm> {
                           });
                         },
                         enabled: !(isApprovedLeave || isUnapprovedLeave),
+                      ),
+                      TextFormField(
+                        decoration: InputDecoration(labelText: 'Reason'),
+                        onChanged: (val) {
+                          attitudeReasons['askNeeds'] = val;
+                        },
                       ),
                       _attitudeCheckboxRow(
                         label: 'Help find the right product',
@@ -304,6 +330,12 @@ class _PerformanceFormState extends State<PerformanceForm> {
                         },
                         enabled: !(isApprovedLeave || isUnapprovedLeave),
                       ),
+                      TextFormField(
+                        decoration: InputDecoration(labelText: 'Reason'),
+                        onChanged: (val) {
+                          attitudeReasons['helpFindProduct'] = val;
+                        },
+                      ),
                       _attitudeCheckboxRow(
                         label: 'Confirm the purchase',
                         value: confirmPurchase,
@@ -315,6 +347,12 @@ class _PerformanceFormState extends State<PerformanceForm> {
                         },
                         enabled: !(isApprovedLeave || isUnapprovedLeave),
                       ),
+                      TextFormField(
+                        decoration: InputDecoration(labelText: 'Reason'),
+                        onChanged: (val) {
+                          attitudeReasons['confirmPurchase'] = val;
+                        },
+                      ),
                       _attitudeCheckboxRow(
                         label: 'Offer carry or delivery help',
                         value: offerHelp,
@@ -325,6 +363,12 @@ class _PerformanceFormState extends State<PerformanceForm> {
                           });
                         },
                         enabled: !(isApprovedLeave || isUnapprovedLeave),
+                      ),
+                      TextFormField(
+                        decoration: InputDecoration(labelText: 'Reason'),
+                        onChanged: (val) {
+                          attitudeReasons['offerHelp'] = val;
+                        },
                       ),
 
                       Divider(),

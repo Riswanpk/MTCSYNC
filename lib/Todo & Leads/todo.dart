@@ -525,7 +525,8 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
       if (timestamp is Timestamp) {
         final todoTime = timestamp.toDate();
         final difference = now.difference(todoTime);
-        if (difference.inHours >= 24) {
+        // Change from 24 hours to 30 days (about 1 month)
+        if (difference.inDays >= 30) {
           batch.delete(doc.reference);
           // Do NOT update daily_report here!
         }
@@ -1476,4 +1477,3 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
     );
   }
 }
-                  

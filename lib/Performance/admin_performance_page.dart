@@ -362,6 +362,11 @@ class _AdminEditFormState extends State<_AdminEditForm> {
   late String? helpFindProductLevel;
   late String? confirmPurchaseLevel;
   late String? offerHelpLevel;
+  late TextEditingController greetSmileReasonController;
+  late TextEditingController askNeedsReasonController;
+  late TextEditingController helpFindProductReasonController;
+  late TextEditingController confirmPurchaseReasonController;
+  late TextEditingController offerHelpReasonController;
 
   @override
   void initState() {
@@ -386,6 +391,21 @@ class _AdminEditFormState extends State<_AdminEditForm> {
     // REMOVE performance fields
     // targetAchieved = f['performance']?['target'];
     // otherPerformance = f['performance']?['otherPerformance'];
+    greetSmileReasonController = TextEditingController(text: f['attitude']?['greetSmileReason'] ?? '');
+    askNeedsReasonController = TextEditingController(text: f['attitude']?['askNeedsReason'] ?? '');
+    helpFindProductReasonController = TextEditingController(text: f['attitude']?['helpFindProductReason'] ?? '');
+    confirmPurchaseReasonController = TextEditingController(text: f['attitude']?['confirmPurchaseReason'] ?? '');
+    offerHelpReasonController = TextEditingController(text: f['attitude']?['offerHelpReason'] ?? '');
+  }
+
+  @override
+  void dispose() {
+    greetSmileReasonController.dispose();
+    askNeedsReasonController.dispose();
+    helpFindProductReasonController.dispose();
+    confirmPurchaseReasonController.dispose();
+    offerHelpReasonController.dispose();
+    super.dispose();
   }
 
   Future<void> save() async {
@@ -399,19 +419,23 @@ class _AdminEditFormState extends State<_AdminEditForm> {
       'attitude': {
         'greetSmile': greetSmile,
         'greetSmileLevel': greetSmileLevel,
+        'greetSmileReason': greetSmileReasonController.text,
         'askNeeds': askNeeds,
         'askNeedsLevel': askNeedsLevel,
+        'askNeedsReason': askNeedsReasonController.text,
         'helpFindProduct': helpFindProduct,
         'helpFindProductLevel': helpFindProductLevel,
+        'helpFindProductReason': helpFindProductReasonController.text,
         'confirmPurchase': confirmPurchase,
         'confirmPurchaseLevel': confirmPurchaseLevel,
+        'confirmPurchaseReason': confirmPurchaseReasonController.text,
         'offerHelp': offerHelp,
         'offerHelpLevel': offerHelpLevel,
+        'offerHelpReason': offerHelpReasonController.text,
       },
       'meeting': {
         'attended': meetingAttended,
       },
-      // REMOVE 'performance'
     });
     widget.onSaved();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -520,6 +544,10 @@ class _AdminEditFormState extends State<_AdminEditForm> {
               }),
               enabled: !(isApprovedLeave || isUnapprovedLeave),
             ),
+            TextFormField(
+              controller: greetSmileReasonController,
+              decoration: InputDecoration(labelText: 'Reason'),
+            ),
             _attitudeAdminRow(
               label: 'Ask about their needs',
               value: askNeeds,
@@ -529,6 +557,10 @@ class _AdminEditFormState extends State<_AdminEditForm> {
                 askNeedsLevel = level;
               }),
               enabled: !(isApprovedLeave || isUnapprovedLeave),
+            ),
+            TextFormField(
+              controller: askNeedsReasonController,
+              decoration: InputDecoration(labelText: 'Reason'),
             ),
             _attitudeAdminRow(
               label: 'Help find the right product',
@@ -540,6 +572,10 @@ class _AdminEditFormState extends State<_AdminEditForm> {
               }),
               enabled: !(isApprovedLeave || isUnapprovedLeave),
             ),
+            TextFormField(
+              controller: helpFindProductReasonController,
+              decoration: InputDecoration(labelText: 'Reason'),
+            ),
             _attitudeAdminRow(
               label: 'Confirm the purchase',
               value: confirmPurchase,
@@ -550,6 +586,10 @@ class _AdminEditFormState extends State<_AdminEditForm> {
               }),
               enabled: !(isApprovedLeave || isUnapprovedLeave),
             ),
+            TextFormField(
+              controller: confirmPurchaseReasonController,
+              decoration: InputDecoration(labelText: 'Reason'),
+            ),
             _attitudeAdminRow(
               label: 'Offer carry or delivery help',
               value: offerHelp,
@@ -559,6 +599,10 @@ class _AdminEditFormState extends State<_AdminEditForm> {
                 offerHelpLevel = level;
               }),
               enabled: !(isApprovedLeave || isUnapprovedLeave),
+            ),
+            TextFormField(
+              controller: offerHelpReasonController,
+              decoration: InputDecoration(labelText: 'Reason'),
             ),
             Divider(color: theme.dividerColor),
             // Meeting

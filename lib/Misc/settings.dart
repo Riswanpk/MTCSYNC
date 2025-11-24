@@ -497,7 +497,7 @@ class SettingsPage extends StatelessWidget {
             'Ask about their needs',
             'Help find the right product',
             'Confirm the purchase',
-            'Offer carry or delivery help' // Pad with spaces
+            'Offer carry or delivery help'
           ];
           for (final cat in attitudeCats) {
             final row = [ex.TextCellValue(cat)];
@@ -505,32 +505,51 @@ class SettingsPage extends StatelessWidget {
               final date = monthStart.add(Duration(days: d));
               final form = getFormForDate(forms, date);
               bool? value;
+              String rating = '-';
+              String reason = '';
               if (form == null || form.isEmpty) {
                 row.add(ex.TextCellValue('-'));
                 continue;
               }
-              if (cat.trim() == 'Greet with a warm smile') value = form['attitude']?['greetSmile'] != false;
-              if (cat.trim() == 'Ask about their needs') value = form['attitude']?['askNeeds'] != false;
-              if (cat.trim() == 'Help find the right product') value = form['attitude']?['helpFindProduct'] != false;
-              if (cat.trim() == 'Confirm the purchase') value = form['attitude']?['confirmPurchase'] != false;
-              if (cat.trim() == 'Offer carry or delivery help') value = form['attitude']?['offerHelp'] != false;
-              row.add(coloredTick(value));
+              String key;
+              if (cat.trim() == 'Greet with a warm smile') key = 'greetSmile';
+              else if (cat.trim() == 'Ask about their needs') key = 'askNeeds';
+              else if (cat.trim() == 'Help find the right product') key = 'helpFindProduct';
+              else if (cat.trim() == 'Confirm the purchase') key = 'confirmPurchase';
+              else if (cat.trim() == 'Offer carry or delivery help') key = 'offerHelp';
+              else key = '';
+
+              // true = Excellent, false = Average, null = none
+              value = form['attitude']?[key];
+              reason = form['attitude']?['${key}Reason'] ?? '';
+
+              String cellText;
+              if (value == true) {
+                rating = 'Excellent';
+                cellText = '✔ ($rating: $reason)';
+              } else if (value == false) {
+                rating = 'Average';
+                cellText = '✔ ($rating: $reason)';
+              } else {
+                cellText = '✘ (-)';
+              }
+
+              row.add(ex.TextCellValue(cellText));
             }
             final rowIdxAtti = sheet.maxRows;
             sheet.appendRow(row);
+            // Color tick/cross cells
             for (int col = 1; col < row.length; col++) {
               final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: rowIdxAtti, columnIndex: col));
-              if (row[col] is ex.TextCellValue) {
-                final val = (row[col] as ex.TextCellValue).value;
-                if (val == '✔') {
-                  cell.cellStyle = ex.CellStyle(
-                    fontColorHex: ex.ExcelColor.fromHexString('#38761D'),
-                  );
-                } else if (val == '✘') {
-                  cell.cellStyle = ex.CellStyle(
-                    fontColorHex: ex.ExcelColor.fromHexString('#CC0000'),
-                  );
-                }
+              final val = (row[col] as ex.TextCellValue).value;
+              if (val is String && val.toString().startsWith('✔')) {
+                cell.cellStyle = ex.CellStyle(
+                  fontColorHex: ex.ExcelColor.fromHexString('#38761D'),
+                );
+              } else if (val is String && val.toString().startsWith('✘')) {
+                cell.cellStyle = ex.CellStyle(
+                  fontColorHex: ex.ExcelColor.fromHexString('#CC0000'),
+                );
               }
             }
           }
