@@ -687,6 +687,26 @@ class _AdminEditFormState extends State<_AdminEditForm> {
           Expanded(
             child: Column(
               children: [
+                Text('Good', style: TextStyle(fontSize: 12)),
+                Checkbox(
+                  value: level == 'good',
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  onChanged: enabled
+                      ? (val) {
+                          if (val == true) {
+                            onChanged(true, 'good');
+                          } else {
+                            onChanged(false, null);
+                          }
+                        }
+                      : null,
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Column(
+              children: [
                 Text('Average', style: TextStyle(fontSize: 12)),
                 Checkbox(
                   value: level == 'average',

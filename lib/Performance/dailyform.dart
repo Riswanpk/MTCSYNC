@@ -397,31 +397,83 @@ class _PerformanceFormState extends State<PerformanceForm> {
   // Helper widget for attitude items
   Widget _attitudeCheckboxRow({
     required String label,
-    required bool? value, // null = unselected, true = Excellent, false = Average
+    required bool? value, // null = unselected, true = Excellent/Good, false = Average
     required ValueChanged<bool?> onChanged,
     required bool enabled,
   }) {
+    String? level;
+    if (label == 'Greet with a warm smile') level = greetSmileLevel;
+    if (label == 'Ask about their needs') level = askNeedsLevel;
+    if (label == 'Help find the right product') level = helpFindProductLevel;
+    if (label == 'Confirm the purchase') level = confirmPurchaseLevel;
+    if (label == 'Offer carry or delivery help') level = offerHelpLevel;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
         children: [
-          Expanded(
-            flex: 2,
-            child: Text(label),
-          ),
+          Expanded(flex: 2, child: Text(label)),
           Expanded(
             child: Column(
               children: [
                 Text('Excellent', style: TextStyle(fontSize: 12)),
                 Checkbox(
-                  value: value == true,
+                  value: level == 'excellent',
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                   onChanged: enabled
                       ? (val) {
                           if (val == true) {
                             onChanged(true);
+                            setState(() {
+                              if (label == 'Greet with a warm smile') greetSmileLevel = 'excellent';
+                              if (label == 'Ask about their needs') askNeedsLevel = 'excellent';
+                              if (label == 'Help find the right product') helpFindProductLevel = 'excellent';
+                              if (label == 'Confirm the purchase') confirmPurchaseLevel = 'excellent';
+                              if (label == 'Offer carry or delivery help') offerHelpLevel = 'excellent';
+                            });
                           } else {
                             onChanged(null);
+                            setState(() {
+                              if (label == 'Greet with a warm smile') greetSmileLevel = null;
+                              if (label == 'Ask about their needs') askNeedsLevel = null;
+                              if (label == 'Help find the right product') helpFindProductLevel = null;
+                              if (label == 'Confirm the purchase') confirmPurchaseLevel = null;
+                              if (label == 'Offer carry or delivery help') offerHelpLevel = null;
+                            });
+                          }
+                        }
+                      : null,
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Column(
+              children: [
+                Text('Good', style: TextStyle(fontSize: 12)),
+                Checkbox(
+                  value: level == 'good',
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  onChanged: enabled
+                      ? (val) {
+                          if (val == true) {
+                            onChanged(true);
+                            setState(() {
+                              if (label == 'Greet with a warm smile') greetSmileLevel = 'good';
+                              if (label == 'Ask about their needs') askNeedsLevel = 'good';
+                              if (label == 'Help find the right product') helpFindProductLevel = 'good';
+                              if (label == 'Confirm the purchase') confirmPurchaseLevel = 'good';
+                              if (label == 'Offer carry or delivery help') offerHelpLevel = 'good';
+                            });
+                          } else {
+                            onChanged(null);
+                            setState(() {
+                              if (label == 'Greet with a warm smile') greetSmileLevel = null;
+                              if (label == 'Ask about their needs') askNeedsLevel = null;
+                              if (label == 'Help find the right product') helpFindProductLevel = null;
+                              if (label == 'Confirm the purchase') confirmPurchaseLevel = null;
+                              if (label == 'Offer carry or delivery help') offerHelpLevel = null;
+                            });
                           }
                         }
                       : null,
@@ -434,14 +486,28 @@ class _PerformanceFormState extends State<PerformanceForm> {
               children: [
                 Text('Average', style: TextStyle(fontSize: 12)),
                 Checkbox(
-                  value: value == false,
+                  value: level == 'average',
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                   onChanged: enabled
                       ? (val) {
                           if (val == true) {
                             onChanged(false);
+                            setState(() {
+                              if (label == 'Greet with a warm smile') greetSmileLevel = 'average';
+                              if (label == 'Ask about their needs') askNeedsLevel = 'average';
+                              if (label == 'Help find the right product') helpFindProductLevel = 'average';
+                              if (label == 'Confirm the purchase') confirmPurchaseLevel = 'average';
+                              if (label == 'Offer carry or delivery help') offerHelpLevel = 'average';
+                            });
                           } else {
                             onChanged(null);
+                            setState(() {
+                              if (label == 'Greet with a warm smile') greetSmileLevel = null;
+                              if (label == 'Ask about their needs') askNeedsLevel = null;
+                              if (label == 'Help find the right product') helpFindProductLevel = null;
+                              if (label == 'Confirm the purchase') confirmPurchaseLevel = null;
+                              if (label == 'Offer carry or delivery help') offerHelpLevel = null;
+                            });
                           }
                         }
                       : null,
