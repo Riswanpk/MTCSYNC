@@ -16,6 +16,7 @@ import 'Misc/theme_notifier.dart'; // Now imports ThemeProvider
 import 'Todo & Leads/presentfollowup.dart';
 import 'Todo & Leads/todo.dart'; // <-- Already present
 import 'package:showcaseview/showcaseview.dart';
+import 'Misc/user_version_helper.dart'; // <-- Add this import
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -105,6 +106,13 @@ void main() async {
   initialNotificationAction = await AwesomeNotifications().getInitialNotificationAction();
 
   final prefs = await SharedPreferences.getInstance();
+
+  // Listen for auth state changes and update user version info
+  FirebaseAuth.instance.authStateChanges().listen((user) {
+    if (user != null) {
+      updateUserVersionInfo();
+    }
+  });
 
   runApp(
     ChangeNotifierProvider(

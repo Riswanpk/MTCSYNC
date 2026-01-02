@@ -30,24 +30,7 @@ class _DashboardPageState extends State<DashboardPage> {
   void initState() {
     super.initState();
     _fetchBranches();
-    _autoSendDailyReport();
-  }
-
-  Future<void> _autoSendDailyReport() async {
-    final today = DateTime.now();
-    final todayString = '${today.year}-${today.month}-${today.day}';
-    final reportDoc = await FirebaseFirestore.instance
-        .collection('reportTracking')
-        .doc(todayString)
-        .get();
-
-    if (!reportDoc.exists) {
-      await sendDailyLeadsReport(context);
-      await FirebaseFirestore.instance
-          .collection('reportTracking')
-          .doc(todayString)
-          .set({'sentAt': FieldValue.serverTimestamp()});
-    }
+   
   }
 
   Future<void> _fetchBranches() async {

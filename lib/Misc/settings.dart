@@ -9,10 +9,10 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../Performance/excel_performance_report.dart'; // <-- Import here
 
+
 class SettingsPage extends StatelessWidget {
   final String userRole;
   final ThemeProvider themeProvider;
-  final String _appVersion = 'Version 1.2.86';
 
   const SettingsPage({super.key, required this.userRole, required this.themeProvider});
 
@@ -51,8 +51,6 @@ class SettingsPage extends StatelessWidget {
     final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
     return doc.data()?['role'] == 'admin';
   }
-
-  
 
   Future<void> _pickMonthAndSendExcel(BuildContext context) async {
     DateTime now = DateTime.now();
@@ -214,13 +212,7 @@ class SettingsPage extends StatelessWidget {
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text(
-                _appVersion,
-                style: TextStyle(color: Colors.grey[600], fontSize: 12),
-              ),
-            ),
+            
           ],
         ),
       ),

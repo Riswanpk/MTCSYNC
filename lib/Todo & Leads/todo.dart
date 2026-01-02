@@ -8,6 +8,7 @@ import '../Misc/theme_notifier.dart';
 import 'package:flutter_slidable/flutter_slidable.dart'; // Add this import at the top
 import 'dart:async';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../widgets/todo_widget_updater.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -537,7 +538,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
+  didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       // App is active, check for old tasks
       _deleteOldTasks();
@@ -587,12 +588,12 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(foregroundColor: Colors.green), // Green for "Yes"
+              style: TextButton.styleFrom(foregroundColor: Colors.green),
               child: const Text('Yes'),
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              style: TextButton.styleFrom(foregroundColor: Colors.blue), // Blue for "Cancel"
+              style: TextButton.styleFrom(foregroundColor: Colors.blue),
               child: const Text('Cancel'),
             ),
           ],
@@ -603,13 +604,15 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
       final today = _dateOnly(DateTime.now());
       await _firestore.collection('todo').doc(doc.id).update({
         'status': newStatus,
-        'timestamp': Timestamp.now(), // Use full timestamp
+        'timestamp': Timestamp.now(),
       });
+      await updateTodoWidgetFromFirestore(); // <-- Add this line
     } else {
       await _firestore.collection('todo').doc(doc.id).update({
         'status': newStatus,
         'timestamp': FieldValue.serverTimestamp(),
       });
+      await updateTodoWidgetFromFirestore(); // <-- Add this line
     }
   }
 
@@ -762,6 +765,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                             );
                             if (confirm == true) {
                               await _firestore.collection('todo').doc(doc.id).delete();
+                              await updateTodoWidgetFromFirestore(); // <-- Add this line
                             }
                           },
                           backgroundColor: Colors.red.shade400,
@@ -1020,6 +1024,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                                 }
                               }
                               await _firestore.collection('todo').doc(doc.id).delete();
+                              await updateTodoWidgetFromFirestore(); // <-- Add this line
                             }
                           },
                           backgroundColor: Colors.red.shade400,
@@ -1168,6 +1173,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
         batch.delete(doc.reference);
       }
       await batch.commit();
+      await updateTodoWidgetFromFirestore(); // <-- Add this line
     }
   }
 
@@ -1199,8 +1205,6 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
         return FutureBuilder<QuerySnapshot>(
           future: _firestore
               .collection('users')
-              .where('role', isEqualTo: 'sales')
-              .where('branch', isEqualTo: managerBranch)
               .get(),
           builder: (context, usersSnapshot) {
             if (!usersSnapshot.hasData) return const Center(child: CircularProgressIndicator());

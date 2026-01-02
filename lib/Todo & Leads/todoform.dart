@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import '../widgets/todo_widget_updater.dart'; // At the top
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -218,6 +219,8 @@ class _TodoFormPageState extends State<TodoFormPage> {
         await _scheduleNotification(scheduledDate, title, widget.docId!); // Schedule new one
       }
 
+      await updateTodoWidgetFromFirestore(); // After saving/updating todo
+
       if (mounted) Navigator.pop(context);
       return;
     }
@@ -257,6 +260,8 @@ class _TodoFormPageState extends State<TodoFormPage> {
     if (_currentUserRole != 'manager' || (_currentUserRole == 'manager' && (_selectedSalesUserId == null || _selectedSalesUserId == user.uid))) {
       await _scheduleNotification(scheduledDate, title, todoRef.id);
     }
+
+    await updateTodoWidgetFromFirestore(); // After saving/updating todo
 
     if (mounted) {
       Navigator.pop(context);

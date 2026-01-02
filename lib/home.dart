@@ -32,6 +32,7 @@ import 'dart:convert';
 import 'package:permission_handler/permission_handler.dart';
 import '../Misc/theme_notifier.dart';
 import 'package:provider/provider.dart';
+import '../widgets/todo_widget_updater.dart'; // Make sure this import is present
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -936,6 +937,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                               height: 56, // Set a fixed height for all cards
                               child: NeumorphicButton(
                                 onTap: () async {
+                                  await updateTodoWidgetFromFirestore(); // <-- Add this line
                                   Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoadingPage()));
                                   await Future.delayed(const Duration(milliseconds: 500)); // Simulate loading
                                   Navigator.of(context).pushReplacement(fadeRoute(const TodoPage()));

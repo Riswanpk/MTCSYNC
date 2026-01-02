@@ -186,9 +186,21 @@ class _PerformanceFormState extends State<PerformanceForm> {
       helpFindProduct = null;
       confirmPurchase = null;
       offerHelp = null;
+      greetSmileLevel = null;
+      askNeedsLevel = null;
+      helpFindProductLevel = null;
+      confirmPurchaseLevel = null;
+      offerHelpLevel = null;
       meetingAttended = false;
       selectedUserId = null;
       selectedUserName = null;
+      attitudeReasons = {
+        'greetSmile': '',
+        'askNeeds': '',
+        'helpFindProduct': '',
+        'confirmPurchase': '',
+        'offerHelp': '',
+      };
       isLoadingUsers = true;
     });
     // Refresh user list to remove the just-filled user

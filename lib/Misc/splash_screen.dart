@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../login.dart';
@@ -6,6 +8,7 @@ import '../main.dart'; // For navigatorKey and initialNotificationAction
 import '../Todo & Leads/presentfollowup.dart'; // For PresentFollowUp
 import '../Todo & Leads/todo.dart'; // For TodoPage and TaskDetailPageFromId
 import 'package:awesome_notifications/awesome_notifications.dart'; // For ReceivedAction
+import 'package:home_widget/home_widget.dart'; // For HomeWidget
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -15,20 +18,36 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  StreamSubscription<Uri?>? _widgetClickSub;
+  bool _openedFromWidget = false; // Add this flag
+
   @override
   void initState() {
     super.initState();
-    _checkAuthAndNavigate();
+    _widgetClickSub = HomeWidget.widgetClicked.listen((Uri? uri) {
+      print('Widget clicked! Navigating to TodoPage');
+      _openedFromWidget = true;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const TodoPage()),
+      );
+    });
+    // Delay navigation check until after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAuthAndNavigate();
+    });
+  }
+
+  @override
+  void dispose() {
+    _widgetClickSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _checkAuthAndNavigate() async {
-    // Await the first authentication state and then navigate.
-    // Using `first` ensures we only get one event and the subscription is closed,
-    // preventing calls on a disposed widget.
     final user = await FirebaseAuth.instance.authStateChanges().first;
-
-    // Ensure the widget is still mounted before navigating.
     if (!mounted) return;
+
+    if (_openedFromWidget) return; // Bypass default navigation if opened from widget
 
     if (user == null) {
       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => const LoginPage()));
