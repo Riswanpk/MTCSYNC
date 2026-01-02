@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:collection/collection.dart'; // Add this for groupBy
 
 class ManageUsersPage extends StatefulWidget {
   final String userRole;
@@ -172,6 +173,117 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
     }
   }
 
+  Future<Map<String, List<Map<String, dynamic>>>> _fetchUserVersionsByBranch() async {
+    final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
+    final versionsSnapshot = await FirebaseFirestore.instance.collection('user_version').get();
+
+    // Map user uid to version info
+    final versionMap = {
+      for (var doc in versionsSnapshot.docs) doc.id: doc.data()
+    };
+
+    // Build user info list with branch and version
+    final userInfoList = usersSnapshot.docs.map((doc) {
+      final data = doc.data();
+      final uid = doc.id;
+      return {
+        'username': data['username'] ?? '',
+        'email': data['email'] ?? '',
+        'branch': data['branch'] ?? 'Unknown',
+        'version': versionMap[uid]?['appVersion'] ?? 'N/A',
+      };
+    }).toList();
+
+    // Group by branch
+    return groupBy(userInfoList, (user) => user['branch'] as String);
+  }
+
+  void _showUserVersionsDialog() async {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
+          future: _fetchUserVersionsByBranch(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const AlertDialog(
+                title: Text('User Versions'),
+                content: SizedBox(height: 100, child: Center(child: CircularProgressIndicator())),
+              );
+            }
+            final branchMap = snapshot.data!;
+            // Exclude the "admin" branch and sort the rest
+            final sortedBranchEntries = branchMap.entries
+                .where((entry) => entry.key.toLowerCase() != 'admin')
+                .toList()
+              ..sort((a, b) => a.key.compareTo(b.key));
+            return AlertDialog(
+              title: const Text('User Versions'),
+              content: SizedBox(
+                width: 350,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: sortedBranchEntries.map((entry) {
+                      final branch = entry.key;
+                      final users = entry.value;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8.0),
+                            child: Text(
+                              branch,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: Colors.blue,
+                              ),
+                            ),
+                          ),
+                          ...users.map((user) => ListTile(
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(user['username'] ?? ''),
+                                subtitle: Text(user['email'] ?? ''),
+                                trailing: Text(
+                                  user['version'] ?? 'N/A',
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              )),
+                          const Divider(),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Close'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Fetches the branch for a user by matching their email in the users collection.
+  Future<String?> getBranchByEmail(String email) async {
+    final query = await FirebaseFirestore.instance
+        .collection('users')
+        .where('email', isEqualTo: email)
+        .limit(1)
+        .get();
+    if (query.docs.isNotEmpty) {
+      return query.docs.first.data()['branch'] as String?;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUser = FirebaseAuth.instance.currentUser;
@@ -192,6 +304,13 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline),
+            tooltip: 'Show User Versions',
+            onPressed: _showUserVersionsDialog,
+          ),
+        ],
       ),
       backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
       body: Padding(
