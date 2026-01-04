@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
 
 class PerformanceForm extends StatefulWidget {
   @override
@@ -8,6 +9,10 @@ class PerformanceForm extends StatefulWidget {
 }
 
 class _PerformanceFormState extends State<PerformanceForm> {
+  // Date selection
+  DateTime selectedDate = DateTime.now();
+  List<DateTime> allowedDates = [];
+
   // Attendance
   String? attendanceStatus; // values: 'punching', 'late', 'approved', 'notApproved'
 
@@ -50,7 +55,16 @@ class _PerformanceFormState extends State<PerformanceForm> {
   @override
   void initState() {
     super.initState();
+    _initAllowedDates();
     fetchBranchUsers();
+  }
+
+  void _initAllowedDates() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    allowedDates = [today, yesterday];
+    selectedDate = today;
   }
 
   Future<void> fetchBranchUsers() async {
@@ -62,10 +76,9 @@ class _PerformanceFormState extends State<PerformanceForm> {
 
     if (branch == null) return;
 
-    // Get today's date range
-    final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day);
-    final todayEnd = todayStart.add(const Duration(days: 1));
+    // Get selected date range
+    final dateStart = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+    final dateEnd = dateStart.add(const Duration(days: 1));
 
     // Fetch users of the same branch
     final usersSnapshot = await FirebaseFirestore.instance
@@ -73,15 +86,15 @@ class _PerformanceFormState extends State<PerformanceForm> {
         .where('branch', isEqualTo: branch)
         .get();
 
-    // Fetch dailyform entries by this manager for today
+    // Fetch dailyform entries by this manager for selected date
     final dailyFormSnapshot = await FirebaseFirestore.instance
         .collection('dailyform')
         .where('managerId', isEqualTo: currentUser.uid)
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
-        .where('timestamp', isLessThan: Timestamp.fromDate(todayEnd))
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(dateStart))
+        .where('timestamp', isLessThan: Timestamp.fromDate(dateEnd))
         .get();
 
-    // Get userIds already filled today by this manager
+    // Get userIds already filled for selected date by this manager
     final filledUserIds = dailyFormSnapshot.docs.map((doc) => doc['userId'] as String).toSet();
 
     setState(() {
@@ -112,22 +125,21 @@ class _PerformanceFormState extends State<PerformanceForm> {
     }
 
     // Check again before submit (in case of race condition)
-    final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day);
-    final todayEnd = todayStart.add(const Duration(days: 1));
+    final dateStart = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+    final dateEnd = dateStart.add(const Duration(days: 1));
     final currentUser = FirebaseAuth.instance.currentUser;
 
     final alreadyFilled = await FirebaseFirestore.instance
         .collection('dailyform')
         .where('managerId', isEqualTo: currentUser!.uid)
         .where('userId', isEqualTo: selectedUserId)
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
-        .where('timestamp', isLessThan: Timestamp.fromDate(todayEnd))
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(dateStart))
+        .where('timestamp', isLessThan: Timestamp.fromDate(dateEnd))
         .get();
 
     if (alreadyFilled.docs.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('You have already filled the form for this user today.')),
+        SnackBar(content: Text('You have already filled the form for this user on this date.')),
       );
       return;
     }
@@ -138,12 +150,23 @@ class _PerformanceFormState extends State<PerformanceForm> {
     // If leave, set all other fields to true
     bool isLeave = attendanceStatus == 'approved' || attendanceStatus == 'notApproved';
 
+    // Create timestamp for the selected date with current time
+    final now = DateTime.now();
+    final submissionTimestamp = DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
+      now.hour,
+      now.minute,
+      now.second,
+    );
+
     await FirebaseFirestore.instance.collection('dailyform').add({
       'userId': selectedUserId,
       'userName': selectedUserName,
       'managerId': currentUser.uid,
       'managerName': managerName,
-      'timestamp': FieldValue.serverTimestamp(),
+      'timestamp': Timestamp.fromDate(submissionTimestamp),
       'attendance': attendanceStatus,
       'dressCode': {
         'cleanUniform': isLeave ? true : cleanUniform,
@@ -219,9 +242,40 @@ class _PerformanceFormState extends State<PerformanceForm> {
           ? Center(child: CircularProgressIndicator())
           : branchUsers.isEmpty
               ? Center(
-                  child: Text(
-                    'All users have been filled for today!',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Date picker even when no users
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: DropdownButtonFormField<DateTime>(
+                          value: selectedDate,
+                          items: allowedDates
+                              .map((date) => DropdownMenuItem<DateTime>(
+                                    value: date,
+                                    child: Text(_formatDate(date)),
+                                  ))
+                              .toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() {
+                                selectedDate = val;
+                                isLoadingUsers = true;
+                              });
+                              fetchBranchUsers();
+                            }
+                          },
+                          decoration: InputDecoration(
+                            labelText: 'Select Date',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      Text(
+                        'All users have been filled for ${_formatDate(selectedDate)}!',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ],
                   ),
                 )
               : SingleChildScrollView(
@@ -229,6 +283,33 @@ class _PerformanceFormState extends State<PerformanceForm> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Date Picker
+                      Text('Select Date', style: TextStyle(fontWeight: FontWeight.bold)),
+                      DropdownButtonFormField<DateTime>(
+                        value: selectedDate,
+                        items: allowedDates
+                            .map((date) => DropdownMenuItem<DateTime>(
+                                  value: date,
+                                  child: Text(_formatDate(date)),
+                                ))
+                            .toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() {
+                              selectedDate = val;
+                              selectedUserId = null;
+                              selectedUserName = null;
+                              isLoadingUsers = true;
+                            });
+                            fetchBranchUsers();
+                          }
+                        },
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        ),
+                      ),
+                      SizedBox(height: 16),
                       Text('Select User', style: TextStyle(fontWeight: FontWeight.bold)),
                       DropdownButtonFormField<String>(
                         value: selectedUserId,
@@ -404,6 +485,19 @@ class _PerformanceFormState extends State<PerformanceForm> {
                   ),
                 ),
     );
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    
+    if (date == today) {
+      return 'Today (${DateFormat('dd MMM yyyy').format(date)})';
+    } else if (date == yesterday) {
+      return 'Yesterday (${DateFormat('dd MMM yyyy').format(date)})';
+    }
+    return DateFormat('dd MMM yyyy').format(date);
   }
 
   // Helper widget for attitude items
