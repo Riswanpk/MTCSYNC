@@ -113,13 +113,15 @@ Future<void> exportAndSendExcel(BuildContext context, {int? year, int? month}) a
           for (int d = 0; d < daysInMonth; d++) {
             final date = monthStart.add(Duration(days: d));
             final form = getFormForDate(forms, date);
-            bool value = false;
-            if (form != null && form.isNotEmpty) {
+            if (form == null || form.isEmpty) {
+              row.add(ex.TextCellValue('-')); // Not entered
+            } else {
+              bool value = false;
               if (cat == 'Clean Uniform') value = form['dressCode']?['cleanUniform'] ?? false;
               if (cat == 'Keep Inside') value = form['dressCode']?['keepInside'] ?? false;
               if (cat == 'Neat Hair') value = form['dressCode']?['neatHair'] ?? false;
+              row.add(ex.TextCellValue(value ? '✔' : '✘'));
             }
-            row.add(ex.TextCellValue(value ? '✔' : '✘'));
           }
           sheet.appendRow(row);
         }
