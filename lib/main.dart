@@ -94,6 +94,9 @@ void main() async {
     await Permission.storage.request();
   }
 
+  // Add this for phone call permission
+  await Permission.phone.request();
+
   // ✅ Setup notification listeners
   AwesomeNotifications().setListeners(
     onActionReceivedMethod: NotificationController.onActionReceivedMethod,

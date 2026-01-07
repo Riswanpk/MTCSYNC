@@ -70,6 +70,7 @@ dependencies:
   showcaseview: ^5.0.1
   cloud_functions: ^5.6.2
   home_widget: ^0.8.1
+  call_log: ^6.0.1
   
 
   # The following adds the Cupertino Icons font to your application.

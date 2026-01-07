@@ -2,6 +2,7 @@ import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mtcsync/customer_target_admin.dart';
 import 'Todo & Leads/todo.dart';
 import 'Todo & Leads/leads.dart';
 import 'login.dart';
@@ -10,7 +11,7 @@ import 'Feedback/feedback.dart'; // Add this import
 import 'Feedback/feedback_admin.dart'; // Add this import
 import 'Dashboard/dashboard.dart'; // Import the dashboard page
 import 'Misc/manageusers.dart'; // Add this import
- // Import the customer list page
+import 'customer_list_target.dart'; // Import the customer list target page
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1025,6 +1026,48 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                                 color: const Color.fromARGB(255, 192, 25, 14),
                                 textColor: Colors.white,
                                 icon: Icons.campaign,
+                                textStyle: const TextStyle(
+                                  fontFamily: 'Montserrat',
+                                  fontWeight: FontWeight.normal,
+                                  fontSize: 17,
+                                  letterSpacing: 1.1,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            // New Customer List button
+                            SizedBox(
+                              width: 200,
+                              height: 56,
+                              child: NeumorphicButton(
+                                onTap: () async {
+                                  // Show loading page while fetching user role
+                                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoadingPage()));
+                                  final user = FirebaseAuth.instance.currentUser;
+                                  String? role;
+                                  if (user != null) {
+                                    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+                                    role = userDoc.data()?['role'];
+                                  }
+                                  await Future.delayed(const Duration(milliseconds: 200));
+                                  Navigator.of(context).pop(); // Remove loading page
+
+                                  if (role == 'admin') {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => const CustomerTargetAdminPage()),
+                                    );
+                                  } else {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => const CustomerListTarget()),
+                                    );
+                                  }
+                                },
+                                text: 'Customer List',
+                                color: Colors.blueGrey,
+                                textColor: Colors.white,
+                                icon: Icons.list_alt,
                                 textStyle: const TextStyle(
                                   fontFamily: 'Montserrat',
                                   fontWeight: FontWeight.normal,
