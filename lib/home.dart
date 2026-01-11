@@ -2,7 +2,7 @@ import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:mtcsync/customer_target_admin.dart';
+import 'package:mtcsync/Customer%20Target/customer_target_admin.dart';
 import 'Todo & Leads/todo.dart';
 import 'Todo & Leads/leads.dart';
 import 'login.dart';
@@ -11,7 +11,7 @@ import 'Feedback/feedback.dart'; // Add this import
 import 'Feedback/feedback_admin.dart'; // Add this import
 import 'Dashboard/dashboard.dart'; // Import the dashboard page
 import 'Misc/manageusers.dart'; // Add this import
-import 'customer_list_target.dart'; // Import the customer list target page
+import 'Customer Target/customer_list_target.dart'; // Import the customer list target page
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -34,6 +34,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../Misc/theme_notifier.dart';
 import 'package:provider/provider.dart';
 import '../widgets/todo_widget_updater.dart'; // Make sure this import is present
+import 'Customer Target/customer_admin_viewer.dart'; // <-- Add this import
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -1055,7 +1056,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                                   if (role == 'admin') {
                                     Navigator.push(
                                       context,
-                                      MaterialPageRoute(builder: (_) => const CustomerTargetAdminPage()),
+                                      MaterialPageRoute(builder: (_) => const CustomerAdminViewerPage()), // <-- Change to viewer page
                                     );
                                   } else {
                                     Navigator.push(
