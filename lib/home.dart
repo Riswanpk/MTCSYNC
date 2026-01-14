@@ -35,6 +35,7 @@ import '../Misc/theme_notifier.dart';
 import 'package:provider/provider.dart';
 import '../widgets/todo_widget_updater.dart'; // Make sure this import is present
 import 'Customer Target/customer_admin_viewer.dart'; // <-- Add this import
+import 'Instructions/instructions.dart'; // <-- Add this import
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -717,6 +718,21 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                         );
                       },
                     ),
+                  // --- Add this block just above Log Out ---
+                  ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    leading: const Icon(Icons.info_outline, color: Colors.blueAccent),
+                    title: const Text('Instructions'),
+                    onTap: () {
+                      Navigator.pop(context); // Close the drawer
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const InstructionsPage()),
+                      );
+                    },
+                  ),
+                  // --- End block ---
                   ListTile(
                     dense: true,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
