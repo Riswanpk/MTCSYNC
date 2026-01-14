@@ -892,9 +892,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                           runSpacing: 16,
                           alignment: WrapAlignment.center,
                           children: [
+                            // First row: Leads & ToDo List (always shown)
                             SizedBox(
                               width: 140,
-                              height: 56, // Set a fixed height for all cards
+                              height: 56,
                               child: NeumorphicButton(
                                 onTap: () async {
                                   // 1. Instantly show the loading page (no fade-in)
@@ -936,12 +937,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                             ),
                             SizedBox(
                               width: 140,
-                              height: 56, // Set a fixed height for all cards
+                              height: 56,
                               child: NeumorphicButton(
                                 onTap: () async {
-                                  await updateTodoWidgetFromFirestore(); // <-- Add this line
+                                  await updateTodoWidgetFromFirestore();
                                   Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoadingPage()));
-                                  await Future.delayed(const Duration(milliseconds: 500)); // Simulate loading
+                                  await Future.delayed(const Duration(milliseconds: 500));
                                   Navigator.of(context).pushReplacement(fadeRoute(const TodoPage()));
                                 },
                                 text: 'ToDo List',
@@ -951,13 +952,110 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                                 textStyle: const TextStyle(
                                   fontFamily: 'Montserrat',
                                   fontWeight: FontWeight.normal,
-                                  fontSize: 17, // Match Leads button font size
+                                  fontSize: 17,
                                   letterSpacing: 1.1,
                                   color: Colors.white,
                                 ),
                               ),
                             ),
-                            // For Dashboard button (admin or manager)
+                            // For sales users: Marketing & Customer List in same row, smaller width
+                            if (role == 'sales') ...[
+                              SizedBox(
+                                width: 140,
+                                height: 56,
+                                child: NeumorphicButton(
+                                  onTap: () async {
+                                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoadingPage()));
+                                    await Future.delayed(const Duration(milliseconds: 500));
+                                    final user = FirebaseAuth.instance.currentUser;
+                                    String? branch, username, userid, role;
+                                    if (user != null) {
+                                      final userDoc = await FirebaseFirestore.instance
+                                          .collection('users')
+                                          .doc(user.uid)
+                                          .get();
+                                      branch = userDoc.data()?['branch'];
+                                      username = userDoc.data()?['username'] ?? userDoc.data()?['email'] ?? '';
+                                      userid = user.uid;
+                                      role = userDoc.data()?['role'];
+                                    }
+                                    if (role == 'admin') {
+                                      Navigator.of(context).pushReplacement(
+                                        MaterialPageRoute(
+                                          builder: (_) => const ViewerMarketingPage(),
+                                        ),
+                                      );
+                                    } else if (branch != null && username != null && userid != null) {
+                                      Navigator.of(context).pushReplacement(
+                                        MaterialPageRoute(
+                                          builder: (_) => MarketingFormPage(
+                                            username: username ?? '',
+                                            userid: userid?? '',
+                                            branch: branch?? '',
+                                          ),
+                                        ),
+                                      );
+                                    } else {
+                                      Navigator.of(context).pop();
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('User info not found')),
+                                      );
+                                    }
+                                  },
+                                  text: 'Marketing',
+                                  color: const Color.fromARGB(255, 192, 25, 14),
+                                  textColor: Colors.white,
+                                  icon: Icons.campaign,
+                                  textStyle: const TextStyle(
+                                    fontFamily: 'Montserrat',
+                                    fontWeight: FontWeight.normal,
+                                    fontSize: 17,
+                                    letterSpacing: 1.1,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(
+                                width: 140,
+                                height: 56,
+                                child: NeumorphicButton(
+                                  onTap: () async {
+                                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoadingPage()));
+                                    final user = FirebaseAuth.instance.currentUser;
+                                    String? role;
+                                    if (user != null) {
+                                      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+                                      role = userDoc.data()?['role'];
+                                    }
+                                    await Future.delayed(const Duration(milliseconds: 200));
+                                    Navigator.of(context).pop();
+                                    if (role == 'admin') {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => const CustomerAdminViewerPage()),
+                                      );
+                                    } else {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => const CustomerListTarget()),
+                                      );
+                                    }
+                                  },
+                                  text: 'Cust. List',
+                                  color: const Color.fromARGB(255, 246, 174, 6),
+                                  textColor: Colors.white,
+                                  icon: Icons.list_alt,
+                                  textStyle: const TextStyle(
+                                    fontFamily: 'Montserrat',
+                                    fontWeight: FontWeight.normal,
+                                    fontSize: 17,
+                                    letterSpacing: 1.1,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            // For admin/manager: Dashboard, Marketing, Customer List as before
                             if (role == 'admin' || role == 'manager')
                               SizedBox(
                                 width: 80,
@@ -965,7 +1063,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                                 child: NeumorphicButton(
                                   onTap: () async {
                                     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoadingPage()));
-                                    await Future.delayed(const Duration(milliseconds: 500)); // Simulate loading
+                                    await Future.delayed(const Duration(milliseconds: 500));
                                     Navigator.of(context).pushReplacement(
                                       MaterialPageRoute(builder: (_) => const DashboardPage()),
                                     );
@@ -976,108 +1074,102 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
                                   icon: Icons.dashboard_rounded,
                                 ),
                               ),
-                            // REMOVE Customer List button for all roles here
-                            // Add Marketing button
-                            SizedBox(
-                              width: 200,
-                              height: 56,
-                              child: NeumorphicButton(
-                                onTap: () async {
-                                  // Show loading page for 1 second before navigating to Marketing
-                                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoadingPage()));
-                                  await Future.delayed(const Duration(milliseconds: 500)); // Reduced to 1 second
-
-                                  // Fetch branch, username, userid for current user
-                                  final user = FirebaseAuth.instance.currentUser;
-                                  String? branch, username, userid, role;
-                                  if (user != null) {
-                                    final userDoc = await FirebaseFirestore.instance
-                                        .collection('users')
-                                        .doc(user.uid)
-                                        .get();
-                                    branch = userDoc.data()?['branch'];
-                                    username = userDoc.data()?['username'] ?? userDoc.data()?['email'] ?? '';
-                                    userid = user.uid;
-                                    role = userDoc.data()?['role'];
-                                  }
-                                  if (role == 'admin') {
-                                    Navigator.of(context).pushReplacement(
-                                      MaterialPageRoute(
-                                        builder: (_) => const ViewerMarketingPage(),
-                                      ),
-                                    );
-                                  } else if (branch != null && username != null && userid != null) {
-                                    Navigator.of(context).pushReplacement(
-                                      MaterialPageRoute(
-                                        builder: (_) => MarketingFormPage(
-                                          username: username ?? '',
-                                          userid: userid?? '',
-                                          branch: branch?? '',
+                            if ((role == 'admin' || role == 'manager'))
+                              SizedBox(
+                                width: 200,
+                                height: 56,
+                                child: NeumorphicButton(
+                                  onTap: () async {
+                                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoadingPage()));
+                                    await Future.delayed(const Duration(milliseconds: 500));
+                                    final user = FirebaseAuth.instance.currentUser;
+                                    String? branch, username, userid, role;
+                                    if (user != null) {
+                                      final userDoc = await FirebaseFirestore.instance
+                                          .collection('users')
+                                          .doc(user.uid)
+                                          .get();
+                                      branch = userDoc.data()?['branch'];
+                                      username = userDoc.data()?['username'] ?? userDoc.data()?['email'] ?? '';
+                                      userid = user.uid;
+                                      role = userDoc.data()?['role'];
+                                    }
+                                    if (role == 'admin') {
+                                      Navigator.of(context).pushReplacement(
+                                        MaterialPageRoute(
+                                          builder: (_) => const ViewerMarketingPage(),
                                         ),
-                                      ),
-                                    );
-                                  } else {
-                                    Navigator.of(context).pop(); // Remove loading page
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('User info not found')),
-                                    );
-                                  }
-                                },
-                                text: 'Marketing',
-                                color: const Color.fromARGB(255, 192, 25, 14),
-                                textColor: Colors.white,
-                                icon: Icons.campaign,
-                                textStyle: const TextStyle(
-                                  fontFamily: 'Montserrat',
-                                  fontWeight: FontWeight.normal,
-                                  fontSize: 17,
-                                  letterSpacing: 1.1,
-                                  color: Colors.white,
+                                      );
+                                    } else if (branch != null && username != null && userid != null) {
+                                      Navigator.of(context).pushReplacement(
+                                        MaterialPageRoute(
+                                          builder: (_) => MarketingFormPage(
+                                            username: username ?? '',
+                                            userid: userid?? '',
+                                            branch: branch?? '',
+                                          ),
+                                        ),
+                                      );
+                                    } else {
+                                      Navigator.of(context).pop();
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('User info not found')),
+                                      );
+                                    }
+                                  },
+                                  text: 'Marketing',
+                                  color: const Color.fromARGB(255, 192, 25, 14),
+                                  textColor: Colors.white,
+                                  icon: Icons.campaign,
+                                  textStyle: const TextStyle(
+                                    fontFamily: 'Montserrat',
+                                    fontWeight: FontWeight.normal,
+                                    fontSize: 17,
+                                    letterSpacing: 1.1,
+                                    color: Colors.white,
+                                  ),
                                 ),
                               ),
-                            ),
-                            // New Customer List button
-                            SizedBox(
-                              width: 200,
-                              height: 56,
-                              child: NeumorphicButton(
-                                onTap: () async {
-                                  // Show loading page while fetching user role
-                                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoadingPage()));
-                                  final user = FirebaseAuth.instance.currentUser;
-                                  String? role;
-                                  if (user != null) {
-                                    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-                                    role = userDoc.data()?['role'];
-                                  }
-                                  await Future.delayed(const Duration(milliseconds: 200));
-                                  Navigator.of(context).pop(); // Remove loading page
-
-                                  if (role == 'admin') {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (_) => const CustomerAdminViewerPage()), // <-- Change to viewer page
-                                    );
-                                  } else {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (_) => const CustomerListTarget()),
-                                    );
-                                  }
-                                },
-                                text: 'Customer List',
-                                color: Colors.blueGrey,
-                                textColor: Colors.white,
-                                icon: Icons.list_alt,
-                                textStyle: const TextStyle(
-                                  fontFamily: 'Montserrat',
-                                  fontWeight: FontWeight.normal,
-                                  fontSize: 17,
-                                  letterSpacing: 1.1,
-                                  color: Colors.white,
+                            if ((role == 'admin' || role == 'manager'))
+                              SizedBox(
+                                width: 200,
+                                height: 56,
+                                child: NeumorphicButton(
+                                  onTap: () async {
+                                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoadingPage()));
+                                    final user = FirebaseAuth.instance.currentUser;
+                                    String? role;
+                                    if (user != null) {
+                                      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+                                      role = userDoc.data()?['role'];
+                                    }
+                                    await Future.delayed(const Duration(milliseconds: 200));
+                                    Navigator.of(context).pop();
+                                    if (role == 'admin') {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => const CustomerAdminViewerPage()),
+                                      );
+                                    } else {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => const CustomerListTarget()),
+                                      );
+                                    }
+                                  },
+                                  text: 'Customer List',
+                                  color: const Color.fromARGB(255, 246, 174, 6),
+                                  textColor: Colors.white,
+                                  icon: Icons.list_alt,
+                                  textStyle: const TextStyle(
+                                    fontFamily: 'Montserrat',
+                                    fontWeight: FontWeight.normal,
+                                    fontSize: 17,
+                                    letterSpacing: 1.1,
+                                    color: Colors.white,
+                                  ),
                                 ),
                               ),
-                            ),
                           ],
                         ),
                       ],
