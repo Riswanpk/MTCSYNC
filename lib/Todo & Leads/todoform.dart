@@ -212,6 +212,21 @@ class _TodoFormPageState extends State<TodoFormPage> {
 
       await _clearDraft();
 
+      // --- ADD THIS BLOCK ---
+      // Daily report logic for edits
+      final now = DateTime.now();
+      final hour = now.hour;
+      // Check if edited between 12pm-11:59pm or 12am-11:59am
+      if ((hour >= 12 && hour <= 23) || (hour >= 0 && hour < 12)) {
+        await FirebaseFirestore.instance.collection('daily_report').add({
+          'timestamp': now,
+          'userId': createdBy,
+          'documentId': widget.docId!,
+          'type': 'todo',
+        });
+      }
+      // --- END BLOCK ---
+
       // Reschedule notification if the reminder was changed
       // Only schedule for self-assigned tasks
       if (_currentUserRole != 'manager' || (_currentUserRole == 'manager' && (_selectedSalesUserId == null || _selectedSalesUserId == user.uid))) {
