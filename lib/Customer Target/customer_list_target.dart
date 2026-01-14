@@ -7,6 +7,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 
 import '../Misc/theme_notifier.dart';
+import 'sales_customer_tile_viewer.dart';
+import 'add_customer.dart';
 
 class CustomerListTarget extends StatefulWidget {
   const CustomerListTarget({super.key});
@@ -22,6 +24,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
   bool _loading = true;
   String? _error;
   String? _docId;
+  bool _sortCalledFirst = true;
 
   @override
   void initState() {
@@ -164,7 +167,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
             ? const Color(0xFF181A20)
             : const Color(0xFFE3F2FD); // very light blue for page background
         final cardColor = isDark ? const Color(0xFF23262B) : Colors.white;
-        final textColor = isDark ? Colors.white : Colors.black87;
+        final textColor = isDark ? Colors.white : Colors.black;
 
         if (_loading) {
           return Scaffold(
@@ -197,105 +200,190 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
           );
         }
 
+        // Calculate called count
+        int calledCount = _customers!.where((c) => c['callMade'] == true).length;
+        int totalCount = _customers!.length;
+
+        // Sort customers based on called status
+        List<Map<String, dynamic>> sortedCustomers = List<Map<String, dynamic>>.from(_customers!);
+        sortedCustomers.sort((a, b) {
+          if (_sortCalledFirst) {
+            return (b['callMade'] == true ? 1 : 0) - (a['callMade'] == true ? 1 : 0);
+          } else {
+            return (a['callMade'] == true ? 1 : 0) - (b['callMade'] == true ? 1 : 0);
+          }
+        });
+
         return Scaffold(
           backgroundColor: bgColor,
           appBar: AppBar(
             title: Text('Customer List', style: TextStyle(color: Colors.white)),
             backgroundColor: isDark ? primaryBlue : primaryGreen,
             iconTheme: const IconThemeData(color: Colors.white),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.add),
+                tooltip: 'Add Customer',
+                onPressed: () async {
+                  final added = await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => AddCustomerPage()),
+                  );
+                  if (added == true) {
+                    _fetchCustomerData();
+                  }
+                },
+              ),
+            ],
           ),
-          body: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.vertical,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: cardColor,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))],
-                  border: Border.all(color: isDark ? Colors.grey.shade800 : Colors.grey.shade300),
-                ),
-                child: DataTable(
-                  headingRowColor: MaterialStateProperty.resolveWith<Color>(
-                    (states) => isDark
-                        ? primaryBlue.withOpacity(0.12)
-                        : primaryGreen.withOpacity(0.18), // blue for light
-                  ),
-                  dataRowColor: MaterialStateProperty.resolveWith<Color>(
-                    (states) => states.contains(MaterialState.selected)
-                        ? (isDark
-                            ? primaryGreen.withOpacity(0.18)
-                            : primaryBlue.withOpacity(0.12)) // green for light
-                        : (isDark ? const Color(0xFF181A20) : Colors.white),
-                  ),
-                  columns: [
-                    DataColumn(label: Text('Sl. No', style: TextStyle(fontSize: 11, color: primaryGreen))),
-                    DataColumn(label: Text('Customer Name', style: TextStyle(fontSize: 11, color: primaryBlue))),
-                    DataColumn(label: Text('Contact No.', style: TextStyle(fontSize: 11, color: primaryGreen))),
-                    DataColumn(label: Text('Called', style: TextStyle(fontSize: 11, color: primaryBlue))),
-                    DataColumn(label: Text('Remarks', style: TextStyle(fontSize: 11, color: primaryGreen))),
+          body: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8),
+                child: Row(
+                  children: [
+                    Text(
+                      'Called: $calledCount / $totalCount',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF8CC63F), // changed to green
+                      ),
+                    ),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _sortCalledFirst = !_sortCalledFirst;
+                        });
+                      },
+                      icon: Icon(
+                        _sortCalledFirst ? Icons.arrow_downward : Icons.arrow_upward,
+                        color: isDark ? Colors.white : Colors.black,
+                        size: 20,
+                      ),
+                      label: const Text('Sort', style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: TextButton.styleFrom(
+                        foregroundColor: isDark ? Colors.white : Colors.black,
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      ),
+                    ),
                   ],
-                  rows: List<DataRow>.generate(
-                    _customers!.length,
-                    (index) {
-                      var customer = _customers![index];
-                      bool callMade = customer['callMade'] == true;
-                      final isEven = index % 2 == 0;
-                      return DataRow(
-                        color: MaterialStateProperty.resolveWith<Color>(
-                          (states) => isDark
-                              ? (isEven ? primaryBlue.withOpacity(0.06) : primaryGreen.withOpacity(0.06))
-                              : (isEven ? primaryGreen.withOpacity(0.06) : primaryBlue.withOpacity(0.06)),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 0), // Remove horizontal padding
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.vertical,
+                      child: Container(
+                        // Remove margin and set width to fill parent
+                        width: MediaQuery.of(context).size.width,
+                        decoration: BoxDecoration(
+                          color: cardColor,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))],
+                          border: Border.all(color: isDark ? Colors.grey.shade800 : Colors.grey.shade300),
                         ),
-                        cells: [
-                          DataCell(Text(customer['slno'] ?? '', style: TextStyle(fontSize: 11, color: primaryGreen))),
-                          DataCell(Text(customer['name'] ?? '', style: TextStyle(fontSize: 11, color: primaryBlue))),
-                          DataCell(
-                            InkWell(
-                              child: Text(
-                                customer['contact'] ?? '',
+                        child: DataTable(
+                          showCheckboxColumn: false,
+                          headingRowColor: MaterialStateProperty.resolveWith<Color>(
+                            (states) => isDark
+                                ? primaryBlue.withOpacity(0.12)
+                                : primaryGreen.withOpacity(0.18),
+                          ),
+                          dataRowColor: MaterialStateProperty.resolveWith<Color>(
+                            (states) => states.contains(MaterialState.selected)
+                                ? (isDark
+                                    ? primaryGreen.withOpacity(0.18)
+                                    : primaryBlue.withOpacity(0.12))
+                                : (isDark ? const Color(0xFF181A20) : Colors.white),
+                          ),
+                          columns: [
+                            DataColumn(
+                              label: Text(
+                                'Customer Name',
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: primaryBlue,
-                                  decoration: TextDecoration.underline,
+                                  color: textColor,
+                                  fontFamily: 'NotoSans',
                                 ),
                               ),
-                              onTap: () => _makeCall(customer['contact'] ?? '', index),
                             ),
-                          ),
-                          DataCell(
-                            Icon(
-                              callMade ? Icons.check_circle : Icons.cancel,
-                              color: callMade ? primaryBlue : primaryGreen,
-                              size: 16,
-                            ),
-                          ),
-                          DataCell(
-                            TextFormField(
-                              initialValue: customer['remarks'] ?? '',
-                              decoration: const InputDecoration(
-                                border: InputBorder.none,
-                                hintText: 'Enter remarks',
+                            DataColumn(
+                              label: Text(
+                                'Called',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: textColor,
+                                  fontFamily: 'NotoSans',
+                                ),
                               ),
-                              style: TextStyle(fontSize: 11, color: primaryGreen),
-                              onChanged: (val) {
-                                setState(() {
-                                  _customers![index]['remarks'] = val;
-                                });
-                                _updateFirestore();
-                              },
+                            ),
+                          ],
+                          rows: List<DataRow>.generate(
+                            sortedCustomers.length,
+                            (index) {
+                              var customer = sortedCustomers[index];
+                              bool callMade = customer['callMade'] == true;
+                              return DataRow(
+                                color: MaterialStateProperty.resolveWith<Color>(
+                                  (states) => isDark ? const Color(0xFF181A20) : Colors.white,
+                                ),
+                                onSelectChanged: (_) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => SalesCustomerTileViewer(
+                                        customer: customer,
+                                        onStatusChanged: (remarks) async {
+                                          setState(() {
+                                            customer['callMade'] = true;
+                                            customer['remarks'] = remarks;
+                                          });
+                                          await _updateFirestore();
+                                        },
+                                      ),
+                                    ),
+                                  );
+                                },
+                                cells: [
+                                  DataCell(
+                                    Text(
+                                      customer['name'] ?? '',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        color: textColor,
+                                        fontFamily: 'NotoSans',
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    Icon(
+                                      callMade ? Icons.check_circle : Icons.cancel,
+                                      color: callMade ? primaryBlue : primaryGreen,
+                                      size: 16,
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                          border: TableBorder(
+                            horizontalInside: BorderSide(
+                              color: isDark ? Colors.grey.shade700 : Colors.grey.shade300,
+                              width: 0.7,
                             ),
                           ),
-                        ],
-                      );
-                    },
-                  ),
-                  border: TableBorder(
-                    horizontalInside: BorderSide(color: isDark ? primaryBlue.withOpacity(0.18) : primaryGreen.withOpacity(0.18), width: 0.5),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
         );
       },

@@ -237,7 +237,7 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                       : (isDark ? const Color(0xFF181A20) : Colors.white),
                 ),
                 columns: [
-                  DataColumn(label: Text('Sl. No', style: tableTextStyle.copyWith(color: primaryGreen))),
+                  // DataColumn(label: Text('Sl. No', style: tableTextStyle.copyWith(color: primaryGreen))), // removed
                   DataColumn(label: Text('Customer Name', style: tableTextStyle.copyWith(color: primaryBlue))),
                   DataColumn(label: Text('Called', style: tableTextStyle.copyWith(color: primaryGreen))),
                   DataColumn(label: Text('Remarks', style: tableTextStyle.copyWith(color: primaryBlue))),
@@ -254,7 +254,7 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                             : (isEven ? primaryBlue.withOpacity(0.06) : primaryGreen.withOpacity(0.06)),
                       ),
                       cells: [
-                        DataCell(Text(customer['slno'] ?? '', style: tableTextStyle.copyWith(color: primaryGreen))),
+                        // DataCell(Text(customer['slno'] ?? '', style: tableTextStyle.copyWith(color: primaryGreen))), // removed
                         DataCell(Text(customer['name'] ?? '', style: tableTextStyle.copyWith(color: primaryBlue))),
                         DataCell(
                           Icon(

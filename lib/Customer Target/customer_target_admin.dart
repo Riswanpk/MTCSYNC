@@ -59,40 +59,91 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
     setState(() {
       _loading = true;
       _error = null;
-      _success = null;
       _customers = null;
     });
+
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['xlsx', 'xls']);
-      if (result != null && result.files.single.path != null) {
-        File file = File(result.files.single.path!);
-        var bytes = await file.readAsBytes();
-        var excel = Excel.decodeBytes(bytes);
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['xlsx', 'xls'],
+      );
 
-        if (excel.tables.isEmpty) throw Exception("No sheet found in Excel file.");
-        var sheet = excel.tables[excel.tables.keys.first];
-        if (sheet == null) throw Exception("No sheet found");
+      if (result == null || result.files.single.path == null) return;
 
-        List<Map<String, dynamic>> customers = [];
-        for (int i = 1; i < sheet.maxRows; i++) {
-          var row = sheet.row(i);
-          if (row.length >= 3) {
-            customers.add({
-              'slno': row[0]?.value?.toString() ?? '',
-              'name': row[1]?.value?.toString() ?? '',
-              'contact': row[2]?.value?.toString() ?? '',
-              'remarks': '',
-            });
-          }
-        }
-        setState(() {
-          _customers = customers;
-          _success = "Excel imported. Ready to assign.";
-        });
+      File file = File(result.files.single.path!);
+      var bytes = await file.readAsBytes();
+      var excel = Excel.decodeBytes(bytes);
+
+      if (excel.tables.isEmpty) {
+        throw Exception("No sheets found in Excel file");
       }
+
+      final sheet = excel.tables.values.first;
+      if (sheet == null || sheet.maxRows < 2) {
+        throw Exception("Sheet is empty");
+      }
+
+      // ---- READ HEADER ROW ----
+      final headerRow = sheet.row(0);
+
+      int? nameCol;
+      int? contactCol;
+
+      for (int i = 0; i < headerRow.length; i++) {
+        final header = headerRow[i]?.value?.toString().toLowerCase().trim();
+
+        if (header == null) continue;
+
+        if (header.contains('name') || header.contains('customer') || header.contains('client')) {
+          nameCol ??= i;
+        }
+
+        if (header.contains('phone') ||
+            header.contains('mobile') ||
+            header.contains('contact')) {
+          contactCol ??= i;
+        }
+      }
+
+      if (nameCol == null || contactCol == null) {
+        throw Exception("Required columns not found (Name / Contact)");
+      }
+
+      // ---- READ DATA ROWS ----
+      List<Map<String, dynamic>> customers = [];
+
+      for (int i = 1; i < sheet.maxRows; i++) {
+        final row = sheet.row(i);
+
+        String name = row.length > nameCol && row[nameCol]?.value != null
+            ? row[nameCol]!.value.toString().trim()
+            : '';
+
+        String contact = row.length > contactCol && row[contactCol]?.value != null
+            ? row[contactCol]!.value.toString().trim()
+            : '';
+
+        if (name.isNotEmpty && contact.isNotEmpty) {
+          customers.add({
+            'name': name,
+            'contact': contact,
+            'remarks': '',
+          });
+        }
+      }
+
+      if (customers.isEmpty) {
+        throw Exception("No valid customer data found");
+      }
+
+      setState(() {
+        _customers = customers;
+        _success = "Excel imported. Ready to assign.";
+      });
     } catch (e) {
       setState(() {
-        _error = "Failed: $e";
+        _error = "Failed to import: $e";
+        _customers = null;
       });
     } finally {
       setState(() {
@@ -145,14 +196,14 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
       scrollDirection: Axis.horizontal,
       child: DataTable(
         columns: const [
-          DataColumn(label: Text('Sl. No')),
+          // DataColumn(label: Text('Sl. No')), // removed
           DataColumn(label: Text('Customer Name')),
           DataColumn(label: Text('Contact No.')),
         ],
         rows: _customers!
             .map((customer) => DataRow(
                   cells: [
-                    DataCell(Text(customer['slno'] ?? '')),
+                    // DataCell(Text(customer['slno'] ?? '')), // removed
                     DataCell(Text(customer['name'] ?? '')),
                     DataCell(Text(customer['contact'] ?? '')),
                   ],
@@ -242,7 +293,7 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
                   ),
                   const SizedBox(height: 16),
                   // Customer Preview Table
-                 
+                  
                   // Error and Success Messages
                   if (_error != null) ...[
                     const SizedBox(height: 16),

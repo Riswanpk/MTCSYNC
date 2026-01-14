@@ -39,7 +39,16 @@ Future<List<Contact>> getCachedContacts() async {
 class FollowUpForm extends StatefulWidget {
   static const String DRAFT_KEY = 'leads_form_draft';
 
-  const FollowUpForm({super.key});
+  final String? initialName;
+  final String? initialPhone;
+  final String? initialAddress;
+
+  const FollowUpForm({
+    super.key,
+    this.initialName,
+    this.initialPhone,
+    this.initialAddress,
+  });
 
   @override
   State<FollowUpForm> createState() => _FollowUpFormState();
@@ -297,6 +306,17 @@ class _FollowUpFormState extends State<FollowUpForm> {
     // PREFETCH device contacts to warm cache and speed up picker
     // (do not await here so UI startup is not blocked)
     _loadDeviceContacts();
+
+    // Pre-fill fields if initial values are provided
+    if (widget.initialName != null && widget.initialName!.isNotEmpty) {
+      _nameController.text = widget.initialName!;
+    }
+    if (widget.initialPhone != null && widget.initialPhone!.isNotEmpty) {
+      _phoneController.text = widget.initialPhone!;
+    }
+    if (widget.initialAddress != null && widget.initialAddress!.isNotEmpty) {
+      _addressController.text = widget.initialAddress!;
+    }
   }
 
   Future<void> _loadDeviceContacts() async {
