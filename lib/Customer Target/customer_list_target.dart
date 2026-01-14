@@ -349,6 +349,80 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                                     ),
                                   );
                                 },
+                                // Add onLongPress for row options
+                                onLongPress: () async {
+                                  final action = await showModalBottomSheet<String>(
+                                    context: context,
+                                    builder: (context) => SafeArea(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          ListTile(
+                                            leading: const Icon(Icons.edit, color: Colors.blue),
+                                            title: const Text('Edit'),
+                                            onTap: () => Navigator.pop(context, 'edit'),
+                                          ),
+                                          ListTile(
+                                            leading: const Icon(Icons.delete, color: Colors.red),
+                                            title: const Text('Delete'),
+                                            onTap: () => Navigator.pop(context, 'delete'),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                  if (action == 'edit') {
+                                    // Go to edit page (reuse SalesCustomerTileViewer and trigger edit dialog)
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => SalesCustomerTileViewer(
+                                          customer: customer,
+                                          onStatusChanged: (remarks) async {
+                                            setState(() {
+                                              customer['callMade'] = true;
+                                              customer['remarks'] = remarks;
+                                            });
+                                            await _updateFirestore();
+                                          },
+                                        ),
+                                      ),
+                                    );
+                                    // Optionally, refresh after edit
+                                    await _fetchCustomerData();
+                                  } else if (action == 'delete') {
+                                    final confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: const Text('Delete Customer'),
+                                        content: const Text('Are you sure you want to delete this customer?'),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(context, false),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(context, true),
+                                            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                    if (confirm == true) {
+                                      setState(() {
+                                        _customers!.removeWhere((c) =>
+                                          c['name'] == customer['name'] &&
+                                          c['contact'] == customer['contact']
+                                        );
+                                      });
+                                      await _updateFirestore();
+                                      await _fetchCustomerData();
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Customer deleted.'), backgroundColor: Colors.red),
+                                      );
+                                    }
+                                  }
+                                },
                                 cells: [
                                   DataCell(
                                     Text(
