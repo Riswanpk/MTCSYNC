@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'customer_target_admin.dart';
+import 'customer_target_export_page.dart'; // <-- Import the export page
 import 'package:provider/provider.dart';
 import '../Misc/theme_notifier.dart';
 
@@ -129,7 +130,7 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
           backgroundColor: bgColor,
           appBar: AppBar(
             title: Text('Customer Target Progress Viewer', style: TextStyle(color: Colors.white)),
-            backgroundColor: isDark ? primaryGreen : primaryBlue, // green for dark, blue for light
+            backgroundColor: isDark ? primaryGreen : primaryBlue,
             iconTheme: const IconThemeData(color: Colors.white),
             actions: [
               IconButton(
@@ -139,6 +140,16 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const CustomerTargetAdminPage()),
+                  );
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.download),
+                tooltip: 'Export Customer Target',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const CustomerTargetExportPage()),
                   );
                 },
               ),

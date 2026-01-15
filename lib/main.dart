@@ -17,6 +17,7 @@ import 'Todo & Leads/presentfollowup.dart';
 import 'Todo & Leads/todo.dart'; // <-- Already present
 import 'package:showcaseview/showcaseview.dart';
 import 'Misc/user_version_helper.dart'; // <-- Add this import
+import 'Customer Target/reset_monthly.dart'; // Add this import
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +38,16 @@ void main() async {
       measurementId: firebaseMeasurementId,
     ),
   );
+
+  // --- AUTO RESET CUSTOMER TARGETS IF NEW MONTH ---
+  final prefs = await SharedPreferences.getInstance();
+  final now = DateTime.now();
+  final lastResetMonth = prefs.getString('last_customer_target_reset_month');
+  final currentMonth = "${now.year}-${now.month}";
+  if (lastResetMonth != currentMonth) {
+    await resetCustomerTargetsForNewMonth();
+    await prefs.setString('last_customer_target_reset_month', currentMonth);
+  }
 
   // Enable Firestore offline persistence
   FirebaseFirestore.instance.settings = const Settings(
@@ -108,7 +119,7 @@ void main() async {
   // Get initial notification action if app was launched by a notification
   initialNotificationAction = await AwesomeNotifications().getInitialNotificationAction();
 
-  final prefs = await SharedPreferences.getInstance();
+  await SharedPreferences.getInstance();
 
   // Listen for auth state changes and update user version info
   FirebaseAuth.instance.authStateChanges().listen((user) {
