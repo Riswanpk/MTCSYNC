@@ -165,8 +165,14 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
       _success = null;
     });
     try {
+      // Get current month-year string, e.g., "Jan 2026"
+      final now = DateTime.now();
+      final monthYear = "${_monthName(now.month)} ${now.year}";
+
       await FirebaseFirestore.instance
           .collection('customer_target')
+          .doc(monthYear)
+          .collection('users')
           .doc(_selectedUserEmail)
           .set({
         'branch': _selectedBranch,
@@ -187,6 +193,15 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
         _loading = false;
       });
     }
+  }
+
+  // Helper to get month name
+  String _monthName(int month) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return months[month - 1];
   }
 
   Widget _customerPreviewTable() {
@@ -292,8 +307,8 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  // Customer Preview Table
-                  
+
+
                   // Error and Success Messages
                   if (_error != null) ...[
                     const SizedBox(height: 16),

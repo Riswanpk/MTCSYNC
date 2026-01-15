@@ -22,6 +22,8 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
   TextEditingController remarksController = TextEditingController();
   String? _pendingCallNumber;
   DateTime? _callStartTime;
+  String? _lastRemarks;
+  bool _loadingLastRemarks = false;
 
   @override
   void initState() {
@@ -33,6 +35,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     remarksController.addListener(() {
       setState(() {}); // Rebuild to update save button state
     });
+    _fetchLastRemarks();
   }
 
   @override
@@ -228,6 +231,56 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
         );
       },
     );
+  }
+
+  Future<void> _fetchLastRemarks() async {
+    setState(() {
+      _loadingLastRemarks = true;
+    });
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      final contact = customer['contact'];
+      if (contact == null) return;
+
+      // Get previous month and year
+      final now = DateTime.now();
+      final months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      ];
+      final prev = DateTime(now.year, now.month - 1, 1);
+      final monthYear = "${months[prev.month - 1]} ${prev.year}";
+      final doc = await FirebaseFirestore.instance
+          .collection('customer_target')
+          .doc(monthYear)
+          .collection('users')
+          .doc(user.email)
+          .get();
+      if (doc.exists && doc.data()?['customers'] != null) {
+        final List customers = doc.data()!['customers'];
+        final prevCustomer = customers.firstWhere(
+          (c) => c['contact'] == contact,
+          orElse: () => null,
+        );
+        if (prevCustomer != null && prevCustomer['remarks'] != null && prevCustomer['remarks'].toString().trim().isNotEmpty) {
+          setState(() {
+            _lastRemarks = prevCustomer['remarks'];
+            _loadingLastRemarks = false;
+          });
+          return;
+        }
+      }
+      setState(() {
+        _lastRemarks = null;
+        _loadingLastRemarks = false;
+      });
+    } catch (e) {
+      setState(() {
+        _lastRemarks = null;
+        _loadingLastRemarks = false;
+      });
+    }
   }
 
   @override
@@ -504,7 +557,43 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                 ),
               )).toList(),
 
-              // Remarks Section
+              // --- Last Remarks Section ---
+              if (_loadingLastRemarks)
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: LinearProgressIndicator(),
+                ),
+              if (!_loadingLastRemarks && _lastRemarks != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Last Remarks',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          _lastRemarks!,
+                          style: const TextStyle(fontSize: 15, color: Colors.black87),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // --- Remarks Section ---
               const SizedBox(height: 16),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),

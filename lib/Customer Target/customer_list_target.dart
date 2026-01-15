@@ -48,7 +48,16 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
         return;
       }
       _docId = user.email;
-      final doc = await FirebaseFirestore.instance.collection('customer_target').doc(_docId).get();
+      // Get current month-year string, e.g., "Jan 2026"
+      final now = DateTime.now();
+      final monthYear = "${_monthName(now.month)} ${now.year}";
+
+      final doc = await FirebaseFirestore.instance
+          .collection('customer_target')
+          .doc(monthYear)
+          .collection('users')
+          .doc(_docId)
+          .get();
       if (doc.exists && doc.data()?['customers'] != null) {
         final List<dynamic> data = doc.data()!['customers'];
         setState(() {
@@ -67,6 +76,15 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
         _loading = false;
       });
     }
+  }
+
+  // Helper to get month name
+  String _monthName(int month) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return months[month - 1];
   }
 
   @override
@@ -142,8 +160,14 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
   Future<void> _updateFirestore() async {
     if (_docId == null) return;
     try {
+      // Get current month-year string, e.g., "Jan 2026"
+      final now = DateTime.now();
+      final monthYear = "${_monthName(now.month)} ${now.year}";
+
       await FirebaseFirestore.instance
           .collection('customer_target')
+          .doc(monthYear)
+          .collection('users')
           .doc(_docId)
           .update({'customers': _customers});
     } catch (e) {

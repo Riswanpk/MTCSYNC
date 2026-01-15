@@ -14,6 +14,7 @@ class CustomerAdminViewerPage extends StatefulWidget {
 class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
   String? _selectedBranch;
   String? _selectedUserEmail;
+  String? _selectedMonthYear; // <-- Add this
   List<String> _branches = [];
   List<Map<String, dynamic>> _users = [];
   List<Map<String, dynamic>> _allUsers = [];
@@ -21,9 +22,23 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
   bool _loading = false;
   String? _error;
 
+  final List<String> _monthYears = List.generate(
+    12,
+    (i) {
+      final now = DateTime.now();
+      final date = DateTime(now.year, now.month - i, 1);
+      const months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      ];
+      return "${months[date.month - 1]} ${date.year}";
+    },
+  );
+
   @override
   void initState() {
     super.initState();
+    _selectedMonthYear = _monthYears.first; // Default to current month
     _fetchUsersAndBranches();
   }
 
@@ -61,11 +76,13 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
   }
 
   Future<void> _fetchCustomerTarget() async {
-    if (_selectedUserEmail == null) return;
+    if (_selectedUserEmail == null || _selectedMonthYear == null) return;
     setState(() { _loading = true; _error = null; });
     try {
       final doc = await FirebaseFirestore.instance
           .collection('customer_target')
+          .doc(_selectedMonthYear)
+          .collection('users')
           .doc(_selectedUserEmail)
           .get();
       if (doc.exists && doc.data()?['customers'] != null) {
@@ -133,6 +150,24 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
+                      // --- Month-Year Dropdown ---
+                      DropdownButtonFormField<String>(
+                        value: _selectedMonthYear,
+                        hint: Text('Select Month', style: TextStyle(color: primaryBlue)),
+                        items: _monthYears
+                            .map((m) => DropdownMenuItem(value: m, child: Text(m, style: TextStyle(color: primaryBlue))))
+                            .toList(),
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedMonthYear = val;
+                            _customers = null;
+                          });
+                          if (val != null && _selectedUserEmail != null) _fetchCustomerTarget();
+                        },
+                        dropdownColor: cardColor,
+                      ),
+                      const SizedBox(height: 16),
+                      // --- Branch Dropdown ---
                       DropdownButtonFormField<String>(
                         value: _branches.contains(_selectedBranch) ? _selectedBranch : null,
                         hint: Text('Select Branch', style: TextStyle(color: primaryGreen)),
@@ -158,6 +193,7 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                         dropdownColor: cardColor,
                       ),
                       const SizedBox(height: 16),
+                      // --- User Dropdown ---
                       DropdownButtonFormField<String>(
                         value: _users.any((u) => u['email'] == _selectedUserEmail) ? _selectedUserEmail : null,
                         hint: Text('Select User', style: TextStyle(color: primaryBlue)),
@@ -179,7 +215,7 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                             _selectedUserEmail = val;
                             _customers = null;
                           });
-                          if (val != null) _fetchCustomerTarget();
+                          if (val != null && _selectedMonthYear != null) _fetchCustomerTarget();
                         },
                         dropdownColor: cardColor,
                       ),
