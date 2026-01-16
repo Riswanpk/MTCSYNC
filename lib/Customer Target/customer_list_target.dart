@@ -25,6 +25,9 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
   String? _error;
   String? _docId;
   bool _sortCalledFirst = true;
+  String _searchText = '';
+  bool _showSearchBar = false;
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -224,12 +227,22 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
           );
         }
 
-        // Calculate called count
-        int calledCount = _customers!.where((c) => c['callMade'] == true).length;
-        int totalCount = _customers!.length;
+        // Filter customers by search
+        List<Map<String, dynamic>> filteredCustomers = _customers!;
+        if (_searchText.isNotEmpty) {
+          filteredCustomers = filteredCustomers
+              .where((c) =>
+                  (c['name'] ?? '').toString().toLowerCase().contains(_searchText.toLowerCase()) ||
+                  (c['contact'] ?? '').toString().toLowerCase().contains(_searchText.toLowerCase()))
+              .toList();
+        }
+
+        // Calculate calledCount and totalCount
+        int totalCount = filteredCustomers.length;
+        int calledCount = filteredCustomers.where((c) => c['callMade'] == true).length;
 
         // Sort customers based on called status
-        List<Map<String, dynamic>> sortedCustomers = List<Map<String, dynamic>>.from(_customers!);
+        List<Map<String, dynamic>> sortedCustomers = List<Map<String, dynamic>>.from(filteredCustomers);
         sortedCustomers.sort((a, b) {
           if (_sortCalledFirst) {
             return (b['callMade'] == true ? 1 : 0) - (a['callMade'] == true ? 1 : 0);
@@ -262,6 +275,35 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
           ),
           body: Column(
             children: [
+              if (_showSearchBar)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6),
+                  child: TextField(
+                    controller: _searchController,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      hintText: 'Search customer name or contact',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          setState(() {
+                            _searchText = '';
+                            _searchController.clear();
+                            _showSearchBar = false;
+                          });
+                        },
+                      ),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 8),
+                    ),
+                    onChanged: (val) {
+                      setState(() {
+                        _searchText = val;
+                      });
+                    },
+                  ),
+                ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8),
                 child: Row(
@@ -275,6 +317,20 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                       ),
                     ),
                     const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.search),
+                      tooltip: 'Search',
+                      color: isDark ? Colors.white : Colors.black,
+                      onPressed: () {
+                        setState(() {
+                          _showSearchBar = !_showSearchBar;
+                          if (!_showSearchBar) {
+                            _searchText = '';
+                            _searchController.clear();
+                          }
+                        });
+                      },
+                    ),
                     TextButton.icon(
                       onPressed: () {
                         setState(() {
@@ -370,8 +426,8 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                                           await _updateFirestore();
                                         },
                                       ),
-                                    ),
-                                  );
+                                    )
+                                    );
                                 },
                                 // Add onLongPress for row options
                                 onLongPress: () async {
