@@ -69,29 +69,28 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
     } else {
       todoWindowStart = today.subtract(const Duration(days: 1)).add(const Duration(hours: 12)); // Previous day 12 PM
     }
-    final todoWindowEnd = today.add(const Duration(hours: 12)); // Today 11:59:59 AM
+    final todoWindowEnd = today.add(const Duration(hours: 12)); // Today 12 PM
 
     // --- OPTIMIZATION: Use Future.wait to run queries for all users in parallel ---
     await Future.wait(users.map((user) async {
         final userId = user['uid'];
 
-        // New logic for lead window
+        // --- CHANGE: Lead window same as todo window ---
         DateTime leadWindowStart;
         if (today.weekday == DateTime.monday) {
-            leadWindowStart = today.subtract(const Duration(days: 1)); // Sunday
+            leadWindowStart = today.subtract(const Duration(days: 2)).add(const Duration(hours: 12)); // Saturday 12 PM
         } else {
-            leadWindowStart = today; // Today
+            leadWindowStart = today.subtract(const Duration(days: 1)).add(const Duration(hours: 12)); // Previous day 12 PM
         }
-        final leadWindowEnd = today.add(const Duration(days: 1)); // Up to end of today
+        final leadWindowEnd = today.add(const Duration(hours: 12)); // Today 12 PM
 
-        // Run both queries for a user concurrently
         final results = await Future.wait([
             FirebaseFirestore.instance
                 .collection('daily_report')
                 .where('userId', isEqualTo: userId)
                 .where('type', isEqualTo: 'leads')
-                .where('timestamp', isGreaterThanOrEqualTo: leadWindowStart)
-                .where('timestamp', isLessThan: leadWindowEnd)
+                .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(leadWindowStart))
+                .where('timestamp', isLessThan: Timestamp.fromDate(leadWindowEnd))
                 .limit(1) // We only need to know if one exists
                 .get(),
             FirebaseFirestore.instance

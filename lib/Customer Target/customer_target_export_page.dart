@@ -4,6 +4,7 @@ import 'package:share_plus/share_plus.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as syncfusion;
+import 'package:cloud_functions/cloud_functions.dart';
 
 class CustomerTargetExportPage extends StatefulWidget {
   const CustomerTargetExportPage({super.key});
@@ -116,6 +117,12 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
         _loading = false;
       });
     }
+  }
+
+  Future<void> triggerCustomerTargetExport(String monthYear, String fileMonth) async {
+    final HttpsCallable callable = FirebaseFunctions.instance.httpsCallable('exportCustomerTargetIndividualReport');
+    final result = await callable.call({'monthYear': monthYear, 'fileMonth': fileMonth});
+    // Handle result (e.g., show a dialog with the download link)
   }
 
   @override

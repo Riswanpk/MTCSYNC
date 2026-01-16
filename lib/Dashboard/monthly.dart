@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:excel/excel.dart' hide TextSpan, Border;
-import 'package:path_provider/path_provider.dart';
-import 'dart:io';
-import 'package:share_plus/share_plus.dart';
 import 'dart:async';
-import '../widgets/loading_progress_bar.dart';
 
 class MonthlyReportPage extends StatefulWidget {
   final String? branch;
@@ -25,8 +20,12 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
   String? _currentUserRole;
   List<String> _branches = [];
   List<Map<String, dynamic>> _usersForBranch = [];
-  bool _isLoading = false;
-  double _progress = 0.0;
+  String? _userRole;
+  bool _isInitialized = false;
+
+  // Cache for report data
+  List<Map<String, dynamic>>? _cachedReport;
+  String? _cacheKey;
 
   @override
   void initState() {
@@ -38,44 +37,57 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
     final user = FirebaseAuth.instance.currentUser;
     String? userRole;
     String? userBranch;
+    
     if (user != null) {
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
       userRole = userDoc['role'];
       userBranch = userDoc['branch'];
       _currentUserRole = userRole;
+      _userRole = userRole;
     }
 
     if (widget.users.isNotEmpty && widget.branch != null) {
       setState(() {
         _selectedBranch = widget.branch;
-        _usersForBranch = widget.users;
-        _selectedUser = widget.users.isNotEmpty ? widget.users.first : null;
+        _usersForBranch = List<Map<String, dynamic>>.from(widget.users)
+          ..sort((a, b) => a['username'].toString().toLowerCase().compareTo(b['username'].toString().toLowerCase()));
+        _selectedUser = _usersForBranch.isNotEmpty ? _usersForBranch.first : null;
         _branches = [widget.branch!];
+        _isInitialized = true;
       });
       return;
     }
 
-    final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
+    final usersSnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .get();
+    
     final branches = usersSnapshot.docs
         .map((doc) => doc['branch'] ?? '')
         .where((b) => b != null && b.toString().isNotEmpty)
         .toSet()
         .cast<String>()
-        .toList();
-
-    setState(() {
-      _branches = branches;
-      if (_branches.isNotEmpty && _selectedBranch == null) {
-        _selectedBranch = _branches.first;
-      }
-    });
+        .toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase())); // Sort branches alphabetically
 
     if (userRole == 'manager' && userBranch != null) {
       await _fetchUsersForBranch(userBranch);
       setState(() {
         _selectedBranch = userBranch;
+        _branches = [userBranch ?? ''];
+        _isInitialized = true;
       });
     } else {
+      setState(() {
+        _branches = branches;
+        if (_branches.isNotEmpty && _selectedBranch == null) {
+          _selectedBranch = _branches.first;
+        }
+        _isInitialized = true;
+      });
       await _fetchUsersForBranch(_selectedBranch);
     }
   }
@@ -88,6 +100,7 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
       });
       return;
     }
+    
     final usersSnapshot = await FirebaseFirestore.instance
         .collection('users')
         .where('branch', isEqualTo: branch)
@@ -102,248 +115,87 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
               'email': doc['email'] ?? '',
               'branch': doc['branch'] ?? '',
             })
-        .toList();
+        .toList()
+      ..sort((a, b) => a['username'].toString().toLowerCase().compareTo(b['username'].toString().toLowerCase())); // Sort usernames alphabetically
 
     setState(() {
       _usersForBranch = users;
       _selectedUser = users.isNotEmpty ? users.first : null;
+      _cachedReport = null; // Clear cache when user changes
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    if (_isLoading) {
-      return Scaffold(
-        body: LoadingProgressBar(progress: _progress, text: "Generating Monthly Report..."),
-      );
-    }
-
-    Widget mainScaffold = FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid).get(),
-      builder: (context, snapshot) {
-        String role = 'sales';
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
-          );
-        }
-        if (snapshot.hasData && snapshot.data!.data() != null) {
-          final data = snapshot.data!.data() as Map<String, dynamic>;
-          role = data['role'] ?? 'sales';
-        }
-
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('Monthly Missed Report'),
-            backgroundColor: const Color(0xFF005BAC),
-            foregroundColor: Colors.white,
-            elevation: 0,
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.download),
-                tooltip: 'Export Excel',
-                onPressed: () async {
-                  await _generateAndShareExcel(role);
-                },
-              ),
-            ],
-          ),
-          backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
-          body: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 24),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (role == 'admin' && _branches.isNotEmpty)
-                        DropdownButton<String>(
-                          value: _selectedBranch,
-                          items: _branches
-                              .map((b) => DropdownMenuItem(value: b, child: Text(b)))
-                              .toList(),
-                          onChanged: (val) async {
-                            setState(() {
-                              _selectedBranch = val;
-                            });
-                            await _fetchUsersForBranch(val);
-                          },
-                          hint: const Text("Select Branch"),
-                        ),
-                      DropdownButton<Map<String, dynamic>>(
-                        value: _selectedUser,
-                        items: _usersForBranch
-                            .map((u) => DropdownMenuItem(
-                                  value: u,
-                                  child: Text(u['username']),
-                                ))
-                            .toList(),
-                        onChanged: (val) {
-                          setState(() {
-                            _selectedUser = val;
-                          });
-                        },
-                        hint: const Text("Select User"),
-                      ),
-                      DropdownButton<int>(
-                        value: _selectedMonth,
-                        items: List.generate(12, (i) => i + 1)
-                            .map((m) => DropdownMenuItem(
-                                  value: m,
-                                  child: Text(
-                                    [
-                                      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-                                    ][m - 1],
-                                  ),
-                                ))
-                            .toList(),
-                        onChanged: (val) {
-                          setState(() {
-                            _selectedMonth = val!;
-                          });
-                        },
-                      ),
-                      DropdownButton<int>(
-                        value: _selectedYear,
-                        items: List.generate(5, (i) => DateTime.now().year - i)
-                            .map((y) => DropdownMenuItem(value: y, child: Text('$y')))
-                            .toList(),
-                        onChanged: (val) {
-                          setState(() {
-                            _selectedYear = val!;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                  if (_selectedUser != null)
-                    FutureBuilder<List<Map<String, dynamic>>>(
-                      future: _generateUserMonthlyReport(
-                        _selectedUser!['uid'],
-                        _selectedUser!['email'],
-                        _selectedMonth,
-                        _selectedYear,
-                      ),
-                      builder: (context, snap) {
-                        if (snap.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
-                        if (snap.hasError) {
-                          return Center(child: Text('Error: ${snap.error}'));
-                        }
-                        if (!snap.hasData || snap.data!.isEmpty) {
-                          return const Center(child: Text('No missed entries this month.'));
-                        }
-                        final missed = snap.data!;
-                        return SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: DataTable(
-                            columns: const [
-                              DataColumn(label: Text('Date')),
-                              DataColumn(label: Text('Todo')),
-                              DataColumn(label: Text('Lead')),
-                            ],
-                            rows: missed.map((m) => DataRow(cells: [
-                              DataCell(Text(m['date'])),
-                              DataCell(
-                                Text(
-                                  m['todo'] ? '✓' : '⭕',
-                                  style: TextStyle(
-                                    color: m['todo'] ? Colors.green : Colors.red,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ),
-                              DataCell(
-                                Text(
-                                  m['lead'] ? '✓' : '⭕',
-                                  style: TextStyle(
-                                    color: m['lead'] ? Colors.green : Colors.red,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ),
-                            ])).toList(),
-                          )
-                        );
-                        },
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-
-    return mainScaffold;
+  String _getCacheKey() {
+    return '${_selectedUser?['uid']}_${_selectedMonth}_$_selectedYear';
   }
 
-  Future<List<Map<String, dynamic>>> _generateUserMonthlyReport(
-    String uid, String email, int month, int year) async {
-    final monthStart = DateTime(year, month, 1);
-    final nextMonth = month == 12 ? DateTime(year + 1, 1, 1) : DateTime(year, month + 1, 1);
+  Future<List<Map<String, dynamic>>> _generateUserMonthlyReport() async {
+    final cacheKey = _getCacheKey();
+    
+    // Return cached data if available
+    if (_cachedReport != null && _cacheKey == cacheKey) {
+      return _cachedReport!;
+    }
+
+    final uid = _selectedUser!['uid'];
+    final monthStart = DateTime(_selectedYear, _selectedMonth, 1);
+    final nextMonth = _selectedMonth == 12 
+        ? DateTime(_selectedYear + 1, 1, 1) 
+        : DateTime(_selectedYear, _selectedMonth + 1, 1);
     final today = DateTime.now();
-    final lastDay = (nextMonth.isAfter(today) ? today : nextMonth.subtract(const Duration(days: 1))).day;
+    final lastDay = (nextMonth.isAfter(today) 
+        ? today 
+        : nextMonth.subtract(const Duration(days: 1))).day;
 
-    // --- OPTIMIZATION: Fetch all data for the month in two queries ---
-    final leadsSnapshot = await FirebaseFirestore.instance
-        .collection('daily_report')
-        .where('userId', isEqualTo: uid)
-        .where('type', isEqualTo: 'leads')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
-        .where('timestamp', isLessThan: Timestamp.fromDate(nextMonth))
-        .get();
+    // Fetch both snapshots in parallel for faster loading
+    final results = await Future.wait([
+      FirebaseFirestore.instance
+          .collection('daily_report')
+          .where('userId', isEqualTo: uid)
+          .where('type', isEqualTo: 'leads')
+          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
+          .where('timestamp', isLessThan: Timestamp.fromDate(nextMonth))
+          .get(),
+      FirebaseFirestore.instance
+          .collection('daily_report')
+          .where('userId', isEqualTo: uid)
+          .where('type', isEqualTo: 'todo')
+          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart.subtract(const Duration(days: 2))))
+          .where('timestamp', isLessThan: Timestamp.fromDate(nextMonth.add(const Duration(hours: 12))))
+          .get(),
+    ]);
 
-    // Fetch todos for the entire month. The window needs to start earlier to catch todos for the 1st of the month.
-    final todosSnapshot = await FirebaseFirestore.instance
-        .collection('daily_report')
-        .where('userId', isEqualTo: uid)
-        .where('type', isEqualTo: 'todo')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart.subtract(const Duration(days: 2))))
-        .where('timestamp', isLessThan: Timestamp.fromDate(nextMonth.add(const Duration(hours: 12))))
-        .get();
-
-    final leadDates = leadsSnapshot.docs.map((doc) => (doc['timestamp'] as Timestamp).toDate()).toSet();
-    final todoDates = todosSnapshot.docs.map((doc) => (doc['timestamp'] as Timestamp).toDate()).toSet();
-    // --- END OPTIMIZATION ---
+    final leadDates = results[0].docs
+        .map((doc) => (doc['timestamp'] as Timestamp).toDate())
+        .toSet();
+    final todoDates = results[1].docs
+        .map((doc) => (doc['timestamp'] as Timestamp).toDate())
+        .toSet();
 
     List<Map<String, dynamic>> missedReport = [];
 
     for (int i = 0; i < lastDay; i++) {
       final date = monthStart.add(Duration(days: i));
-      if (date.weekday == DateTime.sunday) continue; // Skip Sundays
+      if (date.weekday == DateTime.sunday) continue;
 
       final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
       final dayStart = DateTime(date.year, date.month, date.day);
 
-      // --- OPTIMIZATION: Check against the fetched data instead of querying ---
-      final leadTick = leadDates.any((leadDate) {
-        if (dayStart.weekday == DateTime.monday) {
-          // For Monday, check if lead is from Sunday or Monday
-          return leadDate.isAfter(dayStart.subtract(const Duration(days: 1))) && leadDate.isBefore(dayStart.add(const Duration(days: 1)));
-        }
-        return leadDate.isAfter(dayStart) && leadDate.isBefore(dayStart.add(const Duration(days: 1)));
-      });
-
-      DateTime todoWindowStart;
+      DateTime windowStart;
       if (dayStart.weekday == DateTime.monday) {
-        todoWindowStart = dayStart.subtract(const Duration(days: 2)).add(const Duration(hours: 12)); // Saturday 12 PM
+        windowStart = dayStart.subtract(const Duration(days: 2)).add(const Duration(hours: 12));
       } else {
-        todoWindowStart = dayStart.subtract(const Duration(days: 1)).add(const Duration(hours: 12)); // Previous day 12 PM
+        windowStart = dayStart.subtract(const Duration(days: 1)).add(const Duration(hours: 12));
       }
-      final todoWindowEnd = dayStart.add(const Duration(hours: 12));
+      final windowEnd = dayStart.add(const Duration(hours: 12));
 
-      final todoTick = todoDates.any((todoDate) => todoDate.isAfter(todoWindowStart) && todoDate.isBefore(todoWindowEnd));
-      // --- END OPTIMIZATION ---
+      final leadTick = leadDates.any((leadDate) =>
+        leadDate.isAfter(windowStart) && leadDate.isBefore(windowEnd)
+      );
+
+      final todoTick = todoDates.any((todoDate) =>
+        todoDate.isAfter(windowStart) && todoDate.isBefore(windowEnd)
+      );
 
       missedReport.add({
         'date': dateStr,
@@ -351,154 +203,344 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
         'lead': leadTick,
       });
     }
+
+    // Cache the result
+    _cachedReport = missedReport;
+    _cacheKey = cacheKey;
+
     return missedReport;
   }
 
-  Future<void> _generateAndShareExcel(String role) async {
-    setState(() {
-      _isLoading = true;
-      _progress = 0.0;
-    });
-    try {
-      // Determine branch to use
-      String branchToUse = '';
-      if (role == 'admin') {
-        branchToUse = _selectedBranch ?? '';
-      } else if (role == 'manager') {
-        branchToUse = _selectedBranch ?? '';
-      } else {
-        final user = FirebaseAuth.instance.currentUser;
-        final userDoc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
-        branchToUse = userDoc['branch'] ?? '';
-      }
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-      // Fetch all users of the branch
-      final usersSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where('branch', isEqualTo: branchToUse)
-          .where('role', isNotEqualTo: 'admin')
-          .get();
+    // Define your colors here for consistency
+    const Color selectedGreen = Color.fromARGB(255, 97, 175, 34);
+    const Color listBlue = Colors.blue;
 
-      final users = usersSnapshot.docs
-          .map((doc) => {
-                'uid': doc.id,
-                'username': doc['username'] ?? '',
-                'email': doc['email'] ?? '',
-              })
-          .toList();
-
-      // Table 1: Username, Leads Created, Leads Completed
-      final excel = Excel.createExcel();
-      final sheet1 = excel['Leads Summary'];
-      sheet1.appendRow([
-        TextCellValue('Username'),
-        TextCellValue('Leads Created'),
-        TextCellValue('Leads Completed'),
-      ]);
-
-      final monthStart = DateTime(_selectedYear, _selectedMonth, 1);
-      final nextMonth = _selectedMonth == 12
-          ? DateTime(_selectedYear + 1, 1, 1)
-          : DateTime(_selectedYear, _selectedMonth + 1, 1);
-
-      for (int i = 0; i < users.length; i++) {
-        final user = users[i];
-        // Leads Created
-        final createdSnapshot = await FirebaseFirestore.instance
-            .collection('follow_ups')
-            .where('created_by', isEqualTo: user['uid'])
-            .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
-            .where('created_at', isLessThan: Timestamp.fromDate(nextMonth))
-            .get();
-        final createdCount = createdSnapshot.docs.length;
-
-        // Leads Completed
-        final completedSnapshot = await FirebaseFirestore.instance
-            .collection('follow_ups')
-            .where('created_by', isEqualTo: user['uid'])
-            .where('status', isEqualTo: 'Completed')
-            .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
-            .where('created_at', isLessThan: Timestamp.fromDate(nextMonth))
-            .get();
-        final completedCount = completedSnapshot.docs.length;
-
-        sheet1.appendRow([
-          TextCellValue(user['username']),
-          TextCellValue(createdCount.toString()),
-          TextCellValue(completedCount.toString()),
-        ]);
-      }
-
-      // Table 2: Username, Date, Todo, Lead (with space after each user, colored Yes/No)
-      final sheet2 = excel['Missed Report'];
-      sheet2.appendRow([
-        TextCellValue('Username'),
-        TextCellValue('Date'),
-        TextCellValue('Todo'),
-        TextCellValue('Lead'),
-      ]);
-
-      for (int i = 0; i < users.length; i++) {
-        final user = users[i];
-        final missed = await _generateUserMonthlyReport(
-          user['uid'],
-          user['email'],
-          _selectedMonth,
-          _selectedYear,
-        );
-        for (final m in missed) {
-          final todoCell = TextCellValue(m['todo'] ? 'Yes' : 'No');
-          final leadCell = TextCellValue(m['lead'] ? 'Yes' : 'No');
-          final rowIdx = sheet2.maxRows;
-          sheet2.appendRow([
-            TextCellValue(user['username']),
-            TextCellValue(m['date']),
-            todoCell,
-            leadCell,
-          ]);
-          // Color the "Yes" as green and "No" as red
-          final todoExcelCell = sheet2.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: rowIdx));
-          final leadExcelCell = sheet2.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: rowIdx));
-          if (m['todo']) {
-            todoExcelCell.cellStyle = CellStyle(fontColorHex: ExcelColor.fromHexString('#008000')); // green
-          } else {
-            todoExcelCell.cellStyle = CellStyle(fontColorHex: ExcelColor.fromHexString('#FF0000')); // red
-          }
-          if (m['lead']) {
-            leadExcelCell.cellStyle = CellStyle(fontColorHex: ExcelColor.fromHexString('#008000')); // green
-          } else {
-            leadExcelCell.cellStyle = CellStyle(fontColorHex: ExcelColor.fromHexString('#FF0000')); // red
-          }
-        }
-        // Add an empty row after each user for spacing
-        sheet2.appendRow([
-          TextCellValue(''),
-          TextCellValue(''),
-          TextCellValue(''),
-          TextCellValue(''),
-        ]);
-      }
-
-      // Save and share
-      final tempDir = await getTemporaryDirectory();
-      final branchName = (branchToUse.isNotEmpty ? branchToUse : "AllBranches").replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-      final monthName = [
-        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-      ][_selectedMonth - 1];
-      final file = File('${tempDir.path}/Monthly Report $branchName $monthName.xlsx');
-      final fileBytes = await excel.encode();
-      await file.writeAsBytes(fileBytes!);
-
-      await Share.shareXFiles([XFile(file.path)], text: 'Monthly Report Excel');
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to generate Excel: $e')),
+    if (!_isInitialized) {
+      return Scaffold(
+        backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
+        body: Center(
+          child: CircularProgressIndicator(
+            color: isDark ? Colors.white : const Color(0xFF6C5CE7),
+          ),
+        ),
       );
     }
-    setState(() {
-      _isLoading = false;
-      _progress = 0.0;
-    });
+
+    return Scaffold(
+        backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
+        appBar: AppBar(
+          elevation: 0,
+          backgroundColor: const Color.fromARGB(255, 6, 91, 160),
+          title: Container(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+            decoration: BoxDecoration(
+              color: const Color.fromARGB(255, 6, 91, 160),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Text(
+              'Monthly Report',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 22,
+              ),
+            ),
+          ),
+          centerTitle: true,
+        ),
+        body: Column(
+          children: [
+            // Compact Filter Section
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  // -------------------------
+                  // 1. BRANCH DROPDOWN
+                  // -------------------------
+                  if (_userRole == 'admin' && _branches.isNotEmpty)
+                    Flexible(
+                      flex: 2,
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          isExpanded: true,
+                          value: _selectedBranch,
+                          icon: const Icon(Icons.keyboard_arrow_down, size: 18, color: Colors.black),
+                          dropdownColor: Colors.white,
+                          
+                          // 1. ITEMS (The Open Menu -> BLUE)
+                          items: _branches.map((b) => DropdownMenuItem(
+                                value: b,
+                                child: Text(
+                                  b,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: listBlue, // Blue inside list
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              )).toList(),
+                          
+                          // 2. SELECTED (The Closed Button -> GREEN)
+                          selectedItemBuilder: (BuildContext context) {
+                            return _branches.map((String value) {
+                              return Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  value,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: selectedGreen, // Green when selected
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              );
+                            }).toList();
+                          },
+
+                          onChanged: (val) async {
+                            await _fetchUsersForBranch(val);
+                            setState(() {
+                              _selectedBranch = val;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                  
+                  if (!(_userRole == 'admin' && _branches.isNotEmpty)) const SizedBox.shrink(),
+                  const SizedBox(width: 6),
+
+                  // -------------------------
+                  // 2. USER DROPDOWN
+                  // -------------------------
+                  Flexible(
+                    flex: 3,
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<Map<String, dynamic>>(
+                        isExpanded: true,
+                        value: _selectedUser,
+                        icon: const Icon(Icons.keyboard_arrow_down, size: 18, color: Colors.black),
+                        dropdownColor: Colors.white,
+                        
+                        // 1. ITEMS (The Open Menu -> BLUE)
+                        items: _usersForBranch.map((u) => DropdownMenuItem(
+                                value: u,
+                                child: Text(
+                                  u['username'],
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: listBlue, // Blue inside list
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              )).toList(),
+
+                        // 2. SELECTED (The Closed Button -> GREEN)
+                        selectedItemBuilder: (BuildContext context) {
+                          return _usersForBranch.map((Map<String, dynamic> value) {
+                            return Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                value['username'],
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: selectedGreen, // Green when selected
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            );
+                          }).toList();
+                        },
+
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedUser = val;
+                            _cachedReport = null;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+
+                  // -------------------------
+                  // 3. MONTH DROPDOWN
+                  // -------------------------
+                  Flexible(
+                    flex: 2,
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<int>(
+                        isExpanded: true,
+                        value: _selectedMonth,
+                        icon: const Icon(Icons.keyboard_arrow_down, size: 18, color: Colors.black),
+                        dropdownColor: Colors.white,
+
+                        // 1. ITEMS (The Open Menu -> BLUE)
+                        items: List.generate(12, (i) => i + 1).map((m) => DropdownMenuItem(
+                                value: m,
+                                child: Text(
+                                  _getMonthShort(m),
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: listBlue, // Blue inside list
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              )).toList(),
+
+                        // 2. SELECTED (The Closed Button -> GREEN)
+                        selectedItemBuilder: (BuildContext context) {
+                          return List.generate(12, (i) => i + 1).map((int value) {
+                            return Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                _getMonthShort(value),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: selectedGreen, // Green when selected
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            );
+                          }).toList();
+                        },
+
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedMonth = val!;
+                            _cachedReport = null;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+
+                  // -------------------------
+                  // 4. YEAR DROPDOWN
+                  // -------------------------
+                  Flexible(
+                    flex: 2,
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<int>(
+                        isExpanded: true,
+                        value: _selectedYear,
+                        icon: const Icon(Icons.keyboard_arrow_down, size: 18, color: Colors.black),
+                        dropdownColor: Colors.white,
+
+                        // 1. ITEMS (The Open Menu -> BLUE)
+                        items: List.generate(5, (i) => DateTime.now().year - i).map((y) => DropdownMenuItem(
+                                value: y,
+                                child: Text(
+                                  '$y',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: listBlue, // Blue inside list
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              )).toList(),
+
+                        // 2. SELECTED (The Closed Button -> GREEN)
+                        selectedItemBuilder: (BuildContext context) {
+                          return List.generate(5, (i) => DateTime.now().year - i).map((int value) {
+                            return Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                '$value',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: selectedGreen, // Green when selected
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            );
+                          }).toList();
+                        },
+
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedYear = val!;
+                            _cachedReport = null;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Report Table Section
+            Expanded(
+              child: _selectedUser != null
+                  ? FutureBuilder<List<Map<String, dynamic>>>(
+                      future: _generateUserMonthlyReport(),
+                      builder: (context, snap) {
+                        if (snap.connectionState == ConnectionState.waiting) {
+                          return Center(
+                            child: CircularProgressIndicator(
+                              color: isDark ? Colors.white : const Color(0xFF6C5CE7),
+                            ),
+                          );
+                        }
+                        if (snap.hasError) {
+                          return Center(child: Text('Error: ${snap.error}'));
+                        }
+                        final data = snap.data ?? [];
+                        if (data.isEmpty) {
+                          return const Center(child: Text('No data for this month.'));
+                        }
+                        return Scrollbar(
+                          thumbVisibility: true,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.vertical,
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: SizedBox(
+                                width: MediaQuery.of(context).size.width,
+                                child: DataTable(
+                                  columnSpacing: MediaQuery.of(context).size.width / 8,
+                                  columns: const [
+                                    DataColumn(label: Text('Date', style: TextStyle(color: selectedGreen, fontWeight: FontWeight.bold))),
+                                    DataColumn(label: Text('Todo', style: TextStyle(color: selectedGreen, fontWeight: FontWeight.bold))),
+                                    DataColumn(label: Text('Lead', style: TextStyle(color: selectedGreen, fontWeight: FontWeight.bold))),
+                                  ],
+                                  rows: data.map((item) {
+                                    return DataRow(cells: [
+                                      DataCell(Text(item['date'])),
+                                      DataCell(Icon(
+                                        item['todo'] ? Icons.check_circle : Icons.cancel,
+                                        color: item['todo'] ? Colors.blue : Colors.red,
+                                        size: 20,
+                                      )),
+                                      DataCell(Icon(
+                                        item['lead'] ? Icons.check_circle : Icons.cancel,
+                                        color: item['lead'] ? Colors.green : Colors.red,
+                                        size: 20,
+                                      )),
+                                    ]);
+                                  }).toList(),
+                                ),
+                              ),
+                            ),
+                          )
+                          );
+                        },
+                      )
+                  : const Center(child: Text('Select a user to view report')),
+            ),
+          ],
+        ));
+  }
+
+  String _getMonthShort(int month) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return months[month - 1];
   }
 }
