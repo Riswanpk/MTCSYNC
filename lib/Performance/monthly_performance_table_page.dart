@@ -129,14 +129,28 @@ class _MonthlyPerformanceTablePageState extends State<MonthlyPerformanceTablePag
                       if (cat == 'Confirm the purchase') value = form['attitude']?['confirmPurchase'] != false;
                       if (cat == 'Offer carry or delivery help') value = form['attitude']?['offerHelp'] != false;
                     } else if (sectionKey == 'meeting') {
-                      if (cat == 'Meeting') value = form['meeting']?['attended'] == true;
+                      if (cat == 'Meeting') {
+                        if (form['meeting']?['noMeeting'] == true) {
+                          value = null;
+                        } else {
+                          value = form['meeting']?['attended'] == true;
+                        }
+                      }
                     }
                     return DataCell(
-                      value == null
-                          ? const Text('-', style: TextStyle(fontSize: 11))
-                          : value
-                              ? const Icon(Icons.check, color: Colors.green, size: 16)
-                              : const Icon(Icons.close, color: Colors.red, size: 16),
+                      form['meeting']?['noMeeting'] == true
+                          ? Row(
+                              children: const [
+                                Icon(Icons.info_outline, color: Colors.blue, size: 16),
+                                SizedBox(width: 2),
+                                Text('No meeting', style: TextStyle(fontSize: 10, color: Colors.blue)),
+                              ],
+                            )
+                          : value == null
+                              ? const Text('-', style: TextStyle(fontSize: 11))
+                              : value
+                                  ? const Icon(Icons.check, color: Colors.green, size: 16)
+                                  : const Icon(Icons.close, color: Colors.red, size: 16),
                     );
                   }).toList(),
                 ],

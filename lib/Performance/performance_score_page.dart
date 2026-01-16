@@ -109,7 +109,7 @@ class _PerformanceScoreInnerPageState extends State<PerformanceScoreInnerPage> w
     for (var form in dailyForms) {
       final att = form['attendance'];
       if (att == 'approved' || att == 'notApproved') continue; // skip deduction for any leave
-      if (form['meeting']?['attended'] == false) marks -= 1;
+      if (form['meeting']?['attended'] == false && form['meeting']?['noMeeting'] != true) marks -= 1;
     }
     if (marks < 0) marks = 0;
     return marks;
@@ -218,7 +218,7 @@ class _PerformanceScoreInnerPageState extends State<PerformanceScoreInnerPage> w
       }
       // Meeting deduction
       if (att != 'approved' && att != 'notApproved') {
-        if (form['meeting']?['attended'] == false) {
+        if (form['meeting']?['attended'] == false && form['meeting']?['noMeeting'] != true) {
           meeting -= 1;
           meetingReduced = true;
         }
@@ -310,7 +310,7 @@ class _PerformanceScoreInnerPageState extends State<PerformanceScoreInnerPage> w
         if (att == 'approved' || att == 'notApproved') {
           // skip deduction for any leave
         } else {
-          if (form['meeting']?['attended'] == false) meeting -= 1;
+          if (form['meeting']?['attended'] == false && form['meeting']?['noMeeting'] != true) meeting -= 1;
         }
 
         // Clamp to zero

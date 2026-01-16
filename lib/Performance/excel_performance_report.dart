@@ -207,11 +207,18 @@ Future<void> exportAndSendExcel(BuildContext context, {int? year, int? month}) a
         for (int d = 0; d < daysInMonth; d++) {
           final date = monthStart.add(Duration(days: d));
           final form = getFormForDate(forms, date);
-          bool attended = false;
+          String meetingCell = '-';
           if (form != null && form.isNotEmpty) {
-            attended = form['meeting']?['attended'] ?? false;
+            final meeting = form['meeting'];
+            if (meeting?['noMeeting'] == true) {
+              meetingCell = 'ⓘ No meeting';
+            } else if (meeting?['attended'] == true) {
+              meetingCell = '✔';
+            } else {
+              meetingCell = '✘';
+            }
           }
-          meetingRow.add(ex.TextCellValue(attended ? '✔' : '✘'));
+          meetingRow.add(ex.TextCellValue(meetingCell));
         }
         sheet.appendRow(meetingRow);
 

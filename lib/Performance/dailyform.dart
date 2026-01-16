@@ -37,6 +37,7 @@ class _PerformanceFormState extends State<PerformanceForm> {
 
   // Meeting
   bool meetingAttended = false;
+  bool meetingNoMeeting = false;
 
   String? selectedUserId;
   String? selectedUserName;
@@ -192,6 +193,8 @@ class _PerformanceFormState extends State<PerformanceForm> {
       },
       'meeting': {
         'attended': isLeave ? true : meetingAttended,
+        'noMeeting': isLeave ? false : meetingNoMeeting,
+        'meetingComment': isLeave ? '' : (meetingNoMeeting ? 'No meeting conducted' : ''),
       },
     });
 
@@ -466,10 +469,44 @@ class _PerformanceFormState extends State<PerformanceForm> {
 
                       Divider(),
                       Text('4) Meeting', style: TextStyle(fontWeight: FontWeight.bold)),
-                      CheckboxListTile(
-                        title: Text('Attended'),
-                        value: meetingAttended,
-                        onChanged: (isApprovedLeave || isUnapprovedLeave) ? null : (val) => setState(() => meetingAttended = val!),
+                      Row(
+                        children: [
+                          Checkbox(
+                            value: meetingAttended && !meetingNoMeeting,
+                            onChanged: (isApprovedLeave || isUnapprovedLeave)
+                                ? null
+                                : (val) {
+                                    setState(() {
+                                      if (val == true) {
+                                        meetingAttended = true;
+                                        meetingNoMeeting = false;
+                                      } else {
+                                        meetingAttended = false;
+                                        meetingNoMeeting = false;
+                                      }
+                                    });
+                                  },
+                          ),
+                          const Text('Attended'),
+                          const SizedBox(width: 24),
+                          Checkbox(
+                            value: meetingNoMeeting,
+                            onChanged: (isApprovedLeave || isUnapprovedLeave)
+                                ? null
+                                : (val) {
+                                    setState(() {
+                                      if (val == true) {
+                                        meetingNoMeeting = true;
+                                        meetingAttended = true;
+                                      } else {
+                                        meetingNoMeeting = false;
+                                        meetingAttended = false;
+                                      }
+                                    });
+                                  },
+                          ),
+                          const Text('No meeting conducted'),
+                        ],
                       ),
                       Divider(),
 

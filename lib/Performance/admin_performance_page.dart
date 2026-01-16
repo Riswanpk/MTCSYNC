@@ -352,6 +352,8 @@ class _AdminEditFormState extends State<_AdminEditForm> {
   late bool confirmPurchase;
   late bool offerHelp;
   late bool meetingAttended;
+  late bool meetingNoMeeting; // <-- Add this line
+
   // REMOVE performance fields
   // late bool? targetAchieved;
   // late bool? otherPerformance;
@@ -388,6 +390,7 @@ class _AdminEditFormState extends State<_AdminEditForm> {
     offerHelp = f['attitude']?['offerHelp'] ?? false;
     offerHelpLevel = f['attitude']?['offerHelpLevel'];
     meetingAttended = f['meeting']?['attended'] ?? false;
+    meetingNoMeeting = f['meeting']?['noMeeting'] ?? false; // <-- Add this line
     // REMOVE performance fields
     // targetAchieved = f['performance']?['target'];
     // otherPerformance = f['performance']?['otherPerformance'];
@@ -435,6 +438,7 @@ class _AdminEditFormState extends State<_AdminEditForm> {
       },
       'meeting': {
         'attended': meetingAttended,
+        'noMeeting': meetingNoMeeting, // <-- Add this line
       },
     });
     widget.onSaved();
@@ -613,13 +617,46 @@ class _AdminEditFormState extends State<_AdminEditForm> {
                 color: theme.colorScheme.secondary, // Green from theme
               ),
             ),
-            CheckboxListTile(
-              title: const Text('Attended'),
-              value: meetingAttended,
-              onChanged: (isApprovedLeave || isUnapprovedLeave)
-                  ? null
-                  : (val) => setState(() => meetingAttended = val!),
-              activeColor: colorScheme.primary,
+            Row(
+              children: [
+                Checkbox(
+                  value: meetingAttended && !meetingNoMeeting,
+                  onChanged: (isApprovedLeave || isUnapprovedLeave)
+                      ? null
+                      : (val) {
+                          setState(() {
+                            if (val == true) {
+                              meetingAttended = true;
+                              meetingNoMeeting = false;
+                            } else {
+                              meetingAttended = false;
+                              meetingNoMeeting = false;
+                            }
+                          });
+                        },
+                  activeColor: colorScheme.primary,
+                ),
+                const Text('Attended'),
+                const SizedBox(width: 24),
+                Checkbox(
+                  value: meetingNoMeeting,
+                  onChanged: (isApprovedLeave || isUnapprovedLeave)
+                      ? null
+                      : (val) {
+                          setState(() {
+                            if (val == true) {
+                              meetingNoMeeting = true;
+                              meetingAttended = true;
+                            } else {
+                              meetingNoMeeting = false;
+                              meetingAttended = false;
+                            }
+                          });
+                        },
+                  activeColor: colorScheme.primary,
+                ),
+                const Text('No meeting conducted'),
+              ],
             ),
             Divider(color: theme.dividerColor),
             // REMOVE Performance section from UI
