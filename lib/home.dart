@@ -487,9 +487,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
           builder: (context) => AlertDialog(
             title: const Text('Notice'),
             content: const Text(
-              'ToDo and Lead timings have changed!\n\n'
-              'You can now create ToDos and Leads from 12:00 PM yesterday to 11:59 AM today. '
-              'Please plan accordingly.',
+              'ToDo, Lead സമയക്രമങ്ങളിൽ മാറ്റം വന്നിരിക്കുന്നു!\n\n'
+              'ഇന്ന് ഉച്ചയ്ക്ക് 12:00 മുതൽ നാളെ ഉച്ചയ്ക്ക് 12:00 വരെ ക്രിയേറ്റ് ചെയ്യുന്ന ToDo & Lead നാളത്തെ കണക്കിലാകും ഉൾപ്പെടുത്തുക. '
+              'അതനുസരിച്ച് പ്ലാൻ ചെയ്യുക',
             ),
             actions: [
               TextButton(
