@@ -119,14 +119,25 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
             ? row[nameCol]!.value.toString().trim()
             : '';
 
-        String contact = row.length > contactCol && row[contactCol]?.value != null
+        String contactRaw = row.length > contactCol && row[contactCol]?.value != null
             ? row[contactCol]!.value.toString().trim()
             : '';
 
-        if (name.isNotEmpty && contact.isNotEmpty) {
+        // Split by comma, trim, and filter empty
+        List<String> contacts = contactRaw
+            .split(',')
+            .map((c) => c.trim())
+            .where((c) => c.isNotEmpty)
+            .toList();
+
+        String contact1 = contacts.isNotEmpty ? contacts[0] : '';
+        String contact2 = contacts.length > 1 ? contacts[1] : '';
+
+        if (name.isNotEmpty && contact1.isNotEmpty) {
           customers.add({
             'name': name,
-            'contact': contact,
+            'contact1': contact1,
+            'contact2': contact2,
             'remarks': '',
           });
         }
@@ -165,24 +176,42 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
       _success = null;
     });
     try {
-      // Get current month-year string, e.g., "Jan 2026"
       final now = DateTime.now();
       final monthYear = "${_monthName(now.month)} ${now.year}";
-
-      await FirebaseFirestore.instance
+      final docRef = FirebaseFirestore.instance
           .collection('customer_target')
           .doc(monthYear)
           .collection('users')
-          .doc(_selectedUserEmail)
-          .set({
+          .doc(_selectedUserEmail);
+
+      // Fetch existing customers
+      final docSnap = await docRef.get();
+      List<Map<String, dynamic>> existingCustomers = [];
+      if (docSnap.exists && docSnap.data()?['customers'] != null) {
+        existingCustomers = List<Map<String, dynamic>>.from(docSnap.data()!['customers']);
+      }
+
+      // Use a Set for fast lookup (by name + contact1)
+      final existingSet = existingCustomers
+          .map((c) => "${c['name']}_${c['contact1']}")
+          .toSet();
+
+      // Filter only new customers
+      final newCustomers = _customers!.where((c) =>
+          !existingSet.contains("${c['name']}_${c['contact1']}")).toList();
+
+      // Combine existing + new
+      final updatedCustomers = [...existingCustomers, ...newCustomers];
+
+      await docRef.set({
         'branch': _selectedBranch,
         'user': _selectedUserEmail,
-        'customers': _customers,
+        'customers': updatedCustomers,
         'updated': FieldValue.serverTimestamp(),
       });
 
       setState(() {
-        _success = "Customer target assigned for $_selectedUserEmail";
+        _success = "Customer target assigned. ${newCustomers.length} new customers added.";
       });
     } catch (e) {
       setState(() {
@@ -211,16 +240,16 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
       scrollDirection: Axis.horizontal,
       child: DataTable(
         columns: const [
-          // DataColumn(label: Text('Sl. No')), // removed
           DataColumn(label: Text('Customer Name')),
-          DataColumn(label: Text('Contact No.')),
+          DataColumn(label: Text('Contact No. 1')),
+          DataColumn(label: Text('Contact No. 2')),
         ],
         rows: _customers!
             .map((customer) => DataRow(
                   cells: [
-                    // DataCell(Text(customer['slno'] ?? '')), // removed
                     DataCell(Text(customer['name'] ?? '')),
-                    DataCell(Text(customer['contact'] ?? '')),
+                    DataCell(Text(customer['contact1'] ?? '')),
+                    DataCell(Text(customer['contact2'] ?? '')),
                   ],
                 ))
             .toList(),

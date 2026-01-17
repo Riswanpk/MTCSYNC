@@ -12,6 +12,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameCtrl = TextEditingController();
   final TextEditingController _contactCtrl = TextEditingController();
+  final TextEditingController _contact2Ctrl = TextEditingController();
   bool _loading = false;
   String? _error;
 
@@ -24,20 +25,32 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception("Not logged in");
-      final docId = user.email;
-      final docRef = FirebaseFirestore.instance.collection('customer_target').doc(docId);
-      final doc = await docRef.get();
+
+      final now = DateTime.now();
+      final monthYear = "${_monthName(now.month)} ${now.year}";
+      final docRef = FirebaseFirestore.instance
+          .collection('customer_target')
+          .doc(monthYear)
+          .collection('users')
+          .doc(user.email);
+
+      final docSnap = await docRef.get();
       List customers = [];
-      if (doc.exists && doc.data()?['customers'] != null) {
-        customers = List.from(doc.data()!['customers']);
+      if (docSnap.exists && docSnap.data()?['customers'] != null) {
+        customers = List.from(docSnap.data()!['customers']);
       }
       customers.add({
         'name': _nameCtrl.text.trim(),
-        'contact': _contactCtrl.text.trim(),
+        'contact1': _contactCtrl.text.trim(),
+        'contact2': _contact2Ctrl.text.trim(),
         'callMade': false,
         'remarks': '',
       });
-      await docRef.set({'customers': customers}, SetOptions(merge: true));
+      await docRef.set({
+        'user': user.email,
+        'customers': customers,
+        'updated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
       Navigator.pop(context, true);
     } catch (e) {
       setState(() {
@@ -48,6 +61,15 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
         _loading = false;
       });
     }
+  }
+
+  // Helper to get month name
+  String _monthName(int month) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return months[month - 1];
   }
 
   @override
@@ -77,7 +99,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _contactCtrl,
-                decoration: const InputDecoration(labelText: 'Contact Number'),
+                decoration: const InputDecoration(labelText: 'Contact Number 1'),
                 keyboardType: TextInputType.number,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
@@ -86,6 +108,20 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Enter contact';
                   if (v.length != 10) return 'Enter exactly 10 digits';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _contact2Ctrl,
+                decoration: const InputDecoration(labelText: 'Contact Number 2 (optional)'),
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(10),
+                ],
+                validator: (v) {
+                  if (v != null && v.isNotEmpty && v.length != 10) return 'Enter exactly 10 digits';
                   return null;
                 },
               ),

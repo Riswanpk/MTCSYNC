@@ -158,6 +158,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
 
     _fetchAndCacheContacts();
     _printCustomClaims(); // <-- Add this line
+    _showTodoLeadTimingChangeMessageIfNeeded(); // Add this line
   }
 
   Future<void> _loadProfileImage() async {
@@ -473,6 +474,33 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
     } else {
       final idTokenResult = await user.getIdTokenResult();
       print("Custom claims: ${idTokenResult.claims}");
+    }
+  }
+
+  Future<void> _showTodoLeadTimingChangeMessageIfNeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    final shownCount = prefs.getInt('todo_lead_timing_change_shown') ?? 0;
+    if (shownCount < 2) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Notice'),
+            content: const Text(
+              'ToDo and Lead timings have changed!\n\n'
+              'You can now create ToDos and Leads from 12:00 PM yesterday to 11:59 AM today. '
+              'Please plan accordingly.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      });
+      await prefs.setInt('todo_lead_timing_change_shown', shownCount + 1);
     }
   }
 

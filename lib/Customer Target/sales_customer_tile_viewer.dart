@@ -45,7 +45,32 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     super.dispose();
   }
 
-  Future<void> _makeCall(BuildContext context, String contact) async {
+  Future<void> _makeCall(BuildContext context, String contact1, [String? contact2]) async {
+    String? numberToCall = contact1;
+    if (contact2 != null && contact2.isNotEmpty) {
+      // Ask user which number to call
+      numberToCall = await showDialog<String>(
+        context: context,
+        builder: (ctx) => SimpleDialog(
+          title: const Text('Select Number to Call'),
+          children: [
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, contact1),
+              child: Text(contact1),
+            ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, contact2),
+              child: Text(contact2),
+            ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, null),
+              child: const Text('Cancel', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        ),
+      );
+      if (numberToCall == null) return;
+    }
     var status = await Permission.phone.request();
     if (!status.isGranted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -53,9 +78,9 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
       );
       return;
     }
-    final uri = Uri(scheme: 'tel', path: contact);
+    final uri = Uri(scheme: 'tel', path: numberToCall);
     if (await canLaunchUrl(uri)) {
-      _pendingCallNumber = contact;
+      _pendingCallNumber = numberToCall;
       _callStartTime = DateTime.now();
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
@@ -80,13 +105,15 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
         dateFrom: _callStartTime!.millisecondsSinceEpoch,
         dateTo: now.millisecondsSinceEpoch,
       );
+      // Accept call to either contact1 or contact2
+      String? c1 = customer['contact1'] ?? customer['contact'];
+      String? c2 = customer['contact2'];
       bool callMade = entries.any((entry) {
         String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
-        String pendingNumber = _pendingCallNumber!.replaceAll(RegExp(r'\D'), '');
-        // Check if call was connected (duration > 0)
-        bool numberMatches = logNumber.endsWith(pendingNumber) || pendingNumber.endsWith(logNumber);
         bool wasConnected = (entry.duration ?? 0) > 0;
-        return numberMatches && wasConnected;
+        bool matches1 = c1 != null && logNumber.endsWith(c1.replaceAll(RegExp(r'\D'), ''));
+        bool matches2 = c2 != null && c2.isNotEmpty && logNumber.endsWith(c2.replaceAll(RegExp(r'\D'), ''));
+        return (matches1 || matches2) && wasConnected;
       });
       if (callMade) {
         setState(() {
@@ -95,7 +122,6 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
         });
         _pendingCallNumber = null;
         _callStartTime = null;
-        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Call detected! Please add remarks.'),
@@ -103,8 +129,6 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
             duration: Duration(seconds: 2),
           ),
         );
-        
-        // Auto-scroll to remarks field
         Future.delayed(const Duration(milliseconds: 300), () {
           Scrollable.ensureVisible(
             context,
@@ -240,8 +264,10 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
-      final contact = customer['contact'];
-      if (contact == null) return;
+      // Support both contact1/contact2 and contact
+      final contact1 = customer['contact1'] ?? customer['contact'];
+      final contact2 = customer['contact2'];
+      if ((contact1 == null || contact1.isEmpty) && (contact2 == null || contact2.isEmpty)) return;
 
       // Get previous month and year
       final now = DateTime.now();
@@ -259,10 +285,21 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
           .get();
       if (doc.exists && doc.data()?['customers'] != null) {
         final List customers = doc.data()!['customers'];
-        final prevCustomer = customers.firstWhere(
-          (c) => c['contact'] == contact,
-          orElse: () => null,
-        );
+        // Try to find by contact1, then contact2
+        dynamic prevCustomer;
+        if (contact1 != null && contact1.isNotEmpty) {
+          prevCustomer = customers.firstWhere(
+            (c) => c['contact'] == contact1,
+            orElse: () => null,
+          );
+        }
+        if ((prevCustomer == null || prevCustomer['remarks'] == null || prevCustomer['remarks'].toString().trim().isEmpty) &&
+            contact2 != null && contact2.isNotEmpty) {
+          prevCustomer = customers.firstWhere(
+            (c) => c['contact'] == contact2,
+            orElse: () => null,
+          );
+        }
         if (prevCustomer != null && prevCustomer['remarks'] != null && prevCustomer['remarks'].toString().trim().isNotEmpty) {
           setState(() {
             _lastRemarks = prevCustomer['remarks'];
@@ -288,29 +325,28 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    // Swap blue and green if called
     final Color blue = const Color(0xFF005BAC);
     final Color green = const Color.fromARGB(255, 108, 185, 13);
-    final primaryColor = called
-        ? (isDark ? blue : green)
-        : (isDark ? green : blue);
+    final primaryColor = called ? green : blue;
+    final swappedColor = called ? green : blue;
 
-    final swappedColor = called
-        ? (isDark ? green : blue)
-        : (isDark ? blue : green);
-
-    String? contactNumber;
-    String? customerName;
+    String? contact1 = customer['contact1'] ?? customer['contact'];
+    String? contact2 = customer['contact2'];
+    String? customerName = customer['name'];
     List<MapEntry<String, dynamic>> fields = [];
-    
+
+    // Add contact numbers as the first fields in details
+    if (contact1 != null && contact1.isNotEmpty) {
+      fields.add(MapEntry('contact_no_1', contact1));
+    }
+    if (contact2 != null && contact2.isNotEmpty) {
+      fields.add(MapEntry('contact_no_2', contact2));
+    }
+
     customer.forEach((key, value) {
-      if (key == 'slno' || key == 'remarks' || key == 'callMade') return;
-      if (key == 'contact') {
-        contactNumber = value?.toString();
-        fields.add(MapEntry(key, value)); // Add contact to details
-      } else if (key == 'name') {
-        customerName = value?.toString();
-        // Do NOT add name to fields (removes name box from details)
+      if (key == 'slno' || key == 'remarks' || key == 'callMade' || key == 'contact' || key == 'contact1' || key == 'contact2') return;
+      if (key == 'name') {
+        // handled separately
       } else {
         fields.add(MapEntry(key, value));
       }
@@ -366,7 +402,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                       const SizedBox(height: 16),
                       if (customerName != null) ...[
                         Text(
-                          customerName!,
+                          customerName,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 24,
@@ -375,7 +411,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 16),
-                        if (contactNumber != null)
+                        if (contact1 != null && contact1.isNotEmpty)
                           called
                               // Call Completed: white background, swapped color text
                               ? ClipRRect(
@@ -427,7 +463,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                                     child: Material(
                                       color: Colors.transparent,
                                       child: InkWell(
-                                        onTap: () => _makeCall(context, contactNumber!),
+                                        onTap: () => _makeCall(context, contact1, contact2),
                                         child: Padding(
                                           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
                                           child: Row(
@@ -518,7 +554,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
               ),
               const SizedBox(height: 8),
 
-              // Details Cards (name field removed)
+              // Details Cards (now includes contact numbers at the top)
               ...fields.map((entry) => Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 padding: const EdgeInsets.all(16),

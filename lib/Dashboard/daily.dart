@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../Todo & Leads/todo_leads_full_month.dart';
 
 class DailyDashboardPage extends StatefulWidget {
   const DailyDashboardPage({super.key});
@@ -121,6 +122,22 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
         title: const Text('Leads Today'),
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
+        actions: [
+          if (_role == 'admin')
+            IconButton(
+              icon: const Icon(Icons.download),
+              tooltip: 'Download Report',
+              onPressed: () async {
+                // Navigate to the report page
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const TodoLeadsFullMonthPage(),
+                  ),
+                );
+              },
+            ),
+        ],
       ),
       body: Column(
         children: [
