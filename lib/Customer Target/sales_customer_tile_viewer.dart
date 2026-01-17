@@ -82,6 +82,10 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     if (await canLaunchUrl(uri)) {
       _pendingCallNumber = numberToCall;
       _callStartTime = DateTime.now();
+      // Store the called number for leads
+      setState(() {
+        customer['lastCalledNumber'] = numberToCall;
+      });
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -161,7 +165,8 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
 
   Future<void> _editCustomerDialog() async {
     final nameController = TextEditingController(text: customer['name'] ?? '');
-    final contactController = TextEditingController(text: customer['contact'] ?? '');
+    final contact1Controller = TextEditingController(text: customer['contact1'] ?? customer['contact'] ?? '');
+    final contact2Controller = TextEditingController(text: customer['contact2'] ?? '');
     final formKey = GlobalKey<FormState>();
     bool loading = false;
     String? error;
@@ -189,8 +194,8 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
-                    controller: contactController,
-                    decoration: const InputDecoration(labelText: 'Contact Number'),
+                    controller: contact1Controller,
+                    decoration: const InputDecoration(labelText: 'Contact Number 1'),
                     keyboardType: TextInputType.number,
                     inputFormatters: [
                       FilteringTextInputFormatter.digitsOnly,
@@ -199,6 +204,20 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) return 'Enter contact';
                       if (v.length != 10) return 'Enter exactly 10 digits';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: contact2Controller,
+                    decoration: const InputDecoration(labelText: 'Contact Number 2 (optional)'),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(10),
+                    ],
+                    validator: (v) {
+                      if (v != null && v.isNotEmpty && v.length != 10) return 'Enter exactly 10 digits';
                       return null;
                     },
                   ),
@@ -220,21 +239,38 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                           // Update local state
                           this.setState(() {
                             customer['name'] = nameController.text.trim();
-                            customer['contact'] = contactController.text.trim();
+                            customer['contact1'] = contact1Controller.text.trim();
+                            customer['contact2'] = contact2Controller.text.trim();
+                            // For backward compatibility, set 'contact' to contact1
+                            customer['contact'] = contact1Controller.text.trim();
                           });
                           // Update Firestore
                           final user = FirebaseAuth.instance.currentUser;
                           if (user != null) {
                             final docId = user.email;
-                            final docRef = FirebaseFirestore.instance.collection('customer_target').doc(docId);
+                            // Get current month-year string, e.g., "Jan 2026"
+                            final now = DateTime.now();
+                            final months = [
+                              'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+                            ];
+                            final monthYear = "${months[now.month - 1]} ${now.year}";
+                            final docRef = FirebaseFirestore.instance
+                                .collection('customer_target')
+                                .doc(monthYear)
+                                .collection('users')
+                                .doc(docId);
                             final doc = await docRef.get();
                             if (doc.exists && doc.data()?['customers'] != null) {
                               List customers = List.from(doc.data()!['customers']);
                               int idx = customers.indexWhere((c) =>
-                                  (c['name'] == widget.customer['name'] && c['contact'] == widget.customer['contact']));
+                                  (c['name'] == widget.customer['name'] &&
+                                   (c['contact1'] ?? c['contact']) == (widget.customer['contact1'] ?? widget.customer['contact'])));
                               if (idx != -1) {
                                 customers[idx]['name'] = nameController.text.trim();
-                                customers[idx]['contact'] = contactController.text.trim();
+                                customers[idx]['contact1'] = contact1Controller.text.trim();
+                                customers[idx]['contact2'] = contact2Controller.text.trim();
+                                customers[idx]['contact'] = contact1Controller.text.trim();
                                 await docRef.update({'customers': customers});
                               }
                             }
@@ -767,8 +803,8 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                       child: InkWell(
                         onTap: called && remarksEntered
                             ? () async {
-                                // Fetch customer details from Firestore if exists
-                                String? phone = customer['contact'] ?? customer['phone'];
+                                // Always use lastCalledNumber for leads
+                                String? phone = customer['lastCalledNumber'] ?? customer['contact1'] ?? customer['contact'] ?? customer['phone'];
                                 String? name = customer['name'];
                                 Map<String, dynamic>? customerData;
 
@@ -791,8 +827,6 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
                                     builder: (context) => FollowUpForm(
-                                      // Pass initial values using a constructor or static method
-                                      // You may need to add these parameters to FollowUpForm
                                       key: UniqueKey(),
                                       initialName: prefillName,
                                       initialPhone: prefillPhone,
