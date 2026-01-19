@@ -24,6 +24,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
   DateTime? _callStartTime;
   String? _lastRemarks;
   bool _loadingLastRemarks = false;
+  bool _remarksSaved = false; // Add this flag
 
   @override
   void initState() {
@@ -33,7 +34,9 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     called = customer['callMade'] == true;
     remarksController.text = customer['remarks'] ?? '';
     remarksController.addListener(() {
-      setState(() {}); // Rebuild to update save button state
+      setState(() {
+        _remarksSaved = false; // Reset flag when remarks change
+      });
     });
     _fetchLastRemarks();
   }
@@ -165,6 +168,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
 
   Future<void> _editCustomerDialog() async {
     final nameController = TextEditingController(text: customer['name'] ?? '');
+    final addressController = TextEditingController(text: customer['address'] ?? '');
     final contact1Controller = TextEditingController(text: customer['contact1'] ?? customer['contact'] ?? '');
     final contact2Controller = TextEditingController(text: customer['contact2'] ?? '');
     final formKey = GlobalKey<FormState>();
@@ -191,6 +195,12 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                     controller: nameController,
                     decoration: const InputDecoration(labelText: 'Customer Name'),
                     validator: (v) => v == null || v.trim().isEmpty ? 'Enter name' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: addressController,
+                    decoration: const InputDecoration(labelText: 'Address'),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Enter address' : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -239,16 +249,15 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                           // Update local state
                           this.setState(() {
                             customer['name'] = nameController.text.trim();
+                            customer['address'] = addressController.text.trim();
                             customer['contact1'] = contact1Controller.text.trim();
                             customer['contact2'] = contact2Controller.text.trim();
-                            // For backward compatibility, set 'contact' to contact1
                             customer['contact'] = contact1Controller.text.trim();
                           });
                           // Update Firestore
                           final user = FirebaseAuth.instance.currentUser;
                           if (user != null) {
                             final docId = user.email;
-                            // Get current month-year string, e.g., "Jan 2026"
                             final now = DateTime.now();
                             final months = [
                               'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -268,6 +277,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                                    (c['contact1'] ?? c['contact']) == (widget.customer['contact1'] ?? widget.customer['contact'])));
                               if (idx != -1) {
                                 customers[idx]['name'] = nameController.text.trim();
+                                customers[idx]['address'] = addressController.text.trim();
                                 customers[idx]['contact1'] = contact1Controller.text.trim();
                                 customers[idx]['contact2'] = contact2Controller.text.trim();
                                 customers[idx]['contact'] = contact1Controller.text.trim();
@@ -369,6 +379,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     String? contact1 = customer['contact1'] ?? customer['contact'];
     String? contact2 = customer['contact2'];
     String? customerName = customer['name'];
+    String? address = customer['address'];
     List<MapEntry<String, dynamic>> fields = [];
 
     // Add contact numbers as the first fields in details
@@ -379,8 +390,13 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
       fields.add(MapEntry('contact_no_2', contact2));
     }
 
+    // Add address as a field just after contact numbers
+    if (address != null && address.isNotEmpty) {
+      fields.add(MapEntry('address', address));
+    }
+
     customer.forEach((key, value) {
-      if (key == 'slno' || key == 'remarks' || key == 'callMade' || key == 'contact' || key == 'contact1' || key == 'contact2') return;
+      if (key == 'slno' || key == 'remarks' || key == 'callMade' || key == 'contact' || key == 'contact1' || key == 'contact2' || key == 'address' || key == 'lastCalledNumber') return;
       if (key == 'name') {
         // handled separately
       } else {
@@ -751,6 +767,9 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                                 if (widget.onStatusChanged != null) {
                                   await widget.onStatusChanged!(customer['remarks']);
                                 }
+                                setState(() {
+                                  _remarksSaved = true; // Set flag after save
+                                });
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(content: Text('Remarks saved.'), backgroundColor: Colors.green),
                                 );
@@ -786,7 +805,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
                     decoration: BoxDecoration(
-                      gradient: remarksEntered
+                      gradient: (_remarksSaved && remarksEntered)
                           ? LinearGradient(
                               colors: [
                                 primaryColor,
@@ -796,16 +815,17 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                               end: Alignment.bottomRight,
                             )
                           : null,
-                      color: remarksEntered ? null : Colors.grey[400],
+                      color: (_remarksSaved && remarksEntered) ? null : Colors.grey[400],
                     ),
                     child: Material(
                       color: Colors.transparent,
                       child: InkWell(
-                        onTap: called && remarksEntered
+                        onTap: (called && remarksEntered && _remarksSaved)
                             ? () async {
                                 // Always use lastCalledNumber for leads
                                 String? phone = customer['lastCalledNumber'] ?? customer['contact1'] ?? customer['contact'] ?? customer['phone'];
                                 String? name = customer['name'];
+                                String? address = customer['address'];
                                 Map<String, dynamic>? customerData;
 
                                 if (phone != null && phone.isNotEmpty) {
@@ -819,10 +839,9 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                                   }
                                 }
 
-                                // Use Firestore data if exists, else fallback to current
                                 final prefillName = customerData?['name'] ?? name ?? '';
                                 final prefillPhone = customerData?['phone'] ?? phone ?? '';
-                                final prefillAddress = customerData?['address'] ?? '';
+                                final prefillAddress = customerData?['address'] ?? address ?? '';
 
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
@@ -841,12 +860,12 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.add, color: remarksEntered ? Colors.white : Colors.white70),
+                              Icon(Icons.add, color: (_remarksSaved && remarksEntered) ? Colors.white : Colors.white70),
                               const SizedBox(width: 8),
                               Text(
                                 'Add To Leads',
                                 style: TextStyle(
-                                  color: remarksEntered ? Colors.white : Colors.white70,
+                                  color: (_remarksSaved && remarksEntered) ? Colors.white : Colors.white70,
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
                                 ),

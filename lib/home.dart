@@ -479,7 +479,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
 
   Future<void> _showTodoLeadTimingChangeMessageIfNeeded() async {
     final prefs = await SharedPreferences.getInstance();
-    final shownCount = prefs.getInt('todo_lead_timing_change_shown') ?? 0;
+    final shownCount = prefs.getInt('todo_lead_timing_change_show') ?? 0;
     if (shownCount < 2) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         showDialog(
@@ -500,7 +500,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin, Rout
           ),
         );
       });
-      await prefs.setInt('todo_lead_timing_change_shown', shownCount + 1);
+      await prefs.setInt('todo_lead_timing_change_show', shownCount + 1);
     }
   }
 

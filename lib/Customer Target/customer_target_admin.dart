@@ -88,6 +88,7 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
 
       int? nameCol;
       int? contactCol;
+      int? addressCol;
 
       for (int i = 0; i < headerRow.length; i++) {
         final header = headerRow[i]?.value?.toString().toLowerCase().trim();
@@ -103,10 +104,14 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
             header.contains('contact')) {
           contactCol ??= i;
         }
+
+        if (header.contains('address')) {
+          addressCol ??= i;
+        }
       }
 
-      if (nameCol == null || contactCol == null) {
-        throw Exception("Required columns not found (Name / Contact)");
+      if (nameCol == null || contactCol == null || addressCol == null) {
+        throw Exception("Required columns not found (Name / Address / Contact)");
       }
 
       // ---- READ DATA ROWS ----
@@ -117,6 +122,10 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
 
         String name = row.length > nameCol && row[nameCol]?.value != null
             ? row[nameCol]!.value.toString().trim()
+            : '';
+
+        String address = row.length > addressCol && row[addressCol]?.value != null
+            ? row[addressCol]!.value.toString().trim()
             : '';
 
         String contactRaw = row.length > contactCol && row[contactCol]?.value != null
@@ -136,6 +145,7 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
         if (name.isNotEmpty && contact1.isNotEmpty) {
           customers.add({
             'name': name,
+            'address': address,
             'contact1': contact1,
             'contact2': contact2,
             'remarks': '',
@@ -241,6 +251,7 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
       child: DataTable(
         columns: const [
           DataColumn(label: Text('Customer Name')),
+          DataColumn(label: Text('Address')),
           DataColumn(label: Text('Contact No. 1')),
           DataColumn(label: Text('Contact No. 2')),
         ],
@@ -248,6 +259,7 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
             .map((customer) => DataRow(
                   cells: [
                     DataCell(Text(customer['name'] ?? '')),
+                    DataCell(Text(customer['address'] ?? '')),
                     DataCell(Text(customer['contact1'] ?? '')),
                     DataCell(Text(customer['contact2'] ?? '')),
                   ],

@@ -11,6 +11,7 @@ class AddCustomerPage extends StatefulWidget {
 class _AddCustomerPageState extends State<AddCustomerPage> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameCtrl = TextEditingController();
+  final TextEditingController _addressCtrl = TextEditingController();
   final TextEditingController _contactCtrl = TextEditingController();
   final TextEditingController _contact2Ctrl = TextEditingController();
   bool _loading = false;
@@ -41,6 +42,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
       }
       customers.add({
         'name': _nameCtrl.text.trim(),
+        'address': _addressCtrl.text.trim(),
         'contact1': _contactCtrl.text.trim(),
         'contact2': _contact2Ctrl.text.trim(),
         'callMade': false,
@@ -95,6 +97,12 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                 controller: _nameCtrl,
                 decoration: const InputDecoration(labelText: 'Customer Name'),
                 validator: (v) => v == null || v.trim().isEmpty ? 'Enter name' : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _addressCtrl,
+                decoration: const InputDecoration(labelText: 'Address'),
+                validator: (v) => v == null || v.trim().isEmpty ? 'Enter address' : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
