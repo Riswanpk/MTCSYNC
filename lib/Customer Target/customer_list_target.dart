@@ -222,8 +222,48 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
               title: Text('Customer List', style: TextStyle(color: Colors.white)),
               backgroundColor: isDark ? primaryBlue : primaryGreen,
               iconTheme: const IconThemeData(color: Colors.white),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.add),
+                  tooltip: 'Add Customer',
+                  onPressed: () async {
+                    final added = await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => AddCustomerPage()),
+                    );
+                    if (added == true) {
+                      _fetchCustomerData();
+                    }
+                  },
+                ),
+              ],
             ),
-            body: Center(child: Text('No data', style: TextStyle(color: textColor))),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('No data', style: TextStyle(color: textColor)),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Customer'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryBlue,
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: () async {
+                      final added = await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => AddCustomerPage()),
+                      );
+                      if (added == true) {
+                        _fetchCustomerData();
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
           );
         }
 

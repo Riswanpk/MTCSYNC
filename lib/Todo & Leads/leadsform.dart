@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
+
 import 'leads.dart'; // Make sure this import exists
 import '../../Dashboard/leadscount.dart'; // <-- Add this import
 
@@ -293,6 +294,16 @@ class _FollowUpFormState extends State<FollowUpForm> {
     await prefs.remove(FollowUpForm.DRAFT_KEY);
   }
 
+  // Add this helper to format phone numbers
+  String formatIndianPhone(String raw) {
+    final digits = RegExp(r'\d').allMatches(raw).map((m) => m.group(0)).join();
+    if (digits.length >= 10) {
+      final tenDigits = digits.substring(digits.length - 10);
+      return '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
+    }
+    return '+91 ';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -311,8 +322,9 @@ class _FollowUpFormState extends State<FollowUpForm> {
     if (widget.initialName != null && widget.initialName!.isNotEmpty) {
       _nameController.text = widget.initialName!;
     }
+    // If initialPhone is provided, always format it correctly
     if (widget.initialPhone != null && widget.initialPhone!.isNotEmpty) {
-      _phoneController.text = widget.initialPhone!;
+      _phoneController.text = formatIndianPhone(widget.initialPhone!);
     }
     if (widget.initialAddress != null && widget.initialAddress!.isNotEmpty) {
       _addressController.text = widget.initialAddress!;
@@ -454,7 +466,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                             _addressController.text =
                                 selectedCustomer['address'] ?? '';
                             _phoneController.text =
-                                selectedCustomer['phone'] ?? '';
+                                formatIndianPhone(selectedCustomer['phone'] ?? '');
                           });
                         },
                       );
@@ -664,7 +676,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                       setState(() {
                         _nameController.text = selectedCustomer['name'] ?? '';
                         _addressController.text = selectedCustomer['address'] ?? '';
-                        _phoneController.text = selectedCustomer['phone'] ?? '';
+                        _phoneController.text = formatIndianPhone(selectedCustomer['phone'] ?? '');
                       });
                     },
                   ),
