@@ -29,17 +29,25 @@ Future<void> resetCustomerTargetsForNewMonth() async {
     final prevData = userDoc.data();
     final prevCustomers = prevData['customers'] as List<dynamic>? ?? [];
 
-    // Prepare new customers list: clear remarks and callMade
+    // Prepare new customers list: clear remarks and callMade, ensure new fields
     final newCustomers = prevCustomers.map((customer) {
       final map = Map<String, dynamic>.from(customer);
       map['remarks'] = '';
       map['callMade'] = false;
+      map['contact1'] = map['contact1'] ?? map['contact'] ?? '';
+      map['contact2'] = map['contact2'] ?? '';
+      map['address'] = map['address'] ?? '';
+      map.remove('contact');
       return map;
     }).toList();
 
-    // Copy other fields if needed (e.g., branch, user)
+    // Always set branch and user fields at the user doc level
+    final branch = prevData['branch'] ?? '';
+    final user = prevData['user'] ?? userDoc.id;
+
     final newData = {
-      ...prevData,
+      'branch': branch,
+      'user': user,
       'customers': newCustomers,
       'updated': FieldValue.serverTimestamp(),
     };
