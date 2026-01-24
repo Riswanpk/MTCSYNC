@@ -13,6 +13,7 @@ class ManageUsersPage extends StatefulWidget {
 }
 
 class _ManageUsersPageState extends State<ManageUsersPage> {
+    bool _filterByVersion = false;
   final List<String> _roles = ['sales', 'manager', 'admin'];
   String? _currentUserId;
   String _searchQuery = ''; // <-- Add this line
@@ -202,68 +203,117 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
     showDialog(
       context: context,
       builder: (context) {
-        return FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
-          future: _fetchUserVersionsByBranch(),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              return const AlertDialog(
-                title: Text('User Versions'),
-                content: SizedBox(height: 100, child: Center(child: CircularProgressIndicator())),
-              );
-            }
-            final branchMap = snapshot.data!;
-            // Exclude the "admin" branch and sort the rest
-            final sortedBranchEntries = branchMap.entries
-                .where((entry) => entry.key.toLowerCase() != 'admin')
-                .toList()
-              ..sort((a, b) => a.key.compareTo(b.key));
-            return AlertDialog(
-              title: const Text('User Versions'),
-              content: SizedBox(
-                width: 350,
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: sortedBranchEntries.map((entry) {
-                      final branch = entry.key;
-                      final users = entry.value;
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8.0),
-                            child: Text(
-                              branch,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                color: Colors.blue,
-                              ),
-                            ),
-                          ),
-                          ...users.map((user) => ListTile(
-                                dense: true,
-                                contentPadding: EdgeInsets.zero,
-                                title: Text(user['username'] ?? ''),
-                                subtitle: Text(user['email'] ?? ''),
-                                trailing: Text(
-                                  user['version'] ?? 'N/A',
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                              )),
-                          const Divider(),
-                        ],
-                      );
-                    }).toList(),
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
+              future: _fetchUserVersionsByBranch(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const AlertDialog(
+                    title: Text('User Versions'),
+                    content: SizedBox(height: 100, child: Center(child: CircularProgressIndicator())),
+                  );
+                }
+                final branchMap = snapshot.data!;
+                // Exclude the "admin" branch and sort the rest
+                final sortedBranchEntries = branchMap.entries
+                    .where((entry) => entry.key.toLowerCase() != 'admin')
+                    .toList()
+                  ..sort((a, b) => a.key.compareTo(b.key));
+
+                // Get latest version from app_constants.dart
+                const String latestVersion = '1.2.98';
+
+                return AlertDialog(
+                  title: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('User Versions'),
+                      IconButton(
+                        icon: Icon(_filterByVersion ? Icons.filter_alt : Icons.filter_alt_outlined, color: Colors.blue),
+                        tooltip: _filterByVersion ? 'Show Unsorted' : 'Sort by Version',
+                        onPressed: () {
+                          setStateDialog(() {
+                            _filterByVersion = !_filterByVersion;
+                          });
+                        },
+                      ),
+                    ],
                   ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Close'),
-                ),
-              ],
+                  content: SizedBox(
+                    width: 350,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: sortedBranchEntries.map((entry) {
+                          final branch = entry.key;
+                          List<Map<String, dynamic>> users = List<Map<String, dynamic>>.from(entry.value);
+                          if (_filterByVersion) {
+                            users.sort((a, b) {
+                              String vA = a['version'] ?? '';
+                              String vB = b['version'] ?? '';
+                              // Place latest version at the end (ascending order)
+                              int parseVersion(String v) {
+                                // Converts version string to int for comparison, e.g. 1.2.98 -> 000100020098
+                                return int.tryParse(v.replaceAll('.', '').padLeft(8, '0')) ?? 0;
+                              }
+                              return parseVersion(vA).compareTo(parseVersion(vB));
+                            });
+                          }
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                child: Text(
+                                  branch,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                              ),
+                              ...users.map((user) => ListTile(
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    title: Text(user['username'] ?? ''),
+                                    subtitle: Text(user['email'] ?? ''),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          user['version'] ?? 'N/A',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: (user['version'] == latestVersion)
+                                                ? Colors.green
+                                                : null,
+                                          ),
+                                        ),
+                                        if (user['version'] == latestVersion)
+                                          const Padding(
+                                            padding: EdgeInsets.only(left: 4.0),
+                                            child: Icon(Icons.check_circle, color: Colors.green, size: 18),
+                                          ),
+                                      ],
+                                    ),
+                                  )),
+                              const Divider(),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Close'),
+                    ),
+                  ],
+                );
+              },
             );
           },
         );
