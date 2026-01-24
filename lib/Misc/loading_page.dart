@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import '../widgets/home_widgets.dart';
 
+/// Loading page displayed during navigation transitions.
+/// Uses the shared RotatingLogo widget for consistent animation.
 class LoadingPage extends StatelessWidget {
   const LoadingPage({super.key});
 
@@ -8,56 +11,67 @@ class LoadingPage extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF181A20) : Colors.white,
-      body: Center(
-        child: _RotatingLogo(),
+      body: const Center(
+        child: RotatingLogo(),
       ),
     );
   }
 }
 
-class _RotatingLogo extends StatefulWidget {
-  const _RotatingLogo();
+/// A wrapper that shows a loading overlay on top while the child page loads.
+/// This allows the actual page to start building in the background.
+class LoadingOverlayPage extends StatefulWidget {
+  final Widget child;
+  final Duration minLoadTime;
+
+  const LoadingOverlayPage({
+    super.key,
+    required this.child,
+    this.minLoadTime =
+        const Duration(milliseconds: 500), // loading overlay 500ms
+  });
 
   @override
-  State<_RotatingLogo> createState() => _RotatingLogoState();
+  State<LoadingOverlayPage> createState() => _LoadingOverlayPageState();
 }
 
-class _RotatingLogoState extends State<_RotatingLogo> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
+class _LoadingOverlayPageState extends State<LoadingOverlayPage> {
+  bool _showOverlay = true;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat();
+    _hideOverlayAfterDelay();
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  Future<void> _hideOverlayAfterDelay() async {
+    await Future.delayed(widget.minLoadTime);
+    if (mounted) {
+      setState(() => _showOverlay = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return Transform(
-          alignment: Alignment.center,
-          transform: Matrix4.identity()
-            ..setEntry(3, 2, 0.001)
-            ..rotateY(_controller.value * 2 * 3.1415926535),
-          child: child,
-        );
-      },
-      child: Image.asset(
-        'assets/images/logo.png',
-        width: 200,
-        height: 200,
-      ),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Stack(
+      children: [
+        // The actual page loads underneath
+        widget.child,
+        // Loading overlay on top
+        if (_showOverlay)
+          AnimatedOpacity(
+            opacity: _showOverlay ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 300),
+            child: Container(
+              color: isDark ? const Color(0xFF181A20) : Colors.white,
+              child: const Center(
+                child: RotatingLogo(),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
