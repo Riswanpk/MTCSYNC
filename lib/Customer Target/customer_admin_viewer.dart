@@ -24,6 +24,8 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
   List<Map<String, dynamic>>? _customers;
   bool _loading = false;
   String? _error;
+  bool _sortCalledFirst = true;
+  bool _dropdownsVisible = true;
 
   final List<String> _monthYears = List.generate(
     12,
@@ -141,7 +143,7 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
         return Scaffold(
           backgroundColor: bgColor,
           appBar: AppBar(
-            title: Text('Customer Target Progress Viewer', style: TextStyle(color: Colors.white)),
+            title: Text('Customer List', style: TextStyle(color: Colors.white)),
             backgroundColor: isDark ? primaryGreen : primaryBlue,
             iconTheme: const IconThemeData(color: Colors.white),
             actions: [
@@ -172,84 +174,121 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
               : Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // --- Month-Year Dropdown ---
-                      DropdownButtonFormField<String>(
-                        value: _selectedMonthYear,
-                        hint: Text('Select Month', style: TextStyle(color: primaryBlue)),
-                        items: _monthYears
-                            .map((m) => DropdownMenuItem(value: m, child: Text(m, style: TextStyle(color: primaryBlue))))
-                            .toList(),
-                        onChanged: (val) {
-                          setState(() {
-                            _selectedMonthYear = val;
-                            _customers = null;
-                          });
-                          if (val != null && _selectedUserEmail != null) _fetchCustomerTarget();
-                        },
-                        dropdownColor: cardColor,
-                      ),
-                      const SizedBox(height: 16),
-                      // --- Branch Dropdown ---
-                      if (!widget.hideBranchDropdown)
-                        DropdownButtonFormField<String>(
-                          value: _branches.contains(_selectedBranch) ? _selectedBranch : null,
-                          hint: Text('Select Branch', style: TextStyle(color: primaryGreen)),
-                          items: _branches.isNotEmpty
-                              ? _branches
-                                  .map((b) => DropdownMenuItem(value: b, child: Text(b, style: TextStyle(color: primaryGreen))))
-                                  .toList()
-                              : [
-                                  DropdownMenuItem(
-                                    value: null,
-                                    child: Text('No branches found', style: TextStyle(color: primaryGreen)),
+                      // --- Collapsible Dropdowns ---
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeInOut,
+                        child: _dropdownsVisible
+                            ? Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // --- Month-Year Dropdown ---
+                                  DropdownButtonFormField<String>(
+                                    value: _selectedMonthYear,
+                                    hint: Text('Select Month', style: TextStyle(color: primaryBlue)),
+                                    items: _monthYears
+                                        .map((m) => DropdownMenuItem(value: m, child: Text(m, style: TextStyle(color: primaryBlue))))
+                                        .toList(),
+                                    onChanged: (val) {
+                                      setState(() {
+                                        _selectedMonthYear = val;
+                                        _customers = null;
+                                      });
+                                      if (val != null && _selectedUserEmail != null) _fetchCustomerTarget();
+                                    },
+                                    dropdownColor: cardColor,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  // --- Branch Dropdown ---
+                                  if (!widget.hideBranchDropdown)
+                                    DropdownButtonFormField<String>(
+                                      value: _branches.contains(_selectedBranch) ? _selectedBranch : null,
+                                      hint: Text('Select Branch', style: TextStyle(color: primaryGreen)),
+                                      items: _branches.isNotEmpty
+                                          ? _branches
+                                              .map((b) => DropdownMenuItem(value: b, child: Text(b, style: TextStyle(color: primaryGreen))))
+                                              .toList()
+                                          : [
+                                              DropdownMenuItem(
+                                                value: null,
+                                                child: Text('No branches found', style: TextStyle(color: primaryGreen)),
+                                              ),
+                                            ],
+                                      onChanged: (val) {
+                                        setState(() {
+                                          _selectedBranch = val;
+                                          _selectedUserEmail = null;
+                                          _users = [];
+                                          _customers = null;
+                                        });
+                                        if (val != null) _filterUsersForBranch(val);
+                                      },
+                                      dropdownColor: cardColor,
+                                    ),
+                                  if (!widget.hideBranchDropdown) const SizedBox(height: 16),
+                                  // --- User Dropdown ---
+                                  DropdownButtonFormField<String>(
+                                    value: _users.any((u) => u['email'] == _selectedUserEmail) ? _selectedUserEmail : null,
+                                    hint: Text('Select User', style: TextStyle(color: primaryBlue)),
+                                    items: _users.isNotEmpty
+                                        ? _users
+                                            .map((u) => DropdownMenuItem<String>(
+                                                  value: u['email'] as String,
+                                                  child: Text(u['name'] ?? '', style: TextStyle(color: primaryBlue)),
+                                                ))
+                                            .toList()
+                                        : [
+                                            DropdownMenuItem(
+                                              value: null,
+                                              child: Text('No users found', style: TextStyle(color: primaryBlue)),
+                                            ),
+                                          ],
+                                    onChanged: (val) {
+                                      setState(() {
+                                        _selectedUserEmail = val;
+                                        _customers = null;
+                                      });
+                                      if (val != null && _selectedMonthYear != null) _fetchCustomerTarget();
+                                    },
+                                    dropdownColor: cardColor,
                                   ),
                                 ],
-                          onChanged: (val) {
-                            setState(() {
-                              _selectedBranch = val;
-                              _selectedUserEmail = null;
-                              _users = [];
-                              _customers = null;
-                            });
-                            if (val != null) _filterUsersForBranch(val);
-                          },
-                          dropdownColor: cardColor,
-                        ),
-                      if (!widget.hideBranchDropdown) const SizedBox(height: 16),
-                      // --- User Dropdown ---
-                      DropdownButtonFormField<String>(
-                        value: _users.any((u) => u['email'] == _selectedUserEmail) ? _selectedUserEmail : null,
-                        hint: Text('Select User', style: TextStyle(color: primaryBlue)),
-                        items: _users.isNotEmpty
-                            ? _users
-                                .map((u) => DropdownMenuItem<String>(
-                                      value: u['email'] as String,
-                                      child: Text('${u['name']} (${u['email']})', style: TextStyle(color: primaryBlue)),
-                                    ))
-                                .toList()
-                            : [
-                                DropdownMenuItem(
-                                  value: null,
-                                  child: Text('No users found', style: TextStyle(color: primaryBlue)),
-                                ),
-                              ],
-                        onChanged: (val) {
-                          setState(() {
-                            _selectedUserEmail = val;
-                            _customers = null;
-                          });
-                          if (val != null && _selectedMonthYear != null) _fetchCustomerTarget();
-                        },
-                        dropdownColor: cardColor,
+                              )
+                            : const SizedBox.shrink(),
                       ),
-                      const SizedBox(height: 24),
+                      // --- Toggle arrow button ---
+                      Center(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _dropdownsVisible = !_dropdownsVisible;
+                            });
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: AnimatedRotation(
+                              turns: _dropdownsVisible ? 0 : 0.5,
+                              duration: const Duration(milliseconds: 250),
+                              child: Icon(
+                                Icons.keyboard_arrow_up,
+                                color: primaryGreen,
+                                size: 28,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
                       if (_error != null) ...[
                         Text(_error!, style: const TextStyle(color: Colors.red)),
+                        const SizedBox(height: 16),
                       ],
                       if (_customers != null)
                         Expanded(
                           child: Container(
+                            // height: MediaQuery.of(context).size.height * 0.6, // Remove fixed height
                             decoration: BoxDecoration(
                               color: cardColor,
                               borderRadius: BorderRadius.circular(8),
@@ -272,65 +311,151 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
     if (_customers!.isEmpty) return Text('No customer target assigned.', style: TextStyle(color: textColor));
     const tableTextStyle = TextStyle(fontSize: 11);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    // Sort customers by call status if needed
+    List<Map<String, dynamic>> sortedCustomers = List<Map<String, dynamic>>.from(_customers!);
+    sortedCustomers.sort((a, b) {
+      if (_sortCalledFirst) {
+        return (b['callMade'] == true ? 1 : 0) - (a['callMade'] == true ? 1 : 0);
+      } else {
+        return (a['callMade'] == true ? 1 : 0) - (b['callMade'] == true ? 1 : 0);
+      }
+    });
+
+    return ListView(
+      padding: const EdgeInsets.all(0),
       children: [
-        Text('Progress: ${_customers!.where((c) => c['callMade'] == true).length} / ${_customers!.length} called',
-            style: TextStyle(fontWeight: FontWeight.bold, color: primaryBlue)),
+        Row(
+          children: [
+            Text(
+              'Progress: ${_customers!.where((c) => c['callMade'] == true).length} / ${_customers!.length} called',
+              style: TextStyle(fontWeight: FontWeight.bold, color: primaryBlue),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: Icon(_sortCalledFirst ? Icons.arrow_downward : Icons.arrow_upward, color: primaryGreen, size: 20),
+              tooltip: 'Sort by call status',
+              onPressed: () {
+                setState(() {
+                  _sortCalledFirst = !_sortCalledFirst;
+                });
+              },
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
+          ],
+        ),
         const SizedBox(height: 8),
-        Expanded(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.vertical,
-              child: DataTable(
-                headingRowColor: MaterialStateProperty.resolveWith<Color>(
-                  (states) => isDark
-                      ? primaryGreen.withOpacity(0.12)
-                      : primaryBlue.withOpacity(0.18), // blue for light
-                ),
-                dataRowColor: MaterialStateProperty.resolveWith<Color>(
-                  (states) => states.contains(MaterialState.selected)
-                      ? (isDark
-                          ? primaryBlue.withOpacity(0.18)
-                          : primaryGreen.withOpacity(0.12)) // green for light
-                      : (isDark ? const Color(0xFF181A20) : Colors.white),
-                ),
-                columns: [
-                  // DataColumn(label: Text('Sl. No', style: tableTextStyle.copyWith(color: primaryGreen))), // removed
-                  DataColumn(label: Text('Customer Name', style: tableTextStyle.copyWith(color: primaryBlue))),
-                  DataColumn(label: Text('Called', style: tableTextStyle.copyWith(color: primaryGreen))),
-                  DataColumn(label: Text('Remarks', style: tableTextStyle.copyWith(color: primaryBlue))),
-                ],
-                rows: List<DataRow>.generate(
-                  _customers!.length,
-                  (index) {
-                    final customer = _customers![index];
-                    final isEven = index % 2 == 0;
-                    return DataRow(
-                      color: MaterialStateProperty.resolveWith<Color>(
-                        (states) => isDark
-                            ? (isEven ? primaryGreen.withOpacity(0.06) : primaryBlue.withOpacity(0.06))
-                            : (isEven ? primaryBlue.withOpacity(0.06) : primaryGreen.withOpacity(0.06)),
-                      ),
-                      cells: [
-                        // DataCell(Text(customer['slno'] ?? '', style: tableTextStyle.copyWith(color: primaryGreen))), // removed
-                        DataCell(Text(customer['name'] ?? '', style: tableTextStyle.copyWith(color: primaryBlue))),
-                        DataCell(
-                          Icon(
-                            customer['callMade'] == true ? Icons.check_circle : Icons.cancel,
-                            color: customer['callMade'] == true ? primaryBlue : primaryGreen,
-                            size: 16,
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: SizedBox(
+            width: 500, //adjust as needed
+            child: DataTable(
+              headingRowColor: MaterialStateProperty.resolveWith<Color>(
+                (states) => isDark
+                    ? primaryGreen.withOpacity(0.12)
+                    : primaryBlue.withOpacity(0.18), // blue for light
+              ),
+              dataRowColor: MaterialStateProperty.resolveWith<Color>(
+                (states) => states.contains(MaterialState.selected)
+                    ? (isDark
+                        ? primaryBlue.withOpacity(0.18)
+                        : primaryGreen.withOpacity(0.12)) // green for light
+                    : (isDark ? const Color(0xFF181A20) : Colors.white),
+              ),
+              columns: [
+                DataColumn(
+                  label: Builder(
+                    builder: (context) {
+                      final isDark = Theme.of(context).brightness == Brightness.dark;
+                      return SizedBox(
+                        width: 120,
+                        child: Text(
+                          'Customer Name',
+                          style: tableTextStyle.copyWith(
+                            color: isDark ? primaryBlue : primaryGreen,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        DataCell(Text(customer['remarks'] ?? '', style: tableTextStyle.copyWith(color: primaryBlue))),
-                      ],
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
-                border: TableBorder(
-                  horizontalInside: BorderSide(color: isDark ? primaryGreen.withOpacity(0.18) : primaryBlue.withOpacity(0.18), width: 0.5),
+                DataColumn(
+                  label: SizedBox(
+                    width: 10,
+                    child: Icon(Icons.phone, color: primaryGreen, size: 16),
+                  ),
                 ),
+                DataColumn(
+                  label: SizedBox(
+                    width: 180,
+                    child: Text('Remarks', style: tableTextStyle.copyWith(color: primaryBlue)),
+                  ),
+                ),
+              ],
+              rows: List<DataRow>.generate(
+                sortedCustomers.length,
+                (index) {
+                  final customer = sortedCustomers[index];
+                  final isEven = index % 2 == 0;
+                  return DataRow(
+                    color: MaterialStateProperty.resolveWith<Color>(
+                      (states) => isDark
+                          ? (isEven ? primaryGreen.withOpacity(0.06) : primaryBlue.withOpacity(0.06))
+                          : (isEven ? primaryBlue.withOpacity(0.06) : primaryGreen.withOpacity(0.06)),
+                    ),
+                    cells: [
+                      DataCell(
+                        Builder(
+                          builder: (context) {
+                            final isDark = Theme.of(context).brightness == Brightness.dark;
+                            return SizedBox(
+                              width: 170,
+                              child: Text(
+                                customer['name'] ?? '',
+                                style: tableTextStyle.copyWith(
+                                  color: isDark ? primaryBlue : primaryGreen,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      DataCell(
+                        Icon(
+                          customer['callMade'] == true ? Icons.check_circle : Icons.cancel,
+                          color: customer['callMade'] == true ? primaryBlue : primaryGreen,
+                          size: 16,
+                        ),
+                      ),
+                      DataCell(
+                        Builder(
+                          builder: (context) {
+                            final isDark = Theme.of(context).brightness == Brightness.dark;
+                            return SizedBox(
+                              width: 180,
+                              child: Text(
+                                customer['remarks'] ?? '',
+                                style: tableTextStyle.copyWith(
+                                  color: isDark ? primaryBlue : primaryGreen,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+              border: TableBorder(
+                horizontalInside: BorderSide(color: isDark ? primaryGreen.withOpacity(0.18) : primaryBlue.withOpacity(0.18), width: 0.5),
               ),
             ),
           ),
