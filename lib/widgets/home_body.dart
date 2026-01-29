@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math';
-
+import '../Customer Target/customer_manager_view.dart';
 import '../Todo & Leads/todo.dart';
 import '../Todo & Leads/leads.dart';
 import '../Todo & Leads/todoform.dart';
@@ -265,10 +265,24 @@ class HomeButtonsContainer extends StatelessWidget {
               Expanded(
                 child: NeumorphicButton(
                   onTap: () => _navigateToCustomerList(context),
-                  text: 'Customers',
+                  text: 'Customer List',
                   color: primaryGreen.withGreen(220), // Lighter green variant
                   textColor: Colors.white,
                   icon: Icons.assignment_ind_rounded,
+                  textStyle: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    letterSpacing: 0.6,
+                    color: Colors.white,
+                    fontFamily: 'Montserrat',
+                    shadows: [
+                      Shadow(
+                        color: Colors.black.withOpacity(0.25),
+                        offset: const Offset(0, 1),
+                        blurRadius: 3,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -303,9 +317,21 @@ class HomeButtonsContainer extends StatelessWidget {
           const SizedBox(height: 14),
           NeumorphicButton(
             onTap: () => _navigateToCustomerList(context),
+            onLongPress: role == 'manager'
+                ? () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const LoadingOverlayPage(
+                          child: CustomerManagerViewerPage(),
+                        ),
+                      ),
+                    );
+                  }
+                : null,
             text: 'Customer List',
-            color: const Color.fromARGB(255, 126, 124, 124),
-            textColor: primaryGreen,
+            color: isDark ? const Color(0xFF23272A) : Colors.white,
+            textColor: isDark ? Colors.white : primaryBlue,
             icon: Icons.assignment_ind_rounded,
           ),
         ],

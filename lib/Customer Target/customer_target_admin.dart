@@ -40,7 +40,8 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
         .toList();
 
     // Extract unique branches
-    final branches = users.map((u) => u['branch'] as String).toSet().toList();
+      final branches = users.map((u) => u['branch'] as String).toSet().toList();
+      branches.sort(); // Sort branches in ascending order
 
     setState(() {
       _allUsers = users;

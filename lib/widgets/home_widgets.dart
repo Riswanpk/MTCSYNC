@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 /// A stylized button with neumorphic design, bounce animation, and responsive feedback.
 class NeumorphicButton extends StatefulWidget {
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
   final String text;
   final Color color;
   final Color textColor;
@@ -12,6 +13,7 @@ class NeumorphicButton extends StatefulWidget {
   const NeumorphicButton({
     super.key,
     required this.onTap,
+    this.onLongPress,
     required this.text,
     required this.color,
     required this.textColor,
@@ -66,6 +68,13 @@ class _NeumorphicButtonState extends State<NeumorphicButton>
     _bounceController.reverse();
   }
 
+  void _onLongPress() {
+    setState(() => _isPressed = false);
+    _bounceController.reverse().then((_) {
+      if (widget.onLongPress != null) widget.onLongPress!();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -75,10 +84,11 @@ class _NeumorphicButtonState extends State<NeumorphicButton>
       builder: (context, child) {
         return Transform.scale(
           scale: _scaleAnimation.value,
-          child: GestureDetector(
-            onTapDown: _onTapDown,
-            onTapUp: _onTapUp,
-            onTapCancel: _onTapCancel,
+            child: GestureDetector(
+              onTapDown: _onTapDown,
+              onTapUp: _onTapUp,
+              onTapCancel: _onTapCancel,
+              onLongPress: widget.onLongPress != null ? _onLongPress : null,
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),

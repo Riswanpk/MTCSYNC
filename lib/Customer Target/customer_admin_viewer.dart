@@ -6,7 +6,9 @@ import 'package:provider/provider.dart';
 import '../Misc/theme_notifier.dart';
 
 class CustomerAdminViewerPage extends StatefulWidget {
-  const CustomerAdminViewerPage({super.key});
+  final String? forceBranch;
+  final bool hideBranchDropdown;
+  const CustomerAdminViewerPage({super.key, this.forceBranch, this.hideBranchDropdown = false});
 
   @override
   State<CustomerAdminViewerPage> createState() => _CustomerAdminViewerPageState();
@@ -39,7 +41,7 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
   @override
   void initState() {
     super.initState();
-    _selectedMonthYear = _monthYears.first; // Default to current month
+    _selectedMonthYear = _monthYears.first;
     _fetchUsersAndBranches();
   }
 
@@ -55,9 +57,19 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
               })
           .toList();
       final branches = users.map((u) => u['branch'] as String).toSet().toList();
+      branches.sort(); // Sort branches in ascending order
+      String? autoBranch = widget.forceBranch;
+      List<Map<String, dynamic>> filteredUsers = users;
+      if (autoBranch != null) {
+        filteredUsers = users.where((u) => u['branch'] == autoBranch).toList();
+      }
       setState(() {
         _allUsers = users;
         _branches = branches;
+        if (autoBranch != null) {
+          _selectedBranch = autoBranch;
+          _users = filteredUsers;
+        }
         _loading = false;
       });
     } catch (e) {
@@ -179,31 +191,32 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                       ),
                       const SizedBox(height: 16),
                       // --- Branch Dropdown ---
-                      DropdownButtonFormField<String>(
-                        value: _branches.contains(_selectedBranch) ? _selectedBranch : null,
-                        hint: Text('Select Branch', style: TextStyle(color: primaryGreen)),
-                        items: _branches.isNotEmpty
-                            ? _branches
-                                .map((b) => DropdownMenuItem(value: b, child: Text(b, style: TextStyle(color: primaryGreen))))
-                                .toList()
-                            : [
-                                DropdownMenuItem(
-                                  value: null,
-                                  child: Text('No branches found', style: TextStyle(color: primaryGreen)),
-                                ),
-                              ],
-                        onChanged: (val) {
-                          setState(() {
-                            _selectedBranch = val;
-                            _selectedUserEmail = null;
-                            _users = [];
-                            _customers = null;
-                          });
-                          if (val != null) _filterUsersForBranch(val);
-                        },
-                        dropdownColor: cardColor,
-                      ),
-                      const SizedBox(height: 16),
+                      if (!widget.hideBranchDropdown)
+                        DropdownButtonFormField<String>(
+                          value: _branches.contains(_selectedBranch) ? _selectedBranch : null,
+                          hint: Text('Select Branch', style: TextStyle(color: primaryGreen)),
+                          items: _branches.isNotEmpty
+                              ? _branches
+                                  .map((b) => DropdownMenuItem(value: b, child: Text(b, style: TextStyle(color: primaryGreen))))
+                                  .toList()
+                              : [
+                                  DropdownMenuItem(
+                                    value: null,
+                                    child: Text('No branches found', style: TextStyle(color: primaryGreen)),
+                                  ),
+                                ],
+                          onChanged: (val) {
+                            setState(() {
+                              _selectedBranch = val;
+                              _selectedUserEmail = null;
+                              _users = [];
+                              _customers = null;
+                            });
+                            if (val != null) _filterUsersForBranch(val);
+                          },
+                          dropdownColor: cardColor,
+                        ),
+                      if (!widget.hideBranchDropdown) const SizedBox(height: 16),
                       // --- User Dropdown ---
                       DropdownButtonFormField<String>(
                         value: _users.any((u) => u['email'] == _selectedUserEmail) ? _selectedUserEmail : null,
