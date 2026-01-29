@@ -1007,22 +1007,6 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                               ),
                             );
                             if (confirm == true) {
-                              final data = doc.data() as Map<String, dynamic>;
-                              final timestamp = data['timestamp'] as Timestamp?;
-                              final userId = data['userId'] ?? _auth.currentUser?.uid;
-                              if (timestamp != null && userId != null) {
-                                final created = timestamp.toDate();
-                                final hour = created.hour;
-                                // Only write daily_report if created between 12pm-11:59pm or 12am-11:59am
-                                if ((hour >= 12 && hour <= 23) || (hour >= 0 && hour < 12)) {
-                                  await FirebaseFirestore.instance.collection('daily_report').add({
-                                    'timestamp': created,
-                                    'userId': userId,
-                                    'documentId': doc.id,
-                                    'type': 'todo',
-                                  });
-                                }
-                              }
                               await _firestore.collection('todo').doc(doc.id).delete();
                               await updateTodoWidgetFromFirestore(); // <-- Add this line
                             }
@@ -1098,22 +1082,19 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                                 ],
                               ),
                             ),
-                            // Assignment info
-                            if (data['assigned_to_name'] != null && data['assigned_by_name'] == null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: Text(
-                                  'Assigned to: ${data['assigned_to_name']}',
-                                  style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
-                                ),
-                              )
-                            else if (data['assigned_by_name'] != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: Text(
-                                  'Assigned by: Manager',
-                                  style: const TextStyle(fontSize: 12, color: Colors.deepPurple),
-                                ),
+                            if (data['email'] != null)
+                              FutureBuilder<String>(
+                                future: _getUsernameByEmail(data['email'] ?? ''),
+                                builder: (context, snapshot) {
+                                  if (!snapshot.hasData) return const SizedBox.shrink();
+                                  return Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Text(
+                                      'Assigned to: ${snapshot.data}',
+                                      style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
+                                    ),
+                                  );
+                                },
                               ),
                           ],
                         ),
@@ -1205,6 +1186,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
         return FutureBuilder<QuerySnapshot>(
           future: _firestore
               .collection('users')
+              .where('branch', isEqualTo: managerBranch) // <-- Only users from same branch
               .get(),
           builder: (context, usersSnapshot) {
             if (!usersSnapshot.hasData) return const Center(child: CircularProgressIndicator());

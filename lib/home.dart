@@ -46,8 +46,7 @@ class _HomePageState extends State<HomePage>
     _setupPerformanceNotifications();
     _fetchAndCacheContacts();
     _printCustomClaims();
-    _showTodoLeadTimingChangeMessageIfNeeded();
-  }
+   }
 
   void _initSwingAnimation() {
     _swingController = AnimationController(
@@ -326,32 +325,6 @@ class _HomePageState extends State<HomePage>
     }
   }
 
-  Future<void> _showTodoLeadTimingChangeMessageIfNeeded() async {
-    final prefs = await SharedPreferences.getInstance();
-    final shownCount = prefs.getInt('todo_lead_timing_change_show') ?? 0;
-    if (shownCount < 2) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Notice'),
-            content: const Text(
-              'ToDo, Lead സമയക്രമങ്ങളിൽ മാറ്റം വന്നിരിക്കുന്നു!\n\n'
-              'ഇന്ന് ഉച്ചയ്ക്ക് 12:00 മുതൽ നാളെ ഉച്ചയ്ക്ക് 12:00 വരെ ക്രിയേറ്റ് ചെയ്യുന്ന ToDo & Lead നാളത്തെ കണക്കിലാകും ഉൾപ്പെടുത്തുക. '
-              'അതനുസരിച്ച് പ്ലാൻ ചെയ്യുക',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      });
-      await prefs.setInt('todo_lead_timing_change_show', shownCount + 1);
-    }
-  }
 
   void _handleLogoTap() {
     _swingController.forward(from: 0.0);
