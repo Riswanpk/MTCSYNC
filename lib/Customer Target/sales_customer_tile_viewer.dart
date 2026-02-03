@@ -116,10 +116,10 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
       String? c1 = customer['contact1'] ?? customer['contact'];
       String? c2 = customer['contact2'];
       bool callMade = entries.any((entry) {
-        String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
+        String logNumber = entry.number?.replaceAll(RegExp(r'\\D'), '') ?? '';
         bool wasConnected = (entry.duration ?? 0) > 0;
-        bool matches1 = c1 != null && logNumber.endsWith(c1.replaceAll(RegExp(r'\D'), ''));
-        bool matches2 = c2 != null && c2.isNotEmpty && logNumber.endsWith(c2.replaceAll(RegExp(r'\D'), ''));
+        bool matches1 = c1 != null && logNumber.endsWith(c1.replaceAll(RegExp(r'\\D'), ''));
+        bool matches2 = c2 != null && c2.isNotEmpty && logNumber.endsWith(c2.replaceAll(RegExp(r'\\D'), ''));
         return (matches1 || matches2) && wasConnected;
       });
       if (callMade) {
@@ -127,8 +127,8 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
           called = true;
           customer['callMade'] = true;
         });
-        _pendingCallNumber = null;
-        _callStartTime = null;
+        // Update Firestore to persist callMade status
+        await _updateCallStatusInFirestore();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Call detected! Please add remarks.'),
@@ -149,6 +149,48 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     } finally {
       _pendingCallNumber = null;
       _callStartTime = null;
+    }
+  }
+
+  Future<void> _updateCallStatusInFirestore() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      final now = DateTime.now();
+      final months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      ];
+      final monthYear = "${months[now.month - 1]} ${now.year}";
+      final docRef = FirebaseFirestore.instance
+          .collection('customer_target')
+          .doc(monthYear)
+          .collection('users')
+          .doc(user.email);
+      final doc = await docRef.get();
+      if (doc.exists && doc.data()?['customers'] != null) {
+        List customers = List.from(doc.data()!['customers']);
+        // Find the customer by contact1/contact
+        String? c1 = customer['contact1'] ?? customer['contact'];
+        String? c2 = customer['contact2'];
+        int idx = customers.indexWhere((c) =>
+          (c['contact'] == c1) || (c2 != null && c2.isNotEmpty && c['contact'] == c2)
+        );
+        if (idx != -1) {
+          customers[idx]['callMade'] = true;
+          await docRef.update({'customers': customers});
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to update callMade in Firestore: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update call status in Firestore: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

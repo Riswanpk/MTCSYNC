@@ -22,8 +22,16 @@ import 'Customer Target/reset_monthly.dart'; // Add this import
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Request camera and location permissions
+  // Request all non-notification permissions first (location last)
   await Permission.camera.request();
+  await Permission.manageExternalStorage.request();
+  await Permission.contacts.request();
+  await Permission.scheduleExactAlarm.request();
+  await Permission.reminders.request();
+  if (await Permission.storage.isDenied) {
+    await Permission.storage.request();
+  }
+  await Permission.phone.request();
   await Permission.location.request();
 
   // Initialize Firebase
@@ -53,50 +61,51 @@ void main() async {
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
   );
-  // Initialize Awesome Notifications
-  await AwesomeNotifications().initialize(
-    null,
-    [
-      NotificationChannel(
-        channelKey: 'basic_channel',
-        channelName: 'Basic Notifications',
-        channelDescription: 'Notification channel for basic tests',
-        defaultColor: const Color(0xFF005BAC),
-        ledColor: Colors.white,
-        soundSource: 'resource://raw/leadsreminder',
-        importance: NotificationImportance.High,
-        channelShowBadge: true,
-      ),
-      NotificationChannel(
-        channelKey: 'reminder_channel', // <-- ADD THIS
-        channelName: 'Reminder Notifications',
-        channelDescription: 'Channel for task reminders',
-        defaultColor: const Color(0xFF8CC63F),
-        ledColor: Colors.green,
-        soundSource: 'resource://raw/taskreminder',
-        importance: NotificationImportance.High,
-        channelShowBadge: true,
-      ),
-    ],
-    debug: true,
-  );
+  // Defer notification channel initialization and permission request until after first frame
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    await AwesomeNotifications().initialize(
+      null,
+      [
+        NotificationChannel(
+          channelKey: 'basic_channel',
+          channelName: 'Basic Notifications',
+          channelDescription: 'Notification channel for basic tests',
+          defaultColor: const Color(0xFF005BAC),
+          ledColor: Colors.white,
+          soundSource: 'resource://raw/leadsreminder',
+          importance: NotificationImportance.High,
+          channelShowBadge: true,
+        ),
+        NotificationChannel(
+          channelKey: 'reminder_channel',
+          channelName: 'Reminder Notifications',
+          channelDescription: 'Channel for task reminders',
+          defaultColor: const Color(0xFF8CC63F),
+          ledColor: Colors.green,
+          soundSource: 'resource://raw/taskreminder',
+          importance: NotificationImportance.High,
+          channelShowBadge: true,
+        ),
+      ],
+      debug: true,
+    );
 
-  // Initialize Flutter Local Notifications
-  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-      FlutterLocalNotificationsPlugin();
-  const AndroidInitializationSettings androidSettings =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-  const InitializationSettings initSettings =
-      InitializationSettings(android: androidSettings);
-  await flutterLocalNotificationsPlugin.initialize(initSettings);
+    // Initialize Flutter Local Notifications
+    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+        FlutterLocalNotificationsPlugin();
+    const AndroidInitializationSettings androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initSettings =
+        InitializationSettings(android: androidSettings);
+    await flutterLocalNotificationsPlugin.initialize(initSettings);
 
-  // Request notification permissions
-  bool isAllowed = await AwesomeNotifications().isNotificationAllowed();
-  if (!isAllowed) {
-    await AwesomeNotifications().requestPermissionToSendNotifications();
-  }
-
-  await Permission.notification.request();
+    // Request notification permissions after channels are set up
+    bool isAllowed = await AwesomeNotifications().isNotificationAllowed();
+    if (!isAllowed) {
+      await AwesomeNotifications().requestPermissionToSendNotifications();
+    }
+    await Permission.notification.request();
+  });
   await Permission.manageExternalStorage.request();
   await Permission.contacts.request();
   await Permission.scheduleExactAlarm.request();
@@ -104,9 +113,9 @@ void main() async {
   if (await Permission.storage.isDenied) {
     await Permission.storage.request();
   }
-
-  // Add this for phone call permission
   await Permission.phone.request();
+  // Request location permissions last
+  await Permission.location.request();
 
   // ✅ Setup notification listeners
   AwesomeNotifications().setListeners(
