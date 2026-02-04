@@ -5,8 +5,18 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 Future<void> resetCustomerTargetsForNewMonth() async {
   final now = DateTime.now();
   final months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec'
   ];
   // Get previous and current month-year strings
   final prev = DateTime(now.year, now.month - 1, 1);
@@ -26,6 +36,13 @@ Future<void> resetCustomerTargetsForNewMonth() async {
   final prevUsersSnapshot = await prevUsersRef.get();
 
   for (final userDoc in prevUsersSnapshot.docs) {
+    // CHECK IF CURRENT MONTH ALREADY HAS DATA - Skip if it does to avoid overwriting
+    final currDoc = await currUsersRef.doc(userDoc.id).get();
+    if (currDoc.exists) {
+      // User already has data for current month, skip to preserve call statuses
+      continue;
+    }
+
     final prevData = userDoc.data();
     final prevCustomers = prevData['customers'] as List<dynamic>? ?? [];
 
