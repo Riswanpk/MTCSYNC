@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math';
+import '../Misc/auth_wrapper.dart';
 import '../Customer Target/customer_manager_view.dart';
 import '../Todo & Leads/todo.dart';
 import '../Todo & Leads/leads.dart';
@@ -341,13 +342,21 @@ class HomeButtonsContainer extends StatelessWidget {
 
   Future<void> _navigateToLeads(BuildContext context) async {
     final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      handleFirebaseAuthError(context, FirebaseException(plugin: 'firestore', code: 'unauthenticated'));
+      return;
+    }
+    
     String? branch;
-    if (user != null) {
+    try {
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .get();
       branch = userDoc.data()?['branch'];
+    } catch (e) {
+      if (handleFirebaseAuthError(context, e)) return;
+      rethrow;
     }
 
     if (branch != null) {
@@ -378,8 +387,13 @@ class HomeButtonsContainer extends StatelessWidget {
 
   Future<void> _navigateToMarketing(BuildContext context) async {
     final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      handleFirebaseAuthError(context, FirebaseException(plugin: 'firestore', code: 'unauthenticated'));
+      return;
+    }
+    
     String? branch, username, userid, role;
-    if (user != null) {
+    try {
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -388,6 +402,9 @@ class HomeButtonsContainer extends StatelessWidget {
       username = userDoc.data()?['username'] ?? userDoc.data()?['email'] ?? '';
       userid = user.uid;
       role = userDoc.data()?['role'];
+    } catch (e) {
+      if (handleFirebaseAuthError(context, e)) return;
+      rethrow;
     }
 
     if (role == 'admin') {
@@ -419,13 +436,21 @@ class HomeButtonsContainer extends StatelessWidget {
 
   Future<void> _navigateToCustomerList(BuildContext context) async {
     final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      handleFirebaseAuthError(context, FirebaseException(plugin: 'firestore', code: 'unauthenticated'));
+      return;
+    }
+    
     String? role;
-    if (user != null) {
+    try {
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .get();
       role = userDoc.data()?['role'];
+    } catch (e) {
+      if (handleFirebaseAuthError(context, e)) return;
+      rethrow;
     }
 
     if (role == 'admin') {

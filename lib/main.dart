@@ -13,6 +13,7 @@ import 'login.dart';
 import 'home.dart';
 import 'Misc/splash_screen.dart';
 import 'Misc/theme_notifier.dart'; // Now imports ThemeProvider
+import 'Misc/auth_wrapper.dart';
 import 'Todo & Leads/presentfollowup.dart';
 import 'Todo & Leads/todo.dart'; // <-- Already present
 import 'package:showcaseview/showcaseview.dart';
@@ -186,7 +187,7 @@ class MyApp extends StatelessWidget {
             );
           },
 
-          home: const SplashScreen(),
+          home: const AuthWrapper(child: SplashScreen()),
         );
       },
     );

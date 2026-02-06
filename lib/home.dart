@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -27,6 +28,7 @@ class _HomePageState extends State<HomePage>
     with TickerProviderStateMixin, RouteAware {
   late AnimationController _swingController;
   late Animation<double> _swingAnimation;
+  StreamSubscription<User?>? _authSubscription;
 
   File? _profileImage;
   String? _profileImagePath;
@@ -59,7 +61,7 @@ class _HomePageState extends State<HomePage>
   }
 
   void _setupPerformanceNotifications() {
-    FirebaseAuth.instance.authStateChanges().listen((user) async {
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) async {
       if (user != null) {
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
@@ -85,6 +87,7 @@ class _HomePageState extends State<HomePage>
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
     routeObserver.unsubscribe(this);
     _swingController.dispose();
     super.dispose();
