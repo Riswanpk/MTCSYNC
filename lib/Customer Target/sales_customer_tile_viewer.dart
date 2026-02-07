@@ -117,7 +117,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
       String? c2 = customer['contact2'];
       bool callMade = entries.any((entry) {
         String logNumber = entry.number?.replaceAll(RegExp(r'\\D'), '') ?? '';
-        bool wasConnected = (entry.duration ?? 0) > 0;
+        bool wasConnected = (entry.duration ?? 0) > 15; // Require call duration > 15 seconds
         bool matches1 = c1 != null && logNumber.endsWith(c1.replaceAll(RegExp(r'\\D'), ''));
         bool matches2 = c2 != null && c2.isNotEmpty && logNumber.endsWith(c2.replaceAll(RegExp(r'\\D'), ''));
         return (matches1 || matches2) && wasConnected;
