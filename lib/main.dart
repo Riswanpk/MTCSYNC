@@ -18,52 +18,54 @@ import 'Todo & Leads/presentfollowup.dart';
 import 'Todo & Leads/todo.dart'; // <-- Already present
 import 'package:showcaseview/showcaseview.dart';
 import 'Misc/user_version_helper.dart'; // <-- Add this import
-import 'Customer Target/reset_monthly.dart'; // Add this import
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Request all non-notification permissions first (location last)
-  await Permission.camera.request();
-  await Permission.manageExternalStorage.request();
-  await Permission.contacts.request();
-  await Permission.scheduleExactAlarm.request();
-  await Permission.reminders.request();
-  if (await Permission.storage.isDenied) {
-    await Permission.storage.request();
-  }
-  await Permission.phone.request();
-  await Permission.location.request();
-
-  // Initialize Firebase
-  await Firebase.initializeApp(
-    options: FirebaseOptions(
-      apiKey: firebaseApiKey,
-      appId: firebaseAppId,
-      messagingSenderId: firebaseMessagingSenderId,
-      projectId: firebaseProjectId,
-      authDomain: firebaseAuthDomain,
-      storageBucket: firebaseStorageBucket,
-      measurementId: firebaseMeasurementId,
+  // Initialize Firebase and SharedPreferences in parallel (both required before UI)
+  final results = await Future.wait([
+    Firebase.initializeApp(
+      options: FirebaseOptions(
+        apiKey: firebaseApiKey,
+        appId: firebaseAppId,
+        messagingSenderId: firebaseMessagingSenderId,
+        projectId: firebaseProjectId,
+        authDomain: firebaseAuthDomain,
+        storageBucket: firebaseStorageBucket,
+        measurementId: firebaseMeasurementId,
+      ),
     ),
-  );
+    SharedPreferences.getInstance(),
+  ]);
 
-  // --- AUTO RESET CUSTOMER TARGETS IF NEW MONTH ---
-  final prefs = await SharedPreferences.getInstance();
-  final now = DateTime.now();
-  final lastResetMonth = prefs.getString('last_customer_target_reset_month');
-  final currentMonth = "${now.year}-${now.month}";
-  if (lastResetMonth != currentMonth) {
-    await resetCustomerTargetsForNewMonth();
-    await prefs.setString('last_customer_target_reset_month', currentMonth);
-  }
+  final prefs = results[1] as SharedPreferences;
 
   // Enable Firestore offline persistence
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
   );
-  // Defer notification channel initialization and permission request until after first frame
-  WidgetsBinding.instance.addPostFrameCallback((_) async {
+
+  // Run the app
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => ThemeProvider(prefs: prefs),
+      child: ShowCaseWidget(
+        builder: (context) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
+          child: const MyApp(),
+        ),
+      ),
+    ),
+  );
+
+  // Deferred services init (non-blocking)
+  _initializeDeferredServices(prefs);
+}
+
+/// All non-essential initialization that can happen after UI is visible
+void _initializeDeferredServices(SharedPreferences prefs) {
+  Future.microtask(() async {
+    // Initialize notification channels
     await AwesomeNotifications().initialize(
       null,
       [
@@ -91,64 +93,27 @@ void main() async {
       debug: true,
     );
 
+    // Setup notification listeners
+    AwesomeNotifications().setListeners(
+      onActionReceivedMethod: NotificationController.onActionReceivedMethod,
+      onNotificationCreatedMethod: NotificationController.onNotificationCreatedMethod,
+      onNotificationDisplayedMethod: NotificationController.onNotificationDisplayedMethod,
+      onDismissActionReceivedMethod: NotificationController.onDismissActionReceivedMethod,
+    );
+
+    // Get initial notification action
+    initialNotificationAction = await AwesomeNotifications().getInitialNotificationAction();
+
     // Initialize Flutter Local Notifications
-    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-        FlutterLocalNotificationsPlugin();
-    const AndroidInitializationSettings androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-    const InitializationSettings initSettings =
-        InitializationSettings(android: androidSettings);
-    await flutterLocalNotificationsPlugin.initialize(initSettings);
+    _initializeFlutterLocalNotifications();
 
-    // Request notification permissions after channels are set up
-    bool isAllowed = await AwesomeNotifications().isNotificationAllowed();
-    if (!isAllowed) {
-      await AwesomeNotifications().requestPermissionToSendNotifications();
-    }
-    await Permission.notification.request();
+    // Listen for auth state changes
+    FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user != null) {
+        updateUserVersionInfo();
+      }
+    });
   });
-  await Permission.manageExternalStorage.request();
-  await Permission.contacts.request();
-  await Permission.scheduleExactAlarm.request();
-  await Permission.reminders.request();
-  if (await Permission.storage.isDenied) {
-    await Permission.storage.request();
-  }
-  await Permission.phone.request();
-  // Request location permissions last
-  await Permission.location.request();
-
-  // ✅ Setup notification listeners
-  AwesomeNotifications().setListeners(
-    onActionReceivedMethod: NotificationController.onActionReceivedMethod,
-    onNotificationCreatedMethod: NotificationController.onNotificationCreatedMethod,
-    onNotificationDisplayedMethod: NotificationController.onNotificationDisplayedMethod,
-    onDismissActionReceivedMethod: NotificationController.onDismissActionReceivedMethod,
-  );
-
-  // Get initial notification action if app was launched by a notification
-  initialNotificationAction = await AwesomeNotifications().getInitialNotificationAction();
-
-  await SharedPreferences.getInstance();
-
-  // Listen for auth state changes and update user version info
-  FirebaseAuth.instance.authStateChanges().listen((user) {
-    if (user != null) {
-      updateUserVersionInfo();
-    }
-  });
-
-  runApp(
-    ChangeNotifierProvider(
-      create: (_) => ThemeProvider(prefs: prefs),
-      child: ShowCaseWidget(
-        builder: (context) => MediaQuery(
-          data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
-          child: const MyApp(),
-        ),
-      ),
-    ),
-  );
 }
 
 final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
@@ -390,4 +355,17 @@ class NotificationController {
       }
     }
   }
+}
+
+/// Initialize Flutter Local Notifications in background (non-blocking)
+void _initializeFlutterLocalNotifications() {
+  Future.microtask(() async {
+    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+        FlutterLocalNotificationsPlugin();
+    const AndroidInitializationSettings androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initSettings =
+        InitializationSettings(android: androidSettings);
+    await flutterLocalNotificationsPlugin.initialize(initSettings);
+  });
 }

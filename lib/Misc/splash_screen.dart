@@ -2,12 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
 import '../login.dart';
 import '../home.dart';
 import '../main.dart'; // For navigatorKey and initialNotificationAction
 import '../Todo & Leads/presentfollowup.dart'; // For PresentFollowUp
 import '../Todo & Leads/todo.dart'; // For TodoPage and TaskDetailPageFromId
-import 'package:awesome_notifications/awesome_notifications.dart'; // For ReceivedAction
 import 'package:home_widget/home_widget.dart'; // For HomeWidget
 
 class SplashScreen extends StatefulWidget {
@@ -31,9 +32,9 @@ class _SplashScreenState extends State<SplashScreen> {
         MaterialPageRoute(builder: (_) => const TodoPage()),
       );
     });
-    // Delay navigation check until after first frame
+    // Delay permission request and navigation until after first frame (UI visible)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAuthAndNavigate();
+      _requestPermissionsAndNavigate();
     });
   }
 
@@ -41,6 +42,31 @@ class _SplashScreenState extends State<SplashScreen> {
   void dispose() {
     _widgetClickSub?.cancel();
     super.dispose();
+  }
+
+  Future<void> _requestPermissionsAndNavigate() async {
+    // Request permissions that show dialogs first
+    // Some permissions auto-grant or require Settings - don't await those blocking
+    try {
+      // These show actual permission dialogs
+      await Permission.camera.request();
+      await Permission.contacts.request();
+      await Permission.phone.request();
+      await Permission.location.request();
+      await Permission.notification.request();
+      
+      // These may auto-grant or not show dialogs - request without blocking
+      Permission.storage.request();
+      Permission.manageExternalStorage.request();
+      Permission.scheduleExactAlarm.request();
+      Permission.reminders.request();
+    } catch (e) {
+      debugPrint('Permission error: $e');
+    }
+
+    // Only navigate after main permissions are handled
+    if (!mounted) return;
+    await _checkAuthAndNavigate();
   }
 
   Future<void> _checkAuthAndNavigate() async {
@@ -86,11 +112,10 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Display a loading indicator while checking auth state
+    // Show empty screen during permission requests - avoids flashing loading circle
     return const Scaffold(
-      body: Center(
-        child: CircularProgressIndicator(),
-      ),
+      backgroundColor: Colors.white,
+      body: SizedBox.shrink(),
     );
   }
 }

@@ -222,7 +222,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                   ..sort((a, b) => a.key.compareTo(b.key));
 
                 // Get latest version from app_constants.dart
-                const String latestVersion = '1.2.102';
+                const String latestVersion = '1.2.103';
 
                 return AlertDialog(
                   title: Row(
@@ -254,7 +254,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                               String vB = b['version'] ?? '';
                               // Place latest version at the end (ascending order)
                               int parseVersion(String v) {
-                                // Converts version string to int for comparison, e.g. 1.2.102 -> 000100020098
+                                // Converts version string to int for comparison, e.g. 1.2.103 -> 000100020098
                                 return int.tryParse(v.replaceAll('.', '').padLeft(8, '0')) ?? 0;
                               }
                               return parseVersion(vA).compareTo(parseVersion(vB));

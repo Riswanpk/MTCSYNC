@@ -346,18 +346,32 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
   }
 
   Future<void> _fetchLastRemarks() async {
+    // First check if lastRemarks is already in the customer object (from Firebase function)
+    if (customer['lastRemarks'] != null && customer['lastRemarks'].toString().trim().isNotEmpty) {
+      setState(() {
+        _lastRemarks = customer['lastRemarks'];
+        _loadingLastRemarks = false;
+      });
+      return;
+    }
+
+    // Fallback: fetch from previous month's collection (for backwards compatibility)
     setState(() {
       _loadingLastRemarks = true;
     });
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-      // Support both contact1/contact2 and contact
+      if (user == null) {
+        setState(() => _loadingLastRemarks = false);
+        return;
+      }
       final contact1 = customer['contact1'] ?? customer['contact'];
       final contact2 = customer['contact2'];
-      if ((contact1 == null || contact1.isEmpty) && (contact2 == null || contact2.isEmpty)) return;
+      if ((contact1 == null || contact1.isEmpty) && (contact2 == null || contact2.isEmpty)) {
+        setState(() => _loadingLastRemarks = false);
+        return;
+      }
 
-      // Get previous month and year
       final now = DateTime.now();
       final months = [
         'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -373,18 +387,17 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
           .get();
       if (doc.exists && doc.data()?['customers'] != null) {
         final List customers = doc.data()!['customers'];
-        // Try to find by contact1, then contact2
         dynamic prevCustomer;
         if (contact1 != null && contact1.isNotEmpty) {
           prevCustomer = customers.firstWhere(
-            (c) => c['contact'] == contact1,
+            (c) => c['contact'] == contact1 || c['contact1'] == contact1,
             orElse: () => null,
           );
         }
         if ((prevCustomer == null || prevCustomer['remarks'] == null || prevCustomer['remarks'].toString().trim().isEmpty) &&
             contact2 != null && contact2.isNotEmpty) {
           prevCustomer = customers.firstWhere(
-            (c) => c['contact'] == contact2,
+            (c) => c['contact'] == contact2 || c['contact2'] == contact2,
             orElse: () => null,
           );
         }
