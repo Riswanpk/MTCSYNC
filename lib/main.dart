@@ -45,6 +45,10 @@ void main() async {
     persistenceEnabled: true,
   );
 
+  // CRITICAL: Initialize AwesomeNotifications BEFORE runApp() 
+  // This ensures scheduled notifications work even when app is killed
+  await _initializeNotifications();
+
   // Run the app
   runApp(
     ChangeNotifierProvider(
@@ -62,49 +66,53 @@ void main() async {
   _initializeDeferredServices(prefs);
 }
 
+/// Initialize AwesomeNotifications - MUST be called before runApp for scheduled notifications
+Future<void> _initializeNotifications() async {
+  await AwesomeNotifications().initialize(
+    null, // Use default app icon
+    [
+      NotificationChannel(
+        channelKey: 'basic_channel',
+        channelName: 'Basic Notifications',
+        channelDescription: 'Notification channel for basic tests',
+        defaultColor: const Color(0xFF005BAC),
+        ledColor: Colors.white,
+        soundSource: 'resource://raw/leadsreminder',
+        importance: NotificationImportance.High,
+        channelShowBadge: true,
+        criticalAlerts: true,
+      ),
+      NotificationChannel(
+        channelKey: 'reminder_channel',
+        channelName: 'Reminder Notifications',
+        channelDescription: 'Channel for task reminders',
+        defaultColor: const Color(0xFF8CC63F),
+        ledColor: Colors.green,
+        soundSource: 'resource://raw/taskreminder',
+        importance: NotificationImportance.High,
+        channelShowBadge: true,
+        criticalAlerts: true,
+      ),
+    ],
+    debug: false, // Set to false for production
+  );
+
+  // Setup notification listeners - required for background handling
+  AwesomeNotifications().setListeners(
+    onActionReceivedMethod: NotificationController.onActionReceivedMethod,
+    onNotificationCreatedMethod: NotificationController.onNotificationCreatedMethod,
+    onNotificationDisplayedMethod: NotificationController.onNotificationDisplayedMethod,
+    onDismissActionReceivedMethod: NotificationController.onDismissActionReceivedMethod,
+  );
+
+  // Get initial notification action (for when app is opened from notification)
+  initialNotificationAction = await AwesomeNotifications().getInitialNotificationAction();
+}
+
 /// All non-essential initialization that can happen after UI is visible
 void _initializeDeferredServices(SharedPreferences prefs) {
   Future.microtask(() async {
-    // Initialize notification channels
-    await AwesomeNotifications().initialize(
-      null,
-      [
-        NotificationChannel(
-          channelKey: 'basic_channel',
-          channelName: 'Basic Notifications',
-          channelDescription: 'Notification channel for basic tests',
-          defaultColor: const Color(0xFF005BAC),
-          ledColor: Colors.white,
-          soundSource: 'resource://raw/leadsreminder',
-          importance: NotificationImportance.High,
-          channelShowBadge: true,
-        ),
-        NotificationChannel(
-          channelKey: 'reminder_channel',
-          channelName: 'Reminder Notifications',
-          channelDescription: 'Channel for task reminders',
-          defaultColor: const Color(0xFF8CC63F),
-          ledColor: Colors.green,
-          soundSource: 'resource://raw/taskreminder',
-          importance: NotificationImportance.High,
-          channelShowBadge: true,
-        ),
-      ],
-      debug: true,
-    );
-
-    // Setup notification listeners
-    AwesomeNotifications().setListeners(
-      onActionReceivedMethod: NotificationController.onActionReceivedMethod,
-      onNotificationCreatedMethod: NotificationController.onNotificationCreatedMethod,
-      onNotificationDisplayedMethod: NotificationController.onNotificationDisplayedMethod,
-      onDismissActionReceivedMethod: NotificationController.onDismissActionReceivedMethod,
-    );
-
-    // Get initial notification action
-    initialNotificationAction = await AwesomeNotifications().getInitialNotificationAction();
-
-    // Initialize Flutter Local Notifications
+    // Initialize Flutter Local Notifications (for assignment notifications etc.)
     _initializeFlutterLocalNotifications();
 
     // Listen for auth state changes

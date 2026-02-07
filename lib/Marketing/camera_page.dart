@@ -5,7 +5,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'watermark_util.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
@@ -109,28 +108,6 @@ class _CameraPageState extends State<CameraPage> {
     }
   }
 
-  Future<void> _submitForm() async {
-    // Your existing form submission logic
-    await FirebaseFirestore.instance.collection('marketing').add({
-      // ...other fields...
-      'locationString': _locationString,
-      // ...other fields...
-    });
-  }
-
-  Future<void> _openCamera() async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const CameraPage()),
-    );
-    if (result != null && result is Map && result['image'] != null) {
-      setState(() {
-        _capturedImage = result['image'];
-        _locationString = result['location']; // <-- Capture location
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -161,18 +138,33 @@ class _CameraPageState extends State<CameraPage> {
                                 setState(() {
                                   _isUploading = true;
                                 });
-                                final watermarkText = "${_locationString!}\n$_dateTimeString";
-                                final watermarkedFile = await addWatermark(
-                                  imageFile: _capturedImage!,
-                                  watermarkText: watermarkText,
-                                );
-                                setState(() {
-                                  _isUploading = false;
-                                });
-                                // Return the image and location to the previous page
-                                if (mounted) {
+                                try {
+                                  final watermarkText = "${_locationString!}\n$_dateTimeString";
+                                  final watermarkedFile = await addWatermark(
+                                    imageFile: _capturedImage!,
+                                    watermarkText: watermarkText,
+                                  );
+                                  if (!mounted) return;
+                                  setState(() {
+                                    _isUploading = false;
+                                  });
+                                  // Return the image and location to the previous page
                                   Navigator.pop(context, {
                                     'image': watermarkedFile,
+                                    'location': _locationString,
+                                  });
+                                } catch (e) {
+                                  debugPrint('Error adding watermark: $e');
+                                  if (!mounted) return;
+                                  setState(() {
+                                    _isUploading = false;
+                                  });
+                                  // Return image without watermark if watermarking fails
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Could not add watermark, using original image')),
+                                  );
+                                  Navigator.pop(context, {
+                                    'image': _capturedImage,
                                     'location': _locationString,
                                   });
                                 }

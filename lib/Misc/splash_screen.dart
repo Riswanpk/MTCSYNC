@@ -9,6 +9,9 @@ import '../home.dart';
 import '../main.dart'; // For navigatorKey and initialNotificationAction
 import '../Todo & Leads/presentfollowup.dart'; // For PresentFollowUp
 import '../Todo & Leads/todo.dart'; // For TodoPage and TaskDetailPageFromId
+import '../Marketing/marketing.dart'; // For MarketingFormPage
+import '../Misc/loading_page.dart'; // For LoadingOverlayPage
+import '../Misc/navigation_state.dart'; // For navigation state restoration
 import 'package:home_widget/home_widget.dart'; // For HomeWidget
 
 class SplashScreen extends StatefulWidget {
@@ -60,6 +63,10 @@ class _SplashScreenState extends State<SplashScreen> {
       Permission.manageExternalStorage.request();
       Permission.scheduleExactAlarm.request();
       Permission.reminders.request();
+      
+      // Request to ignore battery optimizations for reliable notifications
+      // This helps notifications show even when app is in background
+      Permission.ignoreBatteryOptimizations.request();
     } catch (e) {
       debugPrint('Permission error: $e');
     }
@@ -76,6 +83,7 @@ class _SplashScreenState extends State<SplashScreen> {
     if (_openedFromWidget) return; // Bypass default navigation if opened from widget
 
     if (user == null) {
+      await NavigationState.clearState(); // Clear any pending state for logged out users
       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => const LoginPage()));
     } else {
       // Handle initial notification action if the app was opened from a notification.
@@ -83,6 +91,41 @@ class _SplashScreenState extends State<SplashScreen> {
         _handleInitialNotification(initialNotificationAction!);
         initialNotificationAction = null; // Clear after handling
       }
+      
+      // Check for pending navigation state (activity recreation recovery)
+      final pendingState = await NavigationState.getState();
+      if (pendingState == 'marketing') {
+        final userData = await NavigationState.getUserData();
+        if (userData != null && 
+            userData['username'] != null && 
+            userData['userid'] != null && 
+            userData['branch'] != null) {
+          // Restore user to marketing form
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const HomePage()),
+          );
+          // Then push marketing on top (with slight delay to ensure home is loaded)
+          Future.delayed(const Duration(milliseconds: 100), () {
+            if (mounted) {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => LoadingOverlayPage(
+                    child: MarketingFormPage(
+                      username: userData['username'] ?? '',
+                      userid: userData['userid'] ?? '',
+                      branch: userData['branch'] ?? '',
+                    ),
+                  ),
+                ),
+              ).then((_) {
+                NavigationState.clearState();
+              });
+            }
+          });
+          return;
+        }
+      }
+      
       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => const HomePage()));
     }
   }

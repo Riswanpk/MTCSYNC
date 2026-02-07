@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math';
 import '../Misc/auth_wrapper.dart';
+import '../Misc/navigation_state.dart';
 import '../Customer Target/customer_manager_view.dart';
 import '../Todo & Leads/todo.dart';
 import '../Todo & Leads/leads.dart';
@@ -416,6 +417,12 @@ class HomeButtonsContainer extends StatelessWidget {
         ),
       );
     } else if (branch != null && username != null && userid != null) {
+      // Save navigation state for activity recreation recovery
+      await NavigationState.saveState('marketing', userData: {
+        'username': username ?? '',
+        'userid': userid ?? '',
+        'branch': branch ?? '',
+      });
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => LoadingOverlayPage(
@@ -426,7 +433,10 @@ class HomeButtonsContainer extends StatelessWidget {
             ),
           ),
         ),
-      );
+      ).then((_) {
+        // Clear navigation state when user returns from marketing
+        NavigationState.clearState();
+      });
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('User info not found')),

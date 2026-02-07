@@ -16,6 +16,7 @@ import 'Todo & Leads/todoform.dart';
 import 'widgets/home_widgets.dart';
 import 'widgets/home_drawer.dart';
 import 'widgets/home_body.dart';
+import 'Misc/battery_optimization_helper.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -48,7 +49,21 @@ class _HomePageState extends State<HomePage>
     _setupPerformanceNotifications();
     _fetchAndCacheContacts();
     _printCustomClaims();
-   }
+    _checkBatteryOptimization();
+  }
+
+  /// Check and prompt for battery optimization after first frame
+  void _checkBatteryOptimization() {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      if (await BatteryOptimizationHelper.shouldShowPrompt()) {
+        // Add small delay to let the home screen settle
+        await Future.delayed(const Duration(seconds: 2));
+        if (!mounted) return;
+        await BatteryOptimizationHelper.showBatteryOptimizationDialog(context);
+      }
+    });
+  }
 
   void _initSwingAnimation() {
     _swingController = AnimationController(

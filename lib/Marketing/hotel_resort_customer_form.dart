@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
+import '../Misc/navigation_state.dart';
 
 class HotelResortCustomerForm extends StatefulWidget {
   final String username;
@@ -341,6 +342,9 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
     });
 
     await _clearDraft();
+    
+    // Clear navigation state since form was successfully submitted
+    await NavigationState.clearState();
 
     setState(() {
       isLoading = false;

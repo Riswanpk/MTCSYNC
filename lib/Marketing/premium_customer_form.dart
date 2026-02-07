@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
+import '../Misc/navigation_state.dart';
 
 class PremiumCustomerForm extends StatefulWidget {
   final String username;
@@ -234,6 +235,9 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
     });
 
     await _clearDraft();
+    
+    // Clear navigation state since form was successfully submitted
+    await NavigationState.clearState();
 
     setState(() => isLoading = false);
     ScaffoldMessenger.of(context).showSnackBar(

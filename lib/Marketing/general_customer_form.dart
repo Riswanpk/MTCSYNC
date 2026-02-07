@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
+import '../Misc/navigation_state.dart';
 
 class GeneralCustomerForm extends StatefulWidget {
   final String username;
@@ -289,6 +290,9 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
     );
 
     await _clearDraft();
+    
+    // Clear navigation state since form was successfully submitted
+    await NavigationState.clearState();
 
     setState(() {
       isLoading = false;
