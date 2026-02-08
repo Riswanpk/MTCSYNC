@@ -73,15 +73,10 @@ class _LeadsPageState extends State<LeadsPage> {
       if (userData != null) {
         final role = userData['role'] ?? 'sales';
         final branch = userData['branch'] ?? '';
-        if (role == 'admin') {
-          // For admin, fetch users for the first available branch
-          if (availableBranches.isNotEmpty) {
-            await _fetchUsers(availableBranches.first);
-          }
-        } else {
+        if (role != 'admin') {
           await _fetchUsers(branch, uid);
+          _applyDefaultFiltersAndFetch(role, branch, uid);
         }
-        _applyDefaultFiltersAndFetch(role, branch, uid);
       }
     }
     // Auto delete completed leads at end of month
@@ -115,12 +110,12 @@ class _LeadsPageState extends State<LeadsPage> {
         .where((branch) => branch != null)
         .toSet()
         .cast<String>()
-        .toList();
+        .toList()
+      ..sort();
     setState(() {
       availableBranches = branches;
-      if (branches.isNotEmpty && selectedBranch == null) {
-        selectedBranch = branches.first;
-      }
+      // Do not auto-select a branch or load leads here
+      // selectedBranch remains null until user selects
     });
   }
 
@@ -520,21 +515,16 @@ class _LeadsPageState extends State<LeadsPage> {
                                         onChanged: (val) {
                                           setState(() {
                                             selectedBranch = val;
-                                             selectedUser = null; // Reset user filter
-             _pageStartCursors.clear();
-             _pageStartCursors[1] = null;
-                                             _currentPage = 1; // Reset page
+                                            selectedUser = null;
+                                            _pageStartCursors.clear();
+                                            _pageStartCursors[1] = null;
+                                            _currentPage = 1;
+                                            availableUsers = [];
+                                            _leads = [];
+                                            _lastDocument = null;
                                           });
-                                          // Only fetch users after branch is selected
                                           if (val != null) {
                                             _fetchUsers(val).then((_) => _fetchLeadsPage());
-                                          } else {
-                                            setState(() { // Clear users if no branch
-                                              availableUsers = [];
-               _leads = [];
-               _lastDocument = null;
-               _currentPage = 1;
-                                            });
                                           }
                                         },
                                         decoration: InputDecoration(

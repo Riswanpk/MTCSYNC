@@ -40,7 +40,8 @@ class _DashboardPageState extends State<DashboardPage> {
         .where((b) => b != null && b.toString().isNotEmpty)
         .toSet()
         .cast<String>()
-        .toList();
+        .toList()
+      ..sort();
     setState(() {
       _branches = branches;
       _selectedBranch = branches.isNotEmpty ? branches.first : null;
@@ -713,7 +714,8 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
         .where((b) => b != null && b.toString().isNotEmpty)
         .toSet()
         .cast<String>()
-        .toList();
+        .toList()
+      ..sort();
     setState(() {
       _branches = branches;
       if (_branches.isNotEmpty && _selectedBranch == null) {

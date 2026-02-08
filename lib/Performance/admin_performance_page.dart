@@ -33,8 +33,9 @@ class _AdminPerformancePageState extends State<AdminPerformancePage> {
       final branch = doc.data()['branch'];
       if (branch != null) branchSet.add(branch);
     }
+    final sortedBranches = branchSet.toList()..sort();
     setState(() {
-      branches = branchSet.map((b) => {'branch': b}).toList();
+      branches = sortedBranches.map((b) => {'branch': b}).toList();
     });
   }
 

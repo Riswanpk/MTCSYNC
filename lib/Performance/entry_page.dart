@@ -26,8 +26,9 @@ class _EntryPageState extends State<EntryPage> {
       final branch = doc.data()['branch'];
       if (branch != null) branchSet.add(branch);
     }
+    final sortedBranches = branchSet.toList()..sort();
     setState(() {
-      branches = branchSet.map((b) => {'branch': b}).toList();
+      branches = sortedBranches.map((b) => {'branch': b}).toList();
       if (branches.isNotEmpty) selectedBranch = branches.first['branch'];
     });
     fetchUsersForBranch(selectedBranch);
