@@ -30,6 +30,10 @@ class GeneralCustomerForm extends StatefulWidget {
 }
 
 class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
+    String? _otherPurchases; // 'yes' or 'no'
+    TextEditingController _otherPurchasesReasonController = TextEditingController();
+    bool _otherPurchasesError = false;
+    bool _otherPurchasesReasonError = false;
   // Controllers for text fields to manage state for drafts
   late TextEditingController _shopNameController;
   late TextEditingController _placeController;
@@ -94,6 +98,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
     _currentEnquiriesController = TextEditingController();
     _confirmedOrderController = TextEditingController();
     _newProductSuggestionController = TextEditingController();
+    _otherPurchasesReasonController = TextEditingController();
     _loadDraft();
   }
 
@@ -106,6 +111,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
     _currentEnquiriesController.dispose();
     _confirmedOrderController.dispose();
     _newProductSuggestionController.dispose();
+    _otherPurchasesReasonController.dispose();
     super.dispose();
   }
 
@@ -120,52 +126,65 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
       'confirmedOrder': _confirmedOrderController.text,
       'newProductSuggestion': _newProductSuggestionController.text,
       'locationString': locationString,
+      'otherPurchases': _otherPurchases,
+      'otherPurchasesReason': _otherPurchasesReasonController.text,
     };
   }
 
   Future<void> _saveDraft() async {
-    final prefs = await SharedPreferences.getInstance();
-    Map<String, dynamic> draftData = _toDraftMap();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      Map<String, dynamic> draftData = _toDraftMap();
 
-    if (_imageFile != null) {
-      final appDir = await getApplicationDocumentsDirectory();
-      final fileName = path.basename(_imageFile!.path);
-      final savedImage = await _imageFile!.copy('${appDir.path}/$fileName');
-      draftData['imagePath'] = savedImage.path;
-    } else {
-      draftData.remove('imagePath');
+      if (_imageFile != null && _imageFile!.existsSync()) {
+        final appDir = await getApplicationDocumentsDirectory();
+        final fileName = path.basename(_imageFile!.path);
+        final savedImage = await _imageFile!.copy('${appDir.path}/$fileName');
+        draftData['imagePath'] = savedImage.path;
+      } else {
+        draftData.remove('imagePath');
+      }
+
+      String draftJson = jsonEncode(draftData);
+      await prefs.setString(GeneralCustomerForm.DRAFT_KEY, draftJson);
+    } catch (e) {
+      debugPrint('Error saving draft: $e');
     }
-
-    String draftJson = jsonEncode(draftData);
-    await prefs.setString(GeneralCustomerForm.DRAFT_KEY, draftJson);
   }
 
   Future<void> _loadDraft() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? draftJson = prefs.getString(GeneralCustomerForm.DRAFT_KEY);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? draftJson = prefs.getString(GeneralCustomerForm.DRAFT_KEY);
 
-    if (draftJson == null) return;
+      if (draftJson == null) return;
 
-    final Map<String, dynamic> draftData = jsonDecode(draftJson);
+      final Map<String, dynamic> draftData = jsonDecode(draftJson);
 
-    setState(() {
-      _shopNameController.text = draftData['shopName'] ?? '';
-      _placeController.text = draftData['place'] ?? '';
-      _phoneNoController.text = draftData['phoneNo'] ?? '';
-      natureOfBusiness = draftData['natureOfBusiness'] ?? '';
-      _customNatureOfBusinessController.text = draftData['customNatureOfBusiness'] ?? '';
-      _currentEnquiriesController.text = draftData['currentEnquiries'] ?? '';
-      _confirmedOrderController.text = draftData['confirmedOrder'] ?? '';
-      _newProductSuggestionController.text = draftData['newProductSuggestion'] ?? '';
-      locationString = draftData['locationString'];
+      if (!mounted) return;
+      setState(() {
+        _shopNameController.text = draftData['shopName'] ?? '';
+        _placeController.text = draftData['place'] ?? '';
+        _phoneNoController.text = draftData['phoneNo'] ?? '';
+        natureOfBusiness = draftData['natureOfBusiness'] ?? '';
+        _customNatureOfBusinessController.text = draftData['customNatureOfBusiness'] ?? '';
+        _currentEnquiriesController.text = draftData['currentEnquiries'] ?? '';
+        _confirmedOrderController.text = draftData['confirmedOrder'] ?? '';
+        _newProductSuggestionController.text = draftData['newProductSuggestion'] ?? '';
+        locationString = draftData['locationString'];
+        _otherPurchases = draftData['otherPurchases'];
+        _otherPurchasesReasonController.text = draftData['otherPurchasesReason'] ?? '';
 
-      if (draftData['imagePath'] != null) {
-        final imageFile = File(draftData['imagePath']);
-        if (imageFile.existsSync()) {
-          _imageFile = imageFile;
+        if (draftData['imagePath'] != null) {
+          final imageFile = File(draftData['imagePath']);
+          if (imageFile.existsSync()) {
+            _imageFile = imageFile;
+          }
         }
-      }
-    });
+      });
+    } catch (e) {
+      debugPrint('Error loading draft: $e');
+    }
   }
 
   Future<void> _clearDraft() async {
@@ -174,14 +193,21 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
   }
 
   Future<void> _submitForm() async {
-    if (!_formKey.currentState!.validate() || natureOfBusiness.isEmpty || _imageFile == null) {
-      setState(() {
-        _photoError = _imageFile == null;
-      });
+    bool otherPurchasesInvalid = _otherPurchases == null;
+    bool otherPurchasesReasonInvalid = false;
+    if (_otherPurchases == 'yes' && _otherPurchasesReasonController.text.trim().isEmpty) {
+      otherPurchasesReasonInvalid = true;
+    }
+    setState(() {
+      _otherPurchasesError = otherPurchasesInvalid;
+      _otherPurchasesReasonError = otherPurchasesReasonInvalid;
+      _photoError = _imageFile == null;
+    });
+    if (_formKey.currentState?.validate() != true || natureOfBusiness.isEmpty || _imageFile == null || otherPurchasesInvalid || otherPurchasesReasonInvalid) {
       return;
     }
 
-    _formKey.currentState!.save();
+    _formKey.currentState?.save();
     shopName = _shopNameController.text;
     place = _placeController.text;
     phoneNo = _phoneNoController.text;
@@ -189,6 +215,8 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
     currentEnquiries = _currentEnquiriesController.text;
     confirmedOrder = _confirmedOrderController.text;
     newProductSuggestion = _newProductSuggestionController.text;
+    String otherPurchases = _otherPurchases ?? '';
+    String otherPurchasesReason = _otherPurchasesReasonController.text;
 
     setState(() {
       isLoading = true;
@@ -196,123 +224,150 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
       _uploadProgress = 0.0;
     });
 
-    String? imageUrl;
-    if (_imageFile != null) {
-      try {
-        final ref = FirebaseStorage.instance
-            .ref()
-            .child('marketing')
-            .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
-        final uploadTask = ref.putFile(_imageFile!);
+    try {
+      String? imageUrl;
+      if (_imageFile != null) {
+        try {
+          final ref = FirebaseStorage.instance
+              .ref()
+              .child('marketing')
+              .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
+          final uploadTask = ref.putFile(_imageFile!);
 
-        uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-          setState(() {
-            _uploadProgress = snapshot.bytesTransferred / (snapshot.totalBytes == 0 ? 1 : snapshot.totalBytes);
+          uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
+            if (mounted) {
+              setState(() {
+                _uploadProgress = snapshot.bytesTransferred / (snapshot.totalBytes == 0 ? 1 : snapshot.totalBytes);
+              });
+            }
           });
-        });
 
-        await uploadTask;
-        imageUrl = await ref.getDownloadURL();
-      } catch (e) {
-        imageUrl = null;
+          await uploadTask;
+          imageUrl = await ref.getDownloadURL();
+        } catch (e) {
+          debugPrint('Error uploading image: $e');
+          imageUrl = null;
+        }
       }
+
+      // Submit marketing form
+      final marketingDoc = await FirebaseFirestore.instance.collection('marketing').add({
+        'formType': 'General Customer',
+        'username': widget.username,
+        'userid': widget.userid,
+        'branch': widget.branch,
+        'shopName': shopName,
+        'place': place,
+        'phoneNo': phoneNo,
+        'natureOfBusiness': natureOfBusiness == 'OTHERS' && customNatureOfBusiness.isNotEmpty
+            ? customNatureOfBusiness
+            : natureOfBusiness,
+        'currentEnquiries': currentEnquiries,
+        'confirmedOrder': confirmedOrder,
+        'newProductSuggestion': newProductSuggestion,
+        'locationString': locationString,
+        'imageUrl': imageUrl,
+        'timestamp': FieldValue.serverTimestamp(),
+        'otherPurchases': otherPurchases,
+        'otherPurchasesReason': otherPurchases == 'yes' ? otherPurchasesReason : null,
+      });
+
+      // --- INSTANT LEAD CREATION ---
+      final reminderDate = DateTime.now().add(const Duration(days: 15));
+      final leadDoc = await FirebaseFirestore.instance.collection('follow_ups').add({
+        'date': DateTime.now(),
+        'name': shopName,
+        'address': place,
+        'phone': phoneNo,
+        'comments': currentEnquiries,
+        'priority': 'Low',
+        'status': 'In Progress',
+        'reminder': reminderDate.toIso8601String(),
+        'branch': widget.branch,
+        'created_by': widget.userid,
+        'created_at': FieldValue.serverTimestamp(),
+        'source': 'marketing',
+        'marketing_doc_id': marketingDoc.id,
+      });
+
+      // Schedule local notification using basic_channel
+      try {
+        await AwesomeNotifications().createNotification(
+          content: NotificationContent(
+            id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+            channelKey: 'basic_channel',
+            title: 'Follow-Up Reminder',
+            body: 'Reminder for $shopName',
+            notificationLayout: NotificationLayout.Default,
+            payload: {
+              'docId': leadDoc.id,
+              'type': 'lead',
+            },
+          ),
+          actionButtons: [
+            NotificationActionButton(
+              key: 'EDIT_FOLLOWUP',
+              label: 'Edit',
+              autoDismissible: true,
+            ),
+          ],
+          schedule: NotificationCalendar(
+            year: reminderDate.year,
+            month: reminderDate.month,
+            day: reminderDate.day,
+            hour: 9,
+            minute: 0,
+            second: 0,
+            millisecond: 0,
+            timeZone: await AwesomeNotifications().getLocalTimeZoneIdentifier(),
+            preciseAlarm: true,
+          ),
+        );
+      } catch (e) {
+        debugPrint('Error scheduling notification: $e');
+      }
+
+      await _clearDraft();
+      
+      // Clear navigation state since form was successfully submitted
+      await NavigationState.clearState();
+
+      if (!mounted) return;
+
+      setState(() {
+        isLoading = false;
+        _uploadProgress = 0.0;
+        _imageFile = null;
+        locationString = null;
+        natureOfBusiness = '';
+        customNatureOfBusiness = '';
+        _shopNameController.clear();
+        _placeController.clear();
+        _phoneNoController.clear();
+        _customNatureOfBusinessController.clear();
+        _currentEnquiriesController.clear();
+        _confirmedOrderController.clear();
+        _newProductSuggestionController.clear();
+        _otherPurchases = null;
+        _otherPurchasesReasonController.clear();
+      });
+      
+      _formKey.currentState?.reset();
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Form submitted successfully!')),
+      );
+    } catch (e) {
+      debugPrint('Error submitting form: $e');
+      if (!mounted) return;
+      setState(() {
+        isLoading = false;
+        _uploadProgress = 0.0;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error submitting form. Please try again.')),
+      );
     }
-
-    // Submit marketing form
-    final marketingDoc = await FirebaseFirestore.instance.collection('marketing').add({
-      'formType': 'General Customer',
-      'username': widget.username,
-      'userid': widget.userid,
-      'branch': widget.branch,
-      'shopName': shopName,
-      'place': place,
-      'phoneNo': phoneNo,
-      'natureOfBusiness': natureOfBusiness == 'OTHERS' && customNatureOfBusiness.isNotEmpty
-          ? customNatureOfBusiness
-          : natureOfBusiness,
-      'currentEnquiries': currentEnquiries,
-      'confirmedOrder': confirmedOrder,
-      'newProductSuggestion': newProductSuggestion,
-      'locationString': locationString,
-      'imageUrl': imageUrl,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
-
-    // --- INSTANT LEAD CREATION ---
-    final reminderDate = DateTime.now().add(const Duration(days: 15));
-    final leadDoc = await FirebaseFirestore.instance.collection('follow_ups').add({
-      'date': DateTime.now(), // Use current date for the lead
-      'name': shopName,
-      'address': place, // Use place as address
-      'phone': phoneNo,
-      'comments': currentEnquiries,
-      'priority': 'Low',
-      'status': 'In Progress',
-      'reminder': reminderDate.toIso8601String(),
-      'branch': widget.branch,
-      'created_by': widget.userid,
-      'created_at': FieldValue.serverTimestamp(),
-      'source': 'marketing',
-      'marketing_doc_id': marketingDoc.id,
-    });
-
-    // Schedule local notification using basic_channel
-    await AwesomeNotifications().createNotification(
-      content: NotificationContent(
-        id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-        channelKey: 'basic_channel',
-        title: 'Follow-Up Reminder',
-        body: 'Reminder for $shopName',
-        notificationLayout: NotificationLayout.Default,
-        payload: {
-          'docId': leadDoc.id,
-          'type': 'lead',
-        },
-      ),
-      actionButtons: [
-        NotificationActionButton(
-          key: 'EDIT_FOLLOWUP',
-          label: 'Edit',
-          autoDismissible: true,
-        ),
-      ],
-      schedule: NotificationCalendar(
-        year: reminderDate.year,
-        month: reminderDate.month,
-        day: reminderDate.day,
-        hour: 9, // Default to 9 AM
-        minute: 0,
-        second: 0,
-        millisecond: 0,
-        timeZone: await AwesomeNotifications().getLocalTimeZoneIdentifier(),
-        preciseAlarm: true,
-      ),
-    );
-
-    await _clearDraft();
-    
-    // Clear navigation state since form was successfully submitted
-    await NavigationState.clearState();
-
-    setState(() {
-      isLoading = false;
-      _uploadProgress = 0.0;
-      _imageFile = null;
-      locationString = null;
-      natureOfBusiness = '';
-      customNatureOfBusiness = '';
-      _shopNameController.clear();
-      _placeController.clear();
-      _phoneNoController.clear();
-      _customNatureOfBusinessController.clear();
-      _currentEnquiriesController.clear();
-      _confirmedOrderController.clear();
-      _newProductSuggestionController.clear();
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Form submitted successfully!')),
-    );
-    _formKey.currentState!.reset();
   }
 
   @override
@@ -501,8 +556,18 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                           }),
                         ),
                         RadioListTile<String>(
-                          title: const Text('AUDITORIUM', style: TextStyle(fontFamily: 'Electorize')),
-                          value: 'AUDITORIUM',
+                          title: const Text('RESTAURANT', style: TextStyle(fontFamily: 'Electorize')),
+                          value: 'RESTAURANT',
+                          groupValue: natureOfBusiness,
+                          onChanged: (v) => setState(() {
+                            natureOfBusiness = v ?? '';
+                            customNatureOfBusiness = '';
+                            _saveDraft();
+                          }),
+                        ),
+                        RadioListTile<String>(
+                          title: const Text('AUDITORIUM & HALLS', style: TextStyle(fontFamily: 'Electorize')),
+                          value: 'AUDITORIUM & HALLS',
                           groupValue: natureOfBusiness,
                           onChanged: (v) => setState(() {
                             natureOfBusiness = v ?? '';
@@ -542,6 +607,111 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                         child: Text(
                           'Please select a nature of business',
                           style: TextStyle(color: Colors.red, fontSize: 12, fontFamily: 'Electorize'),
+                        ),
+                      ),
+                    const SizedBox(height: 20),
+                    // SECTION: OTHER PURCHASES
+                    _buildSectionTitle('Other Purchases'),
+                    const SizedBox(height: 10),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 4),
+                      child: Text(
+                        'Do you make regular purchases apart from Malabar?',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontFamily: 'Electorize',
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white
+                              : Colors.black87,
+                        ),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: RadioListTile<String>(
+                            title: const Text('Yes', style: TextStyle(fontFamily: 'Electorize')),
+                            value: 'yes',
+                            groupValue: _otherPurchases,
+                            onChanged: (v) {
+                              setState(() {
+                                _otherPurchases = v;
+                                _otherPurchasesError = false;
+                                _saveDraft();
+                              });
+                            },
+                          ),
+                        ),
+                        Expanded(
+                          child: RadioListTile<String>(
+                            title: const Text('No', style: TextStyle(fontFamily: 'Electorize')),
+                            value: 'no',
+                            groupValue: _otherPurchases,
+                            onChanged: (v) {
+                              setState(() {
+                                _otherPurchases = v;
+                                _otherPurchasesError = false;
+                                _saveDraft();
+                              });
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_otherPurchasesError)
+                      const Padding(
+                        padding: EdgeInsets.only(left: 8, bottom: 8),
+                        child: Text(
+                          'Please select Yes or No',
+                          style: TextStyle(color: Colors.red, fontSize: 12, fontFamily: 'Electorize'),
+                        ),
+                      ),
+                    if (_otherPurchases == 'yes')
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.grey[900]
+                                    : const Color.fromARGB(255, 247, 242, 242),
+                                borderRadius: const BorderRadius.only(
+                                  topRight: Radius.circular(22),
+                                  topLeft: Radius.circular(0),
+                                  bottomLeft: Radius.circular(22),
+                                  bottomRight: Radius.circular(0),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.grey.withOpacity(0.3),
+                                    spreadRadius: 1,
+                                    blurRadius: 6,
+                                    offset: const Offset(2, 3),
+                                  ),
+                                ],
+                              ),
+                              child: TextFormField(
+                                controller: _otherPurchasesReasonController,
+                                decoration: _inputDecoration('REASON FOR OUTSIDE PURCHASING', required: true),
+                                onChanged: (v) {
+                                  setState(() {
+                                    _otherPurchasesReasonError = false;
+                                  });
+                                  _saveDraft();
+                                },
+                              ),
+                            ),
+                            if (_otherPurchasesReasonError)
+                              const Padding(
+                                padding: EdgeInsets.only(left: 8, top: 4),
+                                child: Text(
+                                  'Please enter a reason',
+                                  style: TextStyle(color: Colors.red, fontSize: 12, fontFamily: 'Electorize'),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                     const SizedBox(height: 20),
@@ -624,7 +794,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                       ),
                       child: TextFormField(
                         controller: _newProductSuggestionController,
-                        decoration: _inputDecoration('NEW PRODUCT SUGGESTION'),
+                        decoration: _inputDecoration('REMARKS & SUGGESTIONS'),
                         onChanged: (v) => _saveDraft(),
                       ),
                     ),

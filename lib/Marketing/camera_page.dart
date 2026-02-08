@@ -33,7 +33,7 @@ class _CameraPageState extends State<CameraPage> {
           await FlutterImageCompress.compressAndGetFile(
         imageFile.absolute.path,
         targetPath,
-        quality: 40, // Adjust quality as needed (0-100, 85 is a good balance)
+        quality: 30, // Adjust quality as needed (0-100, 85 is a good balance)
         minWidth: 1080, // Resize to a maximum width of 1080px
         minHeight:
             1080, // Maintain aspect ratio by setting a min height as well
@@ -51,60 +51,106 @@ class _CameraPageState extends State<CameraPage> {
   }
 
   Future<void> _takePhoto() async {
+    if (!mounted) return;
     setState(() {
-      _isLoading = true; // Show loading indicator
+      _isLoading = true;
     });
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.camera);
+    try {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(source: ImageSource.camera);
 
-    if (pickedFile != null) {
-      final compressedImageFile = await _compressImage(File(pickedFile.path));
-      if (compressedImageFile == null) {
-        setState(() => _isLoading = false);
-        return;
-      }
+      if (pickedFile != null) {
+        final compressedImageFile = await _compressImage(File(pickedFile.path));
+        if (compressedImageFile == null) {
+          if (!mounted) return;
+          setState(() => _isLoading = false);
+          return;
+        }
 
-      // Keep asking for location until granted
-      LocationPermission permission;
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      while (!serviceEnabled) {
-        await Geolocator.openLocationSettings();
-        serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      }
-      permission = await Geolocator.checkPermission();
-      while (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
-          // Optionally show a dialog or snackbar to inform the user
+        // Keep asking for location until granted (with max retries to avoid infinite loop)
+        LocationPermission permission;
+        int retries = 0;
+        const maxRetries = 3;
+        bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        while (!serviceEnabled && retries < maxRetries) {
+          retries++;
+          await Geolocator.openLocationSettings();
+          if (!mounted) return;
+          serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        }
+        if (!serviceEnabled) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Location permission is required!')),
+            const SnackBar(content: Text('Location services are required. Please enable them.')),
           );
+          setState(() => _isLoading = false);
+          return;
         }
-      }
 
-      final position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high);
-      final placemarks =
-          await placemarkFromCoordinates(position.latitude, position.longitude);
-      final placemark = placemarks.first;
-      final locationText =
-          "${placemark.locality}, ${placemark.administrativeArea}, ${placemark.country}\nLat ${position.latitude.toStringAsFixed(6)}, Long ${position.longitude.toStringAsFixed(6)}";
-      final now = DateTime.now();
+        retries = 0;
+        permission = await Geolocator.checkPermission();
+        while ((permission == LocationPermission.denied || permission == LocationPermission.deniedForever) && retries < maxRetries) {
+          retries++;
+          permission = await Geolocator.requestPermission();
+          if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Location permission is required!')),
+            );
+          }
+        }
+        if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+          if (!mounted) return;
+          setState(() => _isLoading = false);
+          return;
+        }
+
+        final position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.high);
+        
+        String locationText;
+        try {
+          final placemarks =
+              await placemarkFromCoordinates(position.latitude, position.longitude);
+          if (placemarks.isNotEmpty) {
+            final placemark = placemarks.first;
+            locationText =
+                "${placemark.locality ?? ''}, ${placemark.administrativeArea ?? ''}, ${placemark.country ?? ''}\nLat ${position.latitude.toStringAsFixed(6)}, Long ${position.longitude.toStringAsFixed(6)}";
+          } else {
+            locationText =
+                "Lat ${position.latitude.toStringAsFixed(6)}, Long ${position.longitude.toStringAsFixed(6)}";
+          }
+        } catch (e) {
+          debugPrint('Error getting placemark: $e');
+          locationText =
+              "Lat ${position.latitude.toStringAsFixed(6)}, Long ${position.longitude.toStringAsFixed(6)}";
+        }
+
+        final now = DateTime.now();
+        if (!mounted) return;
+        setState(() {
+          _capturedImage = compressedImageFile;
+          _locationString = locationText;
+          _dateTimeString =
+              "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} "
+              "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+          _isLoading = false;
+        });
+      } else {
+        if (!mounted) return;
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error in _takePhoto: $e');
       if (!mounted) return;
       setState(() {
-        _capturedImage = compressedImageFile;
-        _locationString = locationText;
-        _dateTimeString =
-            "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} "
-            "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
-        _isLoading = false; // Hide loading indicator
+        _isLoading = false;
       });
-    } else {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false; // Hide loading indicator if cancelled
-      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error taking photo: ${e.toString().length > 80 ? e.toString().substring(0, 80) : e}')),
+      );
     }
   }
 
@@ -140,6 +186,7 @@ class _CameraPageState extends State<CameraPage> {
                                 });
                                 try {
                                   final watermarkText = "${_locationString!}\n$_dateTimeString";
+                                  // Process watermark in background to avoid blocking UI
                                   final watermarkedFile = await addWatermark(
                                     imageFile: _capturedImage!,
                                     watermarkText: watermarkText,
@@ -184,7 +231,17 @@ class _CameraPageState extends State<CameraPage> {
             Container(
               color: Colors.black54,
               child: const Center(
-                child: CircularProgressIndicator(),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text(
+                      'Processing image...',
+                      style: TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                  ],
+                ),
               ),
             ),
         ],

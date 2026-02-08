@@ -220,7 +220,7 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
                       DropdownButtonFormField<String>(
                         value: _selectedBranch,
                         decoration: _inputDecoration('Branch', Icons.business),
-                        items: ['KSD','TLY','VDK','CLT','WYND','PKTR','TRR','PMNA','PKD','TSR','EKM','KTM','KKM','TVM','CBE','UDP','BGR','JBL','CHE']
+                        items: ['KSD','TLY','VDK','CLT','WYND','PKTR','TRR','PMNA','PKD','TSR','EKM','KTM','KKM','TVM','CBE','UDP','BGR','JBL','CHN']
                             .map((branch) => DropdownMenuItem(value: branch, child: Text(branch)))
                             .toList(),
                         onChanged: (value) {

@@ -32,13 +32,11 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
 
   // Controllers for text fields
   late TextEditingController _shopNameController;
-  late TextEditingController _lastPurchasedItemController;
   late TextEditingController _currentEnquiriesController;
   late TextEditingController _confirmedOrderController;
   late TextEditingController _upcomingEventDetailsController;
   late TextEditingController _newProductSuggestionController;
-  late TextEditingController _upcomingTrendsController;
-  late TextEditingController _feedbackController;
+  // Removed: _upcomingTrendsController, _feedbackController
 
 
   String shopName = '';
@@ -49,8 +47,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
   DateTime? upcomingEventDate;
   String upcomingEventDetails = '';
   String newProductSuggestion = '';
-  String upcomingTrends = '';
-  String feedback = '';
+  // Removed: upcomingTrends, feedback
   File? _imageFile;
   bool isLoading = false;
   String? locationString;
@@ -79,26 +76,22 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
   void initState() {
     super.initState();
     _shopNameController = TextEditingController();
-    _lastPurchasedItemController = TextEditingController();
     _currentEnquiriesController = TextEditingController();
     _confirmedOrderController = TextEditingController();
     _upcomingEventDetailsController = TextEditingController();
     _newProductSuggestionController = TextEditingController();
-    _upcomingTrendsController = TextEditingController();
-    _feedbackController = TextEditingController();
+    // Removed: _upcomingTrendsController, _feedbackController
     _loadDraft();
   }
 
   @override
   void dispose() {
     _shopNameController.dispose();
-    _lastPurchasedItemController.dispose();
     _currentEnquiriesController.dispose();
     _confirmedOrderController.dispose();
     _upcomingEventDetailsController.dispose();
     _newProductSuggestionController.dispose();
-    _upcomingTrendsController.dispose();
-    _feedbackController.dispose();
+    // Removed: _upcomingTrendsController, _feedbackController
     super.dispose();
   }
 
@@ -106,63 +99,66 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
     return {
       'shopName': _shopNameController.text,
       'lastItemPurchasedDate': lastItemPurchasedDate?.toIso8601String(),
-      'lastPurchasedItem': _lastPurchasedItemController.text,
       'currentEnquiries': _currentEnquiriesController.text,
       'confirmedOrder': _confirmedOrderController.text,
       'upcomingEventDate': upcomingEventDate?.toIso8601String(),
       'upcomingEventDetails': _upcomingEventDetailsController.text,
       'newProductSuggestion': _newProductSuggestionController.text,
-      'upcomingTrends': _upcomingTrendsController.text,
-      'feedback': _feedbackController.text,
       'locationString': locationString,
     };
   }
 
   Future<void> _saveDraft() async {
-    final prefs = await SharedPreferences.getInstance();
-    Map<String, dynamic> draftData = _toDraftMap();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      Map<String, dynamic> draftData = _toDraftMap();
 
-    if (_imageFile != null) {
-      final appDir = await getApplicationDocumentsDirectory();
-      final fileName = path.basename(_imageFile!.path);
-      final savedImage = await _imageFile!.copy('${appDir.path}/$fileName');
-      draftData['imagePath'] = savedImage.path;
-    } else {
-      draftData.remove('imagePath');
+      if (_imageFile != null && _imageFile!.existsSync()) {
+        final appDir = await getApplicationDocumentsDirectory();
+        final fileName = path.basename(_imageFile!.path);
+        final savedImage = await _imageFile!.copy('${appDir.path}/$fileName');
+        draftData['imagePath'] = savedImage.path;
+      } else {
+        draftData.remove('imagePath');
+      }
+
+      String draftJson = jsonEncode(draftData);
+      await prefs.setString(PremiumCustomerForm.DRAFT_KEY, draftJson);
+    } catch (e) {
+      debugPrint('Error saving draft: $e');
     }
-
-    String draftJson = jsonEncode(draftData);
-    await prefs.setString(PremiumCustomerForm.DRAFT_KEY, draftJson);
   }
 
   Future<void> _loadDraft() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? draftJson = prefs.getString(PremiumCustomerForm.DRAFT_KEY);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? draftJson = prefs.getString(PremiumCustomerForm.DRAFT_KEY);
 
-    if (draftJson == null) return;
+      if (draftJson == null) return;
 
-    final Map<String, dynamic> draftData = jsonDecode(draftJson);
+      final Map<String, dynamic> draftData = jsonDecode(draftJson);
 
-    setState(() {
-      _shopNameController.text = draftData['shopName'] ?? '';
-      lastItemPurchasedDate = draftData['lastItemPurchasedDate'] != null ? DateTime.parse(draftData['lastItemPurchasedDate']) : null;
-      _lastPurchasedItemController.text = draftData['lastPurchasedItem'] ?? '';
-      _currentEnquiriesController.text = draftData['currentEnquiries'] ?? '';
-      _confirmedOrderController.text = draftData['confirmedOrder'] ?? '';
-      upcomingEventDate = draftData['upcomingEventDate'] != null ? DateTime.parse(draftData['upcomingEventDate']) : null;
-      _upcomingEventDetailsController.text = draftData['upcomingEventDetails'] ?? '';
-      _newProductSuggestionController.text = draftData['newProductSuggestion'] ?? '';
-      _upcomingTrendsController.text = draftData['upcomingTrends'] ?? '';
-      _feedbackController.text = draftData['feedback'] ?? '';
-      locationString = draftData['locationString'];
+      if (!mounted) return;
+      setState(() {
+        _shopNameController.text = draftData['shopName'] ?? '';
+        lastItemPurchasedDate = draftData['lastItemPurchasedDate'] != null ? DateTime.parse(draftData['lastItemPurchasedDate']) : null;
+        _currentEnquiriesController.text = draftData['currentEnquiries'] ?? '';
+        _confirmedOrderController.text = draftData['confirmedOrder'] ?? '';
+        upcomingEventDate = draftData['upcomingEventDate'] != null ? DateTime.parse(draftData['upcomingEventDate']) : null;
+        _upcomingEventDetailsController.text = draftData['upcomingEventDetails'] ?? '';
+        _newProductSuggestionController.text = draftData['newProductSuggestion'] ?? '';
+        locationString = draftData['locationString'];
 
-      if (draftData['imagePath'] != null) {
-        final imageFile = File(draftData['imagePath']);
-        if (imageFile.existsSync()) {
-          _imageFile = imageFile;
+        if (draftData['imagePath'] != null) {
+          final imageFile = File(draftData['imagePath']);
+          if (imageFile.existsSync()) {
+            _imageFile = imageFile;
+          }
         }
-      }
-    });
+      });
+    } catch (e) {
+      debugPrint('Error loading draft: $e');
+    }
   }
 
   Future<void> _clearDraft() async {
@@ -173,13 +169,11 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
   Future<void> _submitForm() async {
     // Update state variables from controllers before validation
     shopName = _shopNameController.text;
-    lastPurchasedItem = _lastPurchasedItemController.text;
     currentEnquiries = _currentEnquiriesController.text;
     confirmedOrder = _confirmedOrderController.text;
     upcomingEventDetails = _upcomingEventDetailsController.text;
     newProductSuggestion = _newProductSuggestionController.text;
-    upcomingTrends = _upcomingTrendsController.text;
-    feedback = _feedbackController.text;
+    // Removed: upcomingTrends, feedback
 
     // Validate all fields manually
     setState(() {
@@ -204,77 +198,85 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
 
     setState(() => isLoading = true);
 
-    String? imageUrl;
-    if (_imageFile != null) {
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('marketing')
-          .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
-      await ref.putFile(_imageFile!);
-      imageUrl = await ref.getDownloadURL();
+    try {
+      String? imageUrl;
+      if (_imageFile != null) {
+        try {
+          final ref = FirebaseStorage.instance
+              .ref()
+              .child('marketing')
+              .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
+          await ref.putFile(_imageFile!);
+          imageUrl = await ref.getDownloadURL();
+        } catch (e) {
+          debugPrint('Error uploading image: $e');
+          imageUrl = null;
+        }
+      }
+
+      await FirebaseFirestore.instance.collection('marketing').add({
+        'formType': 'Premium Customer',
+        'username': widget.username,
+        'userid': widget.userid,
+        'branch': widget.branch,
+        'shopName': shopName,
+        'lastItemPurchasedDate': lastItemPurchasedDate,
+        'lastPurchasedItem': lastPurchasedItem,
+        'currentEnquiries': currentEnquiries,
+        'confirmedOrder': confirmedOrder,
+        'upcomingEventDate': upcomingEventDate,
+        'upcomingEventDetails': upcomingEventDetails,
+        'newProductSuggestion': newProductSuggestion,
+        'imageUrl': imageUrl,
+        'locationString': locationString,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      await _clearDraft();
+      
+      // Clear navigation state since form was successfully submitted
+      await NavigationState.clearState();
+
+      if (!mounted) return;
+      setState(() => isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Form submitted successfully!')),
+      );
+
+      // Reset the form and all fields
+      _formKey.currentState?.reset();
+      setState(() {
+        _imageFile = null;
+        lastItemPurchasedDate = null;
+        upcomingEventDate = null;
+        upcomingEventDetails = '';
+        locationString = null;
+        shopName = '';
+        lastPurchasedItem = '';
+        currentEnquiries = '';
+        confirmedOrder = '';
+        newProductSuggestion = '';
+
+        _shopNameController.clear();
+        _currentEnquiriesController.clear();
+        _confirmedOrderController.clear();
+        _upcomingEventDetailsController.clear();
+        _newProductSuggestionController.clear();
+
+        // Reset all error flags
+        _shopNameError = false;
+        _currentEnquiriesError = false;
+        _confirmedOrderError = false;
+        _photoError = false;
+      });
+    } catch (e) {
+      debugPrint('Error submitting form: $e');
+      if (!mounted) return;
+      setState(() => isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error submitting form. Please try again.')),
+      );
     }
-
-    await FirebaseFirestore.instance.collection('marketing').add({
-      'formType': 'Premium Customer',
-      'username': widget.username,
-      'userid': widget.userid,
-      'branch': widget.branch,
-      'shopName': shopName,
-      'lastItemPurchasedDate': lastItemPurchasedDate,
-      'lastPurchasedItem': lastPurchasedItem,
-      'currentEnquiries': currentEnquiries,
-      'confirmedOrder': confirmedOrder,
-      'upcomingEventDate': upcomingEventDate,
-      'upcomingEventDetails': upcomingEventDetails,
-      'newProductSuggestion': newProductSuggestion,
-      'upcomingTrends': upcomingTrends,
-      'feedback': feedback,
-      'imageUrl': imageUrl,
-      'locationString': locationString,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
-
-    await _clearDraft();
-    
-    // Clear navigation state since form was successfully submitted
-    await NavigationState.clearState();
-
-    setState(() => isLoading = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Form submitted successfully!')),
-    );
-
-    // Reset the form and all fields
-_formKey.currentState?.reset();
-    setState(() { // This setState is now for clearing UI state and controllers
-      _imageFile = null;
-      lastItemPurchasedDate = null;
-      upcomingEventDate = null;
-      upcomingEventDetails = '';
-      locationString = null;
-      shopName = '';
-      lastPurchasedItem = '';
-      currentEnquiries = '';
-      confirmedOrder = '';
-      newProductSuggestion = '';
-      upcomingTrends = '';
-      feedback = '';
-
-      _shopNameController.clear();
-      _lastPurchasedItemController.clear();
-      _currentEnquiriesController.clear();
-      _confirmedOrderController.clear();
-      _upcomingEventDetailsController.clear();
-      _newProductSuggestionController.clear();
-      _upcomingTrendsController.clear();
-      _feedbackController.clear();
-
-      // Reset all error flags
-      _shopNameError = false;
-      _currentEnquiriesError = false;
-      _confirmedOrderError = false;
-      _photoError = false;
-    });
   }
 
   InputDecoration _inputDecoration(String label, {bool error = false, String? errorText}) => InputDecoration(
@@ -367,58 +369,6 @@ _formKey.currentState?.reset();
                     ),
                     const SizedBox(height: 20),
 
-                    // SECTION: PURCHASE HISTORY
-                    _buildSectionTitle('Purchase History'),
-                    const SizedBox(height: 10),
-                    _buildDatePickerField(
-                      label: 'Last Item Purchased Date',
-                      date: lastItemPurchasedDate,
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: lastItemPurchasedDate ?? DateTime.now(),
-                          firstDate: DateTime(2000),
-                          lastDate: DateTime.now(),
-                        );
-                        if (picked != null) {
-                          setState(() {
-                            lastItemPurchasedDate = picked;
-                            _saveDraft();
-                          });
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 15),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: const Color.fromARGB(255, 255, 255, 255),
-                        borderRadius: const BorderRadius.only(
-                          topRight: Radius.circular(22),
-                          topLeft: Radius.circular(0),
-                          bottomLeft: Radius.circular(22),
-                          bottomRight: Radius.circular(0),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.3),
-                            spreadRadius: 1,
-                            blurRadius: 6,
-                            offset: const Offset(2, 3),
-                          ),
-                        ],
-                      ),
-                      child: TextFormField(
-                        controller: _lastPurchasedItemController,
-                        decoration: _inputDecoration('Last Purchased Item'),
-                        onChanged: (v) {
-                          _saveDraft();
-                          setState(() {
-                            lastPurchasedItem = v;
-                          });
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 20),
 
                     // SECTION: ORDERS & ENQUIRIES
                     _buildSectionTitle('Orders & Enquiries'),
@@ -575,67 +525,6 @@ _formKey.currentState?.reset();
                           _saveDraft();
                           setState(() {
                             newProductSuggestion = v;
-                          });
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 15),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: const Color.fromARGB(255, 194, 235, 241),
-                        borderRadius: const BorderRadius.only(
-                          topRight: Radius.circular(22),
-                          topLeft: Radius.circular(0),
-                          bottomLeft: Radius.circular(22),
-                          bottomRight: Radius.circular(0),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.3),
-                            spreadRadius: 1,
-                            blurRadius: 6,
-                            offset: const Offset(2, 3),
-                          ),
-                        ],
-                      ),
-                      child: TextFormField(
-                        controller: _upcomingTrendsController,
-                        decoration: _inputDecoration('Upcoming Trends'),
-                        onChanged: (v) {
-                          _saveDraft();
-                          setState(() {
-                            upcomingTrends = v;
-                          });
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 15),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: const Color.fromARGB(255, 194, 235, 241),
-                        borderRadius: const BorderRadius.only(
-                          topRight: Radius.circular(22),
-                          topLeft: Radius.circular(0),
-                          bottomLeft: Radius.circular(22),
-                          bottomRight: Radius.circular(0),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.3),
-                            spreadRadius: 1,
-                            blurRadius: 6,
-                            offset: const Offset(2, 3),
-                          ),
-                        ],
-                      ),
-                      child: TextFormField(
-                        controller: _feedbackController,
-                        maxLines: 3,
-                        decoration: _inputDecoration('Feedback About Our Product & Services'),
-                        onChanged: (v) {
-                          _saveDraft();
-                          setState(() {
-                            feedback = v;
                           });
                         },
                       ),

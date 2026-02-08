@@ -211,51 +211,60 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
   }
 
   Future<void> _saveDraft() async {
-    final prefs = await SharedPreferences.getInstance();
-    Map<String, dynamic> draftData = _toDraftMap();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      Map<String, dynamic> draftData = _toDraftMap();
 
-    if (_imageFile != null) {
-      final appDir = await getApplicationDocumentsDirectory();
-      final fileName = path.basename(_imageFile!.path);
-      final savedImage = await _imageFile!.copy('${appDir.path}/$fileName');
-      draftData['imagePath'] = savedImage.path;
-    } else {
-      draftData.remove('imagePath');
+      if (_imageFile != null && _imageFile!.existsSync()) {
+        final appDir = await getApplicationDocumentsDirectory();
+        final fileName = path.basename(_imageFile!.path);
+        final savedImage = await _imageFile!.copy('${appDir.path}/$fileName');
+        draftData['imagePath'] = savedImage.path;
+      } else {
+        draftData.remove('imagePath');
+      }
+
+      String draftJson = jsonEncode(draftData);
+      await prefs.setString(HotelResortCustomerForm.DRAFT_KEY, draftJson);
+    } catch (e) {
+      debugPrint('Error saving draft: $e');
     }
-
-    String draftJson = jsonEncode(draftData);
-    await prefs.setString(HotelResortCustomerForm.DRAFT_KEY, draftJson);
   }
 
   Future<void> _loadDraft() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? draftJson = prefs.getString(HotelResortCustomerForm.DRAFT_KEY);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? draftJson = prefs.getString(HotelResortCustomerForm.DRAFT_KEY);
 
-    if (draftJson == null) return;
+      if (draftJson == null) return;
 
-    final Map<String, dynamic> draftData = jsonDecode(draftJson);
+      final Map<String, dynamic> draftData = jsonDecode(draftJson);
 
-    setState(() {
-      _firmNameController.text = draftData['firmName'] ?? '';
-      _placeController.text = draftData['place'] ?? '';
-      _contactPersonController.text = draftData['contactPerson'] ?? '';
-      _contactNumberController.text = draftData['contactNumber'] ?? '';
-      category = draftData['category'] ?? '';
-      _customCategoryController.text = draftData['customCategory'] ?? '';
-      _currentEnquiryController.text = draftData['currentEnquiry'] ?? '';
-      _confirmedOrderController.text = draftData['confirmedOrder'] ?? '';
-      _newProductSuggestionController.text = draftData['newProductSuggestion'] ?? '';
-      feedbackRating = draftData['feedbackRating'] ?? 0;
-      _anySuggestionController.text = draftData['anySuggestion'] ?? '';
-      locationString = draftData['locationString'];
+      if (!mounted) return;
+      setState(() {
+        _firmNameController.text = draftData['firmName'] ?? '';
+        _placeController.text = draftData['place'] ?? '';
+        _contactPersonController.text = draftData['contactPerson'] ?? '';
+        _contactNumberController.text = draftData['contactNumber'] ?? '';
+        category = draftData['category'] ?? '';
+        _customCategoryController.text = draftData['customCategory'] ?? '';
+        _currentEnquiryController.text = draftData['currentEnquiry'] ?? '';
+        _confirmedOrderController.text = draftData['confirmedOrder'] ?? '';
+        _newProductSuggestionController.text = draftData['newProductSuggestion'] ?? '';
+        feedbackRating = draftData['feedbackRating'] ?? 0;
+        _anySuggestionController.text = draftData['anySuggestion'] ?? '';
+        locationString = draftData['locationString'];
 
-      if (draftData['imagePath'] != null) {
-        final imageFile = File(draftData['imagePath']);
-        if (imageFile.existsSync()) {
-          _imageFile = imageFile;
+        if (draftData['imagePath'] != null) {
+          final imageFile = File(draftData['imagePath']);
+          if (imageFile.existsSync()) {
+            _imageFile = imageFile;
+          }
         }
-      }
-    });
+      });
+    } catch (e) {
+      debugPrint('Error loading draft: $e');
+    }
   }
 
   Future<void> _clearDraft() async {
@@ -305,76 +314,90 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
       _photoError = false;
     });
 
-    String? imageUrl;
-    if (_imageFile != null) {
-      try {
-        final ref = FirebaseStorage.instance
-            .ref()
-            .child('marketing')
-            .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
-        await ref.putFile(_imageFile!);
-        imageUrl = await ref.getDownloadURL();
-      } catch (e) {
-        imageUrl = null;
+    try {
+      String? imageUrl;
+      if (_imageFile != null) {
+        try {
+          final ref = FirebaseStorage.instance
+              .ref()
+              .child('marketing')
+              .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
+          await ref.putFile(_imageFile!);
+          imageUrl = await ref.getDownloadURL();
+        } catch (e) {
+          debugPrint('Error uploading image: $e');
+          imageUrl = null;
+        }
       }
+
+      await FirebaseFirestore.instance.collection('marketing').add({
+        'formType': 'Hotel / Resort Customer',
+        'username': widget.username,
+        'userid': widget.userid,
+        'branch': widget.branch,
+        'firmName': firmName,
+        'place': place,
+        'contactPerson': contactPerson,
+        'contactNumber': contactNumber,
+        'category': category == 'OTHERS' && customCategory.trim().isNotEmpty
+            ? customCategory
+            : category,
+        'currentEnquiry': currentEnquiry,
+        'confirmedOrder': confirmedOrder,
+        'newProductSuggestion': newProductSuggestion,
+        'anySuggestion': anySuggestion,
+        'locationString': locationString,
+        'feedbackRating': feedbackRating,
+        'imageUrl': imageUrl,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      await _clearDraft();
+      
+      // Clear navigation state since form was successfully submitted
+      await NavigationState.clearState();
+
+      if (!mounted) return;
+
+      setState(() {
+        isLoading = false;
+        _imageFile = null;
+        locationString = null;
+        category = '';
+        customCategory = '';
+        feedbackRating = 0;
+        firmName = '';
+        place = '';
+        contactPerson = '';
+        contactNumber = '';
+        currentEnquiry = '';
+        confirmedOrder = '';
+        newProductSuggestion = '';
+        anySuggestion = '';
+        _firmNameController.clear();
+        _placeController.clear();
+        _contactPersonController.clear();
+        _contactNumberController.clear();
+        _currentEnquiryController.clear();
+        _confirmedOrderController.clear();
+        _newProductSuggestionController.clear();
+        _anySuggestionController.clear();
+        _customCategoryController.clear();
+      });
+
+      _formKey.currentState?.reset();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Form submitted successfully!')),
+      );
+    } catch (e) {
+      debugPrint('Error submitting form: $e');
+      if (!mounted) return;
+      setState(() => isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error submitting form. Please try again.')),
+      );
     }
-
-    await FirebaseFirestore.instance.collection('marketing').add({
-      'formType': 'Hotel / Resort Customer',
-      'username': widget.username,
-      'userid': widget.userid,
-      'branch': widget.branch,
-      'firmName': firmName,
-      'place': place,
-      'contactPerson': contactPerson,
-      'contactNumber': contactNumber,
-      'category': category == 'OTHERS' && customCategory.trim().isNotEmpty
-          ? customCategory
-          : category, // <-- Save custom category if OTHERS
-      'currentEnquiry': currentEnquiry,
-      'confirmedOrder': confirmedOrder,
-      'newProductSuggestion': newProductSuggestion,
-      'anySuggestion': anySuggestion,
-      'locationString': locationString,
-      'feedbackRating': feedbackRating,
-      'imageUrl': imageUrl,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
-
-    await _clearDraft();
-    
-    // Clear navigation state since form was successfully submitted
-    await NavigationState.clearState();
-
-    setState(() {
-      isLoading = false;
-      _imageFile = null;
-      locationString = null;
-      category = '';
-      customCategory = ''; // <-- Reset custom field
-      feedbackRating = 0;
-      firmName = '';
-      place = '';
-      contactPerson = '';
-      contactNumber = '';
-      currentEnquiry = '';
-      confirmedOrder = '';
-      newProductSuggestion = '';
-      anySuggestion = '';
-      _firmNameController.clear();
-      _placeController.clear();
-      _contactPersonController.clear();
-      _contactNumberController.clear();
-      _currentEnquiryController.clear();
-      _confirmedOrderController.clear();
-      _newProductSuggestionController.clear();
-      _anySuggestionController.clear();
-      _customCategoryController.clear();
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Form submitted successfully!')),
-    );
-    _formKey.currentState!.reset();
   }
 
   @override
@@ -483,8 +506,8 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                           }),
                         ),
                         RadioListTile<String>(
-                          title: const Text('AUDITORIUM'),
-                          value: 'AUDITORIUM',
+                          title: const Text('AUDITORIUM & HALLS'),
+                          value: 'AUDITORIUM & HALLS',
                           groupValue: category,
                           onChanged: (v) => setState(() {
                             category = v ?? '';
