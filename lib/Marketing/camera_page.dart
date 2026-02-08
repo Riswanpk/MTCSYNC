@@ -15,12 +15,57 @@ class CameraPage extends StatefulWidget {
   State<CameraPage> createState() => _CameraPageState();
 }
 
+/// Simple data class to hold location result
+class _LocationResult {
+  final Position position;
+  _LocationResult(this.position);
+}
+
 class _CameraPageState extends State<CameraPage> {
   File? _capturedImage;
   String? _locationString;
   String? _dateTimeString;
   bool _isLoading = false;
-  bool _isUploading = false; // <-- Add this line
+  bool _isUploading = false;
+
+  /// Gets the device location. Returns null if location unavailable.
+  /// Uses medium accuracy — sufficient for watermark text, much faster than high.
+  Future<_LocationResult?> _getLocation() async {
+    try {
+      LocationPermission permission;
+      int retries = 0;
+      const maxRetries = 3;
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      while (!serviceEnabled && retries < maxRetries) {
+        retries++;
+        await Geolocator.openLocationSettings();
+        serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      }
+      if (!serviceEnabled) return null;
+
+      retries = 0;
+      permission = await Geolocator.checkPermission();
+      while ((permission == LocationPermission.denied ||
+              permission == LocationPermission.deniedForever) &&
+          retries < maxRetries) {
+        retries++;
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return null;
+      }
+
+      // Medium accuracy is much faster than high — good enough for a watermark
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+      );
+      return _LocationResult(position);
+    } catch (e) {
+      debugPrint('Error getting location: $e');
+      return null;
+    }
+  }
 
   Future<File?> _compressImage(File imageFile) async {
     try {
@@ -28,16 +73,15 @@ class _CameraPageState extends State<CameraPage> {
       final String targetPath =
           p.join(tempDir.path, "${DateTime.now().millisecondsSinceEpoch}.jpg");
 
-      // Compress the image
+      // Compress the image — smaller dimensions = faster upload
       final XFile? compressedXFile =
           await FlutterImageCompress.compressAndGetFile(
         imageFile.absolute.path,
         targetPath,
-        quality: 30, // Adjust quality as needed (0-100, 85 is a good balance)
-        minWidth: 1080, // Resize to a maximum width of 1080px
-        minHeight:
-            1080, // Maintain aspect ratio by setting a min height as well
-        format: CompressFormat.jpeg, // Specify output format
+        quality: 25, // Aggressive compression for fast upload
+        minWidth: 800, // 800px is sufficient for marketing visit photos
+        minHeight: 800,
+        format: CompressFormat.jpeg,
       );
 
       if (compressedXFile != null) {
@@ -60,54 +104,27 @@ class _CameraPageState extends State<CameraPage> {
       final pickedFile = await picker.pickImage(source: ImageSource.camera);
 
       if (pickedFile != null) {
-        final compressedImageFile = await _compressImage(File(pickedFile.path));
+        // --- OPTIMIZATION: Run compression and location fetch in parallel ---
+        final compressionFuture = _compressImage(File(pickedFile.path));
+        final locationFuture = _getLocation();
+
+        final results = await Future.wait([compressionFuture, locationFuture]);
+        final compressedImageFile = results[0] as File?;
+        final locationResult = results[1] as _LocationResult?;
+
         if (compressedImageFile == null) {
           if (!mounted) return;
           setState(() => _isLoading = false);
           return;
         }
 
-        // Keep asking for location until granted (with max retries to avoid infinite loop)
-        LocationPermission permission;
-        int retries = 0;
-        const maxRetries = 3;
-        bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-        while (!serviceEnabled && retries < maxRetries) {
-          retries++;
-          await Geolocator.openLocationSettings();
-          if (!mounted) return;
-          serviceEnabled = await Geolocator.isLocationServiceEnabled();
-        }
-        if (!serviceEnabled) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Location services are required. Please enable them.')),
-          );
-          setState(() => _isLoading = false);
-          return;
-        }
-
-        retries = 0;
-        permission = await Geolocator.checkPermission();
-        while ((permission == LocationPermission.denied || permission == LocationPermission.deniedForever) && retries < maxRetries) {
-          retries++;
-          permission = await Geolocator.requestPermission();
-          if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Location permission is required!')),
-            );
-          }
-        }
-        if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        if (locationResult == null) {
           if (!mounted) return;
           setState(() => _isLoading = false);
           return;
         }
 
-        final position = await Geolocator.getCurrentPosition(
-            desiredAccuracy: LocationAccuracy.high);
-        
+        final position = locationResult.position;
         String locationText;
         try {
           final placemarks =
@@ -191,13 +208,18 @@ class _CameraPageState extends State<CameraPage> {
                                     imageFile: _capturedImage!,
                                     watermarkText: watermarkText,
                                   );
+                                  // Re-compress after watermarking — the watermark library
+                                  // may output a much larger file (decoded/re-encoded pixels).
+                                  // This re-compression is the #1 upload speed optimization.
+                                  final reCompressed = await _compressImage(watermarkedFile);
+                                  final finalFile = reCompressed ?? watermarkedFile;
                                   if (!mounted) return;
                                   setState(() {
                                     _isUploading = false;
                                   });
                                   // Return the image and location to the previous page
                                   Navigator.pop(context, {
-                                    'image': watermarkedFile,
+                                    'image': finalFile,
                                     'location': _locationString,
                                   });
                                 } catch (e) {

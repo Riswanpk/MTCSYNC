@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import '../Misc/navigation_state.dart';
+import 'image_upload_helper.dart';
 
 class PremiumCustomerForm extends StatefulWidget {
   final String username;
@@ -29,6 +30,7 @@ class PremiumCustomerForm extends StatefulWidget {
 
 class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
   final _formKey = GlobalKey<FormState>();
+  final ImageUploadHelper _uploadHelper = ImageUploadHelper();
 
   // Controllers for text fields
   late TextEditingController _shopNameController;
@@ -36,6 +38,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
   late TextEditingController _confirmedOrderController;
   late TextEditingController _upcomingEventDetailsController;
   late TextEditingController _newProductSuggestionController;
+  late TextEditingController _otherPurchasesReasonController;
   // Removed: _upcomingTrendsController, _feedbackController
 
 
@@ -52,11 +55,14 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
   bool isLoading = false;
   String? locationString;
   bool _photoError = false; // Add this line
+  String? _otherPurchases; // 'yes' or 'no'
 
   // Add error flags for all fields
   bool _shopNameError = false;
   bool _currentEnquiriesError = false;
   bool _confirmedOrderError = false;
+  bool _otherPurchasesError = false;
+  bool _otherPurchasesReasonError = false;
 
   Future<void> _openCamera() async {
     final result = await Navigator.push(
@@ -66,8 +72,11 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
     if (result != null && result is Map && result['image'] != null) {
       setState(() {
         _imageFile = result['image'];
-        locationString = result['location']; // <-- Capture location here
+        locationString = result['location'];
       });
+      // Start uploading immediately while user fills the rest of the form
+      _uploadHelper.cancel(); // cancel any previous upload
+      _uploadHelper.startUpload(_imageFile!);
       _saveDraft();
     }
   }
@@ -80,6 +89,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
     _confirmedOrderController = TextEditingController();
     _upcomingEventDetailsController = TextEditingController();
     _newProductSuggestionController = TextEditingController();
+    _otherPurchasesReasonController = TextEditingController();
     // Removed: _upcomingTrendsController, _feedbackController
     _loadDraft();
   }
@@ -91,6 +101,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
     _confirmedOrderController.dispose();
     _upcomingEventDetailsController.dispose();
     _newProductSuggestionController.dispose();
+    _otherPurchasesReasonController.dispose();
     // Removed: _upcomingTrendsController, _feedbackController
     super.dispose();
   }
@@ -105,6 +116,8 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
       'upcomingEventDetails': _upcomingEventDetailsController.text,
       'newProductSuggestion': _newProductSuggestionController.text,
       'locationString': locationString,
+      'otherPurchases': _otherPurchases,
+      'otherPurchasesReason': _otherPurchasesReasonController.text,
     };
   }
 
@@ -148,6 +161,8 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
         _upcomingEventDetailsController.text = draftData['upcomingEventDetails'] ?? '';
         _newProductSuggestionController.text = draftData['newProductSuggestion'] ?? '';
         locationString = draftData['locationString'];
+        _otherPurchases = draftData['otherPurchases'];
+        _otherPurchasesReasonController.text = draftData['otherPurchasesReason'] ?? '';
 
         if (draftData['imagePath'] != null) {
           final imageFile = File(draftData['imagePath']);
@@ -175,18 +190,28 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
     newProductSuggestion = _newProductSuggestionController.text;
     // Removed: upcomingTrends, feedback
 
+    bool otherPurchasesInvalid = _otherPurchases == null;
+    bool otherPurchasesReasonInvalid = false;
+    if (_otherPurchases == 'yes' && _otherPurchasesReasonController.text.trim().isEmpty) {
+      otherPurchasesReasonInvalid = true;
+    }
+
     // Validate all fields manually
     setState(() {
       _shopNameError = shopName.trim().isEmpty;
       _currentEnquiriesError = currentEnquiries.trim().isEmpty;
       _confirmedOrderError = confirmedOrder.trim().isEmpty;
       _photoError = _imageFile == null;
+      _otherPurchasesError = otherPurchasesInvalid;
+      _otherPurchasesReasonError = otherPurchasesReasonInvalid;
     });
 
     bool hasError = _shopNameError ||
         _currentEnquiriesError ||
         _confirmedOrderError ||
-        _photoError;
+        _photoError ||
+        otherPurchasesInvalid ||
+        otherPurchasesReasonInvalid;
 
     if (hasError) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -199,20 +224,11 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
     setState(() => isLoading = true);
 
     try {
-      String? imageUrl;
-      if (_imageFile != null) {
-        try {
-          final ref = FirebaseStorage.instance
-              .ref()
-              .child('marketing')
-              .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
-          await ref.putFile(_imageFile!);
-          imageUrl = await ref.getDownloadURL();
-        } catch (e) {
-          debugPrint('Error uploading image: $e');
-          imageUrl = null;
-        }
-      }
+      // Use the pre-uploaded image URL (upload started when photo was taken)
+      String? imageUrl = await _uploadHelper.getUploadResult();
+
+      String otherPurchases = _otherPurchases ?? '';
+      String otherPurchasesReason = _otherPurchasesReasonController.text;
 
       await FirebaseFirestore.instance.collection('marketing').add({
         'formType': 'Premium Customer',
@@ -230,12 +246,15 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
         'imageUrl': imageUrl,
         'locationString': locationString,
         'timestamp': FieldValue.serverTimestamp(),
+        'otherPurchases': otherPurchases,
+        'otherPurchasesReason': otherPurchases == 'yes' ? otherPurchasesReason : null,
       });
 
       await _clearDraft();
       
       // Clear navigation state since form was successfully submitted
       await NavigationState.clearState();
+      _uploadHelper.reset();
 
       if (!mounted) return;
       setState(() => isLoading = false);
@@ -262,6 +281,8 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
         _confirmedOrderController.clear();
         _upcomingEventDetailsController.clear();
         _newProductSuggestionController.clear();
+        _otherPurchases = null;
+        _otherPurchasesReasonController.clear();
 
         // Reset all error flags
         _shopNameError = false;
@@ -442,6 +463,98 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                         },
                       ),
                     ),
+                    const SizedBox(height: 20),
+
+                    // OTHER PURCHASES
+                    _buildSectionTitle('Other Purchases'),
+                    const SizedBox(height: 10),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 4),
+                      child: Text(
+                        'Did this customer purchase from another company? *',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontFamily: 'Electorize',
+                        ),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: RadioListTile<String>(
+                            title: const Text('Yes'),
+                            value: 'yes',
+                            groupValue: _otherPurchases,
+                            onChanged: (value) {
+                              setState(() {
+                                _otherPurchases = value;
+                                _otherPurchasesError = false;
+                              });
+                              _saveDraft();
+                            },
+                          ),
+                        ),
+                        Expanded(
+                          child: RadioListTile<String>(
+                            title: const Text('No'),
+                            value: 'no',
+                            groupValue: _otherPurchases,
+                            onChanged: (value) {
+                              setState(() {
+                                _otherPurchases = value;
+                                _otherPurchasesError = false;
+                              });
+                              _saveDraft();
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_otherPurchasesError)
+                      const Padding(
+                        padding: EdgeInsets.only(left: 16, top: 4),
+                        child: Text(
+                          'Please select an option',
+                          style: TextStyle(color: Colors.red, fontSize: 13, fontFamily: 'Electorize'),
+                        ),
+                      ),
+                    if (_otherPurchases == 'yes')
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color.fromARGB(255, 255, 255, 255),
+                            borderRadius: const BorderRadius.only(
+                              topRight: Radius.circular(22),
+                              topLeft: Radius.circular(0),
+                              bottomLeft: Radius.circular(22),
+                              bottomRight: Radius.circular(0),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.08),
+                                spreadRadius: 1,
+                                blurRadius: 8,
+                                offset: const Offset(2, 4),
+                              ),
+                            ],
+                          ),
+                          child: TextFormField(
+                            controller: _otherPurchasesReasonController,
+                            decoration: _inputDecoration(
+                              'Reason for Other Purchase',
+                              error: _otherPurchasesReasonError,
+                              errorText: 'Enter reason',
+                            ),
+                            onChanged: (v) {
+                              setState(() {
+                                _otherPurchasesReasonError = v.trim().isEmpty;
+                              });
+                              _saveDraft();
+                            },
+                          ),
+                        ),
+                      ),
                     const SizedBox(height: 20),
 
                     // SECTION: UPCOMING EVENTS

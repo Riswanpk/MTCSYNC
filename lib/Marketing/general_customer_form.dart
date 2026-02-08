@@ -10,6 +10,7 @@ import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import '../Misc/navigation_state.dart';
+import 'image_upload_helper.dart';
 
 class GeneralCustomerForm extends StatefulWidget {
   final String username;
@@ -30,6 +31,7 @@ class GeneralCustomerForm extends StatefulWidget {
 }
 
 class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
+    final ImageUploadHelper _uploadHelper = ImageUploadHelper();
     String? _otherPurchases; // 'yes' or 'no'
     TextEditingController _otherPurchasesReasonController = TextEditingController();
     bool _otherPurchasesError = false;
@@ -82,8 +84,11 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
     if (result != null && result is Map && result['image'] != null) {
       setState(() {
         _imageFile = result['image'];
-        locationString = result['location']; // <-- Capture location here
+        locationString = result['location'];
       });
+      // Start uploading immediately while user fills the rest of the form
+      _uploadHelper.cancel(); // cancel any previous upload
+      _uploadHelper.startUpload(_imageFile!);
       _saveDraft();
     }
   }
@@ -225,30 +230,8 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
     });
 
     try {
-      String? imageUrl;
-      if (_imageFile != null) {
-        try {
-          final ref = FirebaseStorage.instance
-              .ref()
-              .child('marketing')
-              .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
-          final uploadTask = ref.putFile(_imageFile!);
-
-          uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-            if (mounted) {
-              setState(() {
-                _uploadProgress = snapshot.bytesTransferred / (snapshot.totalBytes == 0 ? 1 : snapshot.totalBytes);
-              });
-            }
-          });
-
-          await uploadTask;
-          imageUrl = await ref.getDownloadURL();
-        } catch (e) {
-          debugPrint('Error uploading image: $e');
-          imageUrl = null;
-        }
-      }
+      // Use the pre-uploaded image URL (upload started when photo was taken)
+      String? imageUrl = await _uploadHelper.getUploadResult();
 
       // Submit marketing form
       final marketingDoc = await FirebaseFirestore.instance.collection('marketing').add({
@@ -331,6 +314,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
       
       // Clear navigation state since form was successfully submitted
       await NavigationState.clearState();
+      _uploadHelper.reset();
 
       if (!mounted) return;
 
