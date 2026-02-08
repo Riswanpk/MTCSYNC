@@ -25,12 +25,14 @@ class _DashboardPageState extends State<DashboardPage> {
   String? _selectedBranch;
   List<String> _branches = [];
   bool _loadingBranches = true;
+  Map<String, dynamic>? _userData;
+  bool _loadingUser = true;
 
   @override
   void initState() {
     super.initState();
     _fetchBranches();
-   
+    _fetchUserData();
   }
 
   Future<void> _fetchBranches() async {
@@ -44,8 +46,20 @@ class _DashboardPageState extends State<DashboardPage> {
       ..sort();
     setState(() {
       _branches = branches;
-      _selectedBranch = branches.isNotEmpty ? branches.first : null;
+      // Do not auto-select branch for admin; keep null until user picks
+      _selectedBranch = null;
       _loadingBranches = false;
+    });
+  }
+
+  Future<void> _fetchUserData() async {
+    final userSnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(FirebaseAuth.instance.currentUser!.uid)
+        .get();
+    setState(() {
+      _userData = userSnapshot.data() as Map<String, dynamic>?;
+      _loadingUser = false;
     });
   }
 
@@ -125,253 +139,245 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance
-          .collection('users')
-          .doc(FirebaseAuth.instance.currentUser!.uid)
-          .get(),
-      builder: (context, userSnapshot) {
-        if (!userSnapshot.hasData) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
-        }
-        final userData = userSnapshot.data!.data() as Map<String, dynamic>;
-        final role = userData['role'] ?? 'sales';
-        final branch = userData['branch'] ?? '';
+    if (_loadingUser) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    final userData = _userData ?? {};
+    final role = userData['role'] ?? 'sales';
+    final branch = userData['branch'] ?? '';
 
-        return Scaffold(
-          backgroundColor: Theme.of(context).colorScheme.background,
-          appBar: AppBar(
-            title: const Text('Dashboard'),
-            backgroundColor: Theme.of(context).colorScheme.background,
-            foregroundColor: Theme.of(context).colorScheme.onBackground,
-            elevation: 0,
-            actions: [
-              if (role == 'admin') // Only show for admin
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.menu),
-                  onSelected: (value) async {
-                    if (value == 'send_daily_report') {
-                      await sendDailyLeadsReport(context);
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem<String>(
-                      value: 'send_daily_report',
-                      child: Text('Send Daily Leads & Todo Report'),
-                    ),
-                  ],
+    return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.background,
+      appBar: AppBar(
+        title: const Text('Dashboard'),
+        backgroundColor: Theme.of(context).colorScheme.background,
+        foregroundColor: Theme.of(context).colorScheme.onBackground,
+        elevation: 0,
+        actions: [
+          if (role == 'admin') // Only show for admin
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.menu),
+              onSelected: (value) async {
+                if (value == 'send_daily_report') {
+                  await sendDailyLeadsReport(context);
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem<String>(
+                  value: 'send_daily_report',
+                  child: Text('Send Daily Leads & Todo Report'),
                 ),
-            ],
-          ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              children: [
-                const SizedBox(height: 24),
-                FutureBuilder<Map<String, int>>(
-                  future: _fetchCounts(branch: role == 'manager' ? branch : null),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    final counts = snapshot.data!;
-                    return GridView.count(
-                      crossAxisCount: 2,
-                      shrinkWrap: true,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      physics: const NeverScrollableScrollPhysics(),
-                      childAspectRatio: 1.25,
-                      children: [
-                        GestureDetector(
-                          onTap: () {
-                            if (role == 'manager') {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => LeadsPage(branch: branch),
-                                ),
-                              );
-                            } else {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => LeadsPage(branch: ""),
-                                ),
-                              );
-                            }
-                          },
-                          child: _StatCard(
-                            title: "Total Leads",
-                            value: counts['totalLeads'].toString(),
-                            color: Colors.blue,
-                            icon: Icons.leaderboard,
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () async {
-                            if (role == 'manager') {
-                              // Fetch users for the manager's branch
-                              final usersSnapshot = await FirebaseFirestore.instance
-                                  .collection('users')
-                                  .where('branch', isEqualTo: branch)
-                                  .where('role', isNotEqualTo: 'admin')
-                                  .get();
-                              final users = usersSnapshot.docs
-                                  .map((doc) => {
-                                        'uid': doc.id,
-                                        'username': doc['username'] ?? '',
-                                        'role': doc['role'] ?? '',
-                                        'email': doc['email'] ?? '',
-                                        'branch': doc['branch'] ?? '',
-                                      })
-                                  .toList();
-
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => MonthlyReportPage(branch: branch, users: users),
-                                ),
-                              );
-                            } else {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => MonthlyReportPage(users: const []),
-                                ),
-                              );
-                            }
-                          },
-                          child: _StatCard(
-                            title: "Leads This Month",
-                            value: counts['monthLeads'].toString(),
-                            color: Colors.green,
-                            icon: Icons.calendar_month,
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const DailyDashboardPage()),
-                            );
-                          },
-                          child: _StatCard(
-                            title: "Leads Today",
-                            value: counts['todayLeads'].toString(),
-                            color: Colors.orange,
-                            icon: Icons.today,
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () {
-                            showModalBottomSheet(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              builder: (_) => PendingTodosModal(role: role, branch: branch),
-                            );
-                          },
-                          child: _StatCard(
-                            title: "Pending Todos",
-                            value: counts['pendingTodos'].toString(),
-                            color: Colors.red,
-                            icon: Icons.pending_actions,
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF23242B) : Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4)),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Only show branch switch for admin, not for manager
-                      if (role == 'admin' && !_loadingBranches)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: DropdownButton<String>(
-                            value: _selectedBranch,
-                            items: _branches
-                                .map((b) => DropdownMenuItem(
-                                      value: b,
-                                      child: Text(
-                                        b,
-                                        style: TextStyle(
-                                          color: Theme.of(context).brightness == Brightness.dark
-                                              ? Colors.white
-                                              : Colors.black,
-                                        ),
-                                      ),
-                                    ))
-                                .toList(),
-                            onChanged: (val) {
-                              setState(() {
-                                _selectedBranch = val;
-                              });
-                            },
-                            dropdownColor: Theme.of(context).brightness == Brightness.dark
-                                ? const Color(0xFF23242B)
-                                : Colors.white,
-                            iconEnabledColor: Theme.of(context).brightness == Brightness.dark
-                                ? Colors.white
-                                : Colors.black,
-                            hint: Text(
-                              "Select Branch",
-                              style: TextStyle(
-                                color: Theme.of(context).brightness == Brightness.dark
-                                    ? Colors.white
-                                    : Colors.black,
-                              ),
-                            ),
-                          ),
-                        ),
-                      SizedBox(
-                        height: 260,
-                        child: LeadsPerMonthChart(
-                          branch: role == 'admin'
-                              ? _selectedBranch
-                              : branch, // For manager, always use their branch
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // --- Insights Button ---
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.insights),
-                    label: const Text("Insights"),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const InsightsPage()),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 24),
               ],
             ),
-          ),
-        );
-      },
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            const SizedBox(height: 24),
+            FutureBuilder<Map<String, int>>(
+              future: _fetchCounts(branch: role == 'manager' ? branch : null),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final counts = snapshot.data!;
+                return GridView.count(
+                  crossAxisCount: 2,
+                  shrinkWrap: true,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  physics: const NeverScrollableScrollPhysics(),
+                  childAspectRatio: 1.25,
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        if (role == 'manager') {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => LeadsPage(branch: branch),
+                            ),
+                          );
+                        } else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => LeadsPage(branch: ""),
+                            ),
+                          );
+                        }
+                      },
+                      child: _StatCard(
+                        title: "Total Leads",
+                        value: counts['totalLeads'].toString(),
+                        color: Colors.blue,
+                        icon: Icons.leaderboard,
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () async {
+                        if (role == 'manager') {
+                          // Fetch users for the manager's branch
+                          final usersSnapshot = await FirebaseFirestore.instance
+                              .collection('users')
+                              .where('branch', isEqualTo: branch)
+                              .where('role', isNotEqualTo: 'admin')
+                              .get();
+                          final users = usersSnapshot.docs
+                              .map((doc) => {
+                                    'uid': doc.id,
+                                    'username': doc['username'] ?? '',
+                                    'role': doc['role'] ?? '',
+                                    'email': doc['email'] ?? '',
+                                    'branch': doc['branch'] ?? '',
+                                  })
+                              .toList();
+
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => MonthlyReportPage(branch: branch, users: users),
+                            ),
+                          );
+                        } else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => MonthlyReportPage(users: const []),
+                            ),
+                          );
+                        }
+                      },
+                      child: _StatCard(
+                        title: "Leads This Month",
+                        value: counts['monthLeads'].toString(),
+                        color: Colors.green,
+                        icon: Icons.calendar_month,
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const DailyDashboardPage()),
+                        );
+                      },
+                      child: _StatCard(
+                        title: "Leads Today",
+                        value: counts['todayLeads'].toString(),
+                        color: Colors.orange,
+                        icon: Icons.today,
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (_) => PendingTodosModal(role: role, branch: branch),
+                        );
+                      },
+                      child: _StatCard(
+                        title: "Pending Todos",
+                        value: counts['pendingTodos'].toString(),
+                        color: Colors.red,
+                        icon: Icons.pending_actions,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF23242B) : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4)),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Only show branch switch for admin, not for manager
+                  if (role == 'admin' && !_loadingBranches)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: DropdownButton<String>(
+                        value: _selectedBranch,
+                        items: _branches
+                            .map((b) => DropdownMenuItem(
+                                  value: b,
+                                  child: Text(
+                                    b,
+                                    style: TextStyle(
+                                      color: Theme.of(context).brightness == Brightness.dark
+                                          ? Colors.white
+                                          : Colors.black,
+                                    ),
+                                  ),
+                                ))
+                            .toList(),
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedBranch = val;
+                          });
+                        },
+                        dropdownColor: Theme.of(context).brightness == Brightness.dark
+                            ? const Color(0xFF23242B)
+                            : Colors.white,
+                        iconEnabledColor: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white
+                            : Colors.black,
+                        hint: Text(
+                          "Select Branch",
+                          style: TextStyle(
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white
+                                : Colors.black,
+                          ),
+                        ),
+                      ),
+                    ),
+                  SizedBox(
+                    height: 260,
+                    child: role == 'admin'
+                        ? (_selectedBranch == null
+                            ? Center(child: Text("Select a branch to view graph", style: TextStyle(color: Theme.of(context).colorScheme.onBackground)))
+                            : LeadsPerMonthChart(branch: _selectedBranch))
+                        : LeadsPerMonthChart(branch: branch), // For manager, always use their branch
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            // --- Insights Button ---
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.insights),
+                label: const Text("Insights"),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const InsightsPage()),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
     );
   }
 }
