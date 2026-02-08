@@ -70,7 +70,8 @@ class TaskDetailPage extends StatelessWidget {
     final priority = data['priority'] ?? 'High';
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
+      backgroundColor:
+          isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
       appBar: AppBar(
         title: const Text('Task Details'),
         backgroundColor: const Color(0xFF005BAC),
@@ -78,19 +79,25 @@ class TaskDetailPage extends StatelessWidget {
         elevation: 0,
         actions: [
           FutureBuilder<DocumentSnapshot>(
-            future: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser!.uid).get(),
+            future: FirebaseFirestore.instance
+                .collection('users')
+                .doc(FirebaseAuth.instance.currentUser!.uid)
+                .get(),
             builder: (context, userSnapshot) {
               if (!userSnapshot.hasData) return const SizedBox.shrink();
- 
-              final currentUserData = userSnapshot.data!.data() as Map<String, dynamic>;
+
+              final currentUserData =
+                  userSnapshot.data!.data() as Map<String, dynamic>;
               final currentUserRole = currentUserData['role'];
               final currentUserId = FirebaseAuth.instance.currentUser!.uid;
- 
+
               // Conditions to show the edit button:
               // 1. User is a manager AND they are the one who assigned the task.
               // 2. The task was NOT assigned by a manager (i.e., it's a self-created task).
-              final bool canEdit = (currentUserRole == 'manager' && data['assigned_by'] == currentUserId) || !isAssignedByManager;
- 
+              final bool canEdit = (currentUserRole == 'manager' &&
+                      data['assigned_by'] == currentUserId) ||
+                  !isAssignedByManager;
+
               return Row(
                 children: [
                   if (canEdit)
@@ -100,7 +107,9 @@ class TaskDetailPage extends StatelessWidget {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => TodoFormPage(docId: data['docId'])),
+                          MaterialPageRoute(
+                              builder: (context) =>
+                                  TodoFormPage(docId: data['docId'])),
                         );
                       },
                     ),
@@ -113,21 +122,28 @@ class TaskDetailPage extends StatelessWidget {
                             context: context,
                             builder: (context) => AlertDialog(
                               title: const Text('Mark as Done?'),
-                              content: const Text('Are you sure you want to mark this task as done?'),
+                              content: const Text(
+                                  'Are you sure you want to mark this task as done?'),
                               actions: [
                                 TextButton(
-                                  onPressed: () => Navigator.of(context).pop(false),
+                                  onPressed: () =>
+                                      Navigator.of(context).pop(false),
                                   child: const Text('Cancel'),
                                 ),
                                 TextButton(
-                                  onPressed: () => Navigator.of(context).pop(true),
-                                  child: const Text('Yes', style: TextStyle(color: Colors.green)),
+                                  onPressed: () =>
+                                      Navigator.of(context).pop(true),
+                                  child: const Text('Yes',
+                                      style: TextStyle(color: Colors.green)),
                                 ),
                               ],
                             ),
                           );
                           if (confirm == true && data['docId'] != null) {
-                            await FirebaseFirestore.instance.collection('todo').doc(data['docId']).update({
+                            await FirebaseFirestore.instance
+                                .collection('todo')
+                                .doc(data['docId'])
+                                .update({
                               'status': 'done',
                               'timestamp': Timestamp.now(),
                             });
@@ -137,7 +153,10 @@ class TaskDetailPage extends StatelessWidget {
                             }
                           }
                         },
-                        child: const Text('DONE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        child: const Text('DONE',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold)),
                       ),
                     ),
                 ],
@@ -164,7 +183,8 @@ class TaskDetailPage extends StatelessWidget {
             // Date
             Row(
               children: [
-                Icon(Icons.calendar_today, size: 18, color: isDark ? Colors.white70 : Colors.black54),
+                Icon(Icons.calendar_today,
+                    size: 18, color: isDark ? Colors.white70 : Colors.black54),
                 const SizedBox(width: 8),
                 Text(
                   dateStr,
@@ -221,14 +241,18 @@ class TaskDetailPage extends StatelessWidget {
             Row(
               children: [
                 Icon(
-                  data['status'] == 'done' ? Icons.check_circle : Icons.radio_button_unchecked,
-                  color: data['status'] == 'done' ? Colors.green : Colors.orange,
+                  data['status'] == 'done'
+                      ? Icons.check_circle
+                      : Icons.radio_button_unchecked,
+                  color:
+                      data['status'] == 'done' ? Colors.green : Colors.orange,
                 ),
                 const SizedBox(width: 8),
                 Text(
                   data['status'] == 'done' ? 'Completed' : 'Pending',
                   style: TextStyle(
-                    color: data['status'] == 'done' ? Colors.green : Colors.orange,
+                    color:
+                        data['status'] == 'done' ? Colors.green : Colors.orange,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -251,7 +275,8 @@ class TaskDetailPageFromId extends StatelessWidget {
       future: FirebaseFirestore.instance.collection('todo').doc(docId).get(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+              body: Center(child: CircularProgressIndicator()));
         }
         final data = snapshot.data!.data() as Map<String, dynamic>?;
         if (data == null) {
@@ -260,10 +285,16 @@ class TaskDetailPageFromId extends StatelessWidget {
         // Add docId to data map for TaskDetailPage
         data['docId'] = docId;
 
-        final timestamp = data['timestamp'] as Timestamp?;
+        final reminderData = data['reminder'];
+        DateTime? reminderDateTime;
+        if (reminderData is Timestamp) {
+          reminderDateTime = reminderData.toDate();
+        } else if (reminderData is String) {
+          reminderDateTime = DateTime.tryParse(reminderData);
+        }
         String dateStr = '';
-        if (timestamp is Timestamp) {
-          dateStr = timestamp.toDate().toLocal().toString().split(' ')[0];
+        if (reminderDateTime != null) {
+          dateStr = reminderDateTime.toLocal().toString().split(' ')[0];
         }
         return TaskDetailPage(data: data, dateStr: dateStr);
       },
@@ -278,7 +309,8 @@ class TodoPage extends StatefulWidget {
   State<TodoPage> createState() => _TodoPageState();
 }
 
-class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+class _TodoPageState extends State<TodoPage>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final TextEditingController _todoController = TextEditingController();
@@ -309,6 +341,7 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
     _userEmail = doc.data()?['email'] ?? 'unknown@example.com';
     _userRole = doc.data()?['role'] ?? 'sales';
   }
+
   @override
   void dispose() {
     _assignmentListener?.cancel();
@@ -329,17 +362,20 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
     await _localNotifications!.initialize(initSettings);
 
     // Create notification channel with custom sound
-    const AndroidNotificationChannel assignmentChannel = AndroidNotificationChannel(
+    const AndroidNotificationChannel assignmentChannel =
+        AndroidNotificationChannel(
       'assignment_channel',
       'Assignment Notifications',
       description: 'Channel for assignment notifications',
       importance: Importance.max,
       playSound: true,
-      sound: RawResourceAndroidNotificationSound('assignment'), // <-- custom sound
+      sound:
+          RawResourceAndroidNotificationSound('assignment'), // <-- custom sound
     );
 
     await _localNotifications!
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(assignmentChannel);
   }
 
@@ -366,14 +402,16 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
   }
 
   Future<void> _showAssignmentNotification(String taskTitle) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
       'assignment_channel',
       'Assignment Notifications',
       channelDescription: 'Channel for assignment notifications',
       importance: Importance.max,
       priority: Priority.high,
       playSound: true,
-      sound: RawResourceAndroidNotificationSound('assignment'), // <-- custom sound
+      sound:
+          RawResourceAndroidNotificationSound('assignment'), // <-- custom sound
     );
     const NotificationDetails platformDetails =
         NotificationDetails(android: androidDetails);
@@ -400,7 +438,8 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
       future: _userInfoFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+              body: Center(child: CircularProgressIndicator()));
         }
 
         final isManager = _userRole == 'manager';
@@ -438,23 +477,27 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                   icon: const Icon(Icons.arrow_back),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
-                backgroundColor: const Color.fromARGB(255, 15, 110, 205), // Or your preferred color
+                backgroundColor: const Color.fromARGB(
+                    255, 15, 110, 205), // Or your preferred color
                 foregroundColor: Colors.white,
                 elevation: 0,
                 actions: [
                   if (_userRole == 'admin')
                     IconButton(
-                      icon: const Icon(Icons.bar_chart_rounded, color: Colors.white),
+                      icon: const Icon(Icons.bar_chart_rounded,
+                          color: Colors.white),
                       tooltip: 'Todo Report',
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => const ReportTodoPage()),
+                          MaterialPageRoute(
+                              builder: (context) => const ReportTodoPage()),
                         );
                       },
                     ),
                   IconButton(
-                    icon: const Icon(Icons.delete_sweep_rounded, color: Colors.white),
+                    icon: const Icon(Icons.delete_sweep_rounded,
+                        color: Colors.white),
                     tooltip: 'Clear All Tasks',
                     onPressed: _clearAllTodos,
                   ),
@@ -463,13 +506,21 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                   controller: _tabController,
                   tabs: isManager
                       ? const [
-                          Tab(icon: Icon(Icons.pending_actions), text: 'Pending'),
-                          Tab(icon: Icon(Icons.check_circle), text: 'Completed'),
+                          Tab(
+                              icon: Icon(Icons.pending_actions),
+                              text: 'Pending'),
+                          Tab(
+                              icon: Icon(Icons.check_circle),
+                              text: 'Completed'),
                           Tab(icon: Icon(Icons.group), text: 'Others'),
                         ]
                       : const [
-                          Tab(icon: Icon(Icons.pending_actions), text: 'Pending'),
-                          Tab(icon: Icon(Icons.check_circle), text: 'Completed'),
+                          Tab(
+                              icon: Icon(Icons.pending_actions),
+                              text: 'Pending'),
+                          Tab(
+                              icon: Icon(Icons.check_circle),
+                              text: 'Completed'),
                         ],
                 ),
               ),
@@ -584,7 +635,8 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Mark as Done?'),
-          content: const Text('Are you sure you want to mark this todo as done?'),
+          content:
+              const Text('Are you sure you want to mark this todo as done?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(true),
@@ -616,7 +668,6 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
     }
   }
 
-
   Widget _buildTodoList(String status, {bool onlySelf = false}) {
     if (_userEmail == null) {
       return const Center(child: CircularProgressIndicator());
@@ -630,7 +681,8 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
     return FutureBuilder<DocumentSnapshot>(
       future: _firestore.collection('users').doc(user.uid).get(),
       builder: (context, userSnapshot) {
-        if (!userSnapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (!userSnapshot.hasData)
+          return const Center(child: CircularProgressIndicator());
         final role = userSnapshot.data!.get('role');
         final uid = user.uid;
 
@@ -644,7 +696,8 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                 .orderBy('timestamp', descending: true)
                 .snapshots(),
             builder: (context, snapshot) {
-              if (snapshot.hasError) return const Center(child: Text('Error loading todos'));
+              if (snapshot.hasError)
+                return const Center(child: Text('Error loading todos'));
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
@@ -654,8 +707,11 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
               if (todos.isEmpty) {
                 return Center(
                   child: Text(
-                    status == 'pending' ? 'No pending tasks' : 'No completed tasks',
-                    style: const TextStyle(fontSize: 16, color: Color.fromARGB(255, 70, 164, 57)),
+                    status == 'pending'
+                        ? 'No pending tasks'
+                        : 'No completed tasks',
+                    style: const TextStyle(
+                        fontSize: 16, color: Color.fromARGB(255, 70, 164, 57)),
                   ),
                 );
               }
@@ -663,7 +719,8 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
               final isDark = Theme.of(context).brightness == Brightness.dark;
 
               return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 itemCount: todos.length,
                 itemBuilder: (context, index) {
                   final doc = todos[index];
@@ -671,10 +728,17 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                   final title = data['title'] ?? 'No title';
                   final description = data['description'] ?? '';
                   final priority = data['priority'] ?? 'High';
-                  final timestamp = data['timestamp'] as Timestamp?;
-                  final timeStr = timestamp != null
-                      ? TimeOfDay.fromDateTime(timestamp.toDate().toLocal()).format(context)
-                      : '...';
+                  final reminderData = data['reminder'];
+                  DateTime? reminderDateTime;
+                  if (reminderData is Timestamp) {
+                    reminderDateTime = reminderData.toDate();
+                  } else if (reminderData is String) {
+                    reminderDateTime = DateTime.tryParse(reminderData);
+                  }
+                  final timeStr = reminderDateTime != null
+                      ? TimeOfDay.fromDateTime(reminderDateTime.toLocal())
+                          .format(context)
+                      : 'No reminder';
 
                   Color priorityColor;
                   Color priorityBgColor;
@@ -682,15 +746,18 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                     switch (priority) {
                       case 'High':
                         priorityColor = Colors.red;
-                        priorityBgColor = const Color(0xFF3B2323); // Dark red shade
+                        priorityBgColor =
+                            const Color(0xFF3B2323); // Dark red shade
                         break;
                       case 'Medium':
                         priorityColor = Colors.amber;
-                        priorityBgColor = const Color(0xFF39321A); // Dark amber shade
+                        priorityBgColor =
+                            const Color(0xFF39321A); // Dark amber shade
                         break;
                       case 'Low':
                         priorityColor = Colors.green;
-                        priorityBgColor = const Color(0xFF1B3223); // Dark green shade
+                        priorityBgColor =
+                            const Color(0xFF1B3223); // Dark green shade
                         break;
                       default:
                         priorityColor = Colors.grey;
@@ -704,11 +771,13 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                         break;
                       case 'Medium':
                         priorityColor = Colors.amber;
-                        priorityBgColor = const Color(0xFFFFF8E1); // Light amber/yellow
+                        priorityBgColor =
+                            const Color(0xFFFFF8E1); // Light amber/yellow
                         break;
                       case 'Low':
                         priorityColor = Colors.green;
-                        priorityBgColor = const Color(0xFFE8F5E9); // Light green
+                        priorityBgColor =
+                            const Color(0xFFE8F5E9); // Light green
                         break;
                       default:
                         priorityColor = Colors.grey;
@@ -717,162 +786,190 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                   }
 
                   return Slidable(
-                    key: ValueKey(doc.id),
-                    startActionPane: ActionPane(
-                      motion: const DrawerMotion(),
-                      extentRatio: 0.28,
-                      children: [
-                        SlidableAction(
-                          onPressed: (context) async {
-                            await _toggleStatus(doc);
-                          },
-                          backgroundColor: data['status'] == 'pending'
-                              ? Colors.green.shade400
-                              : Colors.orange.shade400,
-                          foregroundColor: Colors.white,
-                          icon: data['status'] == 'pending'
-                              ? Icons.check_circle
-                              : Icons.refresh,
-                          label: data['status'] == 'pending'
-                              ? 'Done'
-                              : 'Pending',
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ],
-                    ),
-                    endActionPane: ActionPane(
-                      motion: const DrawerMotion(),
-                      extentRatio: 0.25,
-                      children: [
-                        SlidableAction(
-                          onPressed: (context) async {
-                            final confirm = await showDialog<bool>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Delete Task?'),
-                                content: const Text('Are you sure you want to delete this task?'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.of(context).pop(true),
-                                    child: const Text('Delete', style: TextStyle(color: Color.fromARGB(255, 0, 0, 0))),
-                                  ),
-                                  TextButton(
-                                    onPressed: () => Navigator.of(context).pop(false),
-                                    child: const Text('Cancel'),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (confirm == true) {
-                              await _firestore.collection('todo').doc(doc.id).delete();
-                              await updateTodoWidgetFromFirestore(); // <-- Add this line
-                            }
-                          },
-                          backgroundColor: Colors.red.shade400,
-                          foregroundColor: Colors.white,
-                          icon: Icons.delete,
-                          label: 'Delete',
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ],
-                    ),
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: priorityBgColor,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Theme.of(context).shadowColor.withOpacity(0.15),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
+                      key: ValueKey(doc.id),
+                      startActionPane: ActionPane(
+                        motion: const DrawerMotion(),
+                        extentRatio: 0.28,
+                        children: [
+                          SlidableAction(
+                            onPressed: (context) async {
+                              await _toggleStatus(doc);
+                            },
+                            backgroundColor: data['status'] == 'pending'
+                                ? Colors.green.shade400
+                                : Colors.orange.shade400,
+                            foregroundColor: Colors.white,
+                            icon: data['status'] == 'pending'
+                                ? Icons.check_circle
+                                : Icons.refresh,
+                            label: data['status'] == 'pending'
+                                ? 'Done'
+                                : 'Pending',
+                            borderRadius: BorderRadius.circular(16),
                           ),
                         ],
                       ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        leading: Container(
-                          width: 5,
-                          height: double.infinity,
-                          decoration: BoxDecoration(
-                            color: priorityColor,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        title: Text(
-                          title,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: data['status'] == 'done'
-                                ? Theme.of(context).disabledColor
-                                : Theme.of(context).textTheme.bodyLarge?.color,
-                            decoration: data['status'] == 'done' ? TextDecoration.lineThrough : null,
-                          ),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    timeStr,
-                                    style: TextStyle(
-                                      color: Theme.of(context).hintColor,
-                                      fontSize: 14,
+                      endActionPane: ActionPane(
+                        motion: const DrawerMotion(),
+                        extentRatio: 0.25,
+                        children: [
+                          SlidableAction(
+                            onPressed: (context) async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('Delete Task?'),
+                                  content: const Text(
+                                      'Are you sure you want to delete this task?'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(true),
+                                      child: const Text('Delete',
+                                          style: TextStyle(
+                                              color: Color.fromARGB(
+                                                  255, 0, 0, 0))),
                                     ),
-                                  ),
-                                  if (description.isNotEmpty)
-                                    Flexible(
-                                      child: Text(
-                                        description,
-                                        style: TextStyle(
-                                          color: Theme.of(context).textTheme.bodySmall?.color,
-                                          fontSize: 13,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(false),
+                                      child: const Text('Cancel'),
                                     ),
-                                ],
-                              ),
+                                  ],
+                                ),
+                              );
+                              if (confirm == true) {
+                                await _firestore
+                                    .collection('todo')
+                                    .doc(doc.id)
+                                    .delete();
+                                await updateTodoWidgetFromFirestore(); // <-- Add this line
+                              }
+                            },
+                            backgroundColor: Colors.red.shade400,
+                            foregroundColor: Colors.white,
+                            icon: Icons.delete,
+                            label: 'Delete',
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ],
+                      ),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: priorityBgColor,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Theme.of(context)
+                                  .shadowColor
+                                  .withOpacity(0.15),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
                             ),
-                            if (data['email'] != null)
-                              FutureBuilder<String>(
-                                future: _getUsernameByEmail(data['email'] ?? ''),
-                                builder: (context, snapshot) {
-                                  if (!snapshot.hasData) return const SizedBox.shrink();
-                                  return Padding(
-                                    padding: const EdgeInsets.only(top: 2),
-                                    child: Text(
-                                      'Assigned to: ${snapshot.data}',
-                                      style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
-                                    ),
-                                  );
-                                },
-                              ),
                           ],
                         ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => TaskDetailPage(
-                                data: {
-                                  ...data,
-                                  'docId': doc.id, // Ensure docId is passed
-                                },
-                                dateStr: timestamp != null
-                                    ? timestamp.toDate().toLocal().toString().split(' ')[0]
-                                    : '',
-                              ),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          leading: Container(
+                            width: 5,
+                            height: double.infinity,
+                            decoration: BoxDecoration(
+                              color: priorityColor,
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                          );
-                        },
-                      ),
-                    ));
+                          ),
+                          title: Text(
+                            title,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: data['status'] == 'done'
+                                  ? Theme.of(context).disabledColor
+                                  : Theme.of(context)
+                                      .textTheme
+                                      .bodyLarge
+                                      ?.color,
+                              decoration: data['status'] == 'done'
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                            ),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      timeStr,
+                                      style: TextStyle(
+                                        color: Theme.of(context).hintColor,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    if (description.isNotEmpty)
+                                      Flexible(
+                                        child: Text(
+                                          description,
+                                          style: TextStyle(
+                                            color: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.color,
+                                            fontSize: 13,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              if (data['email'] != null)
+                                FutureBuilder<String>(
+                                  future:
+                                      _getUsernameByEmail(data['email'] ?? ''),
+                                  builder: (context, snapshot) {
+                                    if (!snapshot.hasData)
+                                      return const SizedBox.shrink();
+                                    return Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text(
+                                        'Assigned to: ${snapshot.data}',
+                                        style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.blueGrey),
+                                      ),
+                                    );
+                                  },
+                                ),
+                            ],
+                          ),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => TaskDetailPage(
+                                  data: {
+                                    ...data,
+                                    'docId': doc.id, // Ensure docId is passed
+                                  },
+                                  dateStr: reminderDateTime != null
+                                      ? reminderDateTime
+                                          .toLocal()
+                                          .toString()
+                                          .split(' ')[0]
+                                      : '',
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ));
                 },
               );
             },
@@ -887,7 +984,8 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                 .orderBy('timestamp', descending: true)
                 .snapshots(),
             builder: (context, snapshot) {
-              if (snapshot.hasError) return const Center(child: Text('Error loading todos'));
+              if (snapshot.hasError)
+                return const Center(child: Text('Error loading todos'));
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
@@ -897,8 +995,11 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
               if (todos.isEmpty) {
                 return Center(
                   child: Text(
-                    status == 'pending' ? 'No pending tasks' : 'No completed tasks',
-                    style: const TextStyle(fontSize: 16, color: Color.fromARGB(255, 70, 164, 57)),
+                    status == 'pending'
+                        ? 'No pending tasks'
+                        : 'No completed tasks',
+                    style: const TextStyle(
+                        fontSize: 16, color: Color.fromARGB(255, 70, 164, 57)),
                   ),
                 );
               }
@@ -906,7 +1007,8 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
               final isDark = Theme.of(context).brightness == Brightness.dark;
 
               return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 itemCount: todos.length,
                 itemBuilder: (context, index) {
                   final doc = todos[index];
@@ -914,10 +1016,17 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                   final title = data['title'] ?? 'No title';
                   final description = data['description'] ?? '';
                   final priority = data['priority'] ?? 'High';
-                  final timestamp = data['timestamp'] as Timestamp?;
-                  final timeStr = timestamp != null
-                      ? TimeOfDay.fromDateTime(timestamp.toDate().toLocal()).format(context)
-                      : '...';
+                  final reminderData = data['reminder'];
+                  DateTime? reminderDateTime;
+                  if (reminderData is Timestamp) {
+                    reminderDateTime = reminderData.toDate();
+                  } else if (reminderData is String) {
+                    reminderDateTime = DateTime.tryParse(reminderData);
+                  }
+                  final timeStr = reminderDateTime != null
+                      ? TimeOfDay.fromDateTime(reminderDateTime.toLocal())
+                          .format(context)
+                      : 'No reminder';
 
                   Color priorityColor;
                   Color priorityBgColor;
@@ -925,15 +1034,18 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                     switch (priority) {
                       case 'High':
                         priorityColor = Colors.red;
-                        priorityBgColor = const Color(0xFF3B2323); // Dark red shade
+                        priorityBgColor =
+                            const Color(0xFF3B2323); // Dark red shade
                         break;
                       case 'Medium':
                         priorityColor = Colors.amber;
-                        priorityBgColor = const Color(0xFF39321A); // Dark amber shade
+                        priorityBgColor =
+                            const Color(0xFF39321A); // Dark amber shade
                         break;
                       case 'Low':
                         priorityColor = Colors.green;
-                        priorityBgColor = const Color(0xFF1B3223); // Dark green shade
+                        priorityBgColor =
+                            const Color(0xFF1B3223); // Dark green shade
                         break;
                       default:
                         priorityColor = Colors.grey;
@@ -947,11 +1059,13 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                         break;
                       case 'Medium':
                         priorityColor = Colors.amber;
-                        priorityBgColor = const Color(0xFFFFF8E1); // Light amber/yellow
+                        priorityBgColor =
+                            const Color(0xFFFFF8E1); // Light amber/yellow
                         break;
                       case 'Low':
                         priorityColor = Colors.green;
-                        priorityBgColor = const Color(0xFFE8F5E9); // Light green
+                        priorityBgColor =
+                            const Color(0xFFE8F5E9); // Light green
                         break;
                       default:
                         priorityColor = Colors.grey;
@@ -960,162 +1074,190 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                   }
 
                   return Slidable(
-                    key: ValueKey(doc.id),
-                    startActionPane: ActionPane(
-                      motion: const DrawerMotion(),
-                      extentRatio: 0.28,
-                      children: [
-                        SlidableAction(
-                          onPressed: (context) async {
-                            await _toggleStatus(doc);
-                          },
-                          backgroundColor: data['status'] == 'pending'
-                              ? Colors.green.shade400
-                              : Colors.orange.shade400,
-                          foregroundColor: Colors.white,
-                          icon: data['status'] == 'pending'
-                              ? Icons.check_circle
-                              : Icons.refresh,
-                          label: data['status'] == 'pending'
-                              ? 'Done'
-                              : 'Pending',
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ],
-                    ),
-                    endActionPane: ActionPane(
-                      motion: const DrawerMotion(),
-                      extentRatio: 0.25,
-                      children: [
-                        SlidableAction(
-                          onPressed: (context) async {
-                            final confirm = await showDialog<bool>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Delete Task?'),
-                                content: const Text('Are you sure you want to delete this task?'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.of(context).pop(true),
-                                    child: const Text('Delete', style: TextStyle(color: Color.fromARGB(255, 0, 0, 0))),
-                                  ),
-                                  TextButton(
-                                    onPressed: () => Navigator.of(context).pop(false),
-                                    child: const Text('Cancel'),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (confirm == true) {
-                              await _firestore.collection('todo').doc(doc.id).delete();
-                              await updateTodoWidgetFromFirestore(); // <-- Add this line
-                            }
-                          },
-                          backgroundColor: Colors.red.shade400,
-                          foregroundColor: Colors.white,
-                          icon: Icons.delete,
-                          label: 'Delete',
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ],
-                    ),
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: priorityBgColor,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Theme.of(context).shadowColor.withOpacity(0.15),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
+                      key: ValueKey(doc.id),
+                      startActionPane: ActionPane(
+                        motion: const DrawerMotion(),
+                        extentRatio: 0.28,
+                        children: [
+                          SlidableAction(
+                            onPressed: (context) async {
+                              await _toggleStatus(doc);
+                            },
+                            backgroundColor: data['status'] == 'pending'
+                                ? Colors.green.shade400
+                                : Colors.orange.shade400,
+                            foregroundColor: Colors.white,
+                            icon: data['status'] == 'pending'
+                                ? Icons.check_circle
+                                : Icons.refresh,
+                            label: data['status'] == 'pending'
+                                ? 'Done'
+                                : 'Pending',
+                            borderRadius: BorderRadius.circular(16),
                           ),
                         ],
                       ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        leading: Container(
-                          width: 5,
-                          height: double.infinity,
-                          decoration: BoxDecoration(
-                            color: priorityColor,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        title: Text(
-                          title,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: data['status'] == 'done'
-                                ? Theme.of(context).disabledColor
-                                : Theme.of(context).textTheme.bodyLarge?.color,
-                            decoration: data['status'] == 'done' ? TextDecoration.lineThrough : null,
-                          ),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    timeStr,
-                                    style: TextStyle(
-                                      color: Theme.of(context).hintColor,
-                                      fontSize: 14,
+                      endActionPane: ActionPane(
+                        motion: const DrawerMotion(),
+                        extentRatio: 0.25,
+                        children: [
+                          SlidableAction(
+                            onPressed: (context) async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('Delete Task?'),
+                                  content: const Text(
+                                      'Are you sure you want to delete this task?'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(true),
+                                      child: const Text('Delete',
+                                          style: TextStyle(
+                                              color: Color.fromARGB(
+                                                  255, 0, 0, 0))),
                                     ),
-                                  ),
-                                  if (description.isNotEmpty)
-                                    Flexible(
-                                      child: Text(
-                                        description,
-                                        style: TextStyle(
-                                          color: Theme.of(context).textTheme.bodySmall?.color,
-                                          fontSize: 13,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(false),
+                                      child: const Text('Cancel'),
                                     ),
-                                ],
-                              ),
+                                  ],
+                                ),
+                              );
+                              if (confirm == true) {
+                                await _firestore
+                                    .collection('todo')
+                                    .doc(doc.id)
+                                    .delete();
+                                await updateTodoWidgetFromFirestore(); // <-- Add this line
+                              }
+                            },
+                            backgroundColor: Colors.red.shade400,
+                            foregroundColor: Colors.white,
+                            icon: Icons.delete,
+                            label: 'Delete',
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ],
+                      ),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: priorityBgColor,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Theme.of(context)
+                                  .shadowColor
+                                  .withOpacity(0.15),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
                             ),
-                            if (data['email'] != null)
-                              FutureBuilder<String>(
-                                future: _getUsernameByEmail(data['email'] ?? ''),
-                                builder: (context, snapshot) {
-                                  if (!snapshot.hasData) return const SizedBox.shrink();
-                                  return Padding(
-                                    padding: const EdgeInsets.only(top: 2),
-                                    child: Text(
-                                      'Assigned to: ${snapshot.data}',
-                                      style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
-                                    ),
-                                  );
-                                },
-                              ),
                           ],
                         ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => TaskDetailPage(
-                                data: {
-                                  ...data,
-                                  'docId': doc.id, // Ensure docId is passed
-                                },
-                                dateStr: timestamp != null
-                                    ? timestamp.toDate().toLocal().toString().split(' ')[0]
-                                    : '',
-                              ),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          leading: Container(
+                            width: 5,
+                            height: double.infinity,
+                            decoration: BoxDecoration(
+                              color: priorityColor,
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                          );
-                        },
-                      ),
-                    ));
+                          ),
+                          title: Text(
+                            title,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: data['status'] == 'done'
+                                  ? Theme.of(context).disabledColor
+                                  : Theme.of(context)
+                                      .textTheme
+                                      .bodyLarge
+                                      ?.color,
+                              decoration: data['status'] == 'done'
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                            ),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      timeStr,
+                                      style: TextStyle(
+                                        color: Theme.of(context).hintColor,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    if (description.isNotEmpty)
+                                      Flexible(
+                                        child: Text(
+                                          description,
+                                          style: TextStyle(
+                                            color: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.color,
+                                            fontSize: 13,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              if (data['email'] != null)
+                                FutureBuilder<String>(
+                                  future:
+                                      _getUsernameByEmail(data['email'] ?? ''),
+                                  builder: (context, snapshot) {
+                                    if (!snapshot.hasData)
+                                      return const SizedBox.shrink();
+                                    return Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text(
+                                        'Assigned to: ${snapshot.data}',
+                                        style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.blueGrey),
+                                      ),
+                                    );
+                                  },
+                                ),
+                            ],
+                          ),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => TaskDetailPage(
+                                  data: {
+                                    ...data,
+                                    'docId': doc.id, // Ensure docId is passed
+                                  },
+                                  dateStr: reminderDateTime != null
+                                      ? reminderDateTime
+                                          .toLocal()
+                                          .toString()
+                                          .split(' ')[0]
+                                      : '',
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ));
                 },
               );
             },
@@ -1131,7 +1273,8 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Clear All Tasks?'),
-        content: const Text('Are you sure you want to delete all your tasks? This cannot be undone.'),
+        content: const Text(
+            'Are you sure you want to delete all your tasks? This cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
@@ -1179,21 +1322,25 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
     return FutureBuilder<DocumentSnapshot>(
       future: _firestore.collection('users').doc(_auth.currentUser!.uid).get(),
       builder: (context, userSnapshot) {
-        if (!userSnapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (!userSnapshot.hasData)
+          return const Center(child: CircularProgressIndicator());
         final managerBranch = userSnapshot.data!.get('branch');
         final managerEmail = userSnapshot.data!.get('email');
 
         return FutureBuilder<QuerySnapshot>(
           future: _firestore
               .collection('users')
-              .where('branch', isEqualTo: managerBranch) // <-- Only users from same branch
+              .where('branch',
+                  isEqualTo: managerBranch) // <-- Only users from same branch
               .get(),
           builder: (context, usersSnapshot) {
-            if (!usersSnapshot.hasData) return const Center(child: CircularProgressIndicator());
+            if (!usersSnapshot.hasData)
+              return const Center(child: CircularProgressIndicator());
             final salesUsers = usersSnapshot.data!.docs
                 .map((doc) => {
                       'email': doc['email'] as String?,
-                      'username': doc['username'] as String? ?? doc['email'] as String?,
+                      'username':
+                          doc['username'] as String? ?? doc['email'] as String?,
                     })
                 .where((user) => user['email'] != managerEmail)
                 .toList();
@@ -1219,20 +1366,30 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
 
                 // Get the emails for the current page
                 final int start = _currentPage * pageSize;
-                final int end = ((start + pageSize) > filteredUsers.length) ? filteredUsers.length : (start + pageSize);
-                final List<String> pageEmails = filteredUsers.sublist(start, end).map((u) => u['email']!).toList();
+                final int end = ((start + pageSize) > filteredUsers.length)
+                    ? filteredUsers.length
+                    : (start + pageSize);
+                final List<String> pageEmails = filteredUsers
+                    .sublist(start, end)
+                    .map((u) => u['email']!)
+                    .toList();
 
                 // Username dropdown options
-                final usernames = ['All', ...{for (var u in salesUsers) u['username'] ?? u['email']}];
+                final usernames = [
+                  'All',
+                  ...{for (var u in salesUsers) u['username'] ?? u['email']}
+                ];
 
                 return Column(
                   children: [
                     // Username filter dropdown
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
                       child: Row(
                         children: [
-                          const Text('Filter by user:', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const Text('Filter by user:',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
                           const SizedBox(width: 12),
                           Expanded(
                             child: DropdownButton<String>(
@@ -1247,7 +1404,8 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                               onChanged: (value) {
                                 setState(() {
                                   _selectedUsername = value;
-                                  _currentPage = 0; // Reset to first page on filter change
+                                  _currentPage =
+                                      0; // Reset to first page on filter change
                                 });
                               },
                             ),
@@ -1259,23 +1417,34 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                       child: StreamBuilder<QuerySnapshot>(
                         stream: _firestore
                             .collection('todo')
-                            .where('email', whereIn: pageEmails.isEmpty ? ['dummy'] : pageEmails)
+                            .where('email',
+                                whereIn:
+                                    pageEmails.isEmpty ? ['dummy'] : pageEmails)
                             .orderBy('timestamp', descending: true)
                             .snapshots(),
                         builder: (context, todosSnapshot) {
-                          if (todosSnapshot.hasError) return const Center(child: Text('Error loading todos'));
-                          if (todosSnapshot.connectionState == ConnectionState.waiting) {
-                            return const Center(child: CircularProgressIndicator());
+                          if (todosSnapshot.hasError)
+                            return const Center(
+                                child: Text('Error loading todos'));
+                          if (todosSnapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return const Center(
+                                child: CircularProgressIndicator());
                           }
                           final todos = todosSnapshot.data?.docs ?? [];
                           if (todos.isEmpty) {
                             return const Center(
-                              child: Text('No tasks from others', style: TextStyle(fontSize: 16, color: Color.fromARGB(255, 70, 164, 57))),
+                              child: Text('No tasks from others',
+                                  style: TextStyle(
+                                      fontSize: 16,
+                                      color: Color.fromARGB(255, 70, 164, 57))),
                             );
                           }
-                          final isDark = Theme.of(context).brightness == Brightness.dark;
+                          final isDark =
+                              Theme.of(context).brightness == Brightness.dark;
                           return ListView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 10),
                             itemCount: todos.length,
                             itemBuilder: (context, index) {
                               final doc = todos[index];
@@ -1283,10 +1452,18 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                               final title = data['title'] ?? 'No title';
                               final description = data['description'] ?? '';
                               final priority = data['priority'] ?? 'High';
-                              final timestamp = data['timestamp'] as Timestamp?;
-                              final timeStr = timestamp != null
-                                  ? TimeOfDay.fromDateTime(timestamp.toDate().toLocal()).format(context)
-                                  : '...';
+                              final reminderData = data['reminder'];
+                              DateTime? reminderDateTime;
+                              if (reminderData is Timestamp) {
+                                reminderDateTime = reminderData.toDate();
+                              } else if (reminderData is String) {
+                                reminderDateTime = DateTime.tryParse(reminderData);
+                              }
+                              final timeStr = reminderDateTime != null
+                                  ? TimeOfDay.fromDateTime(
+                                          reminderDateTime.toLocal())
+                                      .format(context)
+                                  : 'No reminder';
 
                               Color priorityColor;
                               Color priorityBgColor;
@@ -1335,14 +1512,17 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                                   borderRadius: BorderRadius.circular(16),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Theme.of(context).shadowColor.withOpacity(0.15),
+                                      color: Theme.of(context)
+                                          .shadowColor
+                                          .withOpacity(0.15),
                                       blurRadius: 10,
                                       offset: const Offset(0, 4),
                                     ),
                                   ],
                                 ),
                                 child: ListTile(
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 12),
                                   leading: Container(
                                     width: 5,
                                     height: double.infinity,
@@ -1358,22 +1538,30 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                                       fontWeight: FontWeight.w600,
                                       color: data['status'] == 'done'
                                           ? Theme.of(context).disabledColor
-                                          : Theme.of(context).textTheme.bodyLarge?.color,
-                                      decoration: data['status'] == 'done' ? TextDecoration.lineThrough : null,
+                                          : Theme.of(context)
+                                              .textTheme
+                                              .bodyLarge
+                                              ?.color,
+                                      decoration: data['status'] == 'done'
+                                          ? TextDecoration.lineThrough
+                                          : null,
                                     ),
                                   ),
                                   subtitle: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Padding(
                                         padding: const EdgeInsets.only(top: 4),
                                         child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
                                           children: [
                                             Text(
                                               timeStr,
                                               style: TextStyle(
-                                                color: Theme.of(context).hintColor,
+                                                color:
+                                                    Theme.of(context).hintColor,
                                                 fontSize: 14,
                                               ),
                                             ),
@@ -1382,10 +1570,14 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                                                 child: Text(
                                                   description,
                                                   style: TextStyle(
-                                                    color: Theme.of(context).textTheme.bodySmall?.color,
+                                                    color: Theme.of(context)
+                                                        .textTheme
+                                                        .bodySmall
+                                                        ?.color,
                                                     fontSize: 13,
                                                   ),
-                                                  overflow: TextOverflow.ellipsis,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                 ),
                                               ),
                                           ],
@@ -1393,14 +1585,19 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                                       ),
                                       if (data['email'] != null)
                                         FutureBuilder<String>(
-                                          future: _getUsernameByEmail(data['email'] ?? ''),
+                                          future: _getUsernameByEmail(
+                                              data['email'] ?? ''),
                                           builder: (context, snapshot) {
-                                            if (!snapshot.hasData) return const SizedBox.shrink();
+                                            if (!snapshot.hasData)
+                                              return const SizedBox.shrink();
                                             return Padding(
-                                              padding: const EdgeInsets.only(top: 2),
+                                              padding:
+                                                  const EdgeInsets.only(top: 2),
                                               child: Text(
                                                 'Assigned to: ${snapshot.data}',
-                                                style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
+                                                style: const TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.blueGrey),
                                               ),
                                             );
                                           },
@@ -1414,10 +1611,14 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                                         builder: (context) => TaskDetailPage(
                                           data: {
                                             ...data,
-                                            'docId': doc.id, // Ensure docId is passed
+                                            'docId': doc
+                                                .id, // Ensure docId is passed
                                           },
-                                          dateStr: timestamp != null
-                                              ? timestamp.toDate().toLocal().toString().split(' ')[0]
+                                          dateStr: reminderDateTime != null
+                                              ? reminderDateTime
+                                                  .toLocal()
+                                                  .toString()
+                                                  .split(' ')[0]
                                               : '',
                                         ),
                                       ),
@@ -1443,7 +1644,8 @@ class _TodoPageState extends State<TodoPage> with SingleTickerProviderStateMixin
                                   ? () => setState(() => _currentPage--)
                                   : null,
                             ),
-                            Text('Page ${_currentPage + 1} of ${((filteredUsers.length - 1) ~/ pageSize) + 1}'),
+                            Text(
+                                'Page ${_currentPage + 1} of ${((filteredUsers.length - 1) ~/ pageSize) + 1}'),
                             IconButton(
                               icon: const Icon(Icons.arrow_forward),
                               onPressed: end < filteredUsers.length
