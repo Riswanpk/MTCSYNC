@@ -53,6 +53,8 @@ class ViewerMarketingDetailPage extends StatelessWidget {
                       _detail('Current Enquiries', data['currentEnquiries']),
                       _detail('Current Enquiry', data['currentEnquiry']), // For hotel/resort
                       _detail('Confirmed Order', data['confirmedOrder']),
+                      _detail('Other Purchases', data['otherPurchases'] == 'yes' ? 'Yes' : (data['otherPurchases'] == 'no' ? 'No' : null)),
+                      _detail('Reason for Other Purchase', data['otherPurchasesReason']),
                       _detail('Upcoming Big Events Date', _formatDate(data['upcomingEventDate'])),
                       _detail('Upcoming Big Events Details', data['upcomingEvents']),
                       _detail('New Product Suggestion', data['newProductSuggestion']),
