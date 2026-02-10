@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:call_log/call_log.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../Todo & Leads/leadsform.dart';
 
 class SalesCustomerTileViewer extends StatefulWidget {
@@ -38,6 +39,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
         _remarksSaved = false; // Reset flag when remarks change
       });
     });
+    _restorePendingCallState();
     _fetchLastRemarks();
   }
 
@@ -46,6 +48,43 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     WidgetsBinding.instance.removeObserver(this);
     remarksController.dispose();
     super.dispose();
+  }
+
+  /// Persist pending call state to SharedPreferences so it survives
+  /// app kills, widget rebuilds, and multi-app switching.
+  Future<void> _savePendingCallState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final customerKey = _customerUniqueKey();
+    await prefs.setString('pending_call_number_$customerKey', _pendingCallNumber ?? '');
+    await prefs.setInt('pending_call_time_$customerKey', _callStartTime?.millisecondsSinceEpoch ?? 0);
+  }
+
+  Future<void> _clearPendingCallState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final customerKey = _customerUniqueKey();
+    await prefs.remove('pending_call_number_$customerKey');
+    await prefs.remove('pending_call_time_$customerKey');
+  }
+
+  Future<void> _restorePendingCallState() async {
+    if (called) return; // Already marked as called, no need to restore
+    final prefs = await SharedPreferences.getInstance();
+    final customerKey = _customerUniqueKey();
+    final savedNumber = prefs.getString('pending_call_number_$customerKey');
+    final savedTime = prefs.getInt('pending_call_time_$customerKey');
+    if (savedNumber != null && savedNumber.isNotEmpty && savedTime != null && savedTime > 0) {
+      _pendingCallNumber = savedNumber;
+      _callStartTime = DateTime.fromMillisecondsSinceEpoch(savedTime);
+      // Immediately check if a call was already completed while we were away
+      _checkIfCallWasMade();
+    }
+  }
+
+  /// Returns a unique key for this customer to scope SharedPreferences keys.
+  String _customerUniqueKey() {
+    final c1 = customer['contact1'] ?? customer['contact'] ?? '';
+    final name = customer['name'] ?? '';
+    return '${name}_$c1'.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
   }
 
   Future<void> _makeCall(BuildContext context, String contact1, [String? contact2]) async {
@@ -85,6 +124,8 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     if (await canLaunchUrl(uri)) {
       _pendingCallNumber = numberToCall;
       _callStartTime = DateTime.now();
+      // Persist pending call state so it survives app switching
+      await _savePendingCallState();
       // Store the called number for leads
       setState(() {
         customer['lastCalledNumber'] = numberToCall;
@@ -127,28 +168,36 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
           called = true;
           customer['callMade'] = true;
         });
+        // Clear persisted pending call state only after confirmed detection
+        _pendingCallNumber = null;
+        _callStartTime = null;
+        await _clearPendingCallState();
         // Update Firestore to persist callMade status
         await _updateCallStatusInFirestore();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Call detected! Please add remarks.'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
-        Future.delayed(const Duration(milliseconds: 300), () {
-          Scrollable.ensureVisible(
-            context,
-            alignment: 1.0,
-            duration: const Duration(milliseconds: 500),
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Call detected! Please add remarks.'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
           );
-        });
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (mounted) {
+              Scrollable.ensureVisible(
+                context,
+                alignment: 1.0,
+                duration: const Duration(milliseconds: 500),
+              );
+            }
+          });
+        }
       }
+      // If call NOT detected, do NOT clear _pendingCallNumber/_callStartTime.
+      // They stay active so the next resume will re-check.
     } catch (e) {
       debugPrint('Error checking call log: $e');
-    } finally {
-      _pendingCallNumber = null;
-      _callStartTime = null;
+      // Don't clear pending state on error either — will retry on next resume.
     }
   }
 
