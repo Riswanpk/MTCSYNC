@@ -48,6 +48,7 @@ class ViewerMarketingDetailPage extends StatelessWidget {
                         _detail('Category', data['category']),
                         _detail('Feedback Rating', data['feedbackRating']),
                       ],
+                      _detail('Phone No', data['phoneNo']),
                       _detail('Last Item Purchased Date', _formatDateOrString(data['lastItemPurchasedDate'], data['lastPurchasedMonth'])),
                       _detail('Last Purchased Item', data['lastPurchasedItem']),
                       _detail('Current Enquiries', data['currentEnquiries']),

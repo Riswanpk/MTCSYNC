@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
@@ -34,6 +35,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
 
   // Controllers for text fields
   late TextEditingController _shopNameController;
+  late TextEditingController _phoneNoController;
   late TextEditingController _currentEnquiriesController;
   late TextEditingController _confirmedOrderController;
   late TextEditingController _upcomingEventDetailsController;
@@ -43,6 +45,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
 
 
   String shopName = '';
+  String phoneNo = '';
   DateTime? lastItemPurchasedDate;
   String lastPurchasedItem = '';
   String currentEnquiries = '';
@@ -59,6 +62,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
 
   // Add error flags for all fields
   bool _shopNameError = false;
+  bool _phoneNoError = false;
   bool _currentEnquiriesError = false;
   bool _confirmedOrderError = false;
   bool _otherPurchasesError = false;
@@ -85,6 +89,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
   void initState() {
     super.initState();
     _shopNameController = TextEditingController();
+    _phoneNoController = TextEditingController();
     _currentEnquiriesController = TextEditingController();
     _confirmedOrderController = TextEditingController();
     _upcomingEventDetailsController = TextEditingController();
@@ -97,6 +102,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
   @override
   void dispose() {
     _shopNameController.dispose();
+    _phoneNoController.dispose();
     _currentEnquiriesController.dispose();
     _confirmedOrderController.dispose();
     _upcomingEventDetailsController.dispose();
@@ -109,6 +115,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
   Map<String, dynamic> _toDraftMap() {
     return {
       'shopName': _shopNameController.text,
+      'phoneNo': _phoneNoController.text,
       'lastItemPurchasedDate': lastItemPurchasedDate?.toIso8601String(),
       'currentEnquiries': _currentEnquiriesController.text,
       'confirmedOrder': _confirmedOrderController.text,
@@ -154,6 +161,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
       if (!mounted) return;
       setState(() {
         _shopNameController.text = draftData['shopName'] ?? '';
+        _phoneNoController.text = draftData['phoneNo'] ?? '';
         lastItemPurchasedDate = draftData['lastItemPurchasedDate'] != null ? DateTime.parse(draftData['lastItemPurchasedDate']) : null;
         _currentEnquiriesController.text = draftData['currentEnquiries'] ?? '';
         _confirmedOrderController.text = draftData['confirmedOrder'] ?? '';
@@ -184,6 +192,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
   Future<void> _submitForm() async {
     // Update state variables from controllers before validation
     shopName = _shopNameController.text;
+    phoneNo = _phoneNoController.text;
     currentEnquiries = _currentEnquiriesController.text;
     confirmedOrder = _confirmedOrderController.text;
     upcomingEventDetails = _upcomingEventDetailsController.text;
@@ -199,6 +208,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
     // Validate all fields manually
     setState(() {
       _shopNameError = shopName.trim().isEmpty;
+      _phoneNoError = phoneNo.trim().isEmpty || phoneNo.trim().length != 10;
       _currentEnquiriesError = currentEnquiries.trim().isEmpty;
       _confirmedOrderError = confirmedOrder.trim().isEmpty;
       _photoError = _imageFile == null;
@@ -207,6 +217,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
     });
 
     bool hasError = _shopNameError ||
+        _phoneNoError ||
         _currentEnquiriesError ||
         _confirmedOrderError ||
         _photoError ||
@@ -236,6 +247,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
         'userid': widget.userid,
         'branch': widget.branch,
         'shopName': shopName,
+        'phoneNo': phoneNo,
         'lastItemPurchasedDate': lastItemPurchasedDate,
         'lastPurchasedItem': lastPurchasedItem,
         'currentEnquiries': currentEnquiries,
@@ -277,6 +289,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
         newProductSuggestion = '';
 
         _shopNameController.clear();
+        _phoneNoController.clear();
         _currentEnquiriesController.clear();
         _confirmedOrderController.clear();
         _upcomingEventDetailsController.clear();
@@ -286,6 +299,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
 
         // Reset all error flags
         _shopNameError = false;
+        _phoneNoError = false;
         _currentEnquiriesError = false;
         _confirmedOrderError = false;
         _photoError = false;
@@ -384,6 +398,47 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                           setState(() {
                             shopName = v;
                             if (v.trim().isNotEmpty) _shopNameError = false;
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    // --- Phone Number ---
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color.fromARGB(255, 255, 255, 255),
+                        borderRadius: const BorderRadius.only(
+                          topRight: Radius.circular(22),
+                          topLeft: Radius.circular(0),
+                          bottomLeft: Radius.circular(22),
+                          bottomRight: Radius.circular(0),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.3),
+                            spreadRadius: 1,
+                            blurRadius: 6,
+                            offset: const Offset(2, 3),
+                          ),
+                        ],
+                      ),
+                      child: TextFormField(
+                        controller: _phoneNoController,
+                        decoration: _inputDecoration(
+                          'Phone Number',
+                          error: _phoneNoError,
+                          errorText: 'Phone number must be 10 digits',
+                        ),
+                        keyboardType: TextInputType.phone,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(10),
+                        ],
+                        onChanged: (v) {
+                          _saveDraft();
+                          setState(() {
+                            phoneNo = v;
+                            if (v.trim().length == 10) _phoneNoError = false;
                           });
                         },
                       ),

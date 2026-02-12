@@ -11,24 +11,10 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
   try {
     final now = DateTime.now();
     final yesterday = now.subtract(const Duration(days: 1));
-    final start = DateTime(yesterday.year, yesterday.month, yesterday.day);
 
-    // --- Window logic as in daily.dart ---
-    DateTime todoWindowStart;
-    if (start.weekday == DateTime.monday) {
-      todoWindowStart = start.subtract(const Duration(days: 2)).add(const Duration(hours: 12)); // Saturday 12 PM
-    } else {
-      todoWindowStart = start.subtract(const Duration(days: 1)).add(const Duration(hours: 12)); // Previous day 12 PM
-    }
-    final todoWindowEnd = start.add(const Duration(hours: 12)); // Yesterday 11:59:59 AM
-
-    DateTime leadWindowStart;
-    if (start.weekday == DateTime.monday) {
-      leadWindowStart = start.subtract(const Duration(days: 1)); // Sunday
-    } else {
-      leadWindowStart = start; // Yesterday
-    }
-    final leadWindowEnd = start.add(const Duration(days: 1)); // Up to end of yesterday
+    // Set window: from yesterday 12:00 PM to today 12:00 PM
+    final start = DateTime(yesterday.year, yesterday.month, yesterday.day, 12); // yesterday 12:00 PM
+    final end = DateTime(now.year, now.month, now.day, 12); // today 12:00 PM
 
     // Fetch users
     final usersSnap = await FirebaseFirestore.instance.collection('users').get();
@@ -46,7 +32,7 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
       };
     }
 
-    // For each user, check leads and todos in the correct window
+    // For each user, check leads and todos in the noon-to-noon window
     for (var branch in branchUserStatus.keys) {
       for (var userId in branchUserStatus[branch]!.keys) {
         // Check leads
@@ -54,8 +40,8 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
             .collection('daily_report')
             .where('userId', isEqualTo: userId)
             .where('type', isEqualTo: 'leads')
-            .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(leadWindowStart))
-            .where('timestamp', isLessThan: Timestamp.fromDate(leadWindowEnd))
+            .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+            .where('timestamp', isLessThan: Timestamp.fromDate(end))
             .limit(1)
             .get();
         branchUserStatus[branch]![userId]!['lead'] = leadSnap.docs.isNotEmpty;
@@ -65,15 +51,15 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
             .collection('daily_report')
             .where('userId', isEqualTo: userId)
             .where('type', isEqualTo: 'todo')
-            .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(todoWindowStart))
-            .where('timestamp', isLessThan: Timestamp.fromDate(todoWindowEnd))
+            .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+            .where('timestamp', isLessThan: Timestamp.fromDate(end))
             .limit(1)
             .get();
         branchUserStatus[branch]![userId]!['todo'] = todoSnap.docs.isNotEmpty;
       }
     }
 
-    // --- Fetch todos created by each user on that day ---
+    // --- Fetch todos created by each user in the noon-to-noon window ---
     final todosByUser = <String, List<Map<String, dynamic>>>{};
     for (var userId in userMap.keys) {
       final userEmail = userMap[userId]?['email'];
@@ -82,7 +68,7 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
           .collection('todo')
           .where('email', isEqualTo: userEmail)
           .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
-          .where('timestamp', isLessThan: Timestamp.fromDate(start.add(const Duration(days: 1))))
+          .where('timestamp', isLessThan: Timestamp.fromDate(end))
           .get();
       todosByUser[userId] = todosSnap.docs.map((d) => d.data()).toList();
     }
