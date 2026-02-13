@@ -42,13 +42,14 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
     _userBranch = userDoc['branch'];
     if (_role == 'admin') {
       final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
-      _branches = usersSnapshot.docs
-          .map((doc) => doc['branch'] ?? '')
-          .where((b) => b != null && b.toString().isNotEmpty)
-          .toSet()
-          .cast<String>()
-          .toList();
-      _selectedBranch = _branches.isNotEmpty ? _branches.first : null;
+        _branches = usersSnapshot.docs
+            .map((doc) => doc['branch'] ?? '')
+            .where((b) => b != null && b.toString().isNotEmpty)
+            .toSet()
+            .cast<String>()
+            .toList()
+            ..sort();
+        _selectedBranch = _branches.isNotEmpty ? _branches.first : null;
     } else {
       _selectedBranch = _userBranch;
     }
