@@ -141,19 +141,11 @@ class _PerformanceTableViewState extends State<_PerformanceTableView> {
   bool isLoading = true;
   List<DateTime> monthDates = [];
   int selectedWeek = 0;
-  late ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
-    _scrollController = ScrollController();
     fetchMonthlyForms();
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
   }
 
   Future<void> fetchMonthlyForms() async {
@@ -196,162 +188,163 @@ class _PerformanceTableViewState extends State<_PerformanceTableView> {
     return monthDates.sublist(start, end);
   }
 
-  Widget buildTableSection(String title, List<String> categories, String sectionKey) {
-    final filteredDates = getFilteredDates();
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+  Widget buildTableSection(String title, List<String> categories, String sectionKey, List<DateTime> filteredDates, bool isDark) {
+    // Set a fixed width for the Category column (adjust as needed for your longest header)
+    const double categoryColWidth = 180;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 12),
         Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? Colors.white : Colors.black)),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          controller: _scrollController,
-          child: DataTable(
-            columnSpacing: 10,
-            dataRowMinHeight: 28,
-            dataRowMaxHeight: 32,
-            headingRowHeight: 28,
-            horizontalMargin: 6,
-            headingRowColor: MaterialStateProperty.resolveWith<Color?>(
-              (states) => isDark ? Colors.grey[900] : Colors.grey[200],
-            ),
-            columns: [
-              const DataColumn(
-                label: Text('Category', style: TextStyle(fontSize: 11)),
+        DataTable(
+          columnSpacing: 10,
+          dataRowMinHeight: 28,
+          dataRowMaxHeight: 32,
+          headingRowHeight: 28,
+          horizontalMargin: 6,
+          headingRowColor: WidgetStateProperty.resolveWith<Color?>(
+            (states) => isDark ? Colors.grey[900] : Colors.grey[200],
+          ),
+          columns: [
+            const DataColumn(
+              label: SizedBox(
+                width: categoryColWidth,
+                child: Text('Category', style: TextStyle(fontSize: 11)),
               ),
-              ...filteredDates.map((d) => DataColumn(
-                label: Text(
-                  '${d.day}-${d.month < 10 ? '0' : ''}${d.month}',
-                  style: const TextStyle(fontSize: 11),
-                ),
-              )),
-            ],
-            rows: categories.map((cat) {
-              return DataRow(
-                cells: [
-                  DataCell(Text(cat, style: const TextStyle(fontSize: 11))),
-                  ...filteredDates.map((date) {
-                    final form = getFormForDate(date);
-                    bool? value;
-                    if (form == null || form.isEmpty) return const DataCell(Text('-', style: TextStyle(fontSize: 11)));
-                    if (sectionKey == 'attendance') {
-                      String att = form['attendance'] ?? '';
-                      if (cat == 'Punching Time') {
-                        value = att == 'punching' ? true : null;
-                      } else if (cat == 'Late time') {
-                        value = att == 'late' ? true : null;
-                      } else if (cat == 'Approved Leave') {
-                        value = att == 'approved' ? true : null;
-                      } else if (cat == 'Unapproved Leave') {
-                        value = att == 'notApproved' ? true : null;
-                      }
-                    } else if (sectionKey == 'dressCode') {
-                      if (cat == 'Wear clean uniform') value = form['dressCode']?['cleanUniform'] != false;
-                      if (cat == 'Keep inside') value = form['dressCode']?['keepInside'] != false;
-                      if (cat == 'Keep your hair neat') value = form['dressCode']?['neatHair'] != false;
-                    } else if (sectionKey == 'attitude') {
-                      if (cat == 'Greet with a warm smile') value = form['attitude']?['greetSmile'] != false;
-                      if (cat == 'Ask about their needs') value = form['attitude']?['askNeeds'] != false;
-                      if (cat == 'Help find the right product') value = form['attitude']?['helpFindProduct'] != false;
-                      if (cat == 'Confirm the purchase') value = form['attitude']?['confirmPurchase'] != false;
-                      if (cat == 'Offer carry or delivery help') value = form['attitude']?['offerHelp'] != false;
-                    } else if (sectionKey == 'meeting') {
-                      if (cat == 'Meeting') {
-                        if (form['meeting']?['noMeeting'] == true) {
-                          // Show a special icon for "No meeting conducted"
-                          value = null;
-                        } else {
-                          value = form['meeting']?['attended'] == true;
-                        }
+            ),
+            ...filteredDates.map((d) => DataColumn(
+              label: Text(
+                '${d.day}-${d.month < 10 ? '0' : ''}${d.month}',
+                style: const TextStyle(fontSize: 11),
+              ),
+            )),
+          ],
+          rows: categories.map((cat) {
+            return DataRow(
+              cells: [
+                DataCell(SizedBox(
+                  width: categoryColWidth,
+                  child: Text(cat, style: const TextStyle(fontSize: 11)),
+                )),
+                ...filteredDates.map((date) {
+                  final form = getFormForDate(date);
+                  bool? value;
+                  if (form == null || form.isEmpty) return const DataCell(Text('-', style: TextStyle(fontSize: 11)));
+                  if (sectionKey == 'attendance') {
+                    String att = form['attendance'] ?? '';
+                    if (cat == 'Punching Time') {
+                      value = att == 'punching' ? true : null;
+                    } else if (cat == 'Late time') {
+                      value = att == 'late' ? true : null;
+                    } else if (cat == 'Approved Leave') {
+                      value = att == 'approved' ? true : null;
+                    } else if (cat == 'Unapproved Leave') {
+                      value = att == 'notApproved' ? true : null;
+                    }
+                  } else if (sectionKey == 'dressCode') {
+                    if (cat == 'Wear clean uniform') value = form['dressCode']?['cleanUniform'] != false;
+                    if (cat == 'Keep inside') value = form['dressCode']?['keepInside'] != false;
+                    if (cat == 'Keep your hair neat') value = form['dressCode']?['neatHair'] != false;
+                  } else if (sectionKey == 'attitude') {
+                    if (cat == 'Greet with a warm smile') value = form['attitude']?['greetSmile'] != false;
+                    if (cat == 'Ask about their needs') value = form['attitude']?['askNeeds'] != false;
+                    if (cat == 'Help find the right product') value = form['attitude']?['helpFindProduct'] != false;
+                    if (cat == 'Confirm the purchase') value = form['attitude']?['confirmPurchase'] != false;
+                    if (cat == 'Offer carry or delivery help') value = form['attitude']?['offerHelp'] != false;
+                  } else if (sectionKey == 'meeting') {
+                    if (cat == 'Meeting') {
+                      if (form['meeting']?['noMeeting'] == true) {
+                        value = null;
+                      } else {
+                        value = form['meeting']?['attended'] == true;
                       }
                     }
-                    return DataCell(
-                      sectionKey == 'meeting' && form['meeting']?['noMeeting'] == true
-                          ? Row(
-                              children: const [
-                                Icon(Icons.info_outline, color: Colors.blue, size: 16),
-                                SizedBox(width: 2),
-                                Text('No meeting', style: TextStyle(fontSize: 10, color: Colors.blue)),
-                              ],
-                            )
-                          : value == null
-                              ? const Text('-', style: TextStyle(fontSize: 11))
-                              : value
-                                  ? const Icon(Icons.check, color: Colors.green, size: 16)
-                                  : const Icon(Icons.close, color: Colors.red, size: 16),
-                    );
-                  }).toList(),
-                ],
-              );
-            }).toList(),
-          ),
+                  }
+                  return DataCell(
+                    sectionKey == 'meeting' && form['meeting']?['noMeeting'] == true
+                        ? Row(
+                            children: const [
+                              Icon(Icons.info_outline, color: Colors.blue, size: 16),
+                              SizedBox(width: 2),
+                              Text('No meeting', style: TextStyle(fontSize: 10, color: Colors.blue)),
+                            ],
+                          )
+                        : value == null
+                            ? const Text('-', style: TextStyle(fontSize: 11))
+                            : value
+                                ? const Icon(Icons.check, color: Colors.green, size: 16)
+                                : const Icon(Icons.close, color: Colors.red, size: 16),
+                  );
+                }).toList(),
+              ],
+            );
+          }).toList(),
         ),
       ],
     );
   }
 
-  Widget buildNewQuestionTableSection(String title, String fieldKey, {bool isBool = false, String? trueText, String? falseText}) {
-    final filteredDates = getFilteredDates();
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+  Widget buildNewQuestionTableSection(String title, String fieldKey, List<DateTime> filteredDates, bool isDark, {bool isBool = false, String? trueText, String? falseText}) {
+    // Set a fixed width for the Category column (same as in buildTableSection)
+    const double categoryColWidth = 180;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 12),
         Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? Colors.white : Colors.black)),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          controller: _scrollController,
-          child: DataTable(
-            columnSpacing: 10,
-            dataRowMinHeight: 28,
-            dataRowMaxHeight: 32,
-            headingRowHeight: 28,
-            horizontalMargin: 6,
-            headingRowColor: MaterialStateProperty.resolveWith<Color?>(
-              (states) => isDark ? Colors.grey[900] : Colors.grey[200],
-            ),
-            columns: [
-              const DataColumn(
-                label: Text('Category', style: TextStyle(fontSize: 11)),
+        DataTable(
+          columnSpacing: 10,
+          dataRowMinHeight: 28,
+          dataRowMaxHeight: 32,
+          headingRowHeight: 28,
+          horizontalMargin: 6,
+          headingRowColor: WidgetStateProperty.resolveWith<Color?>(
+            (states) => isDark ? Colors.grey[900] : Colors.grey[200],
+          ),
+          columns: [
+            const DataColumn(
+              label: SizedBox(
+                width: categoryColWidth,
+                child: Text('Category', style: TextStyle(fontSize: 11)),
               ),
-              ...filteredDates.map((d) => DataColumn(
-                label: Text(
-                  '${d.day}-${d.month < 10 ? '0' : ''}${d.month}',
-                  style: const TextStyle(fontSize: 11),
-                ),
-              )),
-            ],
-            rows: [
-              DataRow(
-                cells: [
-                  DataCell(Text(title, style: const TextStyle(fontSize: 11))),
-                  ...filteredDates.map((date) {
-                    final form = getFormForDate(date);
-                    if (form == null || form.isEmpty) {
+            ),
+            ...filteredDates.map((d) => DataColumn(
+              label: Text(
+                '${d.day}-${d.month < 10 ? '0' : ''}${d.month}',
+                style: const TextStyle(fontSize: 11),
+              ),
+            )),
+          ],
+          rows: [
+            DataRow(
+              cells: [
+                DataCell(SizedBox(
+                  width: categoryColWidth,
+                  child: Text(title, style: const TextStyle(fontSize: 11)),
+                )),
+                ...filteredDates.map((date) {
+                  final form = getFormForDate(date);
+                  if (form == null || form.isEmpty) {
+                    return const DataCell(Text('-', style: TextStyle(fontSize: 11)));
+                  }
+                  final value = form[fieldKey];
+                  if (isBool) {
+                    if (value == true) {
+                      return const DataCell(Icon(Icons.check, color: Colors.green, size: 16));
+                    } else if (value == false) {
+                      return const DataCell(Icon(Icons.close, color: Colors.red, size: 16));
+                    } else {
                       return const DataCell(Text('-', style: TextStyle(fontSize: 11)));
                     }
-                    final value = form[fieldKey];
-                    if (isBool) {
-                      if (value == true) {
-                        return const DataCell(Icon(Icons.check, color: Colors.green, size: 16));
-                      } else if (value == false) {
-                        return const DataCell(Icon(Icons.close, color: Colors.red, size: 16));
-                      } else {
-                        return const DataCell(Text('-', style: TextStyle(fontSize: 11)));
-                      }
-                    } else {
-                      String display = (value ?? '').toString();
-                      if (display.isEmpty || display == 'null') display = '-';
-                      return DataCell(Text(display, style: const TextStyle(fontSize: 11)));
-                    }
-                  }).toList(),
-                ],
-              ),
-            ],
-          ),
+                  } else {
+                    String display = (value ?? '').toString();
+                    if (display.isEmpty || display == 'null') display = '-';
+                    return DataCell(Text(display, style: const TextStyle(fontSize: 11)));
+                  }
+                }).toList(),
+              ],
+            ),
+          ],
         ),
       ],
     );
@@ -365,65 +358,77 @@ class _PerformanceTableViewState extends State<_PerformanceTableView> {
       return const Center(child: CircularProgressIndicator());
     }
     int numWeeks = (monthDates.length / 7).ceil();
+    final filteredDates = getFilteredDates();
     return SingleChildScrollView(
       padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Week filter dropdown
-          Row(
-            children: [
-              Text('Filter by week: ', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
-              DropdownButton<int>(
-                value: selectedWeek,
-                items: [
-                  const DropdownMenuItem(value: 0, child: Text('All')),
-                  ...List.generate(numWeeks, (i) => DropdownMenuItem(
-                    value: i + 1,
-                    child: Text('Week ${i + 1}'),
-                  )),
-                ],
-                onChanged: (val) {
-                  setState(() {
-                    selectedWeek = val ?? 0;
-                  });
-                },
-              ),
-            ],
-          ),
-          buildTableSection(
-            'ATTENDANCE (OUT OF 20)',
-            ['Punching Time', 'Late time', 'Approved Leave', 'Unapproved Leave'],
-            'attendance',
-          ),
-          buildTableSection(
-            'DRESS CODE (OUT OF 20)',
-            ['Wear clean uniform', 'Keep inside', 'Keep your hair neat'],
-            'dressCode',
-          ),
-          buildTableSection(
-            'ATTITUDE (OUT OF 20)',
-            [
-              'Greet with a warm smile',
-              'Ask about their needs',
-              'Help find the right product',
-              'Confirm the purchase',
-              'Offer carry or delivery help'
-            ],
-            'attitude',
-          ),
-          buildTableSection(
-            'MEETING (OUT OF 10)',
-            ['Meeting'],
-            'meeting',
-          ),
-              // New questions
-              buildNewQuestionTableSection('Time Taken for Other Tasks (min)', 'timeTakenOtherTasks'),
-              buildNewQuestionTableSection('Old Stock Offer Given?', 'oldStockOfferGiven', isBool: true, trueText: 'Yes', falseText: 'No'),
-              buildNewQuestionTableSection('Cross-selling & Upselling?', 'crossSellingUpselling', isBool: true, trueText: 'Yes', falseText: 'No'),
-              buildNewQuestionTableSection('Product Complaints?', 'productComplaints', isBool: true, trueText: 'Yes', falseText: 'No'),
-              buildNewQuestionTableSection('Achieved Daily Target?', 'achievedDailyTarget', isBool: true, trueText: 'Yes', falseText: 'No'),
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Week filter dropdown
+            Row(
+              children: [
+                Text('Filter by week: ', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+                DropdownButton<int>(
+                  value: selectedWeek,
+                  items: [
+                    const DropdownMenuItem(value: 0, child: Text('All')),
+                    ...List.generate(numWeeks, (i) => DropdownMenuItem(
+                      value: i + 1,
+                      child: Text('Week ${i + 1}'),
+                    )),
+                  ],
+                  onChanged: (val) {
+                    setState(() {
+                      selectedWeek = val ?? 0;
+                    });
+                  },
+                ),
+              ],
+            ),
+            buildTableSection(
+              'ATTENDANCE (OUT OF 20)',
+              ['Punching Time', 'Late time', 'Approved Leave', 'Unapproved Leave'],
+              'attendance',
+              filteredDates,
+              isDark,
+            ),
+            buildTableSection(
+              'DRESS CODE (OUT OF 20)',
+              ['Wear clean uniform', 'Keep inside', 'Keep your hair neat'],
+              'dressCode',
+              filteredDates,
+              isDark,
+            ),
+            buildTableSection(
+              'ATTITUDE (OUT OF 20)',
+              [
+                'Greet with a warm smile',
+                'Ask about their needs',
+                'Help find the right product',
+                'Confirm the purchase',
+                'Offer carry or delivery help'
+              ],
+              'attitude',
+              filteredDates,
+              isDark,
+            ),
+            buildTableSection(
+              'MEETING (OUT OF 10)',
+              ['Meeting'],
+              'meeting',
+              filteredDates,
+              isDark,
+            ),
+            // New questions
+            buildNewQuestionTableSection('Time Taken for Other Tasks (min)', 'timeTakenOtherTasks', filteredDates, isDark),
+            buildNewQuestionTableSection('Old Stock Offer Given?', 'oldStockOfferGiven', filteredDates, isDark, isBool: true),
+            buildNewQuestionTableSection('Cross-selling & Upselling?', 'crossSellingUpselling', filteredDates, isDark, isBool: true),
+            buildNewQuestionTableSection('Product Complaints?', 'productComplaints', filteredDates, isDark, isBool: true),
+            buildNewQuestionTableSection('Achieved Daily Target?', 'achievedDailyTarget', filteredDates, isDark, isBool: true),
+          ],
+        ),
       ),
     );
   }
