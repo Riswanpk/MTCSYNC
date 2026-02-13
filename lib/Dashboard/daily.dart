@@ -11,6 +11,18 @@ class DailyDashboardPage extends StatefulWidget {
 }
 
 class _DailyDashboardPageState extends State<DailyDashboardPage> {
+    DateTime _selectedDate = _getDefaultDashboardDate();
+
+  static DateTime _getDefaultDashboardDate() {
+    final now = DateTime.now();
+    if (now.hour >= 12) {
+      // After 12 PM, show next day's interval
+      return now.add(const Duration(days: 1));
+    } else {
+      // Before 12 PM, show today's interval
+      return now;
+    }
+  }
   String? _selectedBranch;
   List<String> _branches = [];
   String? _role;
@@ -45,6 +57,24 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
     });
   }
 
+  Future<void> _pickDate(BuildContext context) async {
+    final today = DateTime.now();
+    final defaultDate = _getDefaultDashboardDate();
+    final maxDate = defaultDate.isAfter(today) ? defaultDate : today;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2023, 1, 1),
+      lastDate: maxDate,
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedDate = picked;
+        // Force rebuild to update dashboard data
+      });
+    }
+  }
+
   Future<List<Map<String, dynamic>>> _fetchUsersAndLeads({String role = 'sales'}) async {
     if (_selectedBranch == null) return [];
     final usersSnapshot = await FirebaseFirestore.instance
@@ -60,52 +90,43 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
             })
         .toList();
 
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-
-    // New logic for todo window
-    DateTime todoWindowStart;
+    // Use _selectedDate for the dashboard window
+    final today = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    DateTime windowStart;
     if (today.weekday == DateTime.monday) {
-      todoWindowStart = today.subtract(const Duration(days: 2)).add(const Duration(hours: 12)); // Saturday 12 PM
+      // If selected date is Monday, interval is Saturday 12 PM to Monday 12 PM
+      final saturday = today.subtract(const Duration(days: 2));
+      windowStart = DateTime(saturday.year, saturday.month, saturday.day, 12);
     } else {
-      todoWindowStart = today.subtract(const Duration(days: 1)).add(const Duration(hours: 12)); // Previous day 12 PM
+      // Otherwise, interval is previous day 12 PM to selected date 12 PM
+      final yesterday = today.subtract(const Duration(days: 1));
+      windowStart = DateTime(yesterday.year, yesterday.month, yesterday.day, 12);
     }
-    final todoWindowEnd = today.add(const Duration(hours: 12)); // Today 12 PM
+    final windowEnd = DateTime(today.year, today.month, today.day, 12);
 
     // --- OPTIMIZATION: Use Future.wait to run queries for all users in parallel ---
     await Future.wait(users.map((user) async {
-        final userId = user['uid'];
-
-        // --- CHANGE: Lead window same as todo window ---
-        DateTime leadWindowStart;
-        if (today.weekday == DateTime.monday) {
-            leadWindowStart = today.subtract(const Duration(days: 2)).add(const Duration(hours: 12)); // Saturday 12 PM
-        } else {
-            leadWindowStart = today.subtract(const Duration(days: 1)).add(const Duration(hours: 12)); // Previous day 12 PM
-        }
-        final leadWindowEnd = today.add(const Duration(hours: 12)); // Today 12 PM
-
-        final results = await Future.wait([
-            FirebaseFirestore.instance
-                .collection('daily_report')
-                .where('userId', isEqualTo: userId)
-                .where('type', isEqualTo: 'leads')
-                .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(leadWindowStart))
-                .where('timestamp', isLessThan: Timestamp.fromDate(leadWindowEnd))
-                .limit(1) // We only need to know if one exists
-                .get(),
-            FirebaseFirestore.instance
-                .collection('daily_report')
-                .where('userId', isEqualTo: userId)
-                .where('type', isEqualTo: 'todo')
-                .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(todoWindowStart))
-                .where('timestamp', isLessThan: Timestamp.fromDate(todoWindowEnd))
-                .limit(1) // We only need to know if one exists
-                .get(),
-        ]);
-
-        user['lead'] = (results[0] as QuerySnapshot).docs.isNotEmpty;
-        user['todo'] = (results[1] as QuerySnapshot).docs.isNotEmpty;
+      final userId = user['uid'];
+      final results = await Future.wait([
+        FirebaseFirestore.instance
+            .collection('daily_report')
+            .where('userId', isEqualTo: userId)
+            .where('type', isEqualTo: 'leads')
+            .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(windowStart))
+            .where('timestamp', isLessThan: Timestamp.fromDate(windowEnd))
+            .limit(1)
+            .get(),
+        FirebaseFirestore.instance
+            .collection('daily_report')
+            .where('userId', isEqualTo: userId)
+            .where('type', isEqualTo: 'todo')
+            .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(windowStart))
+            .where('timestamp', isLessThan: Timestamp.fromDate(windowEnd))
+            .limit(1)
+            .get(),
+      ]);
+      user['lead'] = (results[0] as QuerySnapshot).docs.isNotEmpty;
+      user['todo'] = (results[1] as QuerySnapshot).docs.isNotEmpty;
     }));
     // --- END OPTIMIZATION ---
 
@@ -141,6 +162,31 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
       ),
       body: Column(
         children: [
+          // Date dropdown
+          Padding(
+            padding: const EdgeInsets.only(top: 12, left: 12, right: 12, bottom: 0),
+            child: Row(
+              children: [
+                const Text('Date:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => _pickDate(context),
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                      ),
+                      child: Text(
+                        "${_selectedDate.day.toString().padLeft(2, '0')}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.year}",
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           if (_role == 'admin' && _branches.isNotEmpty)
             Padding(
               padding: const EdgeInsets.all(12),
@@ -164,13 +210,13 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Icon(Icons.check_circle, color: Colors.blue, size: 20),
-                const SizedBox(width: 4),
-                const Text('Todo', style: TextStyle(fontSize: 12)),
-                const SizedBox(width: 16),
                 Icon(Icons.check_circle, color: Colors.green, size: 20),
                 const SizedBox(width: 4),
                 const Text('Lead', style: TextStyle(fontSize: 12)),
+                const SizedBox(width: 16),
+                Icon(Icons.check_circle, color: Colors.blue, size: 20),
+                const SizedBox(width: 4),
+                const Text('Todo', style: TextStyle(fontSize: 12)),
                 const SizedBox(width: 16),
               ],
             ),
@@ -209,13 +255,13 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Icon(
-                                            user['todo'] ? Icons.check_circle : Icons.cancel,
-                                            color: user['todo'] ? Colors.blue : Colors.red,
+                                            user['lead'] ? Icons.check_circle : Icons.cancel,
+                                            color: user['lead'] ? Colors.green : Colors.red,
                                           ),
                                           const SizedBox(width: 8),
                                           Icon(
-                                            user['lead'] ? Icons.check_circle : Icons.cancel,
-                                            color: user['lead'] ? Colors.green : Colors.red,
+                                            user['todo'] ? Icons.check_circle : Icons.cancel,
+                                            color: user['todo'] ? Colors.blue : Colors.red,
                                           ),
                                         ],
                                       ),
@@ -234,13 +280,13 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Icon(
-                                            user['todo'] ? Icons.check_circle : Icons.cancel,
-                                            color: user['todo'] ? Colors.blue : Colors.red,
+                                            user['lead'] ? Icons.check_circle : Icons.cancel,
+                                            color: user['lead'] ? Colors.green : Colors.red,
                                           ),
                                           const SizedBox(width: 8),
                                           Icon(
-                                            user['lead'] ? Icons.check_circle : Icons.cancel,
-                                            color: user['lead'] ? Colors.green : Colors.red,
+                                            user['todo'] ? Icons.check_circle : Icons.cancel,
+                                            color: user['todo'] ? Colors.blue : Colors.red,
                                           ),
                                         ],
                                       ),
@@ -274,13 +320,13 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
-                                  user['todo'] ? Icons.check_circle : Icons.cancel,
-                                  color: user['todo'] ? Colors.blue : Colors.red,
+                                  user['lead'] ? Icons.check_circle : Icons.cancel,
+                                  color: user['lead'] ? Colors.green : Colors.red,
                                 ),
                                 const SizedBox(width: 8),
                                 Icon(
-                                  user['lead'] ? Icons.check_circle : Icons.cancel,
-                                  color: user['lead'] ? Colors.green : Colors.red,
+                                  user['todo'] ? Icons.check_circle : Icons.cancel,
+                                  color: user['todo'] ? Colors.blue : Colors.red,
                                 ),
                               ],
                             ),

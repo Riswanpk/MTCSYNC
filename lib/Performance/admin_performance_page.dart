@@ -353,13 +353,16 @@ class _AdminEditFormState extends State<_AdminEditForm> {
   late bool confirmPurchase;
   late bool offerHelp;
   late bool meetingAttended;
-  late bool meetingNoMeeting; // <-- Add this line
+  late bool meetingNoMeeting;
 
-  // REMOVE performance fields
-  // late bool? targetAchieved;
-  // late bool? otherPerformance;
+  // New questions
+  late TextEditingController timeTakenOtherTasksController;
+  late bool oldStockOfferGiven;
+  late bool crossSellingUpselling;
+  late bool productComplaints;
+  late bool achievedDailyTarget;
 
-  // Add these fields:
+  // Attitude levels and reasons
   late String? greetSmileLevel;
   late String? askNeedsLevel;
   late String? helpFindProductLevel;
@@ -391,10 +394,15 @@ class _AdminEditFormState extends State<_AdminEditForm> {
     offerHelp = f['attitude']?['offerHelp'] ?? false;
     offerHelpLevel = f['attitude']?['offerHelpLevel'];
     meetingAttended = f['meeting']?['attended'] ?? false;
-    meetingNoMeeting = f['meeting']?['noMeeting'] ?? false; // <-- Add this line
-    // REMOVE performance fields
-    // targetAchieved = f['performance']?['target'];
-    // otherPerformance = f['performance']?['otherPerformance'];
+    meetingNoMeeting = f['meeting']?['noMeeting'] ?? false;
+
+    // New questions
+    timeTakenOtherTasksController = TextEditingController(text: (f['timeTakenOtherTasks'] ?? '').toString());
+    oldStockOfferGiven = f['oldStockOfferGiven'] ?? false;
+    crossSellingUpselling = f['crossSellingUpselling'] ?? false;
+    productComplaints = f['productComplaints'] ?? false;
+    achievedDailyTarget = f['achievedDailyTarget'] ?? false;
+
     greetSmileReasonController = TextEditingController(text: f['attitude']?['greetSmileReason'] ?? '');
     askNeedsReasonController = TextEditingController(text: f['attitude']?['askNeedsReason'] ?? '');
     helpFindProductReasonController = TextEditingController(text: f['attitude']?['helpFindProductReason'] ?? '');
@@ -409,6 +417,7 @@ class _AdminEditFormState extends State<_AdminEditForm> {
     helpFindProductReasonController.dispose();
     confirmPurchaseReasonController.dispose();
     offerHelpReasonController.dispose();
+    timeTakenOtherTasksController.dispose();
     super.dispose();
   }
 
@@ -439,8 +448,14 @@ class _AdminEditFormState extends State<_AdminEditForm> {
       },
       'meeting': {
         'attended': meetingAttended,
-        'noMeeting': meetingNoMeeting, // <-- Add this line
+        'noMeeting': meetingNoMeeting,
       },
+      // New questions
+      'timeTakenOtherTasks': timeTakenOtherTasksController.text,
+      'oldStockOfferGiven': oldStockOfferGiven,
+      'crossSellingUpselling': crossSellingUpselling,
+      'productComplaints': productComplaints,
+      'achievedDailyTarget': achievedDailyTarget,
     });
     widget.onSaved();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -466,7 +481,7 @@ class _AdminEditFormState extends State<_AdminEditForm> {
               'Attendance',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: theme.colorScheme.secondary, // Green from theme
+                color: theme.colorScheme.secondary,
               ),
             ),
             RadioListTile<String>(
@@ -503,7 +518,7 @@ class _AdminEditFormState extends State<_AdminEditForm> {
               'Dress Code',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: theme.colorScheme.secondary, // Green from theme
+                color: theme.colorScheme.secondary,
               ),
             ),
             CheckboxListTile(
@@ -615,7 +630,7 @@ class _AdminEditFormState extends State<_AdminEditForm> {
               'Meeting',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: theme.colorScheme.secondary, // Green from theme
+                color: theme.colorScheme.secondary,
               ),
             ),
             Row(
@@ -660,10 +675,51 @@ class _AdminEditFormState extends State<_AdminEditForm> {
               ],
             ),
             Divider(color: theme.dividerColor),
-            // REMOVE Performance section from UI
-            // Text('Performance (End of Month Only)', ...),
-            // AbsorbPointer(...),
-            // const SizedBox(height: 16),
+            // New questions
+            Text(
+              'Time Taken for Other Tasks (min)',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.secondary,
+              ),
+            ),
+            TextFormField(
+              controller: timeTakenOtherTasksController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(labelText: 'Minutes'),
+            ),
+            CheckboxListTile(
+              title: const Text('Old Stock Offer Given?'),
+              value: oldStockOfferGiven,
+              onChanged: (isApprovedLeave || isUnapprovedLeave)
+                  ? null
+                  : (val) => setState(() => oldStockOfferGiven = val ?? false),
+              activeColor: colorScheme.primary,
+            ),
+            CheckboxListTile(
+              title: const Text('Cross-selling & Upselling?'),
+              value: crossSellingUpselling,
+              onChanged: (isApprovedLeave || isUnapprovedLeave)
+                  ? null
+                  : (val) => setState(() => crossSellingUpselling = val ?? false),
+              activeColor: colorScheme.primary,
+            ),
+            CheckboxListTile(
+              title: const Text('Product Complaints?'),
+              value: productComplaints,
+              onChanged: (isApprovedLeave || isUnapprovedLeave)
+                  ? null
+                  : (val) => setState(() => productComplaints = val ?? false),
+              activeColor: colorScheme.primary,
+            ),
+            CheckboxListTile(
+              title: const Text('Achieved Daily Target?'),
+              value: achievedDailyTarget,
+              onChanged: (isApprovedLeave || isUnapprovedLeave)
+                  ? null
+                  : (val) => setState(() => achievedDailyTarget = val ?? false),
+              activeColor: colorScheme.primary,
+            ),
             Center(
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(

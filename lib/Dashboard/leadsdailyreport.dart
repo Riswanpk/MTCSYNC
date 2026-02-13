@@ -118,7 +118,7 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
-    final filePath = '${dir.path}/leads_todos_${yesterday.year}_${yesterday.month}_${yesterday.day}.xlsx';
+    final filePath = '${dir.path}/leads_todos_${now.year}_${now.month}_${now.day}.xlsx';
     final fileBytes = await excel.encode();
     final file = File(filePath)..writeAsBytesSync(fileBytes!);
 
@@ -126,8 +126,8 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
     final message = Message()
       ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
       ..recipients.addAll(['crmmalabar@gmail.com','performancemtc@gmail.com'])
-      ..subject = 'Daily Leads & Todo Report for ${yesterday.day}-${yesterday.month}-${yesterday.year}'
-      ..text = 'Please find attached the daily leads and todo report for yesterday.'
+      ..subject = 'Daily Leads & Todo Report for ${now.day}-${now.month}-${now.year}'
+      ..text = 'Please find attached the daily leads and todo report for today.'
       ..attachments = [FileAttachment(file)];
 
     await send(message, smtpServer);
