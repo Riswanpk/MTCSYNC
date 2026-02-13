@@ -13,6 +13,12 @@ class PerformanceForm extends StatefulWidget {
 }
 
 class _PerformanceFormState extends State<PerformanceForm> {
+    // Additional questions
+    String? timeTakenOtherTasks;
+    bool? oldStockOfferGiven;
+    bool? crossSellingUpselling;
+    bool? productComplaints;
+    bool? achievedDailyTarget;
   // Date selection
   DateTime selectedDate = DateTime.now();
   List<DateTime> allowedDates = [];
@@ -222,6 +228,12 @@ class _PerformanceFormState extends State<PerformanceForm> {
         'meetingComment':
             isLeave ? '' : (meetingNoMeeting ? 'No meeting conducted' : ''),
       },
+      // Additional questions
+      'timeTakenOtherTasks': timeTakenOtherTasks,
+      'oldStockOfferGiven': oldStockOfferGiven,
+      'crossSellingUpselling': crossSellingUpselling,
+      'productComplaints': productComplaints,
+      'achievedDailyTarget': achievedDailyTarget,
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -254,6 +266,11 @@ class _PerformanceFormState extends State<PerformanceForm> {
         'offerHelp': '',
       };
       isLoadingUsers = true;
+      timeTakenOtherTasks = null;
+      oldStockOfferGiven = null;
+      crossSellingUpselling = null;
+      productComplaints = null;
+      achievedDailyTarget = null;
     });
     // Refresh user list to remove the just-filled user
     fetchBranchUsers();
@@ -708,6 +725,161 @@ class _PerformanceFormState extends State<PerformanceForm> {
                           ),
                         ),
                         const SizedBox(height: 24),
+                                                // 5) Time taken to complete other tasks?
+                                                _buildSectionHeader('5) Time taken to complete other tasks?', Icons.timer_outlined),
+                                                _buildSectionCard(
+                                                  isDark: isDark,
+                                                  child: TextFormField(
+                                                    keyboardType: TextInputType.number,
+                                                    decoration: _inputDecoration('Enter time in minutes'),
+                                                    onChanged: (val) {
+                                                      setState(() {
+                                                        timeTakenOtherTasks = val;
+                                                      });
+                                                    },
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 16),
+
+                                                // 6) Old stock offer given to customers? (yes or no)
+                                                _buildSectionHeader('6) Old stock offer given to customers?', Icons.local_offer_outlined),
+                                                _buildSectionCard(
+                                                  isDark: isDark,
+                                                  child: Row(
+                                                    children: [
+                                                      Expanded(
+                                                        child: RadioListTile<bool>(
+                                                          title: const Text('Yes'),
+                                                          value: true,
+                                                          groupValue: oldStockOfferGiven,
+                                                          onChanged: (val) {
+                                                            setState(() {
+                                                              oldStockOfferGiven = val;
+                                                            });
+                                                          },
+                                                        ),
+                                                      ),
+                                                      Expanded(
+                                                        child: RadioListTile<bool>(
+                                                          title: const Text('No'),
+                                                          value: false,
+                                                          groupValue: oldStockOfferGiven,
+                                                          onChanged: (val) {
+                                                            setState(() {
+                                                              oldStockOfferGiven = val;
+                                                            });
+                                                          },
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 16),
+
+                                                // 7) Cross-selling and upselling? (yes or no)
+                                                _buildSectionHeader('7) Cross-selling and upselling?', Icons.swap_horiz),
+                                                _buildSectionCard(
+                                                  isDark: isDark,
+                                                  child: Row(
+                                                    children: [
+                                                      Expanded(
+                                                        child: RadioListTile<bool>(
+                                                          title: const Text('Yes'),
+                                                          value: true,
+                                                          groupValue: crossSellingUpselling,
+                                                          onChanged: (val) {
+                                                            setState(() {
+                                                              crossSellingUpselling = val;
+                                                            });
+                                                          },
+                                                        ),
+                                                      ),
+                                                      Expanded(
+                                                        child: RadioListTile<bool>(
+                                                          title: const Text('No'),
+                                                          value: false,
+                                                          groupValue: crossSellingUpselling,
+                                                          onChanged: (val) {
+                                                            setState(() {
+                                                              crossSellingUpselling = val;
+                                                            });
+                                                          },
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 16),
+
+                                                // 8) Are there any product complaints? (yes or no)
+                                                _buildSectionHeader('8) Are there any product complaints?', Icons.report_problem_outlined),
+                                                _buildSectionCard(
+                                                  isDark: isDark,
+                                                  child: Row(
+                                                    children: [
+                                                      Expanded(
+                                                        child: RadioListTile<bool>(
+                                                          title: const Text('Yes'),
+                                                          value: true,
+                                                          groupValue: productComplaints,
+                                                          onChanged: (val) {
+                                                            setState(() {
+                                                              productComplaints = val;
+                                                            });
+                                                          },
+                                                        ),
+                                                      ),
+                                                      Expanded(
+                                                        child: RadioListTile<bool>(
+                                                          title: const Text('No'),
+                                                          value: false,
+                                                          groupValue: productComplaints,
+                                                          onChanged: (val) {
+                                                            setState(() {
+                                                              productComplaints = val;
+                                                            });
+                                                          },
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 16),
+
+                                                // 9) Achieved the daily target? (yes or no)
+                                                _buildSectionHeader('9) Achieved the daily target?', Icons.verified_outlined),
+                                                _buildSectionCard(
+                                                  isDark: isDark,
+                                                  child: Row(
+                                                    children: [
+                                                      Expanded(
+                                                        child: RadioListTile<bool>(
+                                                          title: const Text('Yes'),
+                                                          value: true,
+                                                          groupValue: achievedDailyTarget,
+                                                          onChanged: (val) {
+                                                            setState(() {
+                                                              achievedDailyTarget = val;
+                                                            });
+                                                          },
+                                                        ),
+                                                      ),
+                                                      Expanded(
+                                                        child: RadioListTile<bool>(
+                                                          title: const Text('No'),
+                                                          value: false,
+                                                          groupValue: achievedDailyTarget,
+                                                          onChanged: (val) {
+                                                            setState(() {
+                                                              achievedDailyTarget = val;
+                                                            });
+                                                          },
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 24),
                         // Submit Button
                         Container(
                           width: double.infinity,

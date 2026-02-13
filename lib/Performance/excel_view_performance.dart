@@ -141,11 +141,19 @@ class _PerformanceTableViewState extends State<_PerformanceTableView> {
   bool isLoading = true;
   List<DateTime> monthDates = [];
   int selectedWeek = 0;
+  late ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
+    _scrollController = ScrollController();
     fetchMonthlyForms();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> fetchMonthlyForms() async {
@@ -199,6 +207,7 @@ class _PerformanceTableViewState extends State<_PerformanceTableView> {
         Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? Colors.white : Colors.black)),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
+          controller: _scrollController,
           child: DataTable(
             columnSpacing: 10,
             dataRowMinHeight: 28,
@@ -283,6 +292,71 @@ class _PerformanceTableViewState extends State<_PerformanceTableView> {
     );
   }
 
+  Widget buildNewQuestionTableSection(String title, String fieldKey, {bool isBool = false, String? trueText, String? falseText}) {
+    final filteredDates = getFilteredDates();
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 12),
+        Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? Colors.white : Colors.black)),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          controller: _scrollController,
+          child: DataTable(
+            columnSpacing: 10,
+            dataRowMinHeight: 28,
+            dataRowMaxHeight: 32,
+            headingRowHeight: 28,
+            horizontalMargin: 6,
+            headingRowColor: MaterialStateProperty.resolveWith<Color?>(
+              (states) => isDark ? Colors.grey[900] : Colors.grey[200],
+            ),
+            columns: [
+              const DataColumn(
+                label: Text('Category', style: TextStyle(fontSize: 11)),
+              ),
+              ...filteredDates.map((d) => DataColumn(
+                label: Text(
+                  '${d.day}-${d.month < 10 ? '0' : ''}${d.month}',
+                  style: const TextStyle(fontSize: 11),
+                ),
+              )),
+            ],
+            rows: [
+              DataRow(
+                cells: [
+                  DataCell(Text(title, style: const TextStyle(fontSize: 11))),
+                  ...filteredDates.map((date) {
+                    final form = getFormForDate(date);
+                    if (form == null || form.isEmpty) {
+                      return const DataCell(Text('-', style: TextStyle(fontSize: 11)));
+                    }
+                    final value = form[fieldKey];
+                    if (isBool) {
+                      if (value == true) {
+                        return const DataCell(Icon(Icons.check, color: Colors.green, size: 16));
+                      } else if (value == false) {
+                        return const DataCell(Icon(Icons.close, color: Colors.red, size: 16));
+                      } else {
+                        return const DataCell(Text('-', style: TextStyle(fontSize: 11)));
+                      }
+                    } else {
+                      String display = (value ?? '').toString();
+                      if (display.isEmpty || display == 'null') display = '-';
+                      return DataCell(Text(display, style: const TextStyle(fontSize: 11)));
+                    }
+                  }).toList(),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -343,6 +417,12 @@ class _PerformanceTableViewState extends State<_PerformanceTableView> {
             ['Meeting'],
             'meeting',
           ),
+              // New questions
+              buildNewQuestionTableSection('Time Taken for Other Tasks (min)', 'timeTakenOtherTasks'),
+              buildNewQuestionTableSection('Old Stock Offer Given?', 'oldStockOfferGiven', isBool: true, trueText: 'Yes', falseText: 'No'),
+              buildNewQuestionTableSection('Cross-selling & Upselling?', 'crossSellingUpselling', isBool: true, trueText: 'Yes', falseText: 'No'),
+              buildNewQuestionTableSection('Product Complaints?', 'productComplaints', isBool: true, trueText: 'Yes', falseText: 'No'),
+              buildNewQuestionTableSection('Achieved Daily Target?', 'achievedDailyTarget', isBool: true, trueText: 'Yes', falseText: 'No'),
         ],
       ),
     );

@@ -223,6 +223,120 @@ Future<void> exportAndSendExcel(BuildContext context, {int? year, int? month}) a
         sheet.appendRow(meetingRow);
 
         rowIdx = sheet.maxRows + 2;
+        // --- NEW QUESTIONS TABLES ---
+        // 5) Time taken to complete other tasks
+        sheet.appendRow([ex.TextCellValue('Time Taken for Other Tasks (min)'), ...dateRow.skip(1)]);
+        for (int i = 0; i < dateRow.length; i++) {
+          final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
+          cell.cellStyle = ex.CellStyle(
+            bold: true,
+            backgroundColorHex: ex.ExcelColor.fromHexString("#D0E0E3"),
+          );
+        }
+        final timeRow = [ex.TextCellValue('Minutes')];
+        for (int d = 0; d < daysInMonth; d++) {
+          final date = monthStart.add(Duration(days: d));
+          final form = getFormForDate(forms, date);
+          String value = '-';
+          if (form != null && form.isNotEmpty) {
+            value = (form['timeTakenOtherTasks'] ?? '').toString();
+            if (value.isEmpty) value = '-';
+          }
+          timeRow.add(ex.TextCellValue(value));
+        }
+        sheet.appendRow(timeRow);
+
+        // 6) Old stock offer given to customers?
+        sheet.appendRow([ex.TextCellValue('Old Stock Offer Given?'), ...dateRow.skip(1)]);
+        for (int i = 0; i < dateRow.length; i++) {
+          final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
+          cell.cellStyle = ex.CellStyle(
+            bold: true,
+            backgroundColorHex: ex.ExcelColor.fromHexString("#FFF2CC"),
+          );
+        }
+        final oldStockRow = [ex.TextCellValue('Yes/No')];
+        for (int d = 0; d < daysInMonth; d++) {
+          final date = monthStart.add(Duration(days: d));
+          final form = getFormForDate(forms, date);
+          String value = '-';
+          if (form != null && form.isNotEmpty) {
+            final v = form['oldStockOfferGiven'];
+            if (v == true) value = 'Yes';
+            else if (v == false) value = 'No';
+          }
+          oldStockRow.add(ex.TextCellValue(value));
+        }
+        sheet.appendRow(oldStockRow);
+
+        // 7) Cross-selling and upselling?
+        sheet.appendRow([ex.TextCellValue('Cross-selling & Upselling?'), ...dateRow.skip(1)]);
+        for (int i = 0; i < dateRow.length; i++) {
+          final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
+          cell.cellStyle = ex.CellStyle(
+            bold: true,
+            backgroundColorHex: ex.ExcelColor.fromHexString("#EAD1DC"),
+          );
+        }
+        final crossSellRow = [ex.TextCellValue('Yes/No')];
+        for (int d = 0; d < daysInMonth; d++) {
+          final date = monthStart.add(Duration(days: d));
+          final form = getFormForDate(forms, date);
+          String value = '-';
+          if (form != null && form.isNotEmpty) {
+            final v = form['crossSellingUpselling'];
+            if (v == true) value = 'Yes';
+            else if (v == false) value = 'No';
+          }
+          crossSellRow.add(ex.TextCellValue(value));
+        }
+        sheet.appendRow(crossSellRow);
+
+        // 8) Product complaints?
+        sheet.appendRow([ex.TextCellValue('Product Complaints?'), ...dateRow.skip(1)]);
+        for (int i = 0; i < dateRow.length; i++) {
+          final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
+          cell.cellStyle = ex.CellStyle(
+            bold: true,
+            backgroundColorHex: ex.ExcelColor.fromHexString("#F4CCCC"),
+          );
+        }
+        final complaintsRow = [ex.TextCellValue('Yes/No')];
+        for (int d = 0; d < daysInMonth; d++) {
+          final date = monthStart.add(Duration(days: d));
+          final form = getFormForDate(forms, date);
+          String value = '-';
+          if (form != null && form.isNotEmpty) {
+            final v = form['productComplaints'];
+            if (v == true) value = 'Yes';
+            else if (v == false) value = 'No';
+          }
+          complaintsRow.add(ex.TextCellValue(value));
+        }
+        sheet.appendRow(complaintsRow);
+
+        // 9) Achieved daily target?
+        sheet.appendRow([ex.TextCellValue('Achieved Daily Target?'), ...dateRow.skip(1)]);
+        for (int i = 0; i < dateRow.length; i++) {
+          final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
+          cell.cellStyle = ex.CellStyle(
+            bold: true,
+            backgroundColorHex: ex.ExcelColor.fromHexString("#D9EAD3"),
+          );
+        }
+        final targetRow = [ex.TextCellValue('Yes/No')];
+        for (int d = 0; d < daysInMonth; d++) {
+          final date = monthStart.add(Duration(days: d));
+          final form = getFormForDate(forms, date);
+          String value = '-';
+          if (form != null && form.isNotEmpty) {
+            final v = form['achievedDailyTarget'];
+            if (v == true) value = 'Yes';
+            else if (v == false) value = 'No';
+          }
+          targetRow.add(ex.TextCellValue(value));
+        }
+        sheet.appendRow(targetRow);
       });
     });
 
