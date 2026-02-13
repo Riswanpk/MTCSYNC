@@ -17,11 +17,21 @@ class AuthWrapper extends StatefulWidget {
 class _AuthWrapperState extends State<AuthWrapper> {
   StreamSubscription<User?>? _authSubscription;
   bool _initialCheckDone = false;
+  /// Grace period after app start to allow Firebase Auth session restoration.
+  /// Prevents false logouts on devices with aggressive process management
+  /// (e.g., Pixel 10 / Android 16).
+  bool _startupGracePeriodActive = true;
 
   @override
   void initState() {
     super.initState();
     _setupAuthListener();
+    // Allow a 5-second grace period after startup before acting on null auth events
+    Future.delayed(const Duration(seconds: 5), () {
+      if (mounted) {
+        _startupGracePeriodActive = false;
+      }
+    });
   }
 
   void _setupAuthListener() {
@@ -29,6 +39,12 @@ class _AuthWrapperState extends State<AuthWrapper> {
       // Skip the initial null state on app start (splash screen handles initial auth)
       if (!_initialCheckDone) {
         _initialCheckDone = true;
+        return;
+      }
+
+      // During the startup grace period, ignore null events — Firebase Auth
+      // may still be restoring the persisted session on some devices.
+      if (user == null && _startupGracePeriodActive) {
         return;
       }
 

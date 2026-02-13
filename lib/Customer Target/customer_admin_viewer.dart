@@ -147,26 +147,28 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
             backgroundColor: isDark ? primaryGreen : primaryBlue,
             iconTheme: const IconThemeData(color: Colors.white),
             actions: [
-              IconButton(
-                icon: const Icon(Icons.assignment_turned_in),
-                tooltip: 'Assign Customer Target',
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const CustomerTargetAdminPage()),
-                  );
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.download),
-                tooltip: 'Export Customer Target',
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const CustomerTargetExportPage()),
-                  );
-                },
-              ),
+              if (!widget.hideBranchDropdown) ...[
+                IconButton(
+                  icon: const Icon(Icons.assignment_turned_in),
+                  tooltip: 'Assign Customer Target',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const CustomerTargetAdminPage()),
+                    );
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.download),
+                  tooltip: 'Export Customer Target',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const CustomerTargetExportPage()),
+                    );
+                  },
+                ),
+              ],
             ],
           ),
           body: _loading

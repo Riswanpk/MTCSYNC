@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../login.dart';
 import '../home.dart';
 import '../main.dart'; // For navigatorKey and initialNotificationAction
@@ -76,8 +77,56 @@ class _SplashScreenState extends State<SplashScreen> {
     await _checkAuthAndNavigate();
   }
 
+  /// Robustly resolves the current Firebase Auth user.
+  /// On devices with aggressive process management (e.g., Pixel 10 / Android 16),
+  /// Firebase Auth may not have restored the persisted session by the time
+  /// authStateChanges() first fires. This method adds a brief wait window
+  /// and falls back to re-login with saved credentials if available.
+  Future<User?> _resolveAuthUser() async {
+    // 1. Fast synchronous check (already restored)
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) return user;
+
+    // 2. Wait for the first auth state event
+    user = await FirebaseAuth.instance.authStateChanges().first;
+    if (user != null) return user;
+
+    // 3. Session may still be restoring — wait up to 2s for a non-null event
+    try {
+      user = await FirebaseAuth.instance
+          .authStateChanges()
+          .where((u) => u != null)
+          .first
+          .timeout(const Duration(seconds: 2), onTimeout: () => null);
+    } catch (_) {
+      user = null;
+    }
+    if (user != null) return user;
+
+    // 4. Last resort: if Remember Me credentials are saved, try auto-login
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final rememberMe = prefs.getBool('remember_me_key') ?? false;
+      if (rememberMe) {
+        final email = prefs.getString('email_key');
+        final password = prefs.getString('password_key');
+        if (email != null && email.isNotEmpty && password != null && password.isNotEmpty) {
+          final cred = await FirebaseAuth.instance
+              .signInWithEmailAndPassword(email: email, password: password)
+              .timeout(const Duration(seconds: 5));
+          user = cred.user;
+        }
+      }
+    } catch (e) {
+      debugPrint('Auto-login fallback failed: $e');
+      user = null;
+    }
+
+    return user;
+  }
+
   Future<void> _checkAuthAndNavigate() async {
-    final user = await FirebaseAuth.instance.authStateChanges().first;
+    final user = await _resolveAuthUser();
     if (!mounted) return;
 
     if (_openedFromWidget) return; // Bypass default navigation if opened from widget
