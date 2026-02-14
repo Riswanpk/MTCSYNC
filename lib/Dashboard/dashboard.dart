@@ -226,36 +226,7 @@ class _DashboardPageState extends State<DashboardPage>
                 ),
               ),
               actions: [
-                if (role == 'admin')
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: PopupMenuButton<String>(
-                      icon: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: (isDark ? Colors.white : primaryBlue)
-                              .withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          Icons.more_horiz_rounded,
-                          color: isDark ? Colors.white70 : primaryBlue,
-                          size: 20,
-                        ),
-                      ),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16)),
-                      onSelected: (value) async {
-                        // ...existing code...
-                      },
-                      itemBuilder: (context) => [
-                        PopupMenuItem(
-                          value: 'option1',
-                          child: Text('Option 1'),
-                        ),
-                      ],
-                    ),
-                  ),
+                // ...existing code...
               ],
             ),
 
