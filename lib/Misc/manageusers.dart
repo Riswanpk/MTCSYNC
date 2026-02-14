@@ -254,7 +254,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                               String vB = b['version'] ?? '';
                               // Place latest version at the end (ascending order)
                               int parseVersion(String v) {
-                                // Converts version string to int for comparison, e.g. 1.2.109 -> 000100020098
+                                
                                 return int.tryParse(v.replaceAll('.', '').padLeft(8, '0')) ?? 0;
                               }
                               return parseVersion(vA).compareTo(parseVersion(vB));
