@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math';
 import '../Misc/auth_wrapper.dart';
 import '../Misc/navigation_state.dart';
+import '../Misc/user_cache_service.dart';
 import '../Customer Target/customer_manager_view.dart';
 import '../Todo & Leads/todo.dart';
 import '../Todo & Leads/leads.dart';
@@ -350,11 +351,9 @@ class HomeButtonsContainer extends StatelessWidget {
     
     String? branch;
     try {
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      branch = userDoc.data()?['branch'];
+      final cache = UserCacheService.instance;
+      await cache.ensureLoaded();
+      branch = cache.branch;
     } catch (e) {
       if (handleFirebaseAuthError(context, e)) return;
       rethrow;
@@ -395,14 +394,12 @@ class HomeButtonsContainer extends StatelessWidget {
     
     String? branch, username, userid, role;
     try {
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      branch = userDoc.data()?['branch'];
-      username = userDoc.data()?['username'] ?? userDoc.data()?['email'] ?? '';
+      final cache = UserCacheService.instance;
+      await cache.ensureLoaded();
+      branch = cache.branch;
+      username = cache.username;
       userid = user.uid;
-      role = userDoc.data()?['role'];
+      role = cache.role;
     } catch (e) {
       if (handleFirebaseAuthError(context, e)) return;
       rethrow;
@@ -453,11 +450,9 @@ class HomeButtonsContainer extends StatelessWidget {
     
     String? role;
     try {
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      role = userDoc.data()?['role'];
+      final cache = UserCacheService.instance;
+      await cache.ensureLoaded();
+      role = cache.role;
     } catch (e) {
       if (handleFirebaseAuthError(context, e)) return;
       rethrow;

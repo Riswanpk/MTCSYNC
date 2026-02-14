@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../login.dart';
 import '../Misc/settings.dart';
+import '../Misc/user_cache_service.dart';
 import '../Feedback/feedback.dart';
 import '../Feedback/feedback_admin.dart';
 import '../Misc/manageusers.dart';
@@ -156,15 +157,9 @@ class HomeDrawer extends StatelessWidget {
       onTap: () async {
         Navigator.pop(context);
 
-        final user = FirebaseAuth.instance.currentUser;
-        String? userRole;
-        if (user != null) {
-          final userDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .get();
-          userRole = userDoc.data()?['role'];
-        }
+        final cache = UserCacheService.instance;
+        await cache.ensureLoaded();
+        final userRole = cache.role;
 
         if (userRole == 'admin') {
           Navigator.push(
@@ -318,6 +313,7 @@ class HomeDrawer extends StatelessWidget {
       leading: const Icon(Icons.logout, color: Colors.red),
       title: const Text('Log Out'),
       onTap: () async {
+        UserCacheService.instance.clear();
         await FirebaseAuth.instance.signOut();
         Navigator.pushAndRemoveUntil(
           context,

@@ -17,6 +17,7 @@ import 'widgets/home_widgets.dart';
 import 'widgets/home_drawer.dart';
 import 'widgets/home_body.dart';
 import 'Misc/battery_optimization_helper.dart';
+import 'Misc/user_cache_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -37,6 +38,8 @@ class _HomePageState extends State<HomePage>
   int _logoTapCount = 0;
   List<Contact>? _cachedContacts;
   bool _contactsLoaded = false;
+
+  final _userCache = UserCacheService.instance;
 
   @override
   void initState() {
@@ -78,12 +81,8 @@ class _HomePageState extends State<HomePage>
   void _setupPerformanceNotifications() {
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) async {
       if (user != null) {
-        final userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
-        final role = userDoc.data()?['role'];
-        if (role == 'sales') {
+        await _userCache.ensureLoaded();
+        if (_userCache.role == 'sales') {
           _checkAndShowPerformanceDeductionNotification();
         }
       }
@@ -230,12 +229,9 @@ class _HomePageState extends State<HomePage>
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get();
-    final role = userDoc.data()?['role'];
-    final email = userDoc.data()?['email'];
+    await _userCache.ensureLoaded();
+    final role = _userCache.role;
+    final email = _userCache.email;
     if (role != 'sales') {
       setState(() => _showTodoWarning = false);
       return;
@@ -261,12 +257,8 @@ class _HomePageState extends State<HomePage>
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get();
-    final role = userDoc.data()?['role'];
-    if (role != 'sales') return;
+    await _userCache.ensureLoaded();
+    if (_userCache.role != 'sales') return;
 
     final now = DateTime.now();
     final pendingTodosSnapshot = await FirebaseFirestore.instance
@@ -379,22 +371,12 @@ class _HomePageState extends State<HomePage>
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance
-          .collection('users')
-          .doc(FirebaseAuth.instance.currentUser?.uid)
-          .get(),
+    return FutureBuilder<void>(
+      future: _userCache.ensureLoaded(),
       builder: (context, snapshot) {
-        String? role;
-        String? username;
-        String? branch;
-        if (snapshot.hasData) {
-          role = snapshot.data?.get('role');
-          username = snapshot.data?.get('username') ??
-              snapshot.data?.get('email') ??
-              'User';
-          branch = snapshot.data?.get('branch');
-        }
+        final role = _userCache.role;
+        final username = _userCache.username;
+        final branch = _userCache.branch;
 
         return WillPopScope(
           onWillPop: () async => false,

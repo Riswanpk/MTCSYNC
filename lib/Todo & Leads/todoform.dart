@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../widgets/todo_widget_updater.dart'; // At the top
+import '../Misc/user_cache_service.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -49,12 +50,11 @@ class _TodoFormPageState extends State<TodoFormPage> {
   }
 
   Future<void> _fetchCurrentUserRoleAndBranch() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final cache = UserCacheService.instance;
+    await cache.ensureLoaded();
     setState(() {
-      _currentUserRole = userDoc.data()?['role'];
-      _currentUserBranch = userDoc.data()?['branch'];
+      _currentUserRole = cache.role;
+      _currentUserBranch = cache.branch;
     });
     if (_currentUserRole == 'manager') {
       _fetchSalesUsers();
@@ -174,12 +174,15 @@ class _TodoFormPageState extends State<TodoFormPage> {
       email = salesUser['email'] ?? '';
       createdBy = user.uid;
       assignedBy = user.uid;
-      assignedByName = (await FirebaseFirestore.instance.collection('users').doc(user.uid).get()).data()?['username'] ?? '';
+      final cache = UserCacheService.instance;
+      await cache.ensureLoaded();
+      assignedByName = cache.username ?? '';
       assignedTo = salesUser['uid'];
       assignedToName = salesUser['username'];
     } else {
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      email = userDoc.data()?['email'] ?? user.email ?? 'unknown@example.com';
+      final cache = UserCacheService.instance;
+      await cache.ensureLoaded();
+      email = cache.email ?? user.email ?? 'unknown@example.com';
       createdBy = user.uid;
     }
 

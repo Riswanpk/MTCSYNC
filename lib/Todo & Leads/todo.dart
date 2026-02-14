@@ -5,6 +5,7 @@ import 'todoform.dart';
 import 'report_todo.dart'; // Import the new report page
 import 'package:provider/provider.dart';
 import '../Misc/theme_notifier.dart';
+import '../Misc/user_cache_service.dart';
 import 'package:flutter_slidable/flutter_slidable.dart'; // Add this import at the top
 import 'dart:async';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -78,17 +79,12 @@ class TaskDetailPage extends StatelessWidget {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          FutureBuilder<DocumentSnapshot>(
-            future: FirebaseFirestore.instance
-                .collection('users')
-                .doc(FirebaseAuth.instance.currentUser!.uid)
-                .get(),
+          FutureBuilder<void>(
+            future: UserCacheService.instance.ensureLoaded(),
             builder: (context, userSnapshot) {
-              if (!userSnapshot.hasData) return const SizedBox.shrink();
+              if (userSnapshot.connectionState == ConnectionState.waiting) return const SizedBox.shrink();
 
-              final currentUserData =
-                  userSnapshot.data!.data() as Map<String, dynamic>;
-              final currentUserRole = currentUserData['role'];
+              final currentUserRole = UserCacheService.instance.role;
               final currentUserId = FirebaseAuth.instance.currentUser!.uid;
 
               // Conditions to show the edit button:
@@ -337,9 +333,10 @@ class _TodoPageState extends State<TodoPage>
   Future<void> _loadUserInfo() async {
     final user = _auth.currentUser;
     if (user == null) return;
-    final doc = await _firestore.collection('users').doc(user.uid).get();
-    _userEmail = doc.data()?['email'] ?? 'unknown@example.com';
-    _userRole = doc.data()?['role'] ?? 'sales';
+    final cache = UserCacheService.instance;
+    await cache.ensureLoaded();
+    _userEmail = cache.email ?? 'unknown@example.com';
+    _userRole = cache.role ?? 'sales';
   }
 
   @override
@@ -678,12 +675,12 @@ class _TodoPageState extends State<TodoPage>
       return const Center(child: CircularProgressIndicator());
     }
 
-    return FutureBuilder<DocumentSnapshot>(
-      future: _firestore.collection('users').doc(user.uid).get(),
+    return FutureBuilder<void>(
+      future: UserCacheService.instance.ensureLoaded(),
       builder: (context, userSnapshot) {
-        if (!userSnapshot.hasData)
+        if (userSnapshot.connectionState == ConnectionState.waiting)
           return const Center(child: CircularProgressIndicator());
-        final role = userSnapshot.data!.get('role');
+        final role = UserCacheService.instance.role;
         final uid = user.uid;
 
         // For manager, show only their own todos in Pending/Completed tabs
