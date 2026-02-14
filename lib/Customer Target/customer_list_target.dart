@@ -50,7 +50,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
         });
         return;
       }
-      _docId = user.email;
+      _docId = user.email!.toLowerCase();
       // Get current month-year string, e.g., "Jan 2026"
       final now = DateTime.now();
       final monthYear = "${_monthName(now.month)} ${now.year}";

@@ -43,7 +43,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
           .collection('customer_target')
           .doc(monthYear)
           .collection('users')
-          .doc(user.email);
+          .doc(user.email!.toLowerCase());
 
       final docSnap = await docRef.get();
       List customers = [];
@@ -59,7 +59,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
         'remarks': '',
       });
       await docRef.set({
-        'user': user.email,
+        'user': user.email!.toLowerCase(),
         'customers': customers,
         'updated': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));

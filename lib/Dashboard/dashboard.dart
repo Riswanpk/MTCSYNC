@@ -8,7 +8,7 @@ import 'monthly.dart';
 import '../Todo & Leads/leads.dart';
 import 'daily.dart';
 import 'insights.dart';
-import 'leadsdailyreport.dart';
+// ...existing code...
 import 'leadscount.dart';
 
 // Theme colors
@@ -246,23 +246,12 @@ class _DashboardPageState extends State<DashboardPage>
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16)),
                       onSelected: (value) async {
-                        if (value == 'send_daily_report') {
-                          await sendDailyLeadsReport(context);
-                        }
+                        // ...existing code...
                       },
                       itemBuilder: (context) => [
-                        PopupMenuItem<String>(
-                          value: 'send_daily_report',
-                          child: Row(
-                            children: [
-                              Icon(Icons.send_rounded,
-                                  size: 18,
-                                  color:
-                                      isDark ? Colors.white70 : Colors.black54),
-                              const SizedBox(width: 10),
-                              const Text('Send Daily Report'),
-                            ],
-                          ),
+                        PopupMenuItem(
+                          value: 'option1',
+                          child: Text('Option 1'),
                         ),
                       ],
                     ),

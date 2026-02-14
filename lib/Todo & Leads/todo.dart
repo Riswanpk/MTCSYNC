@@ -359,7 +359,7 @@ class _TodoPageState extends State<TodoPage>
     const InitializationSettings initSettings =
         InitializationSettings(android: androidSettings);
 
-    await _localNotifications!.initialize(initSettings);
+    await _localNotifications!.initialize(settings: initSettings);
 
     // Create notification channel with custom sound
     const AndroidNotificationChannel assignmentChannel =
@@ -417,10 +417,10 @@ class _TodoPageState extends State<TodoPage>
         NotificationDetails(android: androidDetails);
 
     await _localNotifications?.show(
-      DateTime.now().millisecondsSinceEpoch.remainder(100000),
-      'New Task Assigned',
-      'You have been assigned: $taskTitle',
-      platformDetails,
+      id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      title: 'New Task Assigned',
+      body: 'You have been assigned: $taskTitle',
+      notificationDetails: platformDetails,
     );
   }
 

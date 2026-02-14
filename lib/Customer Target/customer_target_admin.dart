@@ -193,7 +193,7 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
           .collection('customer_target')
           .doc(monthYear)
           .collection('users')
-          .doc(_selectedUserEmail);
+          .doc(_selectedUserEmail!.toLowerCase());
 
       // Fetch existing customers
       final docSnap = await docRef.get();
@@ -216,7 +216,7 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
 
       await docRef.set({
         'branch': _selectedBranch,
-        'user': _selectedUserEmail,
+        'user': _selectedUserEmail!.toLowerCase(),
         'customers': updatedCustomers,
         'updated': FieldValue.serverTimestamp(),
       });
