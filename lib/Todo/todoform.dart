@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import '../widgets/todo_widget_updater.dart'; // At the top
+import 'todo_widget_updater.dart'; // At the top
 import '../Misc/user_cache_service.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
