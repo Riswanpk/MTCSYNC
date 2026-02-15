@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import '../Leads/leadsform.dart';
 
 class SalesMarketingDailyViewer extends StatelessWidget {
   final String userId;
@@ -156,6 +157,22 @@ class MarketingFormDetailsPage extends StatelessWidget {
       ..remove('userid')
       ..remove('timestamp');
 
+    // Helper to format phone number as +91 XXXXX YYYYY
+    String formatIndianPhone(String raw) {
+      final digits = RegExp(r'\d').allMatches(raw ?? '').map((m) => m.group(0)).join();
+      if (digits.length >= 10) {
+        final tenDigits = digits.substring(digits.length - 10);
+        return '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
+      }
+      return '+91 ';
+    }
+
+    // Extract values for leads
+    final String name = formData['shopName']?.toString() ?? '';
+    final String address = formData['place']?.toString() ?? '';
+    final String phoneRaw = formData['phoneNo']?.toString() ?? '';
+    final String phone = formatIndianPhone(phoneRaw);
+
     return Scaffold(
       appBar: AppBar(
         title: Text('$formType Details'),
@@ -181,61 +198,94 @@ class MarketingFormDetailsPage extends StatelessWidget {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Card(
-          elevation: 3,
-          shadowColor: Colors.black26,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: ListView(
-              children: [
-                const SizedBox(height: 10),
-                Center(
-                  child: Text(
-                    displayName.isNotEmpty ? displayName : 'No Name',
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Center(
-                  child: Text(
-                    formType,
-                    style: const TextStyle(fontSize: 16, color: Colors.black54),
-                  ),
-                ),
-                const Divider(height: 32, thickness: 1.2),
-                ...filteredData.entries.map((e) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 10.0),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            flex: 2,
-                            child: Text(
-                              '${_beautifyKey(e.key)}:',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF005BAC),
-                                fontSize: 15,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            flex: 3,
-                            child: Text(
-                              _isPhoneNumberKey(e.key) ? e.value.toString() : _formatIfDate(e.value),
-                              style: const TextStyle(fontSize: 16),
-                            ),
-                          ),
-                        ],
+      body: Column(
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Card(
+                elevation: 3,
+                shadowColor: Colors.black26,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: ListView(
+                    children: [
+                      const SizedBox(height: 10),
+                      Center(
+                        child: Text(
+                          displayName.isNotEmpty ? displayName : 'No Name',
+                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                        ),
                       ),
-                    )),
-              ],
+                      const SizedBox(height: 8),
+                      Center(
+                        child: Text(
+                          formType,
+                          style: const TextStyle(fontSize: 16, color: Colors.black54),
+                        ),
+                      ),
+                      const Divider(height: 32, thickness: 1.2),
+                      ...filteredData.entries.map((e) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 10.0),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  flex: 2,
+                                  child: Text(
+                                    '${_beautifyKey(e.key)}:',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF005BAC),
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 3,
+                                  child: Text(
+                                    _isPhoneNumberKey(e.key) ? e.value.toString() : _formatIfDate(e.value),
+                                    style: const TextStyle(fontSize: 16),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
-        ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.add),
+                label: const Text('Add To Leads', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF005BAC),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => FollowUpForm(
+                        key: UniqueKey(),
+                        initialName: name,
+                        initialPhone: phone,
+                        initialAddress: address,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

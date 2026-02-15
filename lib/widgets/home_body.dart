@@ -7,7 +7,7 @@ import '../Misc/navigation_state.dart';
 import '../Misc/user_cache_service.dart';
 import '../Customer Target/customer_manager_view.dart';
 import '../Todo/todo.dart';
-import '../Todo & Leads/leads.dart';
+import '../Leads/leads.dart';
 import '../Todo/todoform.dart';
 import '../Dashboard/dashboard.dart';
 import '../Marketing/marketing.dart';
