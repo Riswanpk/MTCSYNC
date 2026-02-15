@@ -233,8 +233,8 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
       // Use the pre-uploaded image URL (upload started when photo was taken)
       String? imageUrl = await _uploadHelper.getUploadResult();
 
-      // Submit marketing form
-      final marketingDoc = await FirebaseFirestore.instance.collection('marketing').add({
+      // Submit marketing form only (lead creation removed)
+      await FirebaseFirestore.instance.collection('marketing').add({
         'formType': 'General Customer',
         'username': widget.username,
         'userid': widget.userid,
@@ -255,63 +255,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
         'otherPurchasesReason': otherPurchases == 'yes' ? otherPurchasesReason : null,
       });
 
-      // --- INSTANT LEAD CREATION ---
-      final reminderDate = DateTime.now().add(const Duration(days: 15));
-      final leadDoc = await FirebaseFirestore.instance.collection('follow_ups').add({
-        'date': DateTime.now(),
-        'name': shopName,
-        'address': place,
-        'phone': phoneNo,
-        'comments': currentEnquiries,
-        'priority': 'Low',
-        'status': 'In Progress',
-        'reminder': reminderDate.toIso8601String(),
-        'branch': widget.branch,
-        'created_by': widget.userid,
-        'created_at': FieldValue.serverTimestamp(),
-        'source': 'marketing',
-        'marketing_doc_id': marketingDoc.id,
-      });
-
-      // Schedule local notification using basic_channel
-      try {
-        await AwesomeNotifications().createNotification(
-          content: NotificationContent(
-            id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-            channelKey: 'basic_channel',
-            title: 'Follow-Up Reminder',
-            body: 'Reminder for $shopName',
-            notificationLayout: NotificationLayout.Default,
-            payload: {
-              'docId': leadDoc.id,
-              'type': 'lead',
-            },
-          ),
-          actionButtons: [
-            NotificationActionButton(
-              key: 'EDIT_FOLLOWUP',
-              label: 'Edit',
-              autoDismissible: true,
-            ),
-          ],
-          schedule: NotificationCalendar(
-            year: reminderDate.year,
-            month: reminderDate.month,
-            day: reminderDate.day,
-            hour: 9,
-            minute: 0,
-            second: 0,
-            millisecond: 0,
-            timeZone: await AwesomeNotifications().getLocalTimeZoneIdentifier(),
-            preciseAlarm: true,
-          ),
-        );
-      } catch (e) {
-        debugPrint('Error scheduling notification: $e');
-      }
-
       await _clearDraft();
-      
       // Clear navigation state since form was successfully submitted
       await NavigationState.clearState();
       _uploadHelper.reset();
@@ -335,9 +279,9 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
         _otherPurchases = null;
         _otherPurchasesReasonController.clear();
       });
-      
+
       _formKey.currentState?.reset();
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Form submitted successfully!')),
       );
