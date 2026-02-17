@@ -269,6 +269,22 @@ Future<void> exportAndSendExcel(BuildContext context, {int? year, int? month}) a
         }
         sheet.appendRow(oldStockRow);
 
+        // Old Stock Offer Description row
+        final oldStockDescRow = [ex.TextCellValue('Description')];
+        for (int d = 0; d < daysInMonth; d++) {
+          final date = monthStart.add(Duration(days: d));
+          final form = getFormForDate(forms, date);
+          String value = '-';
+          if (form != null && form.isNotEmpty && form['oldStockOfferGiven'] == true) {
+            final desc = form['oldStockOfferDescription'];
+            if (desc != null && desc.toString().isNotEmpty) {
+              value = desc.toString();
+            }
+          }
+          oldStockDescRow.add(ex.TextCellValue(value));
+        }
+        sheet.appendRow(oldStockDescRow);
+
         // 7) Cross-selling and upselling?
         sheet.appendRow([ex.TextCellValue('Cross-selling & Upselling?'), ...dateRow.skip(1)]);
         for (int i = 0; i < dateRow.length; i++) {

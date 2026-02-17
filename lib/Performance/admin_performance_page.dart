@@ -358,6 +358,7 @@ class _AdminEditFormState extends State<_AdminEditForm> {
   // New questions
   late TextEditingController timeTakenOtherTasksController;
   late bool oldStockOfferGiven;
+  late TextEditingController oldStockOfferDescriptionController;
   late bool crossSellingUpselling;
   late bool productComplaints;
   late bool achievedDailyTarget;
@@ -399,6 +400,7 @@ class _AdminEditFormState extends State<_AdminEditForm> {
     // New questions
     timeTakenOtherTasksController = TextEditingController(text: (f['timeTakenOtherTasks'] ?? '').toString());
     oldStockOfferGiven = f['oldStockOfferGiven'] ?? false;
+    oldStockOfferDescriptionController = TextEditingController(text: (f['oldStockOfferDescription'] ?? '').toString());
     crossSellingUpselling = f['crossSellingUpselling'] ?? false;
     productComplaints = f['productComplaints'] ?? false;
     achievedDailyTarget = f['achievedDailyTarget'] ?? false;
@@ -418,6 +420,7 @@ class _AdminEditFormState extends State<_AdminEditForm> {
     confirmPurchaseReasonController.dispose();
     offerHelpReasonController.dispose();
     timeTakenOtherTasksController.dispose();
+    oldStockOfferDescriptionController.dispose();
     super.dispose();
   }
 
@@ -453,6 +456,7 @@ class _AdminEditFormState extends State<_AdminEditForm> {
       // New questions
       'timeTakenOtherTasks': timeTakenOtherTasksController.text,
       'oldStockOfferGiven': oldStockOfferGiven,
+      'oldStockOfferDescription': oldStockOfferGiven ? oldStockOfferDescriptionController.text : null,
       'crossSellingUpselling': crossSellingUpselling,
       'productComplaints': productComplaints,
       'achievedDailyTarget': achievedDailyTarget,
@@ -696,6 +700,18 @@ class _AdminEditFormState extends State<_AdminEditForm> {
                   : (val) => setState(() => oldStockOfferGiven = val ?? false),
               activeColor: colorScheme.primary,
             ),
+            if (oldStockOfferGiven)
+              Padding(
+                padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8),
+                child: TextFormField(
+                  controller: oldStockOfferDescriptionController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Describe the old stock offer',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
             CheckboxListTile(
               title: const Text('Cross-selling & Upselling?'),
               value: crossSellingUpselling,

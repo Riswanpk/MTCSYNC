@@ -1195,6 +1195,11 @@ class _PerformanceTableViewState extends State<_PerformanceTableView>
               isDark,
               isBool: true),
           buildNewQuestionTableSection(
+              'Old Stock Offer Description',
+              'oldStockOfferDescription',
+              filteredDates,
+              isDark),
+          buildNewQuestionTableSection(
               'Cross-selling & Upselling?',
               'crossSellingUpselling',
               filteredDates,

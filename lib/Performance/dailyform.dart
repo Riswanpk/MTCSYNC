@@ -16,6 +16,7 @@ class _PerformanceFormState extends State<PerformanceForm> {
     // Additional questions
     String? timeTakenOtherTasks;
     bool? oldStockOfferGiven;
+    String? oldStockOfferDescription;
     bool? crossSellingUpselling;
     bool? productComplaints;
     bool? achievedDailyTarget;
@@ -231,6 +232,7 @@ class _PerformanceFormState extends State<PerformanceForm> {
       // Additional questions
       'timeTakenOtherTasks': timeTakenOtherTasks,
       'oldStockOfferGiven': oldStockOfferGiven,
+      'oldStockOfferDescription': oldStockOfferGiven == true ? oldStockOfferDescription : null,
       'crossSellingUpselling': crossSellingUpselling,
       'productComplaints': productComplaints,
       'achievedDailyTarget': achievedDailyTarget,
@@ -268,6 +270,7 @@ class _PerformanceFormState extends State<PerformanceForm> {
       isLoadingUsers = true;
       timeTakenOtherTasks = null;
       oldStockOfferGiven = null;
+      oldStockOfferDescription = null;
       crossSellingUpselling = null;
       productComplaints = null;
       achievedDailyTarget = null;
@@ -774,6 +777,22 @@ class _PerformanceFormState extends State<PerformanceForm> {
                                                     ],
                                                   ),
                                                 ),
+                                                if (oldStockOfferGiven == true) ...
+                                                [
+                                                  const SizedBox(height: 8),
+                                                  _buildSectionCard(
+                                                    isDark: isDark,
+                                                    child: TextFormField(
+                                                      maxLines: 3,
+                                                      decoration: _inputDecoration('Describe the old stock offer'),
+                                                      onChanged: (val) {
+                                                        setState(() {
+                                                          oldStockOfferDescription = val;
+                                                        });
+                                                      },
+                                                    ),
+                                                  ),
+                                                ],
                                                 const SizedBox(height: 16),
 
                                                 // 7) Cross-selling and upselling? (yes or no)
