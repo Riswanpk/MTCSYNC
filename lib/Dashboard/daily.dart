@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../Todo/todo_leads_full_month.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
+import 'package:intl/intl.dart';
 
 class DailyDashboardPage extends StatefulWidget {
   const DailyDashboardPage({super.key});
@@ -11,16 +15,22 @@ class DailyDashboardPage extends StatefulWidget {
 }
 
 class _DailyDashboardPageState extends State<DailyDashboardPage> {
-    DateTime _selectedDate = _getDefaultDashboardDate();
+  DateTime _selectedDate = _getDefaultDashboardDateIST();
+  static final _istLocation = _initIST();
 
-  static DateTime _getDefaultDashboardDate() {
-    final now = DateTime.now();
-    if (now.hour >= 12) {
-      // After 12 PM, show next day's interval
-      return now.add(const Duration(days: 1));
+  static tz.Location _initIST() {
+    tz.initializeTimeZones();
+    return tz.getLocation('Asia/Kolkata');
+  }
+
+  static DateTime _getDefaultDashboardDateIST() {
+    final nowIST = tz.TZDateTime.now(_initIST());
+    if (nowIST.hour >= 12) {
+      // After 12 PM IST, show next day's interval
+      return nowIST.add(const Duration(days: 1));
     } else {
-      // Before 12 PM, show today's interval
-      return now;
+      // Before 12 PM IST, show today's interval
+      return nowIST;
     }
   }
   String? _selectedBranch;
@@ -59,14 +69,14 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
   }
 
   Future<void> _pickDate(BuildContext context) async {
-    final today = DateTime.now();
-    final defaultDate = _getDefaultDashboardDate();
-    final maxDate = defaultDate.isAfter(today) ? defaultDate : today;
+    final nowIST = tz.TZDateTime.now(_istLocation);
+    final defaultDate = _getDefaultDashboardDateIST();
+    final maxDate = defaultDate.isAfter(nowIST) ? defaultDate : nowIST;
     final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime(2023, 1, 1),
-      lastDate: maxDate,
+      lastDate: DateTime(maxDate.year, maxDate.month, maxDate.day),
     );
     if (picked != null) {
       setState(() {
@@ -91,19 +101,20 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
             })
         .toList();
 
-    // Use _selectedDate for the dashboard window
-    final today = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    // Use _selectedDate for the dashboard window, always in IST
+    final ist = _istLocation;
+    final todayIST = tz.TZDateTime(ist, _selectedDate.year, _selectedDate.month, _selectedDate.day);
     DateTime windowStart;
-    if (today.weekday == DateTime.monday) {
+    if (todayIST.weekday == DateTime.monday) {
       // If selected date is Monday, interval is Saturday 12 PM to Monday 12 PM
-      final saturday = today.subtract(const Duration(days: 2));
-      windowStart = DateTime(saturday.year, saturday.month, saturday.day, 12);
+      final saturday = todayIST.subtract(const Duration(days: 2));
+      windowStart = tz.TZDateTime(ist, saturday.year, saturday.month, saturday.day, 12);
     } else {
       // Otherwise, interval is previous day 12 PM to selected date 12 PM
-      final yesterday = today.subtract(const Duration(days: 1));
-      windowStart = DateTime(yesterday.year, yesterday.month, yesterday.day, 12);
+      final yesterday = todayIST.subtract(const Duration(days: 1));
+      windowStart = tz.TZDateTime(ist, yesterday.year, yesterday.month, yesterday.day, 12);
     }
-    final windowEnd = DateTime(today.year, today.month, today.day, 12);
+    final windowEnd = tz.TZDateTime(ist, todayIST.year, todayIST.month, todayIST.day, 12);
 
     // --- OPTIMIZATION: Use Future.wait to run queries for all users in parallel ---
     await Future.wait(users.map((user) async {
