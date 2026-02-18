@@ -7,10 +7,55 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
+import 'leads.dart';
+import '../Dashboard/leadscount.dart';
 
-import 'leads.dart'; // Make sure this import exists
-import '../../Dashboard/leadscount.dart'; // <-- Add this import
+/// Returns the current 12 PM–12 PM IST window as [windowStart, windowEnd].
+List<DateTime> _getCurrentISTWindowLeads() {
+  tz.initializeTimeZones();
+  final ist = tz.getLocation('Asia/Kolkata');
+  final nowIST = tz.TZDateTime.now(ist);
+  DateTime windowStart, windowEnd;
+  if (nowIST.hour >= 12) {
+    windowStart = tz.TZDateTime(ist, nowIST.year, nowIST.month, nowIST.day, 12);
+    final tomorrow = nowIST.add(const Duration(days: 1));
+    windowEnd = tz.TZDateTime(ist, tomorrow.year, tomorrow.month, tomorrow.day, 12);
+  } else {
+    final yesterday = nowIST.subtract(const Duration(days: 1));
+    windowStart = tz.TZDateTime(ist, yesterday.year, yesterday.month, yesterday.day, 12);
+    windowEnd = tz.TZDateTime(ist, nowIST.year, nowIST.month, nowIST.day, 12);
+  }
+  return [windowStart, windowEnd];
+}
+
+/// Creates a daily_report document only if one doesn't already exist
+/// for this user+type in the current 12 PM–12 PM IST window.
+Future<void> _createDailyReportIfNeededLeads({
+  required String userId,
+  required String documentId,
+  required String type,
+}) async {
+  final window = _getCurrentISTWindowLeads();
+  final existing = await FirebaseFirestore.instance
+      .collection('daily_report')
+      .where('userId', isEqualTo: userId)
+      .where('type', isEqualTo: type)
+      .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(window[0]))
+      .where('timestamp', isLessThan: Timestamp.fromDate(window[1]))
+      .limit(1)
+      .get();
+  if (existing.docs.isEmpty) {
+    await FirebaseFirestore.instance.collection('daily_report').add({
+      'timestamp': FieldValue.serverTimestamp(),
+      'userId': userId,
+      'documentId': documentId,
+      'type': type,
+    });
+  }
+}
 
 // Update fetchCustomerSuggestions to search by name OR phone:
 Future<List<Map<String, dynamic>>> fetchCustomerSuggestions(String query, String branch) async {
@@ -189,13 +234,12 @@ class _FollowUpFormState extends State<FollowUpForm> {
 
       Navigator.pop(context);
 
-      // Store only timestamp, userId, documentId, and type in daily_report
-      await FirebaseFirestore.instance.collection('daily_report').add({
-        'timestamp': FieldValue.serverTimestamp(),
-        'userId': user.uid,
-        'documentId': followUpRef.id,
-        'type': 'leads',
-      });
+      // Store daily_report (deduplicated per 12PM–12PM IST window)
+      await _createDailyReportIfNeededLeads(
+        userId: user.uid,
+        documentId: followUpRef.id,
+        type: 'leads',
+      );
 
       // After saving, navigate to LeadsPage
       if (mounted) {

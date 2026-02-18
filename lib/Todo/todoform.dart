@@ -5,8 +5,56 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 import 'todo_widget_updater.dart'; // At the top
 import '../Misc/user_cache_service.dart';
+
+/// Returns the current 12 PM–12 PM IST window as [windowStart, windowEnd].
+List<DateTime> _getCurrentISTWindow() {
+  tz.initializeTimeZones();
+  final ist = tz.getLocation('Asia/Kolkata');
+  final nowIST = tz.TZDateTime.now(ist);
+  DateTime windowStart, windowEnd;
+  if (nowIST.hour >= 12) {
+    // After 12 PM: window is today 12 PM → tomorrow 12 PM
+    windowStart = tz.TZDateTime(ist, nowIST.year, nowIST.month, nowIST.day, 12);
+    final tomorrow = nowIST.add(const Duration(days: 1));
+    windowEnd = tz.TZDateTime(ist, tomorrow.year, tomorrow.month, tomorrow.day, 12);
+  } else {
+    // Before 12 PM: window is yesterday 12 PM → today 12 PM
+    final yesterday = nowIST.subtract(const Duration(days: 1));
+    windowStart = tz.TZDateTime(ist, yesterday.year, yesterday.month, yesterday.day, 12);
+    windowEnd = tz.TZDateTime(ist, nowIST.year, nowIST.month, nowIST.day, 12);
+  }
+  return [windowStart, windowEnd];
+}
+
+/// Creates a daily_report document only if one doesn't already exist
+/// for this user+type in the current 12 PM–12 PM IST window.
+Future<void> _createDailyReportIfNeeded({
+  required String userId,
+  required String documentId,
+  required String type,
+}) async {
+  final window = _getCurrentISTWindow();
+  final existing = await FirebaseFirestore.instance
+      .collection('daily_report')
+      .where('userId', isEqualTo: userId)
+      .where('type', isEqualTo: type)
+      .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(window[0]))
+      .where('timestamp', isLessThan: Timestamp.fromDate(window[1]))
+      .limit(1)
+      .get();
+  if (existing.docs.isEmpty) {
+    await FirebaseFirestore.instance.collection('daily_report').add({
+      'timestamp': FieldValue.serverTimestamp(),
+      'userId': userId,
+      'documentId': documentId,
+      'type': type,
+    });
+  }
+}
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -215,20 +263,12 @@ class _TodoFormPageState extends State<TodoFormPage> {
 
       await _clearDraft();
 
-      // --- ADD THIS BLOCK ---
-      // Daily report logic for edits
-      final now = DateTime.now();
-      final hour = now.hour;
-      // Check if edited between 12pm-11:59pm or 12am-11:59am
-      if ((hour >= 12 && hour <= 23) || (hour >= 0 && hour < 12)) {
-        await FirebaseFirestore.instance.collection('daily_report').add({
-          'timestamp': now,
-          'userId': createdBy,
-          'documentId': widget.docId!,
-          'type': 'todo',
-        });
-      }
-      // --- END BLOCK ---
+      // Daily report entry for edits (deduplicated per 12PM–12PM IST window)
+      await _createDailyReportIfNeeded(
+        userId: createdBy,
+        documentId: widget.docId!,
+        type: 'todo',
+      );
 
       // Reschedule notification if the reminder was changed
       // Only schedule for self-assigned tasks
@@ -261,18 +301,12 @@ class _TodoFormPageState extends State<TodoFormPage> {
 
     await _clearDraft();
 
-    // Daily report logic
-    final now = DateTime.now();
-    final hour = now.hour;
-    // Check if created between 12pm-11:59pm or 12am-11:59am
-    if ((hour >= 12 && hour <= 23) || (hour >= 0 && hour < 12)) {
-      await FirebaseFirestore.instance.collection('daily_report').add({
-        'timestamp': now,
-        'userId': createdBy,
-        'documentId': todoRef.id,
-        'type': 'todo',
-      });
-    }
+    // Daily report entry for new todo (deduplicated per 12PM–12PM IST window)
+    await _createDailyReportIfNeeded(
+      userId: createdBy,
+      documentId: todoRef.id,
+      type: 'todo',
+    );
 
     // 🔔 Only schedule notification if assigned to self
     if (_currentUserRole != 'manager' || (_currentUserRole == 'manager' && (_selectedSalesUserId == null || _selectedSalesUserId == user.uid))) {
