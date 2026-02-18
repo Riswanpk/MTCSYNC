@@ -141,6 +141,20 @@ class MonthlyMarketingFormDetailsPage extends StatelessWidget {
     return value.toString();
   }
 
+  bool _isPhoneNumberKey(String key) {
+    final lowerKey = key.toLowerCase();
+    return lowerKey.contains('phone') || lowerKey.contains('contact');
+  }
+
+  String _formatIndianPhone(String raw) {
+    final digits = RegExp(r'\d').allMatches(raw ?? '').map((m) => m.group(0)).join();
+    if (digits.length >= 10) {
+      final tenDigits = digits.substring(digits.length - 10);
+      return '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
+    }
+    return '+91 ';
+  }
+
   String _beautifyKey(String key) {
     return key
         .replaceAllMapped(RegExp(r'([A-Z])'), (m) => ' ${m.group(0)}')
@@ -191,7 +205,9 @@ class MonthlyMarketingFormDetailsPage extends StatelessWidget {
                           Expanded(
                             flex: 3,
                             child: Text(
-                              _formatIfDate(e.value),
+                              _isPhoneNumberKey(e.key)
+                                  ? _formatIndianPhone(e.value?.toString() ?? '')
+                                  : _formatIfDate(e.value),
                               style: const TextStyle(fontSize: 16),
                             ),
                           ),
