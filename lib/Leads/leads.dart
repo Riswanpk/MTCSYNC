@@ -12,7 +12,7 @@ import 'dart:io';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
-import '../Todo & Leads/customer_list.dart'; // Import the customer list page
+import 'customer_list.dart'; 
 
 
 class LeadsPage extends StatefulWidget {
