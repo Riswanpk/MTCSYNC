@@ -11,7 +11,7 @@ import '../Feedback/feedback.dart';
 import '../Feedback/feedback_admin.dart';
 import '../Misc/manageusers.dart';
 import '../Performance/dailyform.dart';
-import '../Performance/performance_score_page.dart';
+
 import '../Performance/admin_performance_page.dart';
 import '../Performance/excel_view_performance.dart';
 import '../Performance/insights_performance.dart';
@@ -47,7 +47,7 @@ class HomeDrawer extends StatelessWidget {
           _buildFeedbackTile(context),
           if (role == 'admin') _buildManageUsersTile(context),
           if (role == 'manager') _buildDailyFormTile(context),
-          if (role == 'sales') _buildPerformanceTile(context),
+
           if (role == 'admin') _buildEditPerformanceFormTile(context),
           if (role == 'admin') _buildPerformanceMonthlyTile(context),
           if (role == 'admin') _buildPerformanceInsightsTile(context),
@@ -209,21 +209,7 @@ class HomeDrawer extends StatelessWidget {
     );
   }
 
-  Widget _buildPerformanceTile(BuildContext context) {
-    return ListTile(
-      dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: const Icon(Icons.bar_chart, color: Colors.teal),
-      title: const Text('Performance'),
-      onTap: () {
-        Navigator.pop(context);
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => PerformanceScoreInnerPage()),
-        );
-      },
-    );
-  }
+  // Removed performance tile for sales role
 
   Widget _buildEditPerformanceFormTile(BuildContext context) {
     return ListTile(
