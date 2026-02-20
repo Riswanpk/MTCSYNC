@@ -1183,40 +1183,66 @@ class _PerformanceTableViewState extends State<_PerformanceTableView>
           ),
 
           // ── Additional Questions ──
-          buildNewQuestionTableSection(
-              'Time Taken for Other Tasks (min)',
+            // 5) Completed other tasks?
+            buildNewQuestionTableSection(
+              'Completed Other Tasks?',
               'timeTakenOtherTasks',
               filteredDates,
+              isDark,
+              isBool: true),
+            buildNewQuestionTableSection(
+              'Other Tasks Description',
+              'timeTakenOtherTasksDescription',
+              filteredDates,
               isDark),
-          buildNewQuestionTableSection(
+            // 6) Old stock offer given to customers?
+            buildNewQuestionTableSection(
               'Old Stock Offer Given?',
               'oldStockOfferGiven',
               filteredDates,
               isDark,
               isBool: true),
-          buildNewQuestionTableSection(
+            buildNewQuestionTableSection(
               'Old Stock Offer Description',
               'oldStockOfferDescription',
               filteredDates,
               isDark),
-          buildNewQuestionTableSection(
+            // 7) Cross-selling and upselling?
+            buildNewQuestionTableSection(
               'Cross-selling & Upselling?',
               'crossSellingUpselling',
               filteredDates,
               isDark,
               isBool: true),
-          buildNewQuestionTableSection(
+            buildNewQuestionTableSection(
+              'Cross-selling & Upselling Description',
+              'crossSellingUpsellingDescription',
+              filteredDates,
+              isDark),
+            // 8) Product complaints?
+            buildNewQuestionTableSection(
               'Product Complaints?',
               'productComplaints',
               filteredDates,
               isDark,
               isBool: true),
-          buildNewQuestionTableSection(
+            buildNewQuestionTableSection(
+              'Product Complaints Description',
+              'productComplaintsDescription',
+              filteredDates,
+              isDark),
+            // 9) Achieved daily target?
+            buildNewQuestionTableSection(
               'Achieved Daily Target?',
               'achievedDailyTarget',
               filteredDates,
               isDark,
               isBool: true),
+            buildNewQuestionTableSection(
+              'Achieved Daily Target Description',
+              'achievedDailyTargetDescription',
+              filteredDates,
+              isDark),
               ],
             ),
           ),

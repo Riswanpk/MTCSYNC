@@ -224,135 +224,120 @@ Future<void> exportAndSendExcel(BuildContext context, {int? year, int? month}) a
 
         rowIdx = sheet.maxRows + 2;
         // --- NEW QUESTIONS TABLES ---
-        // 5) Time taken to complete other tasks
-        sheet.appendRow([ex.TextCellValue('Time Taken for Other Tasks (min)'), ...dateRow.skip(1)]);
+        // 5) Completed other tasks?
+        sheet.appendRow([ex.TextCellValue('Completed Other Tasks?'), ...dateRow.skip(1)]);
         for (int i = 0; i < dateRow.length; i++) {
           final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
-          cell.cellStyle = ex.CellStyle(
-            bold: true,
-            backgroundColorHex: ex.ExcelColor.fromHexString("#D0E0E3"),
-          );
+          cell.cellStyle = ex.CellStyle(bold: true, backgroundColorHex: ex.ExcelColor.fromHexString("#D0E0E3"));
         }
-        final timeRow = [ex.TextCellValue('Minutes')];
+        final otherTasksRow = [ex.TextCellValue('Yes/No')];
+        final otherTasksDescRow = [ex.TextCellValue('Description')];
         for (int d = 0; d < daysInMonth; d++) {
           final date = monthStart.add(Duration(days: d));
           final form = getFormForDate(forms, date);
           String value = '-';
+          String desc = '-';
           if (form != null && form.isNotEmpty) {
-            value = (form['timeTakenOtherTasks'] ?? '').toString();
-            if (value.isEmpty) value = '-';
+            value = form['timeTakenOtherTasks'] == true ? 'Yes' : (form['timeTakenOtherTasks'] == false ? 'No' : '-');
+            desc = form['timeTakenOtherTasksDescription'] ?? '-';
           }
-          timeRow.add(ex.TextCellValue(value));
+          otherTasksRow.add(ex.TextCellValue(value));
+          otherTasksDescRow.add(ex.TextCellValue(desc));
         }
-        sheet.appendRow(timeRow);
+        sheet.appendRow(otherTasksRow);
+        sheet.appendRow(otherTasksDescRow);
 
         // 6) Old stock offer given to customers?
         sheet.appendRow([ex.TextCellValue('Old Stock Offer Given?'), ...dateRow.skip(1)]);
         for (int i = 0; i < dateRow.length; i++) {
           final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
-          cell.cellStyle = ex.CellStyle(
-            bold: true,
-            backgroundColorHex: ex.ExcelColor.fromHexString("#FFF2CC"),
-          );
+          cell.cellStyle = ex.CellStyle(bold: true, backgroundColorHex: ex.ExcelColor.fromHexString("#FFF2CC"));
         }
         final oldStockRow = [ex.TextCellValue('Yes/No')];
-        for (int d = 0; d < daysInMonth; d++) {
-          final date = monthStart.add(Duration(days: d));
-          final form = getFormForDate(forms, date);
-          String value = '-';
-          if (form != null && form.isNotEmpty) {
-            final v = form['oldStockOfferGiven'];
-            if (v == true) value = 'Yes';
-            else if (v == false) value = 'No';
-          }
-          oldStockRow.add(ex.TextCellValue(value));
-        }
-        sheet.appendRow(oldStockRow);
-
-        // Old Stock Offer Description row
         final oldStockDescRow = [ex.TextCellValue('Description')];
         for (int d = 0; d < daysInMonth; d++) {
           final date = monthStart.add(Duration(days: d));
           final form = getFormForDate(forms, date);
           String value = '-';
-          if (form != null && form.isNotEmpty && form['oldStockOfferGiven'] == true) {
-            final desc = form['oldStockOfferDescription'];
-            if (desc != null && desc.toString().isNotEmpty) {
-              value = desc.toString();
-            }
+          String desc = '-';
+          if (form != null && form.isNotEmpty) {
+            value = form['oldStockOfferGiven'] == true ? 'Yes' : (form['oldStockOfferGiven'] == false ? 'No' : '-');
+            desc = form['oldStockOfferDescription'] ?? '-';
           }
-          oldStockDescRow.add(ex.TextCellValue(value));
+          oldStockRow.add(ex.TextCellValue(value));
+          oldStockDescRow.add(ex.TextCellValue(desc));
         }
+        sheet.appendRow(oldStockRow);
         sheet.appendRow(oldStockDescRow);
 
         // 7) Cross-selling and upselling?
         sheet.appendRow([ex.TextCellValue('Cross-selling & Upselling?'), ...dateRow.skip(1)]);
         for (int i = 0; i < dateRow.length; i++) {
           final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
-          cell.cellStyle = ex.CellStyle(
-            bold: true,
-            backgroundColorHex: ex.ExcelColor.fromHexString("#EAD1DC"),
-          );
+          cell.cellStyle = ex.CellStyle(bold: true, backgroundColorHex: ex.ExcelColor.fromHexString("#EAD1DC"));
         }
         final crossSellRow = [ex.TextCellValue('Yes/No')];
+        final crossSellDescRow = [ex.TextCellValue('Description')];
         for (int d = 0; d < daysInMonth; d++) {
           final date = monthStart.add(Duration(days: d));
           final form = getFormForDate(forms, date);
           String value = '-';
+          String desc = '-';
           if (form != null && form.isNotEmpty) {
-            final v = form['crossSellingUpselling'];
-            if (v == true) value = 'Yes';
-            else if (v == false) value = 'No';
+            value = form['crossSellingUpselling'] == true ? 'Yes' : (form['crossSellingUpselling'] == false ? 'No' : '-');
+            desc = form['crossSellingUpsellingDescription'] ?? '-';
           }
           crossSellRow.add(ex.TextCellValue(value));
+          crossSellDescRow.add(ex.TextCellValue(desc));
         }
         sheet.appendRow(crossSellRow);
+        sheet.appendRow(crossSellDescRow);
 
         // 8) Product complaints?
         sheet.appendRow([ex.TextCellValue('Product Complaints?'), ...dateRow.skip(1)]);
         for (int i = 0; i < dateRow.length; i++) {
           final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
-          cell.cellStyle = ex.CellStyle(
-            bold: true,
-            backgroundColorHex: ex.ExcelColor.fromHexString("#F4CCCC"),
-          );
+          cell.cellStyle = ex.CellStyle(bold: true, backgroundColorHex: ex.ExcelColor.fromHexString("#F4CCCC"));
         }
         final complaintsRow = [ex.TextCellValue('Yes/No')];
+        final complaintsDescRow = [ex.TextCellValue('Description')];
         for (int d = 0; d < daysInMonth; d++) {
           final date = monthStart.add(Duration(days: d));
           final form = getFormForDate(forms, date);
           String value = '-';
+          String desc = '-';
           if (form != null && form.isNotEmpty) {
-            final v = form['productComplaints'];
-            if (v == true) value = 'Yes';
-            else if (v == false) value = 'No';
+            value = form['productComplaints'] == true ? 'Yes' : (form['productComplaints'] == false ? 'No' : '-');
+            desc = form['productComplaintsDescription'] ?? '-';
           }
           complaintsRow.add(ex.TextCellValue(value));
+          complaintsDescRow.add(ex.TextCellValue(desc));
         }
         sheet.appendRow(complaintsRow);
+        sheet.appendRow(complaintsDescRow);
 
         // 9) Achieved daily target?
         sheet.appendRow([ex.TextCellValue('Achieved Daily Target?'), ...dateRow.skip(1)]);
         for (int i = 0; i < dateRow.length; i++) {
           final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
-          cell.cellStyle = ex.CellStyle(
-            bold: true,
-            backgroundColorHex: ex.ExcelColor.fromHexString("#D9EAD3"),
-          );
+          cell.cellStyle = ex.CellStyle(bold: true, backgroundColorHex: ex.ExcelColor.fromHexString("#D9EAD3"));
         }
         final targetRow = [ex.TextCellValue('Yes/No')];
+        final targetDescRow = [ex.TextCellValue('Description')];
         for (int d = 0; d < daysInMonth; d++) {
           final date = monthStart.add(Duration(days: d));
           final form = getFormForDate(forms, date);
           String value = '-';
+          String desc = '-';
           if (form != null && form.isNotEmpty) {
-            final v = form['achievedDailyTarget'];
-            if (v == true) value = 'Yes';
-            else if (v == false) value = 'No';
+            value = form['achievedDailyTarget'] == true ? 'Yes' : (form['achievedDailyTarget'] == false ? 'No' : '-');
+            desc = form['achievedDailyTargetDescription'] ?? '-';
           }
           targetRow.add(ex.TextCellValue(value));
+          targetDescRow.add(ex.TextCellValue(desc));
         }
         sheet.appendRow(targetRow);
+        sheet.appendRow(targetDescRow);
       });
     });
 

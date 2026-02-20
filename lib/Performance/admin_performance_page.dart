@@ -355,13 +355,18 @@ class _AdminEditFormState extends State<_AdminEditForm> {
   late bool meetingAttended;
   late bool meetingNoMeeting;
 
-  // New questions
+  // New questions (5-9)
+  late bool timeTakenOtherTasks;
   late TextEditingController timeTakenOtherTasksController;
+  late TextEditingController timeTakenOtherTasksDescriptionController;
   late bool oldStockOfferGiven;
   late TextEditingController oldStockOfferDescriptionController;
   late bool crossSellingUpselling;
+  late TextEditingController crossSellingUpsellingDescriptionController;
   late bool productComplaints;
+  late TextEditingController productComplaintsDescriptionController;
   late bool achievedDailyTarget;
+  late TextEditingController achievedDailyTargetDescriptionController;
 
   // Attitude levels and reasons
   late String? greetSmileLevel;
@@ -397,13 +402,18 @@ class _AdminEditFormState extends State<_AdminEditForm> {
     meetingAttended = f['meeting']?['attended'] ?? false;
     meetingNoMeeting = f['meeting']?['noMeeting'] ?? false;
 
-    // New questions
-    timeTakenOtherTasksController = TextEditingController(text: (f['timeTakenOtherTasks'] ?? '').toString());
+    // New questions (5-9)
+    timeTakenOtherTasks = f['timeTakenOtherTasks'] ?? false;
+    timeTakenOtherTasksController = TextEditingController(text: (f['timeTakenOtherTasksTime'] ?? '').toString());
+    timeTakenOtherTasksDescriptionController = TextEditingController(text: (f['timeTakenOtherTasksDescription'] ?? '').toString());
     oldStockOfferGiven = f['oldStockOfferGiven'] ?? false;
     oldStockOfferDescriptionController = TextEditingController(text: (f['oldStockOfferDescription'] ?? '').toString());
     crossSellingUpselling = f['crossSellingUpselling'] ?? false;
+    crossSellingUpsellingDescriptionController = TextEditingController(text: (f['crossSellingUpsellingDescription'] ?? '').toString());
     productComplaints = f['productComplaints'] ?? false;
+    productComplaintsDescriptionController = TextEditingController(text: (f['productComplaintsDescription'] ?? '').toString());
     achievedDailyTarget = f['achievedDailyTarget'] ?? false;
+    achievedDailyTargetDescriptionController = TextEditingController(text: (f['achievedDailyTargetDescription'] ?? '').toString());
 
     greetSmileReasonController = TextEditingController(text: f['attitude']?['greetSmileReason'] ?? '');
     askNeedsReasonController = TextEditingController(text: f['attitude']?['askNeedsReason'] ?? '');
@@ -420,7 +430,11 @@ class _AdminEditFormState extends State<_AdminEditForm> {
     confirmPurchaseReasonController.dispose();
     offerHelpReasonController.dispose();
     timeTakenOtherTasksController.dispose();
+    timeTakenOtherTasksDescriptionController.dispose();
     oldStockOfferDescriptionController.dispose();
+    crossSellingUpsellingDescriptionController.dispose();
+    productComplaintsDescriptionController.dispose();
+    achievedDailyTargetDescriptionController.dispose();
     super.dispose();
   }
 
@@ -453,13 +467,18 @@ class _AdminEditFormState extends State<_AdminEditForm> {
         'attended': meetingAttended,
         'noMeeting': meetingNoMeeting,
       },
-      // New questions
-      'timeTakenOtherTasks': timeTakenOtherTasksController.text,
+      // New questions (5-9)
+      'timeTakenOtherTasks': timeTakenOtherTasks,
+      'timeTakenOtherTasksTime': timeTakenOtherTasksController.text,
+      'timeTakenOtherTasksDescription': timeTakenOtherTasks ? timeTakenOtherTasksDescriptionController.text : null,
       'oldStockOfferGiven': oldStockOfferGiven,
       'oldStockOfferDescription': oldStockOfferGiven ? oldStockOfferDescriptionController.text : null,
       'crossSellingUpselling': crossSellingUpselling,
+      'crossSellingUpsellingDescription': crossSellingUpselling ? crossSellingUpsellingDescriptionController.text : null,
       'productComplaints': productComplaints,
+      'productComplaintsDescription': productComplaints ? productComplaintsDescriptionController.text : null,
       'achievedDailyTarget': achievedDailyTarget,
+      'achievedDailyTargetDescription': achievedDailyTarget ? achievedDailyTargetDescriptionController.text : null,
     });
     widget.onSaved();
     ScaffoldMessenger.of(context).showSnackBar(

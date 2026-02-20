@@ -14,12 +14,16 @@ class PerformanceForm extends StatefulWidget {
 
 class _PerformanceFormState extends State<PerformanceForm> {
     // Additional questions
-    String? timeTakenOtherTasks;
+    bool? timeTakenOtherTasks;
+    String? timeTakenOtherTasksDescription;
     bool? oldStockOfferGiven;
     String? oldStockOfferDescription;
     bool? crossSellingUpselling;
+    String? crossSellingUpsellingDescription;
     bool? productComplaints;
+    String? productComplaintsDescription;
     bool? achievedDailyTarget;
+    String? achievedDailyTargetDescription;
   // Date selection
   DateTime selectedDate = DateTime.now();
   List<DateTime> allowedDates = [];
@@ -229,13 +233,17 @@ class _PerformanceFormState extends State<PerformanceForm> {
         'meetingComment':
             isLeave ? '' : (meetingNoMeeting ? 'No meeting conducted' : ''),
       },
-      // Additional questions
+      // Additional questions (5-9, all with description if yes)
       'timeTakenOtherTasks': timeTakenOtherTasks,
+      'timeTakenOtherTasksDescription': timeTakenOtherTasks == true ? timeTakenOtherTasksDescription : null,
       'oldStockOfferGiven': oldStockOfferGiven,
       'oldStockOfferDescription': oldStockOfferGiven == true ? oldStockOfferDescription : null,
       'crossSellingUpselling': crossSellingUpselling,
+      'crossSellingUpsellingDescription': crossSellingUpselling == true ? crossSellingUpsellingDescription : null,
       'productComplaints': productComplaints,
+      'productComplaintsDescription': productComplaints == true ? productComplaintsDescription : null,
       'achievedDailyTarget': achievedDailyTarget,
+      'achievedDailyTargetDescription': achievedDailyTarget == true ? achievedDailyTargetDescription : null,
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -728,176 +736,260 @@ class _PerformanceFormState extends State<PerformanceForm> {
                           ),
                         ),
                         const SizedBox(height: 24),
-                                                // 5) Time taken to complete other tasks?
-                                                _buildSectionHeader('5) Time taken to complete other tasks?', Icons.timer_outlined),
-                                                _buildSectionCard(
-                                                  isDark: isDark,
-                                                  child: TextFormField(
-                                                    keyboardType: TextInputType.number,
-                                                    decoration: _inputDecoration('Enter time in minutes'),
-                                                    onChanged: (val) {
-                                                      setState(() {
-                                                        timeTakenOtherTasks = val;
-                                                      });
-                                                    },
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 16),
+                        // 5) Completed other tasks?
+                        _buildSectionHeader('5) Completed other tasks?', Icons.timer_outlined),
+                        _buildSectionCard(
+                          isDark: isDark,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: RadioListTile<bool>(
+                                  title: const Text('Yes'),
+                                  value: true,
+                                  groupValue: timeTakenOtherTasks,
+                                  onChanged: (val) {
+                                    setState(() {
+                                      timeTakenOtherTasks = val;
+                                      if (val != true) timeTakenOtherTasksDescription = null;
+                                    });
+                                  },
+                                ),
+                              ),
+                              Expanded(
+                                child: RadioListTile<bool>(
+                                  title: const Text('No'),
+                                  value: false,
+                                  groupValue: timeTakenOtherTasks,
+                                  onChanged: (val) {
+                                    setState(() {
+                                      timeTakenOtherTasks = val;
+                                      if (val != true) timeTakenOtherTasksDescription = null;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (timeTakenOtherTasks == true)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0, left: 8.0, right: 8.0),
+                            child: TextFormField(
+                              maxLines: 3,
+                              decoration: _inputDecoration('Describe the other tasks and time taken'),
+                              onChanged: (val) {
+                                setState(() {
+                                  timeTakenOtherTasksDescription = val;
+                                });
+                              },
+                              initialValue: timeTakenOtherTasksDescription,
+                            ),
+                          ),
+                        const SizedBox(height: 16),
 
-                                                // 6) Old stock offer given to customers? (yes or no)
-                                                _buildSectionHeader('6) Old stock offer given to customers?', Icons.local_offer_outlined),
-                                                _buildSectionCard(
-                                                  isDark: isDark,
-                                                  child: Row(
-                                                    children: [
-                                                      Expanded(
-                                                        child: RadioListTile<bool>(
-                                                          title: const Text('Yes'),
-                                                          value: true,
-                                                          groupValue: oldStockOfferGiven,
-                                                          onChanged: (val) {
-                                                            setState(() {
-                                                              oldStockOfferGiven = val;
-                                                            });
-                                                          },
-                                                        ),
-                                                      ),
-                                                      Expanded(
-                                                        child: RadioListTile<bool>(
-                                                          title: const Text('No'),
-                                                          value: false,
-                                                          groupValue: oldStockOfferGiven,
-                                                          onChanged: (val) {
-                                                            setState(() {
-                                                              oldStockOfferGiven = val;
-                                                            });
-                                                          },
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                                if (oldStockOfferGiven == true) ...
-                                                [
-                                                  const SizedBox(height: 8),
-                                                  _buildSectionCard(
-                                                    isDark: isDark,
-                                                    child: TextFormField(
-                                                      maxLines: 3,
-                                                      decoration: _inputDecoration('Describe the old stock offer'),
-                                                      onChanged: (val) {
-                                                        setState(() {
-                                                          oldStockOfferDescription = val;
-                                                        });
-                                                      },
-                                                    ),
-                                                  ),
-                                                ],
-                                                const SizedBox(height: 16),
+                        // 6) Old stock offer given to customers? (yes or no)
+                        _buildSectionHeader('6) Old stock offer given to customers?', Icons.local_offer_outlined),
+                        _buildSectionCard(
+                          isDark: isDark,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: RadioListTile<bool>(
+                                  title: const Text('Yes'),
+                                  value: true,
+                                  groupValue: oldStockOfferGiven,
+                                  onChanged: (val) {
+                                    setState(() {
+                                      oldStockOfferGiven = val;
+                                      if (val != true) oldStockOfferDescription = null;
+                                    });
+                                  },
+                                ),
+                              ),
+                              Expanded(
+                                child: RadioListTile<bool>(
+                                  title: const Text('No'),
+                                  value: false,
+                                  groupValue: oldStockOfferGiven,
+                                  onChanged: (val) {
+                                    setState(() {
+                                      oldStockOfferGiven = val;
+                                      if (val != true) oldStockOfferDescription = null;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (oldStockOfferGiven == true)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0, left: 8.0, right: 8.0),
+                            child: TextFormField(
+                              maxLines: 3,
+                              decoration: _inputDecoration('Describe the old stock offer'),
+                              onChanged: (val) {
+                                setState(() {
+                                  oldStockOfferDescription = val;
+                                });
+                              },
+                              initialValue: oldStockOfferDescription,
+                            ),
+                          ),
+                        const SizedBox(height: 16),
 
-                                                // 7) Cross-selling and upselling? (yes or no)
-                                                _buildSectionHeader('7) Cross-selling and upselling?', Icons.swap_horiz),
-                                                _buildSectionCard(
-                                                  isDark: isDark,
-                                                  child: Row(
-                                                    children: [
-                                                      Expanded(
-                                                        child: RadioListTile<bool>(
-                                                          title: const Text('Yes'),
-                                                          value: true,
-                                                          groupValue: crossSellingUpselling,
-                                                          onChanged: (val) {
-                                                            setState(() {
-                                                              crossSellingUpselling = val;
-                                                            });
-                                                          },
-                                                        ),
-                                                      ),
-                                                      Expanded(
-                                                        child: RadioListTile<bool>(
-                                                          title: const Text('No'),
-                                                          value: false,
-                                                          groupValue: crossSellingUpselling,
-                                                          onChanged: (val) {
-                                                            setState(() {
-                                                              crossSellingUpselling = val;
-                                                            });
-                                                          },
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 16),
+                        // 7) Cross-selling and upselling? (yes or no)
+                        _buildSectionHeader('7) Cross-selling and upselling?', Icons.swap_horiz),
+                        _buildSectionCard(
+                          isDark: isDark,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: RadioListTile<bool>(
+                                  title: const Text('Yes'),
+                                  value: true,
+                                  groupValue: crossSellingUpselling,
+                                  onChanged: (val) {
+                                    setState(() {
+                                      crossSellingUpselling = val;
+                                      if (val != true) crossSellingUpsellingDescription = null;
+                                    });
+                                  },
+                                ),
+                              ),
+                              Expanded(
+                                child: RadioListTile<bool>(
+                                  title: const Text('No'),
+                                  value: false,
+                                  groupValue: crossSellingUpselling,
+                                  onChanged: (val) {
+                                    setState(() {
+                                      crossSellingUpselling = val;
+                                      if (val != true) crossSellingUpsellingDescription = null;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (crossSellingUpselling == true)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0, left: 8.0, right: 8.0),
+                            child: TextFormField(
+                              maxLines: 3,
+                              decoration: _inputDecoration('Describe cross/upselling'),
+                              onChanged: (val) {
+                                setState(() {
+                                  crossSellingUpsellingDescription = val;
+                                });
+                              },
+                              initialValue: crossSellingUpsellingDescription,
+                            ),
+                          ),
+                        const SizedBox(height: 16),
 
-                                                // 8) Are there any product complaints? (yes or no)
-                                                _buildSectionHeader('8) Are there any product complaints?', Icons.report_problem_outlined),
-                                                _buildSectionCard(
-                                                  isDark: isDark,
-                                                  child: Row(
-                                                    children: [
-                                                      Expanded(
-                                                        child: RadioListTile<bool>(
-                                                          title: const Text('Yes'),
-                                                          value: true,
-                                                          groupValue: productComplaints,
-                                                          onChanged: (val) {
-                                                            setState(() {
-                                                              productComplaints = val;
-                                                            });
-                                                          },
-                                                        ),
-                                                      ),
-                                                      Expanded(
-                                                        child: RadioListTile<bool>(
-                                                          title: const Text('No'),
-                                                          value: false,
-                                                          groupValue: productComplaints,
-                                                          onChanged: (val) {
-                                                            setState(() {
-                                                              productComplaints = val;
-                                                            });
-                                                          },
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 16),
+                        // 8) Are there any product complaints? (yes or no)
+                        _buildSectionHeader('8) Are there any product complaints?', Icons.report_problem_outlined),
+                        _buildSectionCard(
+                          isDark: isDark,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: RadioListTile<bool>(
+                                  title: const Text('Yes'),
+                                  value: true,
+                                  groupValue: productComplaints,
+                                  onChanged: (val) {
+                                    setState(() {
+                                      productComplaints = val;
+                                      if (val != true) productComplaintsDescription = null;
+                                    });
+                                  },
+                                ),
+                              ),
+                              Expanded(
+                                child: RadioListTile<bool>(
+                                  title: const Text('No'),
+                                  value: false,
+                                  groupValue: productComplaints,
+                                  onChanged: (val) {
+                                    setState(() {
+                                      productComplaints = val;
+                                      if (val != true) productComplaintsDescription = null;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (productComplaints == true)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0, left: 8.0, right: 8.0),
+                            child: TextFormField(
+                              maxLines: 3,
+                              decoration: _inputDecoration('Describe the complaint'),
+                              onChanged: (val) {
+                                setState(() {
+                                  productComplaintsDescription = val;
+                                });
+                              },
+                              initialValue: productComplaintsDescription,
+                            ),
+                          ),
+                        const SizedBox(height: 16),
 
-                                                // 9) Achieved the daily target? (yes or no)
-                                                _buildSectionHeader('9) Achieved the daily target?', Icons.verified_outlined),
-                                                _buildSectionCard(
-                                                  isDark: isDark,
-                                                  child: Row(
-                                                    children: [
-                                                      Expanded(
-                                                        child: RadioListTile<bool>(
-                                                          title: const Text('Yes'),
-                                                          value: true,
-                                                          groupValue: achievedDailyTarget,
-                                                          onChanged: (val) {
-                                                            setState(() {
-                                                              achievedDailyTarget = val;
-                                                            });
-                                                          },
-                                                        ),
-                                                      ),
-                                                      Expanded(
-                                                        child: RadioListTile<bool>(
-                                                          title: const Text('No'),
-                                                          value: false,
-                                                          groupValue: achievedDailyTarget,
-                                                          onChanged: (val) {
-                                                            setState(() {
-                                                              achievedDailyTarget = val;
-                                                            });
-                                                          },
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
+                        // 9) Achieved the daily target? (yes or no)
+                        _buildSectionHeader('9) Achieved the daily target?', Icons.verified_outlined),
+                        _buildSectionCard(
+                          isDark: isDark,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: RadioListTile<bool>(
+                                  title: const Text('Yes'),
+                                  value: true,
+                                  groupValue: achievedDailyTarget,
+                                  onChanged: (val) {
+                                    setState(() {
+                                      achievedDailyTarget = val;
+                                      if (val != true) achievedDailyTargetDescription = null;
+                                    });
+                                  },
+                                ),
+                              ),
+                              Expanded(
+                                child: RadioListTile<bool>(
+                                  title: const Text('No'),
+                                  value: false,
+                                  groupValue: achievedDailyTarget,
+                                  onChanged: (val) {
+                                    setState(() {
+                                      achievedDailyTarget = val;
+                                      if (val != true) achievedDailyTargetDescription = null;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (achievedDailyTarget == true)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0, left: 8.0, right: 8.0),
+                            child: TextFormField(
+                              maxLines: 3,
+                              decoration: _inputDecoration('Describe how target was achieved'),
+                              onChanged: (val) {
+                                setState(() {
+                                  achievedDailyTargetDescription = val;
+                                });
+                              },
+                              initialValue: achievedDailyTargetDescription,
+                            ),
+                          ),
+                        const SizedBox(height: 24),
                                                 const SizedBox(height: 24),
                         // Submit Button
                         Container(
