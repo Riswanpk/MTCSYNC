@@ -222,7 +222,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                   ..sort((a, b) => a.key.compareTo(b.key));
 
                 // Get latest version from app_constants.dart
-                const String latestVersion = '1.2.112';
+                const String latestVersion = '1.2.113';
 
                 return AlertDialog(
                   title: Row(
