@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'sync_head_report_leads.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);
 const Color _primaryGreen = Color(0xFF8CC63F);
@@ -182,6 +183,19 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
         backgroundColor: _primaryBlue,
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download_rounded),
+            tooltip: 'Export Excel Report',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const SyncHeadReportLeadsPage()),
+              );
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
