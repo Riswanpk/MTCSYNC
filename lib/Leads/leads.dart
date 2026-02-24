@@ -5,13 +5,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'presentfollowup.dart';
 import 'leadsform.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
-// Add these imports for Excel export
-import 'package:excel/excel.dart' hide TextSpan;
-import 'package:path_provider/path_provider.dart';
-import 'dart:io';
 import 'package:intl/intl.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:share_plus/share_plus.dart';
 import 'customer_list.dart'; 
 
 
@@ -37,8 +31,7 @@ class _LeadsPageState extends State<LeadsPage> {
   final List<String> statusOptions = [
     'All',
     'In Progress',
-    'Sale',
-    'Closed',
+    'Completed',
     'High',
     'Medium',
     'Low',
@@ -183,8 +176,10 @@ class _LeadsPageState extends State<LeadsPage> {
       query = query.where('created_by', isEqualTo: selectedUser);
     }
     if (selectedStatus != 'All') {
-      if (['In Progress', 'Sale', 'Closed'].contains(selectedStatus)) {
-        query = query.where('status', isEqualTo: selectedStatus);
+      if (selectedStatus == 'Completed') {
+        query = query.where('status', whereIn: ['Sale', 'Closed']);
+      } else if (selectedStatus == 'In Progress') {
+        query = query.where('status', isEqualTo: 'In Progress');
       } else {
         query = query.where('priority', isEqualTo: selectedStatus);
       }
@@ -235,86 +230,6 @@ class _LeadsPageState extends State<LeadsPage> {
       _leads = snapshot.docs;
       _isLoading = false;
     });
-  }
-
-  // Add this method for Excel export
-  Future<String?> _downloadLeadsExcel(BuildContext context, {String? branch}) async {
-    try {
-      final excel = Excel.createExcel();
-      excel.delete('Sheet1'); // Remove default sheet
-
-      // Fetch all leads (or only for a specific branch)
-      QuerySnapshot query;
-      if (branch != null) {
-        query = await FirebaseFirestore.instance
-            .collection('follow_ups')
-            .where('branch', isEqualTo: branch)
-            .get();
-      } else {
-        query = await FirebaseFirestore.instance.collection('follow_ups').get();
-      }
-
-      // Fetch all users to map userId -> username
-      final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
-      final userIdToUsername = {
-        for (var doc in usersSnapshot.docs)
-          doc.id: (doc.data() as Map<String, dynamic>)['username'] ?? 'Unknown'
-      };
-
-      // Group leads by branch
-      final Map<String, List<Map<String, dynamic>>> branchLeads = {};
-      for (final doc in query.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        final branchName = (data['branch'] ?? 'Unknown') as String;
-        branchLeads.putIfAbsent(branchName, () => []).add(data);
-      }
-
-      // For each branch, create a sheet and add leads
-      for (final entry in branchLeads.entries) {
-        final branchName = entry.key;
-        final leads = entry.value;
-        final sheet = excel[branchName];
-
-        // Add header row (Username first)
-        sheet.appendRow([
-          TextCellValue('Username'),
-          TextCellValue('Name'),
-          TextCellValue('Company'),
-          TextCellValue('Address'),
-          TextCellValue('Phone'),
-          TextCellValue('Status'),
-          TextCellValue('Comments'),
-        ]);
-
-        // Add data rows
-        for (final data in leads) {
-          final createdBy = data['created_by'] ?? '';
-          final username = userIdToUsername[createdBy] ?? 'Unknown';
-          sheet.appendRow([
-            TextCellValue(username),
-            TextCellValue(data['name']?.toString() ?? ''),
-            TextCellValue(data['company']?.toString() ?? ''),
-            TextCellValue(data['address']?.toString() ?? ''),
-            TextCellValue(data['phone']?.toString() ?? ''),
-            TextCellValue(data['status']?.toString() ?? ''),
-            TextCellValue(data['comments']?.toString() ?? ''),
-          ]);
-        }
-      }
-
-      // Save to temp directory for sharing
-      final tempDir = await getTemporaryDirectory();
-      final file = File('${tempDir.path}/leads_${DateTime.now().millisecondsSinceEpoch}.xlsx');
-      final fileBytes = await excel.encode(); // <-- now async in v4.x
-      await file.writeAsBytes(fileBytes!);
-
-      return file.path;
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to generate Excel: $e')),
-      );
-      return null;
-    }
   }
 
   Future<void> autoDeleteCompletedLeads(String branch) async {
@@ -418,62 +333,6 @@ class _LeadsPageState extends State<LeadsPage> {
                     );
                   },
                 ),
-                if (role == 'admin' || role == 'manager')
-                  ListTile(
-                    leading: const Icon(Icons.delete_forever, color: Colors.red),
-                    title: const Text('Delete All Completed Leads'),
-                    onTap: () async {
-                      Navigator.pop(context);
-                      final confirm = await showDialog<bool>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Delete All Completed Leads?'),
-                          content: const Text(
-                            'Are you sure you want to delete all completed leads for this branch? This action cannot be undone.',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(true),
-                              child: const Text('Delete', style: TextStyle(color: Colors.red)),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(false),
-                              child: const Text('Cancel'),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (confirm == true) {
-                        final branch = role == 'admin' ? (selectedBranch ?? '') : managerBranch;
-                        final query = await FirebaseFirestore.instance
-                            .collection('follow_ups')
-                            .where('branch', isEqualTo: branch)
-                            .where('status', isEqualTo: 'Completed')
-                            .get();
-                        for (final doc in query.docs) {
-                          await doc.reference.delete();
-                        }
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('All completed leads deleted')),
-                        );
-                      }
-                    },
-                  ),
-                if (role == 'admin' || role == 'manager')
-                  ListTile(
-                    leading: const Icon(Icons.download, color: Colors.green),
-                    title: const Text('Excel'),
-                    onTap: () async {
-                      Navigator.pop(context);
-                      final excelPath = await _downloadLeadsExcel(
-                        context,
-                        branch: role == 'admin' ? null : managerBranch,
-                      );
-                      if (excelPath != null) {
-                        Share.shareXFiles([XFile(excelPath)], text: 'Leads Excel Report');
-                      }
-                    },
-                  ),
                 // ...add other menu items if needed...
               ],
             ),
