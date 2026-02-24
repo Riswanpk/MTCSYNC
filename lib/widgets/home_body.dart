@@ -17,6 +17,8 @@ import '../Customer Target/customer_admin_viewer.dart';
 import '../Misc/loading_page.dart';
 import '../Todo/todo_widget_updater.dart';
 import 'home_widgets.dart';
+import '../Sync Head/sync_head_leads_page.dart';
+import '../Sync Head/sync_head_todos_page.dart';
 
 /// App brand colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -224,6 +226,11 @@ class HomeButtonsContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Sync Head has a completely different homepage
+    if (role == 'sync_head') {
+      return _buildSyncHeadTiles(context);
+    }
+
     return Column(
       children: [
         // Row 1: Leads & ToDo (logo colors)
@@ -339,6 +346,72 @@ class HomeButtonsContainer extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+
+  /// Builds the Sync Head-specific home tiles.
+  Widget _buildSyncHeadTiles(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: NeumorphicButton(
+                onTap: () => _navigateToSyncHeadLeads(context),
+                text: 'Leads',
+                color: primaryBlue,
+                textColor: Colors.white,
+                icon: Icons.bar_chart_rounded,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: NeumorphicButton(
+                onTap: () => _navigateToSyncHeadTodos(context),
+                text: 'Todos',
+                color: primaryGreen,
+                textColor: Colors.white,
+                icon: Icons.checklist_rounded,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        NeumorphicButton(
+          onTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Customer Calling — Coming Soon'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          },
+          text: 'Customer Calling',
+          color: isDark ? const Color(0xFF23272A) : Colors.white,
+          textColor: isDark ? Colors.white70 : const Color(0xFF607D8B),
+          icon: Icons.phone_rounded,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _navigateToSyncHeadLeads(BuildContext context) async {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const LoadingOverlayPage(
+          child: SyncHeadLeadsPage(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _navigateToSyncHeadTodos(BuildContext context) async {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const LoadingOverlayPage(
+          child: SyncHeadTodosPage(),
+        ),
+      ),
     );
   }
 

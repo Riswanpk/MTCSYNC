@@ -37,7 +37,8 @@ class _LeadsPageState extends State<LeadsPage> {
   final List<String> statusOptions = [
     'All',
     'In Progress',
-    'Completed',
+    'Sale',
+    'Closed',
     'High',
     'Medium',
     'Low',
@@ -182,7 +183,7 @@ class _LeadsPageState extends State<LeadsPage> {
       query = query.where('created_by', isEqualTo: selectedUser);
     }
     if (selectedStatus != 'All') {
-      if (['In Progress', 'Completed'].contains(selectedStatus)) {
+      if (['In Progress', 'Sale', 'Closed'].contains(selectedStatus)) {
         query = query.where('status', isEqualTo: selectedStatus);
       } else {
         query = query.where('priority', isEqualTo: selectedStatus);
@@ -320,13 +321,15 @@ class _LeadsPageState extends State<LeadsPage> {
     final now = DateTime.now();
     final lastDay = DateTime(now.year, now.month + 1, 0).day;
     if (now.day == lastDay) {
-      final query = await FirebaseFirestore.instance
-          .collection('follow_ups')
-          .where('branch', isEqualTo: branch)
-          .where('status', isEqualTo: 'Completed')
-          .get();
-      for (final doc in query.docs) {
-        await doc.reference.delete();
+      for (final closedStatus in ['Sale', 'Closed']) {
+        final query = await FirebaseFirestore.instance
+            .collection('follow_ups')
+            .where('branch', isEqualTo: branch)
+            .where('status', isEqualTo: closedStatus)
+            .get();
+        for (final doc in query.docs) {
+          await doc.reference.delete();
+        }
       }
     }
   }
@@ -1058,95 +1061,50 @@ class LeadCard extends StatelessWidget {
         children: [
           SlidableAction(
             onPressed: (context) async {
-              String newStatus = status == 'In Progress' ? 'Completed' : 'In Progress';
               await FirebaseFirestore.instance
                   .collection('follow_ups')
                   .doc(docId)
-                  .update({'status': newStatus});
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Status changed to $newStatus')),
-              );
+                  .update({
+                'status': 'Sale',
+                'completed_at': FieldValue.serverTimestamp(),
+              });
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Marked as Sale')),
+                );
+              }
             },
-            backgroundColor: status == 'In Progress'
-                ? Colors.green.shade400
-                : Colors.orange.shade400,
+            backgroundColor: Colors.green.shade500,
             foregroundColor: Colors.white,
-            icon: status == 'In Progress' ? Icons.check_circle : Icons.refresh,
-            label: status == 'In Progress' ? 'Completed' : 'In Progress',
+            icon: Icons.handshake_rounded,
+            label: 'Sale',
             borderRadius: BorderRadius.circular(20),
           ),
         ],
       ),
       endActionPane: ActionPane(
         motion: const DrawerMotion(),
-        extentRatio: 0.25,
+        extentRatio: 0.28,
         children: [
           SlidableAction(
             onPressed: (context) async {
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Delete Lead?'),
-                  content: const Text('Are you sure you want to delete this lead? This action cannot be undone.'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(true),
-                      child: Text('Delete', style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(false),
-                      child: const Text('Cancel'),
-                    ),
-                  ],
-                ),
-              );
-              if (confirm == true) {
-                // Get lead data before deleting
-                final docSnap = await FirebaseFirestore.instance.collection('follow_ups').doc(docId).get();
-                final data = docSnap.data();
-                String? userEmail = data?['userEmail'] ?? data?['email'];
-                final userId = data?['created_by'];
-                final timestamp = data?['created_at'] ?? data?['timestamp'];
-                // Fallback: fetch user email from users collection if missing
-                if (userEmail == null && userId != null) {
-                  final userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
-                  userEmail = userDoc.data()?['email'];
-                }
-                if (userEmail != null && timestamp != null) {
-                  final date = (timestamp is Timestamp) ? timestamp.toDate() : DateTime.tryParse(timestamp.toString());
-                  final now = DateTime.now();
-                  if (date == null) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Error: Invalid lead date.')),
-                      );
-                    }
-                    return;
-                  }
-                  final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
-                  await FirebaseFirestore.instance.collection('follow_ups').doc(docId).delete();
-
-                  // Only update daily_report if deleted within 24 hours of creation
-                  
-                  
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Lead deleted')),
-                    );
-                  }
-                } else {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Error: Could not delete lead. Missing user or date.')),
-                    );
-                  }
-                }
+              await FirebaseFirestore.instance
+                  .collection('follow_ups')
+                  .doc(docId)
+                  .update({
+                'status': 'Closed',
+                'completed_at': FieldValue.serverTimestamp(),
+              });
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Marked as Closed')),
+                );
               }
             },
             backgroundColor: Colors.red.shade400,
             foregroundColor: Colors.white,
-            icon: Icons.delete,
-            label: 'Delete',
+            icon: Icons.cancel_rounded,
+            label: 'Closed',
             borderRadius: BorderRadius.circular(20),
           ),
         ],

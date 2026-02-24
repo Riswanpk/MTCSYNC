@@ -147,7 +147,7 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
 
-    final updatedData = {
+    final updatedData = <String, dynamic>{
       'name': _nameController.text.trim(),
       'company': _companyController.text.trim(),
       'address': _addressController.text.trim(),
@@ -157,6 +157,7 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
       'status': _status,
       'branch': _branch,
       'date': _selectedDate != null ? Timestamp.fromDate(_selectedDate!) : FieldValue.serverTimestamp(),
+      if (_status == 'Sale' || _status == 'Closed') 'completed_at': FieldValue.serverTimestamp(),
     };
 
     try {
@@ -427,7 +428,7 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
                           value: _data?['status'],
                           dropdownColor: isDark ? const Color(0xFF23262F) : Colors.white,
                           style: TextStyle(color: isDark ? Colors.white : Colors.black),
-                          items: ['In Progress', 'Completed'].map((status) {
+                          items: ['In Progress', 'Sale', 'Closed'].map((status) {
                             return DropdownMenuItem<String>(
                               value: status,
                               child: Text(status),
@@ -435,10 +436,14 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
                           }).toList(),
                           onChanged: (newStatus) async {
                             if (newStatus != null && newStatus != _data?['status']) {
+                              final updateMap = <String, dynamic>{'status': newStatus};
+                              if (newStatus == 'Sale' || newStatus == 'Closed') {
+                                updateMap['completed_at'] = FieldValue.serverTimestamp();
+                              }
                               await FirebaseFirestore.instance
                                   .collection('follow_ups')
                                   .doc(widget.docId)
-                                  .update({'status': newStatus});
+                                  .update(updateMap);
                               setState(() {
                                 _data?['status'] = newStatus;
                               });

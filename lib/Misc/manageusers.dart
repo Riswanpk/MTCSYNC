@@ -14,7 +14,7 @@ class ManageUsersPage extends StatefulWidget {
 
 class _ManageUsersPageState extends State<ManageUsersPage> {
     bool _filterByVersion = false;
-  final List<String> _roles = ['sales', 'manager', 'admin'];
+  final List<String> _roles = ['sales', 'manager', 'admin', 'sync_head'];
   String? _currentUserId;
   String _searchQuery = ''; // <-- Add this line
   final TextEditingController _searchController = TextEditingController(); // <-- Add this line
@@ -222,7 +222,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                   ..sort((a, b) => a.key.compareTo(b.key));
 
                 // Get latest version from app_constants.dart
-                const String latestVersion = '1.2.113';
+                const String latestVersion = '1.2.114';
 
                 return AlertDialog(
                   title: Row(
