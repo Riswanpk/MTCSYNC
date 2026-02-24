@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'task_detail_widgets.dart';
+import 'todoform.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -199,34 +200,6 @@ class TodoListItem extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
-                      if (data['email'] != null)
-                        FutureBuilder<String>(
-                          future: getUsernameByEmail(data['email'] ?? ''),
-                          builder: (context, snapshot) {
-                            if (!snapshot.hasData) return const SizedBox.shrink();
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.person_outline_rounded,
-                                    size: 14,
-                                    color: primaryBlue.withOpacity(0.7),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    snapshot.data!,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: primaryBlue.withOpacity(0.8),
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
                     ],
                   ),
                 ),
@@ -251,14 +224,10 @@ class TodoListItem extends StatelessWidget {
             onPressed: (context) async {
               await onToggleStatus(doc);
             },
-            backgroundColor: data['status'] == 'pending'
-                ? Colors.green.shade400
-                : Colors.orange.shade400,
+            backgroundColor: Colors.green.shade400,
             foregroundColor: Colors.white,
-            icon: data['status'] == 'pending'
-                ? Icons.check_circle
-                : Icons.refresh,
-            label: data['status'] == 'pending' ? 'Done' : 'Pending',
+            icon: Icons.check_circle,
+            label: 'Done',
             borderRadius: BorderRadius.circular(16),
           ),
         ],
@@ -269,34 +238,38 @@ class TodoListItem extends StatelessWidget {
         children: [
           SlidableAction(
             onPressed: (context) async {
-              final confirm = await showDialog<bool>(
+              // Show time picker for new reminder
+              final now = DateTime.now();
+              final initialTime = reminderDateTime != null
+                  ? TimeOfDay.fromDateTime(reminderDateTime)
+                  : TimeOfDay.fromDateTime(now);
+              final pickedTime = await showTimePicker(
                 context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Delete Task?'),
-                  content: const Text(
-                      'Are you sure you want to delete this task?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(true),
-                      child: const Text('Delete',
-                          style: TextStyle(
-                              color: Color.fromARGB(255, 0, 0, 0))),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(false),
-                      child: const Text('Cancel'),
-                    ),
-                  ],
-                ),
+                initialTime: initialTime,
               );
-              if (confirm == true) {
-                await onDelete(doc.id);
+              if (pickedTime != null) {
+                // Use today's date or existing reminder date
+                final baseDate = reminderDateTime ?? now;
+                final newReminder = DateTime(
+                  baseDate.year,
+                  baseDate.month,
+                  baseDate.day,
+                  pickedTime.hour,
+                  pickedTime.minute,
+                );
+                await FirebaseFirestore.instance
+                    .collection('todo')
+                    .doc(doc.id)
+                    .update({'reminder': newReminder.toIso8601String()});
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Reminder time updated')),
+                );
               }
             },
-            backgroundColor: Colors.red.shade400,
+            backgroundColor: Colors.orange.shade400,
             foregroundColor: Colors.white,
-            icon: Icons.delete,
-            label: 'Delete',
+            icon: Icons.schedule,
+            label: 'Postpone',
             borderRadius: BorderRadius.circular(16),
           ),
         ],

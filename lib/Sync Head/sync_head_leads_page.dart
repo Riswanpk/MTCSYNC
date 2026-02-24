@@ -23,7 +23,7 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
   // Totals
   int get _totalCreated  => _userStats.fold(0, (s, u) => s + (u['created']  as int));
   int get _totalSale     => _userStats.fold(0, (s, u) => s + (u['sale']     as int));
-  int get _totalClosed   => _userStats.fold(0, (s, u) => s + (u['closed']   as int));
+  int get _totalCancelled => _userStats.fold(0, (s, u) => s + (u['cancelled'] as int));
 
   @override
   void initState() {
@@ -119,7 +119,7 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
             .collection('follow_ups')
             .where('created_by', isEqualTo: uid)
             .where('branch', isEqualTo: _selectedBranch)
-            .where('status', isEqualTo: 'Closed')
+            .where('status', isEqualTo: 'Cancelled')
             .where('completed_at',
                 isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
             .where('completed_at',
@@ -132,7 +132,7 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
         'role': user['role'],
         'created': (results[0] as QuerySnapshot).size,
         'sale':    (results[1] as QuerySnapshot).size,
-        'closed':  (results[2] as QuerySnapshot).size,
+        'cancelled': (results[2] as QuerySnapshot).size,
       });
     }));
 
@@ -147,11 +147,10 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
   }
 
   Future<void> _pickDateRange() async {
-    final now = DateTime.now();
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2023, 1, 1),
-      lastDate: now,
+      lastDate: DateTime(2100),
       initialDateRange: _selectedRange,
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
@@ -315,8 +314,8 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
                   ),
                   const SizedBox(width: 8),
                   _SummaryChip(
-                    label: 'Closed',
-                    value: _totalClosed,
+                    label: 'Cancelled',
+                    value: _totalCancelled,
                     color: Colors.red,
                   ),
                 ],
@@ -364,7 +363,7 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
                             role: stat['role'] as String,
                             created: stat['created'] as int,
                             sale: stat['sale'] as int,
-                            closed: stat['closed'] as int,
+                            closed: stat['cancelled'] as int,
                             isDark: isDark,
                           );
                         },
@@ -550,7 +549,7 @@ class _UserLeadCard extends StatelessWidget {
               Expanded(
                 child: _StatPill(
                   icon: Icons.cancel_rounded,
-                  label: 'Closed',
+                  label: 'Cancelled',
                   value: closed,
                   color: Colors.red,
                   isDark: isDark,

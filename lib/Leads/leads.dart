@@ -177,7 +177,7 @@ class _LeadsPageState extends State<LeadsPage> {
     }
     if (selectedStatus != 'All') {
       if (selectedStatus == 'Completed') {
-        query = query.where('status', whereIn: ['Sale', 'Closed']);
+        query = query.where('status', whereIn: ['Sale', 'Cancelled']);
       } else if (selectedStatus == 'In Progress') {
         query = query.where('status', isEqualTo: 'In Progress');
       } else {
@@ -236,7 +236,7 @@ class _LeadsPageState extends State<LeadsPage> {
     final now = DateTime.now();
     final lastDay = DateTime(now.year, now.month + 1, 0).day;
     if (now.day == lastDay) {
-      for (final closedStatus in ['Sale', 'Closed']) {
+      for (final closedStatus in ['Sale', 'Cancelled']) {
         final query = await FirebaseFirestore.instance
             .collection('follow_ups')
             .where('branch', isEqualTo: branch)
@@ -725,6 +725,7 @@ class _LeadsPageState extends State<LeadsPage> {
                                         createdBy: creatorUsername,
                                         reminder: reminder,
                                         priority: priority,
+                                        onStatusChanged: () => _fetchLeadsPage(),
                                       );
                                     },
                                   );
@@ -805,6 +806,7 @@ class LeadCard extends StatelessWidget {
   final String createdBy;
   final String priority;
   final String reminder;
+  final VoidCallback? onStatusChanged;
 
   const LeadCard({
     super.key,
@@ -815,6 +817,7 @@ class LeadCard extends StatelessWidget {
     required this.createdBy,
     required this.priority,
     required this.reminder,
+    this.onStatusChanged,
   });
 
   Color getPriorityColor(String priority) {
@@ -927,6 +930,7 @@ class LeadCard extends StatelessWidget {
                 'status': 'Sale',
                 'completed_at': FieldValue.serverTimestamp(),
               });
+              onStatusChanged?.call();
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Marked as Sale')),
@@ -951,19 +955,20 @@ class LeadCard extends StatelessWidget {
                   .collection('follow_ups')
                   .doc(docId)
                   .update({
-                'status': 'Closed',
+                'status': 'Cancelled',
                 'completed_at': FieldValue.serverTimestamp(),
               });
+              onStatusChanged?.call();
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Marked as Closed')),
+                  const SnackBar(content: Text('Marked as Cancelled')),
                 );
               }
             },
             backgroundColor: Colors.red.shade400,
             foregroundColor: Colors.white,
             icon: Icons.cancel_rounded,
-            label: 'Closed',
+            label: 'Cancelled',
             borderRadius: BorderRadius.circular(20),
           ),
         ],
