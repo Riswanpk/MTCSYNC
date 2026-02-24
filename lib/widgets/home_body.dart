@@ -379,10 +379,12 @@ class HomeButtonsContainer extends StatelessWidget {
         const SizedBox(height: 14),
         NeumorphicButton(
           onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Customer Calling — Coming Soon'),
-                duration: Duration(seconds: 2),
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const LoadingOverlayPage(
+                  child: CustomerAdminViewerPage(),
+                ),
               ),
             );
           },

@@ -98,7 +98,7 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
           .collection('customer_target')
           .doc(_selectedMonthYear)
           .collection('users')
-          .doc(_selectedUserEmail)
+          .doc(_selectedUserEmail!.toLowerCase())
           .get();
       if (doc.exists && doc.data()?['customers'] != null) {
         final List<dynamic> data = doc.data()!['customers'];
