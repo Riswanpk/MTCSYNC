@@ -8,8 +8,6 @@ import 'monthly.dart';
 import '../Leads/leads.dart';
 import 'daily.dart';
 import 'insights.dart';
-// ...existing code...
-import 'leadscount.dart';
 
 // Theme colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -119,13 +117,7 @@ class _DashboardPageState extends State<DashboardPage>
     }
 
     final results = await Future.wait([
-      branch == null
-          ? FirebaseFirestore.instance
-              .collection('leadscount')
-              .doc('admin')
-              .get()
-              .then((snap) => (snap.data()?['totalLeads'] ?? 0) as int)
-          : followUps.count().get(),
+      followUps.count().get(),
       followUps
           .where('created_at',
               isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
@@ -161,9 +153,7 @@ class _DashboardPageState extends State<DashboardPage>
     ]);
 
     return {
-      'totalLeads': branch == null
-          ? results[0] as int
-          : (results[0] as AggregateQuerySnapshot).count ?? 0,
+      'totalLeads': (results[0] as AggregateQuerySnapshot).count ?? 0,
       'monthLeads': (results[1] as AggregateQuerySnapshot).count ?? 0,
       'todayLeads': (results[2] as AggregateQuerySnapshot).count ?? 0,
       'pendingTodos': results[3] as int,

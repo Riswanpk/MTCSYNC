@@ -10,7 +10,7 @@ import 'dart:convert';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'leads.dart';
-import '../Dashboard/leadscount.dart';
+
 
 /// Returns the current 12 PM–12 PM IST window as [windowStart, windowEnd].
 List<DateTime> _getCurrentISTWindowLeads() {
@@ -168,9 +168,6 @@ class _FollowUpFormState extends State<FollowUpForm> {
         'created_by': user.uid,
         'created_at': FieldValue.serverTimestamp(),
       });
-
-      // Increment global leads count
-      await LeadCountService.incrementLeadCount(branch: branch);
 
       await _clearDraft(); // Clear draft on successful save
 

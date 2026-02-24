@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
-import 'package:share_plus/share_plus.dart';
+import 'package:mailer/mailer.dart';
+import 'package:mailer/smtp_server.dart';
 import 'package:intl/intl.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);
@@ -39,13 +40,13 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
     final snap = await FirebaseFirestore.instance.collection('users').get();
     final branches = snap.docs
         .map((d) => d.data()['branch'] as String?)
-        .where((b) => b != null && b.isNotEmpty)
+        .where((b) => b != null && b.isNotEmpty && b.toLowerCase() != 'admin')
         .toSet()
         .cast<String>()
         .toList()
       ..sort();
     setState(() {
-      _branches = branches;
+      _branches = ['All Branches', ...branches];
       _branchesLoading = false;
     });
   }
@@ -85,6 +86,8 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
     }
 
     setState(() => _isGenerating = true);
+    // Capture messenger so snackbars work even if user navigates away
+    final messenger = ScaffoldMessenger.of(context);
 
     try {
       final rangeStart = _selectedRange!.start;
@@ -97,91 +100,284 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         59,
       );
 
-      // ── 1. Fetch users in branch ───────────────────────────────────────
-      final usersSnap = await FirebaseFirestore.instance
-          .collection('users')
-          .where('branch', isEqualTo: _selectedBranch)
-          .get();
+      // ── 1. Fetch users in branch or all branches ─────────────────────
+      Query usersQuery = FirebaseFirestore.instance.collection('users');
+      if (_selectedBranch != 'All Branches') {
+        usersQuery = usersQuery.where('branch', isEqualTo: _selectedBranch);
+      } else {
+        usersQuery = usersQuery.where('branch', isNotEqualTo: 'admin');
+      }
+      final usersSnap = await usersQuery.get();
 
       final users = usersSnap.docs
           .map((d) {
-            final data = d.data();
+            final data = d.data() as Map<String, dynamic>?;
             return {
               'uid': d.id,
-              'username': data['username'] ?? 'Unknown',
-              'role': data['role'] ?? 'sales',
+              'username': data?['username'] ?? 'Unknown',
+              'role': data?['role'] ?? 'sales',
+              'branch': data?['branch'] ?? '',
             };
           })
-          .where((u) => u['role'] != 'admin' && u['role'] != 'sync_head')
+          .where((u) => u['role'] != 'admin' && u['role'] != 'sync_head' && (u['branch'] as String).toLowerCase() != 'admin')
           .toList();
 
       if (users.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           const SnackBar(content: Text('No users found in this branch.')),
         );
-        setState(() => _isGenerating = false);
+        if (mounted) setState(() => _isGenerating = false);
         return;
       }
 
       // ── 2. Fetch stats per user (parallel) ─────────────────────────────
-      final List<Map<String, dynamic>> stats = [];
-      await Future.wait(users.map((user) async {
+        final List<Map<String, dynamic>> stats = [];
+        await Future.wait(users.map((user) async {
         final uid = user['uid'] as String;
+        final userBranch = user['branch'] as String? ?? '';
+        final branchForQuery = _selectedBranch == 'All Branches' ? userBranch : _selectedBranch;
 
         final results = await Future.wait([
           // Created in range
           FirebaseFirestore.instance
-              .collection('follow_ups')
-              .where('created_by', isEqualTo: uid)
-              .where('branch', isEqualTo: _selectedBranch)
-              .where('created_at',
-                  isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
-              .where('created_at',
-                  isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
-              .get(),
+            .collection('follow_ups')
+            .where('created_by', isEqualTo: uid)
+            .where('branch', isEqualTo: branchForQuery)
+            .where('created_at',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
+            .where('created_at',
+              isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
+            .get(),
           // Sale in range
           FirebaseFirestore.instance
-              .collection('follow_ups')
-              .where('created_by', isEqualTo: uid)
-              .where('branch', isEqualTo: _selectedBranch)
-              .where('status', isEqualTo: 'Sale')
-              .where('completed_at',
-                  isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
-              .where('completed_at',
-                  isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
-              .get(),
+            .collection('follow_ups')
+            .where('created_by', isEqualTo: uid)
+            .where('branch', isEqualTo: branchForQuery)
+            .where('status', isEqualTo: 'Sale')
+            .where('completed_at',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
+            .where('completed_at',
+              isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
+            .get(),
           // Cancelled in range
           FirebaseFirestore.instance
-              .collection('follow_ups')
-              .where('created_by', isEqualTo: uid)
-              .where('branch', isEqualTo: _selectedBranch)
-              .where('status', isEqualTo: 'Cancelled')
-              .where('completed_at',
-                  isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
-              .where('completed_at',
-                  isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
-              .get(),
+            .collection('follow_ups')
+            .where('created_by', isEqualTo: uid)
+            .where('branch', isEqualTo: branchForQuery)
+            .where('status', isEqualTo: 'Cancelled')
+            .where('completed_at',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
+            .where('completed_at',
+              isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
+            .get(),
         ]);
 
         stats.add({
           'username': user['username'],
           'role': user['role'],
+          'branch': userBranch,
           'created': (results[0] as QuerySnapshot).size,
           'sale': (results[1] as QuerySnapshot).size,
           'cancelled': (results[2] as QuerySnapshot).size,
         });
-      }));
+        }));
 
-      // Sort by created descending (same as leads page)
-      stats.sort(
-          (a, b) => (b['created'] as int).compareTo(a['created'] as int));
+      if (_selectedBranch == 'All Branches') {
+        // Group users by branch
+        final Map<String, List<Map<String, dynamic>>> branchMap = {};
+        for (final user in stats) {
+          final branch = (user['branch'] ?? 'Unknown').toString();
+          branchMap.putIfAbsent(branch, () => []).add(user);
+        }
+        final sortedBranches = branchMap.keys.toList()..sort();
+        final xlsio.Workbook workbook = xlsio.Workbook();
+        int sheetIdx = 0;
+        for (final branch in sortedBranches) {
+          final usersForBranch = branchMap[branch]!;
+          // Sort by created ascending, managers at the bottom
+          usersForBranch.sort((a, b) {
+            final aIsManager = (a['role'] as String).toLowerCase() == 'manager';
+            final bIsManager = (b['role'] as String).toLowerCase() == 'manager';
+            if (aIsManager && !bIsManager) return 1;
+            if (!aIsManager && bIsManager) return -1;
+            return (a['created'] as int).compareTo(b['created'] as int);
+          });
+          // First sheet already exists; add new sheets for subsequent branches
+          final xlsio.Worksheet sheet = sheetIdx == 0
+              ? workbook.worksheets[0]
+              : workbook.worksheets.addWithName(branch);
+          sheet.name = branch; // always set name
+          sheetIdx++;
 
-      // ── 3. Build Excel workbook ────────────────────────────────────────
+          // Title row
+          final titleRange = sheet.getRangeByName('A1:E1');
+          titleRange.merge();
+          titleRange.setText(
+              'Leads Report — $branch  (${_formatDate(rangeStart)} → ${_formatDate(rangeEnd)})');
+          titleRange.cellStyle.bold = true;
+          titleRange.cellStyle.fontSize = 14;
+          titleRange.cellStyle.hAlign = xlsio.HAlignType.center;
+          titleRange.cellStyle.backColor = '#005BAC';
+          titleRange.cellStyle.fontColor = '#FFFFFF';
+          sheet.getRangeByName('A1').rowHeight = 30;
+
+          // Header row — unique style name per sheet to avoid collision
+          const headers = ['User', 'Role', 'Created', 'Sale', 'Cancelled'];
+          final headerStyle = workbook.styles.add('header_$sheetIdx');
+          headerStyle.bold = true;
+          headerStyle.fontSize = 11;
+          headerStyle.backColor = '#8CC63F';
+          headerStyle.fontColor = '#FFFFFF';
+          headerStyle.hAlign = xlsio.HAlignType.center;
+          headerStyle.borders.bottom.lineStyle = xlsio.LineStyle.thin;
+
+          for (int c = 0; c < headers.length; c++) {
+            final cell = sheet.getRangeByIndex(2, c + 1);
+            cell.setText(headers[c]);
+            cell.cellStyle = headerStyle;
+          }
+
+          // Data rows
+          int totalCreated = 0, totalSale = 0, totalCancelled = 0;
+
+          final dataStyle = workbook.styles.add('data_$sheetIdx');
+          dataStyle.fontSize = 11;
+          dataStyle.hAlign = xlsio.HAlignType.center;
+
+          final nameStyle = workbook.styles.add('nameStyle_$sheetIdx');
+          nameStyle.fontSize = 11;
+          nameStyle.hAlign = xlsio.HAlignType.left;
+
+          final altStyle = workbook.styles.add('altData_$sheetIdx');
+          altStyle.fontSize = 11;
+          altStyle.hAlign = xlsio.HAlignType.center;
+          altStyle.backColor = '#F0F5FF';
+
+          final altNameStyle = workbook.styles.add('altNameStyle_$sheetIdx');
+          altNameStyle.fontSize = 11;
+          altNameStyle.hAlign = xlsio.HAlignType.left;
+          altNameStyle.backColor = '#F0F5FF';
+
+          for (int i = 0; i < usersForBranch.length; i++) {
+            final row = i + 3;
+            final s = usersForBranch[i];
+            final created = s['created'] as int;
+            final sale = s['sale'] as int;
+            final cancelled = s['cancelled'] as int;
+            totalCreated += created;
+            totalSale += sale;
+            totalCancelled += cancelled;
+
+            final isAlt = i % 2 == 1;
+            final currentNameStyle = isAlt ? altNameStyle : nameStyle;
+            final currentDataStyle = isAlt ? altStyle : dataStyle;
+
+            final cellA = sheet.getRangeByIndex(row, 1);
+            cellA.setText(s['username'] as String);
+            cellA.cellStyle = currentNameStyle;
+
+            final cellB = sheet.getRangeByIndex(row, 2);
+            final role = s['role'] as String;
+            cellB.setText(
+                role.isNotEmpty ? role[0].toUpperCase() + role.substring(1) : role);
+            cellB.cellStyle = currentDataStyle;
+
+            final cellC = sheet.getRangeByIndex(row, 3);
+            cellC.setNumber(created.toDouble());
+            cellC.cellStyle = currentDataStyle;
+
+            final cellD = sheet.getRangeByIndex(row, 4);
+            cellD.setNumber(sale.toDouble());
+            cellD.cellStyle = currentDataStyle;
+
+            final cellE = sheet.getRangeByIndex(row, 5);
+            cellE.setNumber(cancelled.toDouble());
+            cellE.cellStyle = currentDataStyle;
+          }
+
+          // Totals row
+          final totalsRow = usersForBranch.length + 3;
+          final totalsStyle = workbook.styles.add('totals_$sheetIdx');
+          totalsStyle.bold = true;
+          totalsStyle.fontSize = 12;
+          totalsStyle.hAlign = xlsio.HAlignType.center;
+          totalsStyle.backColor = '#005BAC';
+          totalsStyle.fontColor = '#FFFFFF';
+          totalsStyle.borders.top.lineStyle = xlsio.LineStyle.medium;
+
+          final totalsNameStyle = workbook.styles.add('totalsName_$sheetIdx');
+          totalsNameStyle.bold = true;
+          totalsNameStyle.fontSize = 12;
+          totalsNameStyle.hAlign = xlsio.HAlignType.left;
+          totalsNameStyle.backColor = '#005BAC';
+          totalsNameStyle.fontColor = '#FFFFFF';
+          totalsNameStyle.borders.top.lineStyle = xlsio.LineStyle.medium;
+
+          final tA = sheet.getRangeByIndex(totalsRow, 1);
+          tA.setText('TOTAL');
+          tA.cellStyle = totalsNameStyle;
+
+          final tB = sheet.getRangeByIndex(totalsRow, 2);
+          tB.setText('');
+          tB.cellStyle = totalsStyle;
+
+          final tC = sheet.getRangeByIndex(totalsRow, 3);
+          tC.setNumber(totalCreated.toDouble());
+          tC.cellStyle = totalsStyle;
+
+          final tD = sheet.getRangeByIndex(totalsRow, 4);
+          tD.setNumber(totalSale.toDouble());
+          tD.cellStyle = totalsStyle;
+
+          final tE = sheet.getRangeByIndex(totalsRow, 5);
+          tE.setNumber(totalCancelled.toDouble());
+          tE.cellStyle = totalsStyle;
+
+          // Column widths
+          sheet.getRangeByIndex(1, 1).columnWidth = 25;
+          sheet.getRangeByIndex(1, 2).columnWidth = 15;
+          sheet.getRangeByIndex(1, 3).columnWidth = 14;
+          sheet.getRangeByIndex(1, 4).columnWidth = 14;
+          sheet.getRangeByIndex(1, 5).columnWidth = 14;
+        }
+        // Save & send email (moved below)
+        final List<int> bytes = workbook.saveAsStream();
+        workbook.dispose();
+
+        final directory = await getTemporaryDirectory();
+        final String fileName =
+            '${directory.path}/Leads_Report_AllBranches_${DateFormat('yyyyMMdd').format(rangeStart)}_${DateFormat('yyyyMMdd').format(rangeEnd)}.xlsx';
+        final File file = File(fileName);
+        await file.writeAsBytes(bytes, flush: true);
+
+        // --- Send email with attachment ---
+        final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
+        final message = Message()
+          ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
+          ..recipients.addAll(['crmmalabar@gmail.com','performancemtc@gmail.com'])
+          ..subject = 'Leads Report — All Branches'
+          ..text = 'Please find attached the leads report for all branches.'
+          ..attachments = [FileAttachment(file)];
+
+        try {
+          await send(message, smtpServer);
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Email sent to crmmalabar@gmail.com')),
+          );
+        } on MailerException catch (e) {
+          messenger.showSnackBar(
+            SnackBar(content: Text('Failed to send email: ${e.toString()}')),
+          );
+        }
+        return;
+      }
+
+      // (else: single branch, original logic)
       final xlsio.Workbook workbook = xlsio.Workbook();
       final xlsio.Worksheet sheet = workbook.worksheets[0];
-      sheet.name = _selectedBranch!;
+      sheet.name = _selectedBranch ?? 'Report';
 
-      // ── Title row ──
+      // Title row
       final titleRange = sheet.getRangeByName('A1:E1');
       titleRange.merge();
       titleRange.setText(
@@ -193,7 +389,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
       titleRange.cellStyle.fontColor = '#FFFFFF';
       sheet.getRangeByName('A1').rowHeight = 30;
 
-      // ── Header row ──
+      // Header row
       const headers = ['User', 'Role', 'Created', 'Sale', 'Cancelled'];
       final headerStyle = workbook.styles.add('header');
       headerStyle.bold = true;
@@ -209,7 +405,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         cell.cellStyle = headerStyle;
       }
 
-      // ── Data rows ──
+      // Data rows
       int totalCreated = 0, totalSale = 0, totalCancelled = 0;
 
       final dataStyle = workbook.styles.add('data');
@@ -231,7 +427,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
       altNameStyle.backColor = '#F0F5FF';
 
       for (int i = 0; i < stats.length; i++) {
-        final row = i + 3; // data starts at row 3
+        final row = i + 3;
         final s = stats[i];
         final created = s['created'] as int;
         final sale = s['sale'] as int;
@@ -267,7 +463,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         cellE.cellStyle = currentDataStyle;
       }
 
-      // ── Totals row ──
+      // Totals row
       final totalsRow = stats.length + 3;
       final totalsStyle = workbook.styles.add('totals');
       totalsStyle.bold = true;
@@ -305,14 +501,14 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
       tE.setNumber(totalCancelled.toDouble());
       tE.cellStyle = totalsStyle;
 
-      // ── Column widths ──
-      sheet.getRangeByIndex(1, 1).columnWidth = 25; // User
-      sheet.getRangeByIndex(1, 2).columnWidth = 15; // Role
-      sheet.getRangeByIndex(1, 3).columnWidth = 14; // Created
-      sheet.getRangeByIndex(1, 4).columnWidth = 14; // Sale
-      sheet.getRangeByIndex(1, 5).columnWidth = 14; // Cancelled
+      // Column widths
+      sheet.getRangeByIndex(1, 1).columnWidth = 25;
+      sheet.getRangeByIndex(1, 2).columnWidth = 15;
+      sheet.getRangeByIndex(1, 3).columnWidth = 14;
+      sheet.getRangeByIndex(1, 4).columnWidth = 14;
+      sheet.getRangeByIndex(1, 5).columnWidth = 14;
 
-      // ── 4. Save & share ────────────────────────────────────────────────
+      // ── 4. Save & send email ─────────────────────────────────────────
       final List<int> bytes = workbook.saveAsStream();
       workbook.dispose();
 
@@ -322,16 +518,31 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
       final File file = File(fileName);
       await file.writeAsBytes(bytes, flush: true);
 
-      await Share.shareXFiles(
-        [XFile(fileName)],
-        text: 'Leads Report — $_selectedBranch',
-      );
+      // --- Send email with attachment ---
+      final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
+      final message = Message()
+        ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
+        ..recipients.addAll(['crmmalabar@gmail.com'])
+        ..subject = 'Leads Report — $_selectedBranch'
+        ..text = 'Please find attached the leads report for $_selectedBranch.'
+        ..attachments = [FileAttachment(file)];
+
+      try {
+        await send(message, smtpServer);
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Email sent to crmmalabar@gmail.com')),
+        );
+      } on MailerException catch (e) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Failed to send email: ${e.toString()}')),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(content: Text('Failed to generate report: $e')),
       );
     } finally {
-      setState(() => _isGenerating = false);
+      if (mounted) setState(() => _isGenerating = false);
     }
   }
 
