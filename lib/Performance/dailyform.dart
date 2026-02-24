@@ -747,12 +747,14 @@ class _PerformanceFormState extends State<PerformanceForm> {
                                   title: const Text('Yes'),
                                   value: true,
                                   groupValue: timeTakenOtherTasks,
-                                  onChanged: (val) {
-                                    setState(() {
-                                      timeTakenOtherTasks = val;
-                                      if (val != true) timeTakenOtherTasksDescription = null;
-                                    });
-                                  },
+                                  onChanged: (isApprovedLeave || isUnapprovedLeave)
+                                      ? null
+                                      : (val) {
+                                          setState(() {
+                                            timeTakenOtherTasks = val;
+                                            if (val != true) timeTakenOtherTasksDescription = null;
+                                          });
+                                        },
                                 ),
                               ),
                               Expanded(
@@ -760,12 +762,14 @@ class _PerformanceFormState extends State<PerformanceForm> {
                                   title: const Text('No'),
                                   value: false,
                                   groupValue: timeTakenOtherTasks,
-                                  onChanged: (val) {
-                                    setState(() {
-                                      timeTakenOtherTasks = val;
-                                      if (val != true) timeTakenOtherTasksDescription = null;
-                                    });
-                                  },
+                                  onChanged: (isApprovedLeave || isUnapprovedLeave)
+                                      ? null
+                                      : (val) {
+                                          setState(() {
+                                            timeTakenOtherTasks = val;
+                                            if (val != true) timeTakenOtherTasksDescription = null;
+                                          });
+                                        },
                                 ),
                               ),
                             ],
@@ -783,6 +787,7 @@ class _PerformanceFormState extends State<PerformanceForm> {
                                 });
                               },
                               initialValue: timeTakenOtherTasksDescription,
+                              enabled: !(isApprovedLeave || isUnapprovedLeave),
                             ),
                           ),
                         const SizedBox(height: 16),
@@ -798,12 +803,14 @@ class _PerformanceFormState extends State<PerformanceForm> {
                                   title: const Text('Yes'),
                                   value: true,
                                   groupValue: oldStockOfferGiven,
-                                  onChanged: (val) {
-                                    setState(() {
-                                      oldStockOfferGiven = val;
-                                      if (val != true) oldStockOfferDescription = null;
-                                    });
-                                  },
+                                  onChanged: (isApprovedLeave || isUnapprovedLeave)
+                                      ? null
+                                      : (val) {
+                                          setState(() {
+                                            oldStockOfferGiven = val;
+                                            if (val != true) oldStockOfferDescription = null;
+                                          });
+                                        },
                                 ),
                               ),
                               Expanded(
@@ -811,12 +818,14 @@ class _PerformanceFormState extends State<PerformanceForm> {
                                   title: const Text('No'),
                                   value: false,
                                   groupValue: oldStockOfferGiven,
-                                  onChanged: (val) {
-                                    setState(() {
-                                      oldStockOfferGiven = val;
-                                      if (val != true) oldStockOfferDescription = null;
-                                    });
-                                  },
+                                  onChanged: (isApprovedLeave || isUnapprovedLeave)
+                                      ? null
+                                      : (val) {
+                                          setState(() {
+                                            oldStockOfferGiven = val;
+                                            if (val != true) oldStockOfferDescription = null;
+                                          });
+                                        },
                                 ),
                               ),
                             ],
@@ -834,6 +843,7 @@ class _PerformanceFormState extends State<PerformanceForm> {
                                 });
                               },
                               initialValue: oldStockOfferDescription,
+                              enabled: !(isApprovedLeave || isUnapprovedLeave),
                             ),
                           ),
                         const SizedBox(height: 16),
@@ -849,12 +859,14 @@ class _PerformanceFormState extends State<PerformanceForm> {
                                   title: const Text('Yes'),
                                   value: true,
                                   groupValue: crossSellingUpselling,
-                                  onChanged: (val) {
-                                    setState(() {
-                                      crossSellingUpselling = val;
-                                      if (val != true) crossSellingUpsellingDescription = null;
-                                    });
-                                  },
+                                  onChanged: (isApprovedLeave || isUnapprovedLeave)
+                                      ? null
+                                      : (val) {
+                                          setState(() {
+                                            crossSellingUpselling = val;
+                                            if (val != true) crossSellingUpsellingDescription = null;
+                                          });
+                                        },
                                 ),
                               ),
                               Expanded(
@@ -862,12 +874,14 @@ class _PerformanceFormState extends State<PerformanceForm> {
                                   title: const Text('No'),
                                   value: false,
                                   groupValue: crossSellingUpselling,
-                                  onChanged: (val) {
-                                    setState(() {
-                                      crossSellingUpselling = val;
-                                      if (val != true) crossSellingUpsellingDescription = null;
-                                    });
-                                  },
+                                  onChanged: (isApprovedLeave || isUnapprovedLeave)
+                                      ? null
+                                      : (val) {
+                                          setState(() {
+                                            crossSellingUpselling = val;
+                                            if (val != true) crossSellingUpsellingDescription = null;
+                                          });
+                                        },
                                 ),
                               ),
                             ],
@@ -885,6 +899,7 @@ class _PerformanceFormState extends State<PerformanceForm> {
                                 });
                               },
                               initialValue: crossSellingUpsellingDescription,
+                              enabled: !(isApprovedLeave || isUnapprovedLeave),
                             ),
                           ),
                         const SizedBox(height: 16),
@@ -900,12 +915,14 @@ class _PerformanceFormState extends State<PerformanceForm> {
                                   title: const Text('Yes'),
                                   value: true,
                                   groupValue: productComplaints,
-                                  onChanged: (val) {
-                                    setState(() {
-                                      productComplaints = val;
-                                      if (val != true) productComplaintsDescription = null;
-                                    });
-                                  },
+                                  onChanged: (isApprovedLeave || isUnapprovedLeave)
+                                      ? null
+                                      : (val) {
+                                          setState(() {
+                                            productComplaints = val;
+                                            if (val != true) productComplaintsDescription = null;
+                                          });
+                                        },
                                 ),
                               ),
                               Expanded(
@@ -913,12 +930,14 @@ class _PerformanceFormState extends State<PerformanceForm> {
                                   title: const Text('No'),
                                   value: false,
                                   groupValue: productComplaints,
-                                  onChanged: (val) {
-                                    setState(() {
-                                      productComplaints = val;
-                                      if (val != true) productComplaintsDescription = null;
-                                    });
-                                  },
+                                  onChanged: (isApprovedLeave || isUnapprovedLeave)
+                                      ? null
+                                      : (val) {
+                                          setState(() {
+                                            productComplaints = val;
+                                            if (val != true) productComplaintsDescription = null;
+                                          });
+                                        },
                                 ),
                               ),
                             ],
@@ -936,6 +955,7 @@ class _PerformanceFormState extends State<PerformanceForm> {
                                 });
                               },
                               initialValue: productComplaintsDescription,
+                              enabled: !(isApprovedLeave || isUnapprovedLeave),
                             ),
                           ),
                         const SizedBox(height: 16),
@@ -951,12 +971,14 @@ class _PerformanceFormState extends State<PerformanceForm> {
                                   title: const Text('Yes'),
                                   value: true,
                                   groupValue: achievedDailyTarget,
-                                  onChanged: (val) {
-                                    setState(() {
-                                      achievedDailyTarget = val;
-                                      if (val != true) achievedDailyTargetDescription = null;
-                                    });
-                                  },
+                                  onChanged: (isApprovedLeave || isUnapprovedLeave)
+                                      ? null
+                                      : (val) {
+                                          setState(() {
+                                            achievedDailyTarget = val;
+                                            if (val != true) achievedDailyTargetDescription = null;
+                                          });
+                                        },
                                 ),
                               ),
                               Expanded(
@@ -964,12 +986,14 @@ class _PerformanceFormState extends State<PerformanceForm> {
                                   title: const Text('No'),
                                   value: false,
                                   groupValue: achievedDailyTarget,
-                                  onChanged: (val) {
-                                    setState(() {
-                                      achievedDailyTarget = val;
-                                      if (val != true) achievedDailyTargetDescription = null;
-                                    });
-                                  },
+                                  onChanged: (isApprovedLeave || isUnapprovedLeave)
+                                      ? null
+                                      : (val) {
+                                          setState(() {
+                                            achievedDailyTarget = val;
+                                            if (val != true) achievedDailyTargetDescription = null;
+                                          });
+                                        },
                                 ),
                               ),
                             ],
@@ -987,6 +1011,7 @@ class _PerformanceFormState extends State<PerformanceForm> {
                                 });
                               },
                               initialValue: achievedDailyTargetDescription,
+                              enabled: !(isApprovedLeave || isUnapprovedLeave),
                             ),
                           ),
                         const SizedBox(height: 24),
