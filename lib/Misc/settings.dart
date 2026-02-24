@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'theme_notifier.dart';
@@ -11,6 +12,22 @@ import '../Performance/excel_performance_report.dart'; // <-- Import here
 
 
 class SettingsPage extends StatelessWidget {
+  Future<void> _triggerDeleteOldLeads(BuildContext context) async {
+    try {
+      final functions = FirebaseFunctions.instanceFor(region: 'asia-south1');
+      final callable = functions.httpsCallable('deleteOldLeadsCallable');
+      final result = await callable();
+      final deleted = result.data['deleted'] ?? 0;
+      final before = result.data['before'] ?? '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Deleted $deleted old leads (created before $before)')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete old leads: $e')),
+      );
+    }
+  }
   final String userRole;
   final ThemeProvider themeProvider;
 
@@ -189,19 +206,29 @@ class SettingsPage extends StatelessWidget {
                         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                       ),
                       const SizedBox(height: 32),
-                      if (userRole == 'admin')
-                        ElevatedButton(
-                          onPressed: () => _generateRegistrationCode(context),
-                          child: const Text('Generate Registration Code'),
-                        ),
-                      const SizedBox(height: 32),
                       FutureBuilder<bool>(
                         future: isAdmin(),
                         builder: (context, snapshot) {
                           if (snapshot.data == true) {
-                            return ElevatedButton(
-                              onPressed: () => _pickMonthAndSendExcel(context),
-                              child: const Text('Send Monthly Excel Report'),
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                ElevatedButton(
+                                  onPressed: () => _generateRegistrationCode(context),
+                                  child: const Text('Generate Registration Code'),
+                                ),
+                                const SizedBox(height: 16),
+                                ElevatedButton(
+                                  onPressed: () => _pickMonthAndSendExcel(context),
+                                  child: const Text('Send Monthly Excel Report'),
+                                ),
+                                const SizedBox(height: 16),
+                                ElevatedButton(
+                                  onPressed: () => _triggerDeleteOldLeads(context),
+                                  child: const Text('Delete Old Leads Now'),
+                                ),
+                                const SizedBox(height: 32),
+                              ],
                             );
                           }
                           return const SizedBox.shrink();
