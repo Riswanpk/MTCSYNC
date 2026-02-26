@@ -50,6 +50,16 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
       if (docSnap.exists && docSnap.data()?['customers'] != null) {
         customers = List.from(docSnap.data()!['customers']);
       }
+      // Enforce unique name (case-insensitive, trimmed)
+      String newName = _nameCtrl.text.trim().toLowerCase();
+      bool nameExists = customers.any((c) => (c['name'] ?? '').toString().trim().toLowerCase() == newName);
+      if (nameExists) {
+        setState(() {
+          _error = 'A customer with this name already exists.';
+          _loading = false;
+        });
+        return;
+      }
       customers.add({
         'name': _nameCtrl.text.trim(),
         'address': _addressCtrl.text.trim(),

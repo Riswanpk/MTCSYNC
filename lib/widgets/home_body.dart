@@ -383,7 +383,7 @@ class HomeButtonsContainer extends StatelessWidget {
               context,
               MaterialPageRoute(
                 builder: (_) => const LoadingOverlayPage(
-                  child: CustomerAdminViewerPage(),
+                  child: CustomerAdminViewerPage(hideActions: true),
                 ),
               ),
             );

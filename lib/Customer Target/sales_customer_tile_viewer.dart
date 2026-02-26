@@ -40,6 +40,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
       });
     });
     _restorePendingCallState();
+    _checkForAnyRecentCall();
     _fetchLastRemarks();
   }
 
@@ -198,6 +199,76 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     } catch (e) {
       debugPrint('Error checking call log: $e');
       // Don't clear pending state on error either — will retry on next resume.
+    }
+  }
+
+  /// On tile open, scan today's call log for this customer.
+  /// Only counts as "called" if the user initiated an outgoing call to the
+  /// customer today (any duration), AND there is at least one call (incoming
+  /// or outgoing) with duration > 15 seconds. This handles callbacks after
+  /// rejected/short outgoing calls while ignoring customer-initiated-only calls.
+  Future<void> _checkForAnyRecentCall() async {
+    if (called) return; // Already ticked, nothing to do
+    try {
+      final now = DateTime.now();
+      final startOfDay = DateTime(now.year, now.month, now.day);
+      final Iterable<CallLogEntry> entries = await CallLog.query(
+        dateFrom: startOfDay.millisecondsSinceEpoch,
+        dateTo: now.millisecondsSinceEpoch,
+      );
+      String? c1 = customer['contact1'] ?? customer['contact'];
+      String? c2 = customer['contact2'];
+
+      bool _numberMatches(String logNumber, String? contact) {
+        if (contact == null || contact.isEmpty) return false;
+        String clean = contact.replaceAll(RegExp(r'\D'), '');
+        return logNumber.endsWith(clean) || clean.endsWith(logNumber);
+      }
+
+      // Step 1: Find the latest outgoing call to this customer today
+      int latestOutgoingTime = -1;
+      for (final entry in entries) {
+        if (entry.callType != CallType.outgoing) continue;
+        String logNumber = entry.number?.replaceAll(RegExp(r'\\D'), '') ?? '';
+        if (logNumber.isEmpty) continue;
+        if (_numberMatches(logNumber, c1) || _numberMatches(logNumber, c2)) {
+          if (entry.timestamp != null && entry.timestamp! > latestOutgoingTime) {
+            latestOutgoingTime = entry.timestamp!;
+          }
+        }
+      }
+      if (latestOutgoingTime == -1) return; // No outgoing call found
+
+      // Step 2: Find any call (incoming or outgoing) > 15s AFTER the outgoing call
+      bool hasLongCallAfter = entries.any((entry) {
+        if (entry.timestamp == null || entry.timestamp! <= latestOutgoingTime) return false;
+        String logNumber = entry.number?.replaceAll(RegExp(r'\\D'), '') ?? '';
+        if (logNumber.isEmpty) return false;
+        bool longEnough = (entry.duration ?? 0) > 15;
+        return (_numberMatches(logNumber, c1) || _numberMatches(logNumber, c2)) && longEnough;
+      });
+      if (hasLongCallAfter) {
+        setState(() {
+          called = true;
+          customer['callMade'] = true;
+        });
+        // Clear any lingering pending call state
+        _pendingCallNumber = null;
+        _callStartTime = null;
+        await _clearPendingCallState();
+        await _updateCallStatusInFirestore();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Call detected! Please add remarks.'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error scanning today call log: $e');
     }
   }
 

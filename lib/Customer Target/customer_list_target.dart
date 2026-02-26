@@ -178,6 +178,196 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
     }
   }
 
+  /// Scan today's call log and find customers where:
+  /// 1. The user made an outgoing call to the customer today (any duration)
+  /// 2. There is at least one call (incoming or outgoing) > 15 seconds
+  /// This ensures customer-initiated-only calls are NOT detected.
+  Future<void> _scanCallLogAndShowMatches() async {
+    if (_customers == null || _customers!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No customers to check.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    // Request phone permission
+    var status = await Permission.phone.request();
+    if (!status.isGranted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Phone permission denied')),
+      );
+      return;
+    }
+
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final now = DateTime.now();
+      final startOfDay = DateTime(now.year, now.month, now.day);
+      final Iterable<CallLogEntry> entries = await CallLog.query(
+        dateFrom: startOfDay.millisecondsSinceEpoch,
+        dateTo: now.millisecondsSinceEpoch,
+      );
+
+      bool _numberMatches(String logNumber, String? contact) {
+        if (contact == null || contact.isEmpty) return false;
+        String clean = contact.replaceAll(RegExp(r'\D'), '');
+        return logNumber.endsWith(clean) || clean.endsWith(logNumber);
+      }
+
+      // Find customers that match the two-step criteria
+      List<Map<String, dynamic>> matchedCustomers = [];
+
+      for (var customer in _customers!) {
+        if (customer['callMade'] == true) continue; // already ticked
+
+        String? c1 = customer['contact1'] ?? customer['contact'];
+        String? c2 = customer['contact2'];
+
+        // Step 1: Find the latest outgoing call to this customer today
+        int latestOutgoingTime = -1;
+        for (final entry in entries) {
+          if (entry.callType != CallType.outgoing) continue;
+          String logNumber = entry.number?.replaceAll(RegExp(r'\\D'), '') ?? '';
+          if (logNumber.isEmpty) continue;
+          if (_numberMatches(logNumber, c1) || _numberMatches(logNumber, c2)) {
+            if (entry.timestamp != null && entry.timestamp! > latestOutgoingTime) {
+              latestOutgoingTime = entry.timestamp!;
+            }
+          }
+        }
+        if (latestOutgoingTime == -1) continue; // No outgoing call found
+
+        // Step 2: Find any call (incoming or outgoing) > 15s AFTER the outgoing call
+        bool hasLongCallAfter = entries.any((entry) {
+          if (entry.timestamp == null || entry.timestamp! <= latestOutgoingTime) return false;
+          String logNumber = entry.number?.replaceAll(RegExp(r'\\D'), '') ?? '';
+          if (logNumber.isEmpty) return false;
+          bool longEnough = (entry.duration ?? 0) > 15;
+          return (_numberMatches(logNumber, c1) || _numberMatches(logNumber, c2)) && longEnough;
+        });
+
+        if (hasLongCallAfter) {
+          matchedCustomers.add(customer);
+        }
+      }
+
+      // Dismiss loading
+      if (mounted) Navigator.of(context).pop();
+
+      if (matchedCustomers.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No new calls detected for today.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Show dialog with matched customers
+      if (mounted) {
+        await showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Row(
+              children: const [
+                Icon(Icons.phone_callback, color: Colors.green),
+                SizedBox(width: 8),
+                Expanded(child: Text('Calls Detected', style: TextStyle(fontSize: 18))),
+              ],
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${matchedCustomers.length} customer(s) have calls (>15s) today. Tap to add remarks.',
+                    style: const TextStyle(fontSize: 13, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 12),
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: matchedCustomers.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, i) {
+                        final c = matchedCustomers[i];
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Colors.green.shade50,
+                            child: const Icon(Icons.check_circle, color: Colors.green),
+                          ),
+                          title: Text(
+                            (c['name'] ?? '').toString().toUpperCase(),
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                          ),
+                          subtitle: Text(
+                            c['contact1'] ?? c['contact'] ?? '',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+                          onTap: () {
+                            // Mark as called
+                            setState(() {
+                              c['callMade'] = true;
+                            });
+                            _updateFirestore();
+                            Navigator.of(ctx).pop();
+                            // Navigate to tile viewer for remarks
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => SalesCustomerTileViewer(
+                                  customer: c,
+                                  onStatusChanged: (remarks) async {
+                                    setState(() {
+                                      c['callMade'] = true;
+                                      c['remarks'] = remarks;
+                                    });
+                                    await _updateFirestore();
+                                  },
+                                ),
+                              ),
+                            ).then((_) => _fetchCustomerData());
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      // Dismiss loading if still showing
+      if (mounted) Navigator.of(context).pop();
+      debugPrint('Error scanning call log: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error scanning call log: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<ThemeProvider>(
@@ -223,6 +413,11 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
               backgroundColor: isDark ? primaryBlue : primaryGreen,
               iconTheme: const IconThemeData(color: Colors.white),
               actions: [
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  tooltip: 'Scan Call Log',
+                  onPressed: _scanCallLogAndShowMatches,
+                ),
                 IconButton(
                   icon: const Icon(Icons.add),
                   tooltip: 'Add Customer',
@@ -298,6 +493,11 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
             backgroundColor: isDark ? primaryBlue : primaryGreen,
             iconTheme: const IconThemeData(color: Colors.white),
             actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Scan Call Log',
+                onPressed: _scanCallLogAndShowMatches,
+              ),
               IconButton(
                 icon: const Icon(Icons.add),
                 tooltip: 'Add Customer',

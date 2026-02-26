@@ -8,7 +8,8 @@ import '../Misc/theme_notifier.dart';
 class CustomerAdminViewerPage extends StatefulWidget {
   final String? forceBranch;
   final bool hideBranchDropdown;
-  const CustomerAdminViewerPage({super.key, this.forceBranch, this.hideBranchDropdown = false});
+  final bool hideActions;
+  const CustomerAdminViewerPage({super.key, this.forceBranch, this.hideBranchDropdown = false, this.hideActions = false});
 
   @override
   State<CustomerAdminViewerPage> createState() => _CustomerAdminViewerPageState();
@@ -147,7 +148,7 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
             backgroundColor: isDark ? primaryGreen : primaryBlue,
             iconTheme: const IconThemeData(color: Colors.white),
             actions: [
-              if (!widget.hideBranchDropdown) ...[
+              if (!widget.hideBranchDropdown && !widget.hideActions) ...[
                 IconButton(
                   icon: const Icon(Icons.assignment_turned_in),
                   tooltip: 'Assign Customer Target',
