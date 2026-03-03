@@ -139,7 +139,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
             final branch = (data['branch'] ?? '').toString();
             final name = (data['name'] ?? '').toString().toLowerCase();
             // Admin: show all, others: only matching branch
-            final branchMatch = userRole == 'admin' ? true : branch == userBranch;
+            final branchMatch = (userRole == 'admin' || userRole == 'Sync Head' || userRole == 'sync_head') ? true : branch == userBranch;
             final nameMatch = searchQuery.isEmpty || name.contains(searchQuery);
             return branchMatch && nameMatch;
           }).toList();

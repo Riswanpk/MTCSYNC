@@ -45,13 +45,13 @@ class HomeDrawer extends StatelessWidget {
           _buildDrawerHeader(context),
           _buildSettingsTile(context),
           _buildFeedbackTile(context),
-          if (role == 'admin' || role == 'sync_head') _buildManageUsersTile(context),
+          if (role == 'admin' || role == 'sync_head' || role == 'Sync Head') _buildManageUsersTile(context),
           if (role == 'manager') _buildDailyFormTile(context),
 
-          if (role == 'admin') _buildEditPerformanceFormTile(context),
-          if (role == 'admin') _buildPerformanceMonthlyTile(context),
-          if (role == 'admin') _buildPerformanceInsightsTile(context),
-          if (role == 'admin') _buildEntryPageTile(context),
+          if (role == 'admin' || role == 'sync_head' || role == 'Sync Head') _buildEditPerformanceFormTile(context),
+          if (role == 'admin' || role == 'sync_head' || role == 'Sync Head') _buildPerformanceMonthlyTile(context),
+          if (role == 'admin' || role == 'sync_head' || role == 'Sync Head') _buildPerformanceInsightsTile(context),
+          if (role == 'admin' || role == 'sync_head' || role == 'Sync Head') _buildEntryPageTile(context),
           _buildInstructionsTile(context),
           _buildLogoutTile(context),
         ],
@@ -161,7 +161,7 @@ class HomeDrawer extends StatelessWidget {
         await cache.ensureLoaded();
         final userRole = cache.role;
 
-        if (userRole == 'admin') {
+        if (userRole == 'admin' || userRole == 'Sync Head' || userRole == 'sync_head') {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const FeedbackAdminPage()),

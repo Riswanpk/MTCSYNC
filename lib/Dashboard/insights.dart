@@ -44,7 +44,7 @@ class _InsightsPageState extends State<InsightsPage> {
       _role = role;
       _userBranch = userBranch;
       _branches = branches;
-      _selectedBranch = role == 'admin'
+      _selectedBranch = (role == 'admin' || role == 'Sync Head' || role == 'sync_head')
           ? (branches.contains(userBranch) ? userBranch : (branches.isNotEmpty ? branches.first : null))
           : userBranch;
     });
@@ -62,7 +62,7 @@ class _InsightsPageState extends State<InsightsPage> {
             (doc['role'] ?? 'sales') != 'manager' &&
             (
               (_role == 'manager' && (doc['branch'] ?? '') == _userBranch) ||
-              (_role == 'admin' && _selectedBranch != null && (doc['branch'] ?? '') == _selectedBranch) ||
+              ((_role == 'admin' || _role == 'Sync Head' || _role == 'sync_head') && _selectedBranch != null && (doc['branch'] ?? '') == _selectedBranch) ||
               (_role != 'admin' && _role != 'manager')
             )
         )
@@ -79,7 +79,7 @@ class _InsightsPageState extends State<InsightsPage> {
         .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart));
     if (_role == 'manager') {
       leadsQuery = leadsQuery.where('branch', isEqualTo: _userBranch);
-    } else if (_role == 'admin' && _selectedBranch != null) {
+    } else if ((_role == 'admin' || _role == 'Sync Head' || _role == 'sync_head') && _selectedBranch != null) {
       leadsQuery = leadsQuery.where('branch', isEqualTo: _selectedBranch);
     }
     final leadsSnapshot = await leadsQuery.get();
@@ -133,7 +133,7 @@ class _InsightsPageState extends State<InsightsPage> {
           'worstTodo': {'username': 'N/A', 'count': 0},
         };
       }
-    } else if (_role == 'admin' && _selectedBranch != null) {
+    } else if ((_role == 'admin' || _role == 'Sync Head' || _role == 'sync_head') && _selectedBranch != null) {
       final branchUserIds = users.entries
           .where((e) => e.value['branch'] == _selectedBranch)
           .map((e) => e.key)
@@ -209,7 +209,7 @@ class _InsightsPageState extends State<InsightsPage> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                if (_role == 'admin')
+                if (_role == 'admin' || _role == 'Sync Head' || _role == 'sync_head')
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
                     child: DropdownButtonFormField<String>(

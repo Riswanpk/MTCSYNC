@@ -377,21 +377,37 @@ class HomeButtonsContainer extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 14),
-        NeumorphicButton(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const LoadingOverlayPage(
-                  child: CustomerAdminViewerPage(hideActions: true),
-                ),
+        Row(
+          children: [
+            Expanded(
+              child: NeumorphicButton(
+                onTap: () => _navigateToDashboard(context),
+                text: 'Dashboard',
+                color: primaryGreen,
+                textColor: Colors.white,
+                icon: Icons.dashboard_rounded,
               ),
-            );
-          },
-          text: 'Customer Calling',
-          color: isDark ? const Color(0xFF23272A) : Colors.white,
-          textColor: isDark ? Colors.white70 : const Color(0xFF607D8B),
-          icon: Icons.phone_rounded,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: NeumorphicButton(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const LoadingOverlayPage(
+                        child: CustomerAdminViewerPage(hideActions: true),
+                      ),
+                    ),
+                  );
+                },
+                text: 'Customer Calling',
+                color: isDark ? const Color(0xFF23272A) : Colors.white,
+                textColor: isDark ? Colors.white70 : const Color(0xFF607D8B),
+                icon: Icons.phone_rounded,
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -480,7 +496,7 @@ class HomeButtonsContainer extends StatelessWidget {
       rethrow;
     }
 
-    if (role == 'admin') {
+    if (role == 'admin' || role == 'Sync Head' || role == 'sync_head') {
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => const LoadingOverlayPage(
@@ -533,7 +549,7 @@ class HomeButtonsContainer extends StatelessWidget {
       rethrow;
     }
 
-    if (role == 'admin') {
+    if (role == 'admin' || role == 'Sync Head' || role == 'sync_head') {
       Navigator.push(
         context,
         MaterialPageRoute(

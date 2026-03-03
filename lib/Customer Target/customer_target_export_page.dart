@@ -44,24 +44,34 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
     });
     try {
       final workbook = syncfusion.Workbook();
+
+      // Fetch username map from users collection
+      final usersCollSnapshot = await FirebaseFirestore.instance.collection('users').get();
+      final Map<String, String> emailToUsername = {};
+      for (final doc in usersCollSnapshot.docs) {
+        final email = (doc.data()['email'] as String? ?? '').toLowerCase();
+        final username = doc.data()['username'] as String? ?? '';
+        if (email.isNotEmpty) emailToUsername[email] = username;
+      }
+
       final usersSnapshot = await FirebaseFirestore.instance
           .collection('customer_target')
           .doc(_selectedMonthYear)
           .collection('users')
           .get();
 
-      // Group users by branch and then by user
+      // Group users by branch and then by user email, keeping customers per user
       final Map<String, Map<String, List<Map<String, dynamic>>>> branchUserMap = {};
       for (final doc in usersSnapshot.docs) {
         final data = doc.data();
         final branch = data['branch'] ?? 'Unknown';
-        final user = data['user'] ?? doc.id;
+        final userEmail = (data['user'] ?? doc.id).toString().toLowerCase();
         final customers = (data['customers'] as List<dynamic>? ?? [])
             .map((e) => Map<String, dynamic>.from(e))
             .toList();
         branchUserMap.putIfAbsent(branch, () => {});
-        branchUserMap[branch]!.putIfAbsent(user, () => []);
-        branchUserMap[branch]![user]!.addAll(customers);
+        branchUserMap[branch]!.putIfAbsent(userEmail, () => []);
+        branchUserMap[branch]![userEmail]!.addAll(customers);
       }
 
       // For each branch, create a sheet
@@ -72,24 +82,85 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
             : workbook.worksheets.addWithName(branch);
         sheet.name = branch;
         int row = 1;
-        for (final user in branchUserMap[branch]!.keys) {
-          // User header
-          sheet.getRangeByName('A$row').setText(user);
-          sheet.getRangeByName('A$row').cellStyle.bold = true;
+        for (final userEmail in branchUserMap[branch]!.keys) {
+          final customers = List<Map<String, dynamic>>.from(branchUserMap[branch]![userEmail]!);
+          // Sort: Called first, Not Called second
+          customers.sort((a, b) =>
+              (b['callMade'] == true ? 1 : 0) - (a['callMade'] == true ? 1 : 0));
+
+          final username = emailToUsername[userEmail] ?? userEmail;
+          final calledCount = customers.where((c) => c['callMade'] == true).length;
+          final totalCount = customers.length;
+
+          // --- Username header row ---
+          final userRange = sheet.getRangeByName('A$row:C$row');
+          userRange.merge();
+          userRange.setText(username);
+          userRange.cellStyle.bold = true;
+          userRange.cellStyle.backColor = '#005BAC';
+          userRange.cellStyle.fontColor = '#FFFFFF';
+          userRange.cellStyle.fontSize = 12;
+          userRange.cellStyle.borders.all.lineStyle = syncfusion.LineStyle.thin;
+          userRange.cellStyle.borders.all.color = '#CCCCCC';
           row++;
-          // Table header
-          sheet.getRangeByName('A$row').setText('Customer Name');
-          sheet.getRangeByName('B$row').setText('Remarks');
-          sheet.getRangeByName('C$row').setText('Call Status');
-          sheet.getRangeByName('A$row').cellStyle.bold = true;
-          sheet.getRangeByName('B$row').cellStyle.bold = true;
-          sheet.getRangeByName('C$row').cellStyle.bold = true;
+
+          // --- Called progress row ---
+          final progressRange = sheet.getRangeByName('A$row:C$row');
+          progressRange.merge();
+          progressRange.setText('Customers Called: $calledCount / $totalCount');
+          progressRange.cellStyle.bold = true;
+          progressRange.cellStyle.backColor = '#E8F5E9';
+          progressRange.cellStyle.fontColor = '#1B5E20';
+          progressRange.cellStyle.borders.all.lineStyle = syncfusion.LineStyle.thin;
+          progressRange.cellStyle.borders.all.color = '#CCCCCC';
           row++;
-          // Customer rows
-          for (final customer in branchUserMap[branch]![user]!) {
-            sheet.getRangeByName('A$row').setText(customer['name'] ?? '');
-            sheet.getRangeByName('B$row').setText(customer['remarks'] ?? '');
-            sheet.getRangeByName('C$row').setText(customer['callMade'] == true ? 'Called' : 'Not Called');
+
+          // --- Table column headers ---
+          void applyHeaderStyle(syncfusion.Range r) {
+            r.cellStyle.bold = true;
+            r.cellStyle.backColor = '#37474F';
+            r.cellStyle.fontColor = '#FFFFFF';
+            r.cellStyle.borders.all.lineStyle = syncfusion.LineStyle.thin;
+            r.cellStyle.borders.all.color = '#CCCCCC';
+          }
+          final hA = sheet.getRangeByName('A$row');
+          final hB = sheet.getRangeByName('B$row');
+          final hC = sheet.getRangeByName('C$row');
+          hA.setText('Customer Name');
+          hB.setText('Remarks');
+          hC.setText('Call Status');
+          applyHeaderStyle(hA);
+          applyHeaderStyle(hB);
+          applyHeaderStyle(hC);
+          row++;
+
+          // --- Customer data rows ---
+          for (final customer in customers) {
+            final isCalled = customer['callMade'] == true;
+            final cellA = sheet.getRangeByName('A$row');
+            final cellB = sheet.getRangeByName('B$row');
+            final cellC = sheet.getRangeByName('C$row');
+
+            cellA.setText(customer['name'] ?? '');
+            cellB.setText(customer['remarks'] ?? '');
+            cellC.setText(isCalled ? 'Called' : 'Not Called');
+
+            // Cell borders
+            for (final cell in [cellA, cellB, cellC]) {
+              cell.cellStyle.borders.all.lineStyle = syncfusion.LineStyle.thin;
+              cell.cellStyle.borders.all.color = '#CCCCCC';
+            }
+
+            // Call Status colouring
+            if (isCalled) {
+              cellC.cellStyle.backColor = '#4CAF50';
+              cellC.cellStyle.fontColor = '#FFFFFF';
+              cellC.cellStyle.bold = true;
+            } else {
+              cellC.cellStyle.backColor = '#F44336';
+              cellC.cellStyle.fontColor = '#FFFFFF';
+              cellC.cellStyle.bold = true;
+            }
             row++;
           }
           row++; // Empty row between users

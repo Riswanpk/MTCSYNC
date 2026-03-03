@@ -154,7 +154,7 @@ class _LeadsPageState extends State<LeadsPage> {
 
     final userData = await _currentUserData;
     final role = userData?['role'] ?? 'sales';
-    final branch = role == 'admin' ? selectedBranch : userData?['branch'];
+    final branch = (role == 'admin' || role == 'Sync Head' || role == 'sync_head') ? selectedBranch : userData?['branch'];
 
     if (branch == null || branch.isEmpty) {
       setState(() {
@@ -261,7 +261,7 @@ class _LeadsPageState extends State<LeadsPage> {
         final currentUserId = FirebaseAuth.instance.currentUser?.uid;
         final role = userData['role'] ?? 'sales';
         final managerBranch = userData['branch'];
-        final branchToShow = role == 'admin' ? selectedBranch ?? '' : widget.branch;
+        final branchToShow = (role == 'admin' || role == 'Sync Head' || role == 'sync_head') ? selectedBranch ?? '' : widget.branch;
 
         return Scaffold(
           appBar: AppBar(
@@ -354,7 +354,7 @@ class _LeadsPageState extends State<LeadsPage> {
                   // --- TOP FILTERS ROW ---
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                    child: role == 'admin'
+                    child: (role == 'admin' || role == 'Sync Head' || role == 'sync_head')
                         ? Column(
                             children: [
                               Row(

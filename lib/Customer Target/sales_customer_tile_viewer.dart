@@ -23,7 +23,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
   TextEditingController remarksController = TextEditingController();
   String? _pendingCallNumber;
   DateTime? _callStartTime;
-  String? _lastRemarks;
+  List<Map<String, String>> _pastRemarks = [];
   bool _loadingLastRemarks = false;
   bool _remarksSaved = false; // Add this flag
 
@@ -466,16 +466,6 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
   }
 
   Future<void> _fetchLastRemarks() async {
-    // First check if lastRemarks is already in the customer object (from Firebase function)
-    if (customer['lastRemarks'] != null && customer['lastRemarks'].toString().trim().isNotEmpty) {
-      setState(() {
-        _lastRemarks = customer['lastRemarks'];
-        _loadingLastRemarks = false;
-      });
-      return;
-    }
-
-    // Fallback: fetch from previous month's collection (for backwards compatibility)
     setState(() {
       _loadingLastRemarks = true;
     });
@@ -493,49 +483,50 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
       }
 
       final now = DateTime.now();
-      final months = [
+      const months = [
         'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
       ];
-      final prev = DateTime(now.year, now.month - 1, 1);
-      final monthYear = "${months[prev.month - 1]} ${prev.year}";
-      final doc = await FirebaseFirestore.instance
-          .collection('customer_target')
-          .doc(monthYear)
-          .collection('users')
-          .doc(user.email)
-          .get();
-      if (doc.exists && doc.data()?['customers'] != null) {
-        final List customers = doc.data()!['customers'];
-        dynamic prevCustomer;
-        if (contact1 != null && contact1.isNotEmpty) {
-          prevCustomer = customers.firstWhere(
-            (c) => c['contact'] == contact1 || c['contact1'] == contact1,
-            orElse: () => null,
-          );
-        }
-        if ((prevCustomer == null || prevCustomer['remarks'] == null || prevCustomer['remarks'].toString().trim().isEmpty) &&
-            contact2 != null && contact2.isNotEmpty) {
-          prevCustomer = customers.firstWhere(
-            (c) => c['contact'] == contact2 || c['contact2'] == contact2,
-            orElse: () => null,
-          );
-        }
-        if (prevCustomer != null && prevCustomer['remarks'] != null && prevCustomer['remarks'].toString().trim().isNotEmpty) {
-          setState(() {
-            _lastRemarks = prevCustomer['remarks'];
-            _loadingLastRemarks = false;
-          });
-          return;
+      final List<Map<String, String>> results = [];
+
+      for (int i = 1; i <= 3; i++) {
+        final prev = DateTime(now.year, now.month - i, 1);
+        final monthYear = "${months[prev.month - 1]} ${prev.year}";
+        final doc = await FirebaseFirestore.instance
+            .collection('customer_target')
+            .doc(monthYear)
+            .collection('users')
+            .doc(user.email)
+            .get();
+        if (doc.exists && doc.data()?['customers'] != null) {
+          final List customerList = doc.data()!['customers'];
+          dynamic prevCustomer;
+          if (contact1 != null && contact1.isNotEmpty) {
+            prevCustomer = customerList.firstWhere(
+              (c) => c['contact'] == contact1 || c['contact1'] == contact1,
+              orElse: () => null,
+            );
+          }
+          if ((prevCustomer == null || prevCustomer['remarks'] == null || prevCustomer['remarks'].toString().trim().isEmpty) &&
+              contact2 != null && contact2.isNotEmpty) {
+            prevCustomer = customerList.firstWhere(
+              (c) => c['contact'] == contact2 || c['contact2'] == contact2,
+              orElse: () => null,
+            );
+          }
+          if (prevCustomer != null && prevCustomer['remarks'] != null && prevCustomer['remarks'].toString().trim().isNotEmpty) {
+            results.add({'monthYear': monthYear, 'remarks': prevCustomer['remarks'].toString()});
+          }
         }
       }
+
       setState(() {
-        _lastRemarks = null;
+        _pastRemarks = results;
         _loadingLastRemarks = false;
       });
     } catch (e) {
       setState(() {
-        _lastRemarks = null;
+        _pastRemarks = [];
         _loadingLastRemarks = false;
       });
     }
@@ -571,7 +562,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     }
 
     customer.forEach((key, value) {
-      if (key == 'slno' || key == 'remarks' || key == 'callMade' || key == 'contact' || key == 'contact1' || key == 'contact2' || key == 'address' || key == 'lastCalledNumber') return;
+      if (key == 'slno' || key == 'remarks' || key == 'callMade' || key == 'contact' || key == 'contact1' || key == 'contact2' || key == 'address' || key == 'lastCalledNumber' || key == 'lastRemarks') return;
       if (key == 'name') {
         // handled separately
       } else {
@@ -826,15 +817,15 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                   padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: LinearProgressIndicator(),
                 ),
-              if (!_loadingLastRemarks && _lastRemarks != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              if (!_loadingLastRemarks && _pastRemarks.isNotEmpty)
+                ..._pastRemarks.map((entry) => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Last Remarks',
-                        style: TextStyle(
+                      Text(
+                        '${entry['monthYear']} Remarks',
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
@@ -848,13 +839,13 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          _lastRemarks!,
+                          entry['remarks']!,
                           style: const TextStyle(fontSize: 15, color: Colors.black87),
                         ),
                       ),
                     ],
                   ),
-                ),
+                )).toList(),
 
               // --- Remarks Section ---
               const SizedBox(height: 16),

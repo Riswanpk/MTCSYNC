@@ -6,6 +6,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../login.dart';
+import 'force_update_checker.dart';
+import 'force_update_screen.dart';
 import '../home.dart';
 import '../main.dart'; // For navigatorKey and initialNotificationAction
 import '../Leads/presentfollowup.dart'; // For PresentFollowUp
@@ -49,6 +51,19 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _requestPermissionsAndNavigate() async {
+    // ── Force update check ────────────────────────────────────────────────────
+    // Run before anything else. If the installed build is too old, replace the
+    // splash with a non-dismissible update screen and stop further navigation.
+    final updateRequired = await ForceUpdateChecker.isUpdateRequired();
+    if (!mounted) return;
+    if (updateRequired) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const ForceUpdateScreen()),
+      );
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     // Request permissions that show dialogs first
     // Some permissions auto-grant or require Settings - don't await those blocking
     try {

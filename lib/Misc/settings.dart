@@ -62,11 +62,97 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  Future<bool> isAdmin() async {
+  Future<void> _showForceUpdateDialog(BuildContext context) async {
+    // Fetch current value first
+    int? currentMin;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('config')
+          .doc('app_config')
+          .get();
+      if (doc.exists) {
+        currentMin = (doc.data()?['min_version_code'] as num?)?.toInt();
+      }
+    } catch (_) {}
+
+    if (!context.mounted) return;
+
+    final controller = TextEditingController(
+      text: currentMin != null ? '$currentMin' : '',
+    );
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Force Update Config'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Users with a build number BELOW this value will be forced to update before using the app.',
+              style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Minimum Build Number (versionCode)',
+                border: OutlineInputBorder(),
+                hintText: 'e.g. 117',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final value = int.tryParse(controller.text.trim());
+              if (value == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please enter a valid build number.')),
+                );
+                return;
+              }
+              try {
+                await FirebaseFirestore.instance
+                    .collection('config')
+                    .doc('app_config')
+                    .set({'min_version_code': value}, SetOptions(merge: true));
+                if (ctx.mounted) Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Force update threshold set to build $value.'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed to save: $e')),
+                );
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+  }
+
+  Future<String?> getUserRole() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return false;
+    if (user == null) return null;
     final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    return doc.data()?['role'] == 'admin';
+    final roleRaw = doc.data()?['role'];
+    if (roleRaw == null) return null;
+    return roleRaw.toString().toLowerCase().replaceAll('_', ' ').trim();
   }
 
   Future<void> _pickMonthAndSendExcel(BuildContext context) async {
@@ -206,10 +292,14 @@ class SettingsPage extends StatelessWidget {
                         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                       ),
                       const SizedBox(height: 32),
-                      FutureBuilder<bool>(
-                        future: isAdmin(),
+                      FutureBuilder<String?>(
+                        future: getUserRole(),
                         builder: (context, snapshot) {
-                          if (snapshot.data == true) {
+                          final role = snapshot.data;
+                          if (role == null) return const SizedBox.shrink();
+                          final isAdmin = role == 'admin';
+                          final isSyncHead = role == 'sync head' || role == 'synchead' || role == 'sync-head';
+                          if (isAdmin || isSyncHead) {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
@@ -222,11 +312,23 @@ class SettingsPage extends StatelessWidget {
                                   onPressed: () => _pickMonthAndSendExcel(context),
                                   child: const Text('Send Monthly Excel Report'),
                                 ),
-                                const SizedBox(height: 16),
-                                ElevatedButton(
-                                  onPressed: () => _triggerDeleteOldLeads(context),
-                                  child: const Text('Delete Old Leads Now'),
-                                ),
+                                if (isAdmin) ...[
+                                  const SizedBox(height: 16),
+                                  ElevatedButton(
+                                    onPressed: () => _triggerDeleteOldLeads(context),
+                                    child: const Text('Delete Old Leads Now'),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  ElevatedButton.icon(
+                                    onPressed: () => _showForceUpdateDialog(context),
+                                    icon: const Icon(Icons.system_update_alt_rounded),
+                                    label: const Text('Force Update Config'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF005BAC),
+                                      foregroundColor: Colors.white,
+                                    ),
+                                  ),
+                                ],
                                 const SizedBox(height: 32),
                               ],
                             );

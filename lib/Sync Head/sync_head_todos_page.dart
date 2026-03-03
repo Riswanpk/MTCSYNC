@@ -88,7 +88,7 @@ class _SyncHeadTodosPageState extends State<SyncHeadTodosPage> {
     if (_selectedBranch == null) return;
     setState(() => _loading = true);
 
-    final (windowStart, windowEnd) = _getWindow(_selectedDate);
+    final (start, end) = _getWindow(_selectedDate);
 
     // Fetch all users in selected branch
     final usersSnap = await FirebaseFirestore.instance
@@ -121,9 +121,9 @@ class _SyncHeadTodosPageState extends State<SyncHeadTodosPage> {
           .where('email', isEqualTo: email)
           .where('timestamp',
               isGreaterThanOrEqualTo:
-                  Timestamp.fromDate(windowStart))
+                  Timestamp.fromDate(start))
           .where('timestamp',
-              isLessThan: Timestamp.fromDate(windowEnd))
+              isLessThan: Timestamp.fromDate(end))
           .orderBy('timestamp', descending: false)
           .get();
 
@@ -156,12 +156,12 @@ class _SyncHeadTodosPageState extends State<SyncHeadTodosPage> {
   }
 
   Future<void> _pickDate() async {
-    final now = DateTime.now();
+    final lastDate = _defaultDate();
     final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime(2023, 1, 1),
-      lastDate: now,
+      lastDate: lastDate,
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: const ColorScheme.light(
@@ -232,8 +232,7 @@ class _SyncHeadTodosPageState extends State<SyncHeadTodosPage> {
                                 CrossAxisAlignment.start,
                             children: [
                               Text(
-                                DateFormat('dd MMM yyyy')
-                                    .format(_selectedDate),
+                                DateFormat('dd MMM yyyy').format(_selectedDate),
                                 style: TextStyle(
                                   color: isDark
                                       ? Colors.white

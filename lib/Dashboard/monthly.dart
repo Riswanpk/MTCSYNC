@@ -49,7 +49,8 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
       _userRole = userRole;
     }
 
-    if (widget.users.isNotEmpty && widget.branch != null) {
+    if (widget.users.isNotEmpty && widget.branch != null &&
+        userRole != 'admin' && userRole != 'Sync Head' && userRole != 'sync_head') {
       setState(() {
         _selectedBranch = widget.branch;
         _usersForBranch = List<Map<String, dynamic>>.from(widget.users)
@@ -81,10 +82,14 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
         _isInitialized = true;
       });
     } else {
+      // admin / sync_head: pre-select widget.branch if provided
+      final preselect = (widget.branch != null && branches.contains(widget.branch))
+          ? widget.branch
+          : (branches.isNotEmpty ? branches.first : null);
       setState(() {
         _branches = branches;
         if (_branches.isNotEmpty && _selectedBranch == null) {
-          _selectedBranch = _branches.first;
+          _selectedBranch = preselect;
         }
         _isInitialized = true;
       });
@@ -262,7 +267,7 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
                   // -------------------------
                   // 1. BRANCH DROPDOWN
                   // -------------------------
-                  if (_userRole == 'admin' && _branches.isNotEmpty)
+                  if ((_userRole == 'admin' || _userRole == 'Sync Head' || _userRole == 'sync_head') && _branches.isNotEmpty)
                     Flexible(
                       flex: 2,
                       child: DropdownButtonHideUnderline(
@@ -312,7 +317,7 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
                       ),
                     ),
                   
-                  if (!(_userRole == 'admin' && _branches.isNotEmpty)) const SizedBox.shrink(),
+                  if (!((_userRole == 'admin' || _userRole == 'Sync Head' || _userRole == 'sync_head') && _branches.isNotEmpty)) const SizedBox.shrink(),
                   const SizedBox(width: 6),
 
                   // -------------------------

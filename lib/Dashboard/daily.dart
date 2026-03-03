@@ -50,7 +50,7 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
     final userDoc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
     _role = userDoc['role'];
     _userBranch = userDoc['branch'];
-    if (_role == 'admin') {
+    if (_role == 'admin' || _role == 'Sync Head' || _role == 'sync_head') {
       final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
         _branches = usersSnapshot.docs
             .map((doc) => doc['branch'] ?? '')
@@ -156,7 +156,7 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
         actions: [
-          if (_role == 'admin')
+          if (_role == 'admin' || _role == 'Sync Head' || _role == 'sync_head')
             IconButton(
               icon: const Icon(Icons.download),
               tooltip: 'Download Report',
@@ -199,7 +199,7 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
               ],
             ),
           ),
-          if (_role == 'admin' && _branches.isNotEmpty)
+          if ((_role == 'admin' || _role == 'Sync Head' || _role == 'sync_head') && _branches.isNotEmpty)
             Padding(
               padding: const EdgeInsets.all(12),
               child: DropdownButton<String>(
@@ -234,7 +234,7 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
             ),
           ),
           Expanded(
-            child: _role == 'admin'
+            child: (_role == 'admin' || _role == 'Sync Head' || _role == 'sync_head')
                 ? FutureBuilder<List<Map<String, dynamic>>>(
                     future: _fetchUsersAndLeads(role: 'sales'),
                     builder: (context, salesSnapshot) {

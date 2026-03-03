@@ -172,6 +172,7 @@ class _DashboardPageState extends State<DashboardPage>
     }
     final userData = _userData ?? {};
     final role = userData['role'] ?? 'sales';
+    final isAdminLike = role == 'admin' || role == 'sync_head';
     final branch = userData['branch'] ?? '';
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surfaceColor =
@@ -263,7 +264,7 @@ class _DashboardPageState extends State<DashboardPage>
                           Icons.calendar_month_rounded,
                           1,
                           () async {
-                            if (role == 'manager') {
+                            if (role == 'manager' || isAdminLike) {
                               final usersSnapshot = await FirebaseFirestore
                                   .instance
                                   .collection('users')
@@ -321,7 +322,7 @@ class _DashboardPageState extends State<DashboardPage>
                               isScrollControlled: true,
                               backgroundColor: Colors.transparent,
                               builder: (_) =>
-                                  PendingTodosModal(role: role, branch: branch),
+                                  PendingTodosModal(role: isAdminLike ? 'admin' : role, branch: branch),
                             );
                           },
                         ),
@@ -400,7 +401,7 @@ class _DashboardPageState extends State<DashboardPage>
                                 ),
                               ),
                             ),
-                            if (role == 'admin' && !_loadingBranches)
+                            if (isAdminLike && !_loadingBranches)
                               _BranchChip(
                                 branches: _branches,
                                 selectedBranch: _selectedBranch,
@@ -416,7 +417,7 @@ class _DashboardPageState extends State<DashboardPage>
                         const SizedBox(height: 20),
                         SizedBox(
                           height: 240,
-                          child: role == 'admin'
+                          child: isAdminLike
                               ? (_selectedBranch == null
                                   ? Center(
                                       child: Column(
