@@ -18,6 +18,7 @@ import '../Performance/insights_performance.dart';
 import '../Performance/entry_page.dart';
 import '../Instructions/instructions.dart';
 import '../Misc/theme_notifier.dart';
+import '../Sync Head/sync_head_performance_drawer.dart';
 
 /// Builds the drawer widget for the home page.
 class HomeDrawer extends StatelessWidget {
@@ -48,10 +49,11 @@ class HomeDrawer extends StatelessWidget {
           if (role == 'admin' || role == 'sync_head' || role == 'Sync Head') _buildManageUsersTile(context),
           if (role == 'manager') _buildDailyFormTile(context),
 
-          if (role == 'admin' || role == 'sync_head' || role == 'Sync Head') _buildEditPerformanceFormTile(context),
-          if (role == 'admin' || role == 'sync_head' || role == 'Sync Head') _buildPerformanceMonthlyTile(context),
-          if (role == 'admin' || role == 'sync_head' || role == 'Sync Head') _buildPerformanceInsightsTile(context),
-          if (role == 'admin' || role == 'sync_head' || role == 'Sync Head') _buildEntryPageTile(context),
+          if (role == 'admin') _buildEditPerformanceFormTile(context),
+          if (role == 'admin') _buildPerformanceMonthlyTile(context),
+          if (role == 'admin') _buildPerformanceInsightsTile(context),
+          if (role == 'admin') _buildEntryPageTile(context),
+          if (role == 'sync_head' || role == 'Sync Head') _buildSyncHeadPerformanceTile(context),
           _buildInstructionsTile(context),
           _buildLogoutTile(context),
         ],
@@ -210,6 +212,23 @@ class HomeDrawer extends StatelessWidget {
   }
 
   // Removed performance tile for sales role
+
+  Widget _buildSyncHeadPerformanceTile(BuildContext context) {
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: const Icon(Icons.bar_chart_rounded, color: Color(0xFF005BAC)),
+      title: const Text('Performance'),
+      onTap: () {
+        Navigator.pop(context);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (context) => const SyncHeadPerformancePage()),
+        );
+      },
+    );
+  }
 
   Widget _buildEditPerformanceFormTile(BuildContext context) {
     return ListTile(
