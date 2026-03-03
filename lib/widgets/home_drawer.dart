@@ -45,7 +45,7 @@ class HomeDrawer extends StatelessWidget {
           _buildDrawerHeader(context),
           _buildSettingsTile(context),
           _buildFeedbackTile(context),
-          if (role == 'admin') _buildManageUsersTile(context),
+          if (role == 'admin' || role == 'sync_head') _buildManageUsersTile(context),
           if (role == 'manager') _buildDailyFormTile(context),
 
           if (role == 'admin') _buildEditPerformanceFormTile(context),
@@ -187,7 +187,7 @@ class HomeDrawer extends StatelessWidget {
         Navigator.push(
           context,
           MaterialPageRoute(
-              builder: (context) => const ManageUsersPage(userRole: 'admin')),
+              builder: (context) => ManageUsersPage(userRole: role ?? 'admin')),
         );
       },
     );

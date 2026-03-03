@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:collection/collection.dart'; // Add this for groupBy
+import 'user_detail_page.dart';
 
 class ManageUsersPage extends StatefulWidget {
   final String userRole;
@@ -427,6 +428,18 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                         final docId = user.id; // <-- Use document ID
 
                         return ListTile(
+                          onTap: () async {
+                            final result = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => UserDetailPage(
+                                  userId: docId,
+                                  currentUserRole: widget.userRole,
+                                ),
+                              ),
+                            );
+                            if (result == true) setState(() {});
+                          },
                           leading: CircleAvatar(
                             backgroundColor: const Color(0xFF005BAC),
                             child: Text(
