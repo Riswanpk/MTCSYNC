@@ -9,7 +9,7 @@ import 'dart:convert';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
-import '../Misc/navigation_state.dart';
+import '../Navigation/navigation_state.dart';
 import 'image_upload_helper.dart';
 
 class GeneralCustomerForm extends StatefulWidget {

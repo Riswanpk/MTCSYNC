@@ -279,7 +279,7 @@ class TodoListItem extends StatelessWidget {
   }
 }
 
-/// Read-only todo item for the manager "Others" tab (no slide actions).
+/// Read-only todo item for the "Others" tab – shows a username badge bottom-right.
 class TodoListItemReadOnly extends StatelessWidget {
   final DocumentSnapshot doc;
   final Map<String, dynamic> data;
@@ -294,13 +294,53 @@ class TodoListItemReadOnly extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TodoListItem(
-      doc: doc,
-      data: data,
-      onToggleStatus: (_) async {},
-      onDelete: (_) async {},
-      getUsernameByEmail: getUsernameByEmail,
-      showSlidableActions: false,
+    final email = data['email'] as String? ?? '';
+    return FutureBuilder<String>(
+      future: email.isNotEmpty ? getUsernameByEmail(email) : Future.value(''),
+      builder: (context, snapshot) {
+        final username = snapshot.data ?? '';
+        return Stack(
+          children: [
+            TodoListItem(
+              doc: doc,
+              data: data,
+              onToggleStatus: (_) async {},
+              onDelete: (_) async {},
+              getUsernameByEmail: getUsernameByEmail,
+              showSlidableActions: false,
+            ),
+            if (username.isNotEmpty)
+              Positioned(
+                bottom: 22,
+                right: 16,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: primaryBlue.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.person_outline_rounded,
+                          size: 12, color: primaryBlue),
+                      const SizedBox(width: 4),
+                      Text(
+                        username,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: primaryBlue,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

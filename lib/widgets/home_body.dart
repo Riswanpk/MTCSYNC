@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math';
 import '../Misc/auth_wrapper.dart';
-import '../Misc/navigation_state.dart';
+import '../Navigation/navigation_state.dart';
 import '../Misc/user_cache_service.dart';
 import '../Customer Target/customer_manager_view.dart';
 import '../Todo/todo.dart';

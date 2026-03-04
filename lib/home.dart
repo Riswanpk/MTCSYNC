@@ -232,15 +232,14 @@ class _HomePageState extends State<HomePage>
     await _userCache.ensureLoaded();
     final role = _userCache.role;
     final email = _userCache.email;
-    if (role != 'sales') {
+    if (role != 'sales' && role != 'manager') {
       setState(() => _showTodoWarning = false);
       return;
     }
 
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final windowStart = today.add(const Duration(hours: 12));
-    final windowEnd = today.add(const Duration(days: 1, hours: 12));
+    final window = getCurrentISTWindow();
+    final windowStart = window[0];
+    final windowEnd = window[1];
 
     final todosSnapshot = await FirebaseFirestore.instance
         .collection('todo')

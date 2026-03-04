@@ -5,7 +5,6 @@ import 'todoform.dart' as todoform;
 import 'report_todo.dart';
 import '../Misc/user_cache_service.dart';
 import 'dart:async';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'todo_widget_updater.dart';
 import 'todo_widgets.dart' as todowidgets;
 import 'todo_list_body.dart';
@@ -31,16 +30,12 @@ class _TodoPageState extends State<TodoPage>
   late Future<void> _userInfoFuture;
 
   TabController? _tabController;
-  StreamSubscription<QuerySnapshot>? _assignmentListener;
-  FlutterLocalNotificationsPlugin? _localNotifications;
 
   @override
   void initState() {
     super.initState();
     _userInfoFuture = _loadUserInfo().then((_) {
       _deleteOldTasks();
-      _initLocalNotifications();
-      _setupAssignmentListener();
     });
 
     WidgetsBinding.instance.addObserver(this);
@@ -57,93 +52,11 @@ class _TodoPageState extends State<TodoPage>
 
   @override
   void dispose() {
-    _assignmentListener?.cancel();
     _tabController?.dispose();
     _todoController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
-
-  Future<void> _initLocalNotifications() async {
-    _localNotifications = FlutterLocalNotificationsPlugin();
-
-    const AndroidInitializationSettings androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-    const InitializationSettings initSettings =
-        InitializationSettings(android: androidSettings);
-
-    await _localNotifications!.initialize(settings: initSettings);
-
-    // Create notification channel with custom sound
-    const AndroidNotificationChannel assignmentChannel =
-        AndroidNotificationChannel(
-      'assignment_channel',
-      'Assignment Notifications',
-      description: 'Channel for assignment notifications',
-      importance: Importance.max,
-      playSound: true,
-      sound:
-          RawResourceAndroidNotificationSound('assignment'), // <-- custom sound
-    );
-
-    await _localNotifications!
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(assignmentChannel);
-  }
-
-  void _setupAssignmentListener() async {
-    await _userInfoFuture;
-    if (_userRole != 'sales' || _userEmail == null) return;
-
-    await _assignmentListener?.cancel();
-
-    _assignmentListener = FirebaseFirestore.instance
-        .collection('todo')
-        .where('email', isEqualTo: _userEmail)
-        .where('assigned_by_name', isNotEqualTo: null)
-        .where('assignment_seen', isEqualTo: false)
-        .snapshots()
-        .listen((snapshot) {
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final title = data['title'] ?? 'New Task Assigned';
-        _showAssignmentNotification(title);
-        doc.reference.update({'assignment_seen': true});
-      }
-    });
-  }
-
-  Future<void> _showAssignmentNotification(String taskTitle) async {
-    const AndroidNotificationDetails androidDetails =
-        AndroidNotificationDetails(
-      'assignment_channel',
-      'Assignment Notifications',
-      channelDescription: 'Channel for assignment notifications',
-      importance: Importance.max,
-      priority: Priority.high,
-      playSound: true,
-      sound:
-          RawResourceAndroidNotificationSound('assignment'), // <-- custom sound
-    );
-    const NotificationDetails platformDetails =
-        NotificationDetails(android: androidDetails);
-
-    await _localNotifications?.show(
-      id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-      title: 'New Task Assigned',
-      body: 'You have been assigned: $taskTitle',
-      notificationDetails: platformDetails,
-    );
-  }
-
-  @override
-  didChangeDependencies() {
-    super.didChangeDependencies();
-    _setupAssignmentListener();
-  }
-
-  // ==================== Helper Widgets ====================
 
   Widget _buildTab(IconData icon, String label) {
     return Tab(
@@ -303,7 +216,6 @@ class _TodoPageState extends State<TodoPage>
                       ? [
                           TodoListBody(
                             status: 'pending',
-                            onlySelf: true,
                             userEmail: _userEmail,
                             firestore: _firestore,
                             auth: _auth,
@@ -313,7 +225,6 @@ class _TodoPageState extends State<TodoPage>
                           ),
                           TodoListBody(
                             status: 'done',
-                            onlySelf: true,
                             userEmail: _userEmail,
                             firestore: _firestore,
                             auth: _auth,

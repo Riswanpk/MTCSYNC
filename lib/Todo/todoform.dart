@@ -11,7 +11,7 @@ import 'todo_widget_updater.dart'; // At the top
 import '../Misc/user_cache_service.dart';
 
 /// Returns the current 12 PM–12 PM IST window as [windowStart, windowEnd].
-List<DateTime> _getCurrentISTWindow() {
+List<DateTime> getCurrentISTWindow() {
   tz.initializeTimeZones();
   final ist = tz.getLocation('Asia/Kolkata');
   final nowIST = tz.TZDateTime.now(ist);
@@ -37,7 +37,7 @@ Future<void> _createDailyReportIfNeeded({
   required String documentId,
   required String type,
 }) async {
-  final window = _getCurrentISTWindow();
+  final window = getCurrentISTWindow();
   final existing = await FirebaseFirestore.instance
       .collection('daily_report')
       .where('userId', isEqualTo: userId)
@@ -75,56 +75,18 @@ class _TodoFormPageState extends State<TodoFormPage> {
   final TextEditingController _reminderController = TextEditingController();
   String _priority = 'High';
   bool _isSaving = false;
-
-  // For manager assignment
-  String? _currentUserRole;
-  String? _currentUserBranch;
-  List<Map<String, dynamic>> _salesUsers = [];
-  String? _selectedSalesUserId;
   TimeOfDay? _selectedReminderTime;
   DateTime? _selectedReminderDate;
 
   @override
   void initState() {
     super.initState();
-    _fetchCurrentUserRoleAndBranch();
     if (widget.docId != null) {
       _loadTodoForEdit(widget.docId!);
     }
     // Check for a draft when the form loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (widget.docId == null) _loadDraft();
-    });
-  }
-
-  Future<void> _fetchCurrentUserRoleAndBranch() async {
-    final cache = UserCacheService.instance;
-    await cache.ensureLoaded();
-    setState(() {
-      _currentUserRole = cache.role;
-      _currentUserBranch = cache.branch;
-    });
-    if (_currentUserRole == 'manager') {
-      _fetchSalesUsers();
-    }
-  }
-
-  Future<void> _fetchSalesUsers() async {
-    if (_currentUserBranch == null) return;
-    final query = await FirebaseFirestore.instance
-        .collection('users')
-        .where('role', isEqualTo: 'sales')
-        .where('branch', isEqualTo: _currentUserBranch)
-        .get();
-    setState(() {
-      _salesUsers = query.docs.map((doc) {
-        final data = doc.data();
-        return {
-          'uid': doc.id,
-          'username': data['username'] ?? data['email'] ?? 'Unknown',
-          'email': data['email'] ?? 'unknown@example.com',
-        };
-      }).toList();
     });
   }
 
@@ -164,7 +126,6 @@ class _TodoFormPageState extends State<TodoFormPage> {
       _titleController.text = data['title'] ?? '';
       _descController.text = data['description'] ?? '';
       _priority = data['priority'] ?? 'High';
-      _selectedSalesUserId = data['assigned_to']; // Retain assigned user
       if (data['reminder'] != null) {
         final reminderDate = DateTime.tryParse(data['reminder']);
         if (reminderDate != null) {
@@ -207,32 +168,10 @@ class _TodoFormPageState extends State<TodoFormPage> {
       return;
     }
 
-    String email = '';
-    String createdBy = user.uid;
-    String? assignedBy;
-    String? assignedTo;
-    String? assignedToName;
-    String? assignedByName;
-
-    if (_currentUserRole == 'manager' && _selectedSalesUserId != null) {
-      final salesUser = _salesUsers.firstWhere(
-        (u) => u['uid'] == _selectedSalesUserId,
-        orElse: () => {},
-      );
-      email = salesUser['email'] ?? '';
-      createdBy = user.uid;
-      assignedBy = user.uid;
-      final cache = UserCacheService.instance;
-      await cache.ensureLoaded();
-      assignedByName = cache.username ?? '';
-      assignedTo = salesUser['uid'];
-      assignedToName = salesUser['username'];
-    } else {
-      final cache = UserCacheService.instance;
-      await cache.ensureLoaded();
-      email = cache.email ?? user.email ?? 'unknown@example.com';
-      createdBy = user.uid;
-    }
+    final cache = UserCacheService.instance;
+    await cache.ensureLoaded();
+    final String email = cache.email ?? user.email ?? 'unknown@example.com';
+    final String createdBy = user.uid;
 
     // ✅ Reminder is always required now
     final scheduledDate = DateTime(
@@ -247,18 +186,12 @@ class _TodoFormPageState extends State<TodoFormPage> {
       // Update existing todo
       await FirebaseFirestore.instance.collection('todo').doc(widget.docId!).update({
         'title': title,
-        'userId': user.uid, // Add userId for daily_report
+        'userId': user.uid,
         'description': desc,
         'priority': _priority,
         'reminder': scheduledDate.toIso8601String(),
         'email': email,
         'created_by': createdBy,
-        'assigned_by': assignedBy,
-        'assigned_by_name': assignedByName,
-        'assigned_to': assignedTo,
-        'assigned_to_name': assignedToName,
-        if (assignedBy != null) 'assignment_seen': false,
-        // Optionally update other fields as needed
       });
 
       await _clearDraft();
@@ -270,12 +203,8 @@ class _TodoFormPageState extends State<TodoFormPage> {
         type: 'todo',
       );
 
-      // Reschedule notification if the reminder was changed
-      // Only schedule for self-assigned tasks
-      if (_currentUserRole != 'manager' || (_currentUserRole == 'manager' && (_selectedSalesUserId == null || _selectedSalesUserId == user.uid))) {
-        await AwesomeNotifications().cancel(widget.docId!.hashCode & 0x7FFFFFFF); // Cancel old one
-        await _scheduleNotification(scheduledDate, title, widget.docId!); // Schedule new one
-      }
+      await AwesomeNotifications().cancel(widget.docId!.hashCode & 0x7FFFFFFF);
+      await _scheduleNotification(scheduledDate, title, widget.docId!);
 
       await updateTodoWidgetFromFirestore(); // After saving/updating todo
 
@@ -291,12 +220,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
       'timestamp': FieldValue.serverTimestamp(),
       'email': email,
       'created_by': createdBy,
-      if (assignedBy != null) 'assigned_by': assignedBy,
-      if (assignedByName != null) 'assigned_by_name': assignedByName,
-      if (assignedTo != null) 'assigned_to': assignedTo,
-      if (assignedToName != null) 'assigned_to_name': assignedToName,
-      'reminder': scheduledDate.toIso8601String(), // 🔒 Always saved
-      if (assignedBy != null) 'assignment_seen': false,
+      'reminder': scheduledDate.toIso8601String(),
     });
 
     await _clearDraft();
@@ -308,10 +232,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
       type: 'todo',
     );
 
-    // 🔔 Only schedule notification if assigned to self
-    if (_currentUserRole != 'manager' || (_currentUserRole == 'manager' && (_selectedSalesUserId == null || _selectedSalesUserId == user.uid))) {
-      await _scheduleNotification(scheduledDate, title, todoRef.id);
-    }
+    await _scheduleNotification(scheduledDate, title, todoRef.id);
 
     await updateTodoWidgetFromFirestore(); // After saving/updating todo
 
@@ -328,7 +249,6 @@ class _TodoFormPageState extends State<TodoFormPage> {
       'description': _descController.text,
       'priority': _priority,
       'reminder': _reminderController.text,
-      'selectedSalesUserId': _selectedSalesUserId,
       'reminder_date': _selectedReminderDate?.toIso8601String(),
       'reminder_hour': _selectedReminderTime?.hour,
       'reminder_minute': _selectedReminderTime?.minute,
@@ -366,7 +286,6 @@ class _TodoFormPageState extends State<TodoFormPage> {
           _descController.text = draftData['description'] ?? '';
           _priority = draftData['priority'] ?? 'High';
           _reminderController.text = draftData['reminder'] ?? '';
-          _selectedSalesUserId = draftData['selectedSalesUserId'];
           if (draftData['reminder_date'] != null) {
             _selectedReminderDate = DateTime.tryParse(draftData['reminder_date']);
           }
@@ -469,36 +388,6 @@ class _TodoFormPageState extends State<TodoFormPage> {
                   hintStyle: TextStyle(color: isDark ? Colors.white38 : Colors.grey),
                 ),
               ),
-              if (_currentUserRole == 'manager')
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 18),
-                    const Text('Assign To', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<String>(
-                      value: _selectedSalesUserId,
-                      items: [
-                        DropdownMenuItem<String>(
-                          value: null,
-                          child: const Text('None (Assign to Myself)'),
-                        ),
-                        ..._salesUsers.map<DropdownMenuItem<String>>((user) => DropdownMenuItem<String>(
-                              value: user['uid'] as String,
-                              child: Text(user['username'] as String),
-                            )),
-                      ],
-                      onChanged: (val) {
-                        setState(() => _selectedSalesUserId = val);
-                        _saveDraft();
-                      },
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        hintText: 'Select Sales User',
-                      ),
-                    ),
-                  ],
-                ),
               const SizedBox(height: 18),
               Text('Priority', style: TextStyle(color: labelColor, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),

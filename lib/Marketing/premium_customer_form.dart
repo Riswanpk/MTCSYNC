@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
-import '../Misc/navigation_state.dart';
+import '../Navigation/navigation_state.dart';
 import 'image_upload_helper.dart';
 
 class PremiumCustomerForm extends StatefulWidget {

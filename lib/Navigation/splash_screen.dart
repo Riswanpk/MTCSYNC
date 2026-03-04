@@ -14,7 +14,7 @@ import '../Leads/presentfollowup.dart'; // For PresentFollowUp
 import '../Todo/todo.dart'; // For TodoPage and TaskDetailPageFromId
 import '../Marketing/marketing.dart'; // For MarketingFormPage
 import '../Misc/loading_page.dart'; // For LoadingOverlayPage
-import '../Misc/navigation_state.dart'; // For navigation state restoration
+import 'navigation_state.dart'; // For navigation state restoration
 import 'package:home_widget/home_widget.dart'; // For HomeWidget
 
 class SplashScreen extends StatefulWidget {

@@ -11,7 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'Misc/constant.dart';
 import 'login.dart';
 import 'home.dart';
-import 'Misc/splash_screen.dart';
+import 'Navigation/splash_screen.dart';
 import 'Misc/theme_notifier.dart'; // Now imports ThemeProvider
 import 'Misc/auth_wrapper.dart';
 import 'Leads/presentfollowup.dart';
