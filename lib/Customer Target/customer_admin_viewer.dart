@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'customer_target_admin.dart';
 import 'customer_target_export_page.dart'; // <-- Import the export page
 import 'package:provider/provider.dart';
+import '../Misc/user_cache_service.dart';
 import '../Misc/theme_notifier.dart';
 
 class CustomerAdminViewerPage extends StatefulWidget {
@@ -16,6 +17,7 @@ class CustomerAdminViewerPage extends StatefulWidget {
 }
 
 class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
+    String? _userRole;
   String? _selectedBranch;
   String? _selectedUserEmail;
   String? _selectedMonthYear; // <-- Add this
@@ -45,6 +47,16 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
   void initState() {
     super.initState();
     _selectedMonthYear = _monthYears.first;
+    _fetchUserRoleAndData();
+
+  }
+
+  Future<void> _fetchUserRoleAndData() async {
+    final cache = UserCacheService.instance;
+    await cache.ensureLoaded();
+    setState(() {
+      _userRole = cache.role;
+    });
     _fetchUsersAndBranches();
   }
 
@@ -148,28 +160,41 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
             backgroundColor: isDark ? primaryGreen : primaryBlue,
             iconTheme: const IconThemeData(color: Colors.white),
             actions: [
-              if (!widget.hideBranchDropdown && !widget.hideActions) ...[
-                IconButton(
-                  icon: const Icon(Icons.assignment_turned_in),
-                  tooltip: 'Assign Customer Target',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const CustomerTargetAdminPage()),
-                    );
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.download),
-                  tooltip: 'Export Customer Target',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const CustomerTargetExportPage()),
-                    );
-                  },
-                ),
-              ],
+                if (!widget.hideBranchDropdown && !widget.hideActions) ...[
+                  if (_userRole == 'admin') ...[
+                    IconButton(
+                      icon: const Icon(Icons.assignment_turned_in),
+                      tooltip: 'Assign Customer Target',
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const CustomerTargetAdminPage()),
+                        );
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.download),
+                      tooltip: 'Export Customer Target',
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const CustomerTargetExportPage()),
+                        );
+                      },
+                    ),
+                  ] else if (_userRole == 'sync_head') ...[
+                    IconButton(
+                      icon: const Icon(Icons.download),
+                      tooltip: 'Export Customer Target',
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const CustomerTargetExportPage()),
+                        );
+                      },
+                    ),
+                  ],
+                ],
             ],
           ),
           body: _loading
