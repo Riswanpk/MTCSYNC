@@ -156,7 +156,7 @@ class _SyncHeadTodosPageState extends State<SyncHeadTodosPage> {
   }
 
   Future<void> _pickDate() async {
-    final lastDate = _defaultDate();
+    final lastDate = _defaultDate().add(const Duration(days: 1));
     final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
