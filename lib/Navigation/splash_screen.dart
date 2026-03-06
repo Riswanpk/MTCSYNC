@@ -31,17 +31,45 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _widgetClickSub = HomeWidget.widgetClicked.listen((Uri? uri) {
-      print('Widget clicked! Navigating to TodoPage');
-      _openedFromWidget = true;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const TodoPage()),
-      );
-    });
+    // Listen for widget clicks when app is already running (warm start)
+    _widgetClickSub = HomeWidget.widgetClicked.listen(_handleWidgetClick);
+    // Check if the app was cold-started from a widget click
+    HomeWidget.initiallyLaunchedFromHomeWidget().then(_handleWidgetClick);
     // Delay permission request and navigation until after first frame (UI visible)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _requestPermissionsAndNavigate();
     });
+  }
+
+  void _handleWidgetClick(Uri? uri) {
+    if (!mounted || _openedFromWidget) return;
+    if (uri != null) {
+      print('Widget clicked! URI: $uri');
+      _openedFromWidget = true;
+
+      // Extract the path: "mtcsync://todo" or "mtcsync://todo/<docId>"
+      final pathSegments = uri.pathSegments;
+
+      // Push HomePage first so back button leads there
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const HomePage()),
+      );
+
+      // Then push TodoPage on top
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const TodoPage()),
+      );
+
+      // If a specific todo docId was provided, push its detail page on top
+      if (pathSegments.isNotEmpty) {
+        final docId = pathSegments.first;
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => TaskDetailPageFromId(docId: docId),
+          ),
+        );
+      }
+    }
   }
 
   @override

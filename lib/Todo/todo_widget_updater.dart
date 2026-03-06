@@ -12,12 +12,22 @@ Future<void> updateTodoWidgetFromFirestore() async {
       .where('status', isEqualTo: 'pending')
       .get();
 
-  final todos = snapshot.docs.map((doc) => doc['title'] as String).toList();
-  final todoText = todos.isNotEmpty ? todos.join('\n') : 'No todos';
+  final todoCount = snapshot.docs.isNotEmpty
+      ? '${snapshot.docs.length} tasks'
+      : '0 tasks';
 
-  await HomeWidget.saveWidgetData<String>('todo_list', todoText);
+  // Build structured data: "docId|||title\n\n\ndocId|||title..."
+  final todoItems = snapshot.docs
+      .map((doc) => '${doc.id}|||${doc['title'] as String}')
+      .join('\n\n\n');
+
+  await HomeWidget.saveWidgetData<String>('todo_count', todoCount);
+  await HomeWidget.saveWidgetData<String>(
+    'todo_items',
+    snapshot.docs.isNotEmpty ? todoItems : null,
+  );
   await HomeWidget.updateWidget(
-    name: 'HomeWidgetProvider',
-    iOSName: 'HomeWidgetProvider',
+    name: 'TodoWidgetProvider',
+    iOSName: 'TodoWidgetProvider',
   );
 }
