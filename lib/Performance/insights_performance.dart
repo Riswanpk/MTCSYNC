@@ -107,6 +107,7 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
 
       double totalSum = 0;
       int weekCount = 0;
+      double attendanceSum = 0, dressSum = 0, attitudeSum = 0, meetingSum = 0;
       for (final weekForms in weekMap.values) {
         int attendance = 20, dress = 20, attitude = 20, meeting = 10;
         for (var form in weekForms) {
@@ -131,9 +132,17 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
         if (meeting < 0) meeting = 0;
         int weekTotal = attendance + dress + attitude + meeting;
         totalSum += weekTotal;
+        attendanceSum += attendance;
+        dressSum += dress;
+        attitudeSum += attitude;
+        meetingSum += meeting;
         weekCount++;
       }
       double avgWeeklyMark = weekCount > 0 ? totalSum / weekCount : 0;
+      double avgAttendance = weekCount > 0 ? attendanceSum / weekCount : 0;
+      double avgDress = weekCount > 0 ? dressSum / weekCount : 0;
+      double avgAttitude = weekCount > 0 ? attitudeSum / weekCount : 0;
+      double avgMeeting = weekCount > 0 ? meetingSum / weekCount : 0;
 
       int perfMark = perfMarkByUser[user['id']] ?? 0;
       int bdaMark = bdaMarkByUser[user['id']] ?? 0;
@@ -147,6 +156,10 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
         perfMark: perfMark,
         bdaMark: bdaMark,
         percentage: percentage,
+        avgAttendance: avgAttendance.round(),
+        avgDress: avgDress.round(),
+        avgAttitude: avgAttitude.round(),
+        avgMeeting: avgMeeting.round(),
       ));
     }
     perfList.sort((a, b) => b.percentage.compareTo(a.percentage));
@@ -231,6 +244,10 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
                                     perfMark: user.perfMark,
                                     bdaMark: user.bdaMark,
                                     percentage: user.percentage,
+                                    avgAttendance: user.avgAttendance,
+                                    avgDress: user.avgDress,
+                                    avgAttitude: user.avgAttitude,
+                                    avgMeeting: user.avgMeeting,
                                   ),
                                 ),
                               );
@@ -286,6 +303,10 @@ class _UserPerf {
   final int perfMark;
   final int bdaMark;
   final double percentage;
+  final int avgAttendance;
+  final int avgDress;
+  final int avgAttitude;
+  final int avgMeeting;
 
   _UserPerf({
     required this.userId,
@@ -294,5 +315,9 @@ class _UserPerf {
     required this.perfMark,
     required this.bdaMark,
     required this.percentage,
+    required this.avgAttendance,
+    required this.avgDress,
+    required this.avgAttitude,
+    required this.avgMeeting,
   });
 }

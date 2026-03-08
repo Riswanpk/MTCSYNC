@@ -72,7 +72,8 @@ class _ExcelViewPerformancePageState extends State<ExcelViewPerformancePage>
     }
     setState(() {
       isLoadingUsers = false;
-      selectedUserId = usersInBranch.isNotEmpty ? usersInBranch.first : null;
+      // Remove auto-selection
+      selectedUserId = null;
     });
   }
 

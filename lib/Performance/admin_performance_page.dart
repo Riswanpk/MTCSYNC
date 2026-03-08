@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../Misc/user_cache_service.dart';
 
+// Theme colors (matching dashboard)
+const Color _primaryBlue = Color(0xFF005BAC);
+const Color _primaryGreen = Color(0xFF8CC63F);
+
 class AdminPerformancePage extends StatefulWidget {
   const AdminPerformancePage({Key? key}) : super(key: key);
 
@@ -9,7 +13,8 @@ class AdminPerformancePage extends StatefulWidget {
   State<AdminPerformancePage> createState() => _AdminPerformancePageState();
 }
 
-class _AdminPerformancePageState extends State<AdminPerformancePage> {
+class _AdminPerformancePageState extends State<AdminPerformancePage>
+    with SingleTickerProviderStateMixin {
   String? selectedBranch;
   String? selectedUserId;
   String? selectedDocId;
@@ -20,22 +25,41 @@ class _AdminPerformancePageState extends State<AdminPerformancePage> {
   List<Map<String, dynamic>> forms = [];
   List<DateTime> availableDates = [];
   bool isLoading = false;
+  bool isLoadingBranches = true;
+  bool isLoadingUsers = false;
+  late AnimationController _animController;
+  late Animation<double> _fadeIn;
 
   @override
   void initState() {
     super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _fadeIn = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     fetchBranches();
   }
 
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
+  }
+
   Future<void> fetchBranches() async {
+    setState(() => isLoadingBranches = true);
     final branchList = await UserCacheService.instance.getBranches();
     setState(() {
       branches = branchList.map((b) => {'branch': b}).toList();
+      isLoadingBranches = false;
     });
+    _animController.forward();
   }
 
   Future<void> fetchUsersForBranch(String branch) async {
     setState(() {
+      isLoadingUsers = true;
       users = [];
       selectedUserId = null;
       forms = [];
@@ -52,6 +76,8 @@ class _AdminPerformancePageState extends State<AdminPerformancePage> {
                 'username': doc.data()['username'] ?? doc.data()['email'] ?? 'User',
               })
           .toList();
+      isLoadingUsers = false;
+      // No auto-selection
     });
   }
 
@@ -142,10 +168,77 @@ class _AdminPerformancePageState extends State<AdminPerformancePage> {
     }
   }
 
+  static const _monthNames = [
+    '', 'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+
+  Widget _buildStyledDropdown<T>({
+    required T? value,
+    required String hint,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?> onChanged,
+    required bool isDark,
+    required Color cardColor,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: (isDark ? Colors.white : _primaryBlue).withOpacity(0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: (isDark ? Colors.white : _primaryBlue).withOpacity(0.12),
+        ),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          isExpanded: true,
+          hint: Text(
+            hint,
+            style: TextStyle(
+              fontSize: 14,
+              color: isDark ? Colors.white38 : Colors.black38,
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          borderRadius: BorderRadius.circular(14),
+          dropdownColor: cardColor,
+          icon: Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: isDark ? Colors.white54 : _primaryBlue,
+          ),
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: isDark ? Colors.white : const Color(0xFF1A1B22),
+          ),
+          items: items,
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDropdownLabel(String text, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: isDark ? Colors.white54 : Colors.black45,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? const Color(0xFF1A1B22) : const Color(0xFFF5F7FA);
+    final cardColor = isDark ? const Color(0xFF23242B) : Colors.white;
 
     // Get all months present in forms
     final monthsList = forms
@@ -156,164 +249,353 @@ class _AdminPerformancePageState extends State<AdminPerformancePage> {
         .toList()
       ..sort((a, b) => b.compareTo(a));
 
+    if (isLoadingBranches) {
+      return Scaffold(
+        backgroundColor: surfaceColor,
+        body: const Center(
+          child: CircularProgressIndicator(strokeWidth: 2.5),
+        ),
+      );
+    }
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Edit Daily Form Entry'),
-        backgroundColor: colorScheme.primary,
-        elevation: 1,
-      ),
-      backgroundColor: colorScheme.background,
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // --- First row: Branch & User ---
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    key: ValueKey('branch-$selectedBranch'),
-                    value: selectedBranch,
-                    items: branches
-                        .map((b) => DropdownMenuItem<String>(
-                              value: b['branch'],
-                              child: Text(b['branch'], style: theme.textTheme.bodyLarge),
-                            ))
-                        .toList(),
-                    onChanged: (val) {
-                      setState(() {
-                        selectedBranch = val;
-                        selectedUserId = null;
-                        forms = [];
-                        selectedDocId = null;
-                        selectedMonth = null;
-                        selectedDate = null;
-                        availableDates = [];
-                      });
-                      if (val != null) fetchUsersForBranch(val);
-                    },
-                    decoration: InputDecoration(
-                      labelText: 'Select Branch',
-                      filled: true,
-                      fillColor: colorScheme.surface,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
+      backgroundColor: surfaceColor,
+      body: FadeTransition(
+        opacity: _fadeIn,
+        child: CustomScrollView(
+          physics: const BouncingScrollPhysics(),
+          slivers: [
+            // ── Sliver App Bar ──
+            SliverAppBar(
+              expandedHeight: 120,
+              floating: false,
+              pinned: true,
+              elevation: 0,
+              backgroundColor: isDark ? const Color(0xFF1A1B22) : Colors.white,
+              surfaceTintColor: Colors.transparent,
+              leading: IconButton(
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: (isDark ? Colors.white : _primaryBlue).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: isDark ? Colors.white70 : _primaryBlue,
+                    size: 18,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    key: ValueKey('user-$selectedUserId'),
-                    value: selectedUserId,
-                    items: users
-                        .map((u) => DropdownMenuItem<String>(
-                              value: u['id'],
-                              child: Text(u['username'], style: theme.textTheme.bodyLarge),
-                            ))
-                        .toList(),
-                    onChanged: (val) {
-                      setState(() {
-                        selectedUserId = val;
-                        selectedMonth = null;
-                        selectedDate = null;
-                        availableDates = [];
-                        forms = [];
-                        selectedDocId = null;
-                      });
-                      if (val != null) fetchFormsForUser(val);
-                    },
-                    decoration: InputDecoration(
-                      labelText: 'Select User',
-                      filled: true,
-                      fillColor: colorScheme.surface,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
+                onPressed: () => Navigator.pop(context),
+              ),
+              flexibleSpace: FlexibleSpaceBar(
+                titlePadding: const EdgeInsets.only(left: 60, bottom: 16),
+                title: Text(
+                  'Edit Daily Form',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : const Color(0xFF1A1B22),
+                    letterSpacing: -0.3,
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // --- Second row: Month & Date ---
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<int>(
-                    key: ValueKey('month-$selectedMonth'),
-                    value: selectedMonth,
-                    items: monthsList
-                        .map((m) => DropdownMenuItem<int>(
-                              value: m,
-                              child: Text(
-                                "${m.toString().padLeft(2, '0')}",
-                                style: theme.textTheme.bodyLarge,
-                              ),
-                            ))
-                        .toList(),
-                    onChanged: (val) {
-                      setState(() {
-                        selectedMonth = val;
-                      });
-                      updateAvailableDates();
-                    },
-                    decoration: InputDecoration(
-                      labelText: 'Select Month',
-                      filled: true,
-                      fillColor: colorScheme.surface,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: DropdownButtonFormField<DateTime>(
-                    key: ValueKey('date-$selectedDate'),
-                    value: selectedDate,
-                    items: availableDates
-                        .map((d) => DropdownMenuItem<DateTime>(
-                              value: d,
-                              child: Text(
-                                "${d.day}", // Only show day number
-                                style: theme.textTheme.bodyLarge,
-                              ),
-                            ))
-                        .toList(),
-                    onChanged: (val) {
-                      setState(() {
-                        selectedDate = val;
-                        // Always update selectedDocId and force rebuild
-                        updateSelectedDocId();
-                      });
-                    },
-                    decoration: InputDecoration(
-                      labelText: 'Select Date',
-                      filled: true,
-                      fillColor: colorScheme.surface,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            if (selectedDocId != null)
-              Expanded(
-                key: ValueKey(selectedDocId), // <-- Add key to force rebuild when docId changes
-                child: Card(
-                  color: colorScheme.surface,
-                  elevation: 3,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: _AdminEditForm(
-                      form: forms.firstWhere((f) => f['docId'] == selectedDocId),
-                      docId: selectedDocId!,
-                      onSaved: () async {
-                        if (selectedUserId != null) await fetchFormsForUser(selectedUserId!);
-                      },
+                background: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: isDark
+                          ? [const Color(0xFF1A1B22), const Color(0xFF23242B)]
+                          : [Colors.white, const Color(0xFFF0F4FF)],
                     ),
                   ),
                 ),
               ),
+            ),
+
+            // ── Body ──
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  const SizedBox(height: 8),
+
+                  // ── Filter Card ──
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: cardColor,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isDark ? Colors.black26 : Colors.black.withOpacity(0.06),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Section header
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: _primaryBlue.withOpacity(isDark ? 0.2 : 0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                Icons.filter_list_rounded,
+                                color: isDark ? Colors.white70 : _primaryBlue,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Select Entry',
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                                color: isDark ? Colors.white : const Color(0xFF1A1B22),
+                                letterSpacing: -0.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Branch & User row
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildDropdownLabel('Branch', isDark),
+                                  _buildStyledDropdown<String>(
+                                    value: selectedBranch,
+                                    hint: 'Select Branch',
+                                    isDark: isDark,
+                                    cardColor: cardColor,
+                                    items: branches
+                                        .map((b) => DropdownMenuItem<String>(
+                                              value: b['branch'],
+                                              child: Row(
+                                                children: [
+                                                  Container(
+                                                    padding: const EdgeInsets.all(6),
+                                                    decoration: BoxDecoration(
+                                                      color: _primaryBlue.withOpacity(0.12),
+                                                      borderRadius: BorderRadius.circular(8),
+                                                    ),
+                                                    child: Icon(Icons.store_rounded, size: 16, color: _primaryBlue),
+                                                  ),
+                                                  const SizedBox(width: 10),
+                                                  Text(b['branch']),
+                                                ],
+                                              ),
+                                            ))
+                                        .toList(),
+                                    onChanged: (val) {
+                                      setState(() {
+                                        selectedBranch = val;
+                                        selectedUserId = null;
+                                        forms = [];
+                                        selectedDocId = null;
+                                        selectedMonth = null;
+                                        selectedDate = null;
+                                        availableDates = [];
+                                      });
+                                      if (val != null) fetchUsersForBranch(val);
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildDropdownLabel('Employee', isDark),
+                                  if (isLoadingUsers)
+                                    const Padding(
+                                      padding: EdgeInsets.all(12),
+                                      child: Center(child: CircularProgressIndicator(strokeWidth: 2.5)),
+                                    )
+                                  else
+                                    _buildStyledDropdown<String>(
+                                      value: selectedUserId,
+                                      hint: 'Select User',
+                                      isDark: isDark,
+                                      cardColor: cardColor,
+                                      items: users
+                                          .map((u) => DropdownMenuItem<String>(
+                                                value: u['id'],
+                                                child: Row(
+                                                  children: [
+                                                    CircleAvatar(
+                                                      radius: 14,
+                                                      backgroundColor: _primaryGreen.withOpacity(0.15),
+                                                      child: Text(
+                                                        (u['username'] ?? 'U').substring(0, 1).toUpperCase(),
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          fontWeight: FontWeight.w700,
+                                                          color: _primaryGreen,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 10),
+                                                    Flexible(child: Text(u['username'] ?? u['id'])),
+                                                  ],
+                                                ),
+                                              ))
+                                          .toList(),
+                                      onChanged: (val) {
+                                        setState(() {
+                                          selectedUserId = val;
+                                          selectedMonth = null;
+                                          selectedDate = null;
+                                          availableDates = [];
+                                          forms = [];
+                                          selectedDocId = null;
+                                        });
+                                        if (val != null) fetchFormsForUser(val);
+                                      },
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        // Month & Date row
+                        if (selectedUserId != null) ...[
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildDropdownLabel('Month', isDark),
+                                    _buildStyledDropdown<int>(
+                                      value: selectedMonth,
+                                      hint: 'Select Month',
+                                      isDark: isDark,
+                                      cardColor: cardColor,
+                                      items: monthsList
+                                          .map((m) => DropdownMenuItem<int>(
+                                                value: m,
+                                                child: Row(
+                                                  children: [
+                                                    Container(
+                                                      padding: const EdgeInsets.all(6),
+                                                      decoration: BoxDecoration(
+                                                        color: _primaryGreen.withOpacity(0.12),
+                                                        borderRadius: BorderRadius.circular(8),
+                                                      ),
+                                                      child: Icon(Icons.calendar_month_rounded, size: 16, color: _primaryGreen),
+                                                    ),
+                                                    const SizedBox(width: 10),
+                                                    Text(_monthNames[m]),
+                                                  ],
+                                                ),
+                                              ))
+                                          .toList(),
+                                      onChanged: (val) {
+                                        setState(() {
+                                          selectedMonth = val;
+                                        });
+                                        updateAvailableDates();
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildDropdownLabel('Date', isDark),
+                                    _buildStyledDropdown<DateTime>(
+                                      value: selectedDate,
+                                      hint: 'Select Date',
+                                      isDark: isDark,
+                                      cardColor: cardColor,
+                                      items: availableDates
+                                          .map((d) => DropdownMenuItem<DateTime>(
+                                                value: d,
+                                                child: Row(
+                                                  children: [
+                                                    Container(
+                                                      padding: const EdgeInsets.all(6),
+                                                      decoration: BoxDecoration(
+                                                        color: _primaryBlue.withOpacity(0.12),
+                                                        borderRadius: BorderRadius.circular(8),
+                                                      ),
+                                                      child: Icon(Icons.today_rounded, size: 16, color: _primaryBlue),
+                                                    ),
+                                                    const SizedBox(width: 10),
+                                                    Text('${d.day}/${d.month < 10 ? '0' : ''}${d.month}'),
+                                                  ],
+                                                ),
+                                              ))
+                                          .toList(),
+                                      onChanged: (val) {
+                                        setState(() {
+                                          selectedDate = val;
+                                          updateSelectedDocId();
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ── Form Section ──
+                  if (selectedDocId != null)
+                    Container(
+                      key: ValueKey(selectedDocId),
+                      decoration: BoxDecoration(
+                        color: cardColor,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: isDark ? Colors.black26 : Colors.black.withOpacity(0.06),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: _AdminEditForm(
+                          form: forms.firstWhere((f) => f['docId'] == selectedDocId),
+                          docId: selectedDocId!,
+                          onSaved: () async {
+                            if (selectedUserId != null) await fetchFormsForUser(selectedUserId!);
+                          },
+                        ),
+                      ),
+                    ),
+
+                  const SizedBox(height: 32),
+                ]),
+              ),
+            ),
           ],
         ),
       ),
@@ -483,10 +765,46 @@ class _AdminEditFormState extends State<_AdminEditForm> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isApprovedLeave = attendanceStatus == 'approved';
     final isUnapprovedLeave = attendanceStatus == 'notApproved';
+
+    Widget sectionHeader(String title, IconData icon, Color accentColor) {
+      return Container(
+        margin: const EdgeInsets.only(top: 8, bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isDark
+                ? [accentColor.withOpacity(0.15), Colors.transparent]
+                : [accentColor.withOpacity(0.08), Colors.transparent],
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: accentColor, size: 18),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              title,
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
+                color: isDark ? Colors.white : const Color(0xFF1A1B22),
+                letterSpacing: -0.1,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return SingleChildScrollView(
       child: Padding(
@@ -494,58 +812,46 @@ class _AdminEditFormState extends State<_AdminEditForm> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Attendance (never disable these)
-            Text(
-              'Attendance',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.secondary,
-              ),
-            ),
+            // Attendance
+            sectionHeader('Attendance', Icons.access_time_rounded, const Color(0xFF4A90D9)),
             RadioListTile<String>(
               title: const Text('Punching time'),
               value: 'punching',
               groupValue: attendanceStatus,
               onChanged: (val) => setState(() => attendanceStatus = val!),
-              activeColor: colorScheme.primary,
+              activeColor: _primaryBlue,
             ),
             RadioListTile<String>(
               title: const Text('Late time'),
               value: 'late',
               groupValue: attendanceStatus,
               onChanged: (val) => setState(() => attendanceStatus = val!),
-              activeColor: colorScheme.primary,
+              activeColor: _primaryBlue,
             ),
             RadioListTile<String>(
               title: const Text('Approved leave'),
               value: 'approved',
               groupValue: attendanceStatus,
               onChanged: (val) => setState(() => attendanceStatus = val!),
-              activeColor: colorScheme.primary,
+              activeColor: _primaryBlue,
             ),
             RadioListTile<String>(
               title: const Text('Not Approved'),
               value: 'notApproved',
               groupValue: attendanceStatus,
               onChanged: (val) => setState(() => attendanceStatus = val!),
-              activeColor: colorScheme.primary,
+              activeColor: _primaryBlue,
             ),
-            Divider(color: theme.dividerColor),
+
             // Dress Code
-            Text(
-              'Dress Code',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.secondary,
-              ),
-            ),
+            sectionHeader('Dress Code', Icons.checkroom_rounded, _primaryGreen),
             CheckboxListTile(
               title: const Text('Wear clean uniform'),
               value: cleanUniform,
               onChanged: (isApprovedLeave || isUnapprovedLeave)
                   ? null
                   : (val) => setState(() => cleanUniform = val!),
-              activeColor: colorScheme.primary,
+              activeColor: _primaryGreen,
             ),
             CheckboxListTile(
               title: const Text('Keep inside'),
@@ -553,7 +859,7 @@ class _AdminEditFormState extends State<_AdminEditForm> {
               onChanged: (isApprovedLeave || isUnapprovedLeave)
                   ? null
                   : (val) => setState(() => keepInside = val!),
-              activeColor: colorScheme.primary,
+              activeColor: _primaryGreen,
             ),
             CheckboxListTile(
               title: const Text('Keep your hair neat'),
@@ -561,17 +867,11 @@ class _AdminEditFormState extends State<_AdminEditForm> {
               onChanged: (isApprovedLeave || isUnapprovedLeave)
                   ? null
                   : (val) => setState(() => neatHair = val!),
-              activeColor: colorScheme.primary,
+              activeColor: _primaryGreen,
             ),
-            Divider(color: theme.dividerColor),
+
             // Attitude
-            Text(
-              'Attitude',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.secondary,
-              ),
-            ),
+            sectionHeader('Attitude', Icons.emoji_emotions_rounded, const Color(0xFFFFA726)),
             _attitudeAdminRow(
               label: 'Greet with a warm smile',
               value: greetSmile,
@@ -640,17 +940,11 @@ class _AdminEditFormState extends State<_AdminEditForm> {
             ),
             TextFormField(
               controller: offerHelpReasonController,
-              decoration: InputDecoration(labelText: 'Reason'),
+              decoration: const InputDecoration(labelText: 'Reason'),
             ),
-            Divider(color: theme.dividerColor),
+
             // Meeting
-            Text(
-              'Meeting',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.secondary,
-              ),
-            ),
+            sectionHeader('Meeting', Icons.groups_rounded, const Color(0xFFEF5350)),
             Row(
               children: [
                 Checkbox(
@@ -668,7 +962,7 @@ class _AdminEditFormState extends State<_AdminEditForm> {
                             }
                           });
                         },
-                  activeColor: colorScheme.primary,
+                  activeColor: _primaryBlue,
                 ),
                 const Text('Attended'),
                 const SizedBox(width: 24),
@@ -687,20 +981,14 @@ class _AdminEditFormState extends State<_AdminEditForm> {
                             }
                           });
                         },
-                  activeColor: colorScheme.primary,
+                  activeColor: _primaryBlue,
                 ),
                 const Text('No meeting conducted'),
               ],
             ),
-            Divider(color: theme.dividerColor),
+            Divider(color: isDark ? Colors.white12 : Colors.black12),
             // New questions
-            Text(
-              'Time Taken for Other Tasks (min)',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.secondary,
-              ),
-            ),
+            sectionHeader('Additional Questions', Icons.list_alt_rounded, _primaryBlue),
             TextFormField(
               controller: timeTakenOtherTasksController,
               keyboardType: TextInputType.number,
@@ -712,7 +1000,7 @@ class _AdminEditFormState extends State<_AdminEditForm> {
               onChanged: (isApprovedLeave || isUnapprovedLeave)
                   ? null
                   : (val) => setState(() => oldStockOfferGiven = val ?? false),
-              activeColor: colorScheme.primary,
+              activeColor: _primaryGreen,
             ),
             if (oldStockOfferGiven)
               Padding(
@@ -732,7 +1020,7 @@ class _AdminEditFormState extends State<_AdminEditForm> {
               onChanged: (isApprovedLeave || isUnapprovedLeave)
                   ? null
                   : (val) => setState(() => crossSellingUpselling = val ?? false),
-              activeColor: colorScheme.primary,
+              activeColor: _primaryGreen,
             ),
             CheckboxListTile(
               title: const Text('Product Complaints?'),
@@ -740,7 +1028,7 @@ class _AdminEditFormState extends State<_AdminEditForm> {
               onChanged: (isApprovedLeave || isUnapprovedLeave)
                   ? null
                   : (val) => setState(() => productComplaints = val ?? false),
-              activeColor: colorScheme.primary,
+              activeColor: _primaryGreen,
             ),
             CheckboxListTile(
               title: const Text('Achieved Daily Target?'),
@@ -748,19 +1036,45 @@ class _AdminEditFormState extends State<_AdminEditForm> {
               onChanged: (isApprovedLeave || isUnapprovedLeave)
                   ? null
                   : (val) => setState(() => achievedDailyTarget = val ?? false),
-              activeColor: colorScheme.primary,
+              activeColor: _primaryGreen,
             ),
+            const SizedBox(height: 16),
             Center(
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: colorScheme.primary,
-                  foregroundColor: colorScheme.onPrimary,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              child: Container(
+                width: double.infinity,
+                height: 50,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF66BB6A), Color(0xFF2E7D32)],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _primaryGreen.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
-                onPressed: save,
-                child: const Text('Save Changes'),
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: save,
+                  child: const Text(
+                    'Save Changes',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
               ),
             ),
+            const SizedBox(height: 16),
           ],
         ),
       ),

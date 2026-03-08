@@ -10,6 +10,10 @@ class InsightsDetailViewerPage extends StatefulWidget {
   final int perfMark;
   final int bdaMark;
   final double percentage;
+  final int avgAttendance;
+  final int avgDress;
+  final int avgAttitude;
+  final int avgMeeting;
 
   const InsightsDetailViewerPage({
     required this.userId,
@@ -18,6 +22,10 @@ class InsightsDetailViewerPage extends StatefulWidget {
     required this.perfMark,
     required this.bdaMark,
     required this.percentage,
+    required this.avgAttendance,
+    required this.avgDress,
+    required this.avgAttitude,
+    required this.avgMeeting,
   });
 
   @override
@@ -41,9 +49,12 @@ class _InsightsDetailViewerPageState extends State<InsightsDetailViewerPage> {
     final monthLabel = '${monthNames[prevMonth - 1]} $prevMonthYear';
 
     final bars = [
-      _BarData('Daily Form Avg', widget.avgWeeklyMark, 70, _primaryBlue),
-      _BarData('Performance', widget.perfMark, 30, Colors.orange),
-      _BarData('BDA', widget.bdaMark, 20, _primaryGreen),
+      _BarData('Attendance', widget.avgAttendance, 20, Colors.blue),
+      _BarData('Dress Code', widget.avgDress, 20, Colors.green),
+      _BarData('Attitude', widget.avgAttitude, 20, Colors.orange),
+      _BarData('Meeting', widget.avgMeeting, 10, Colors.purple),
+      _BarData('Performance', widget.perfMark, 30, Colors.red),
+      _BarData('BDA', widget.bdaMark, 20, Colors.teal),
     ];
 
     return Scaffold(
