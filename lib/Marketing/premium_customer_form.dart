@@ -89,7 +89,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
   void initState() {
     super.initState();
     _shopNameController = TextEditingController();
-    _phoneNoController = TextEditingController();
+    _phoneNoController = TextEditingController(text: '+91 ');
     _currentEnquiriesController = TextEditingController();
     _confirmedOrderController = TextEditingController();
     _upcomingEventDetailsController = TextEditingController();
@@ -161,7 +161,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
       if (!mounted) return;
       setState(() {
         _shopNameController.text = draftData['shopName'] ?? '';
-        _phoneNoController.text = draftData['phoneNo'] ?? '';
+        _phoneNoController.text = _formatIndianPhone(draftData['phoneNo'] ?? '');
         lastItemPurchasedDate = draftData['lastItemPurchasedDate'] != null ? DateTime.parse(draftData['lastItemPurchasedDate']) : null;
         _currentEnquiriesController.text = draftData['currentEnquiries'] ?? '';
         _confirmedOrderController.text = draftData['confirmedOrder'] ?? '';
@@ -189,6 +189,15 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
     await prefs.remove(PremiumCustomerForm.DRAFT_KEY);
   }
 
+  String _formatIndianPhone(String raw) {
+    final digits = RegExp(r'\d').allMatches(raw).map((m) => m.group(0)).join();
+    if (digits.length >= 10) {
+      final tenDigits = digits.substring(digits.length - 10);
+      return '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
+    }
+    return '+91 ';
+  }
+
   Future<void> _submitForm() async {
     // Update state variables from controllers before validation
     shopName = _shopNameController.text;
@@ -208,7 +217,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
     // Validate all fields manually
     setState(() {
       _shopNameError = shopName.trim().isEmpty;
-      _phoneNoError = phoneNo.trim().isEmpty || phoneNo.trim().length != 10;
+      _phoneNoError = phoneNo.replaceAll(RegExp(r'\D'), '').length != 12;
       _currentEnquiriesError = currentEnquiries.trim().isEmpty;
       _confirmedOrderError = confirmedOrder.trim().isEmpty;
       _photoError = _imageFile == null;
@@ -289,7 +298,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
         newProductSuggestion = '';
 
         _shopNameController.clear();
-        _phoneNoController.clear();
+        _phoneNoController.text = '+91 ';
         _currentEnquiriesController.clear();
         _confirmedOrderController.clear();
         _upcomingEventDetailsController.clear();
@@ -427,18 +436,73 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                         decoration: _inputDecoration(
                           'Phone Number',
                           error: _phoneNoError,
-                          errorText: 'Phone number must be 10 digits',
+                          errorText: 'Enter a valid 10-digit number after +91',
+                        ).copyWith(
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.paste),
+                            tooltip: 'Paste from clipboard',
+                            onPressed: () async {
+                              final clipboardData =
+                                  await Clipboard.getData('text/plain');
+                              if (clipboardData?.text != null) {
+                                final formatted =
+                                    _formatIndianPhone(clipboardData!.text!);
+                                if (formatted != '+91 ') {
+                                  setState(() {
+                                    _phoneNoController.text = formatted;
+                                    _phoneNoController.selection =
+                                        TextSelection.fromPosition(
+                                      TextPosition(offset: formatted.length),
+                                    );
+                                    phoneNo = formatted;
+                                    _phoneNoError = false;
+                                  });
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content: Text(
+                                            'Clipboard does not contain a valid 10-digit number')),
+                                  );
+                                }
+                              }
+                            },
+                          ),
                         ),
                         keyboardType: TextInputType.phone,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(10),
-                        ],
-                        onChanged: (v) {
+                        onChanged: (val) {
+                          if (!val.startsWith('+91 ')) {
+                            _phoneNoController.text = '+91 ';
+                            _phoneNoController.selection =
+                                TextSelection.fromPosition(
+                              TextPosition(
+                                  offset: _phoneNoController.text.length),
+                            );
+                            setState(() => phoneNo = '+91 ');
+                            return;
+                          }
+                          String raw =
+                              val.replaceAll('+91 ', '').replaceAll(' ', '');
+                          if (raw.length > 10) raw = raw.substring(0, 10);
+                          String formatted = raw.length > 5
+                              ? '+91 ${raw.substring(0, 5)} ${raw.substring(5)}'
+                              : '+91 $raw';
+                          if (_phoneNoController.text != formatted) {
+                            _phoneNoController.text = formatted;
+                            _phoneNoController.selection =
+                                TextSelection.fromPosition(
+                              TextPosition(offset: formatted.length),
+                            );
+                          }
                           _saveDraft();
                           setState(() {
-                            phoneNo = v;
-                            if (v.trim().length == 10) _phoneNoError = false;
+                            phoneNo = formatted;
+                            if (_phoneNoError &&
+                                formatted
+                                        .replaceAll(RegExp(r'\D'), '')
+                                        .length ==
+                                    12) {
+                              _phoneNoError = false;
+                            }
                           });
                         },
                       ),

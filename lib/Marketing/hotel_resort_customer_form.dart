@@ -179,7 +179,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
     _firmNameController = TextEditingController();
     _placeController = TextEditingController();
     _contactPersonController = TextEditingController();
-    _contactNumberController = TextEditingController();
+    _contactNumberController = TextEditingController(text: '+91 ');
     _currentEnquiryController = TextEditingController();
     _confirmedOrderController = TextEditingController();
     _newProductSuggestionController = TextEditingController();
@@ -258,7 +258,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
         _firmNameController.text = draftData['firmName'] ?? '';
         _placeController.text = draftData['place'] ?? '';
         _contactPersonController.text = draftData['contactPerson'] ?? '';
-        _contactNumberController.text = draftData['contactNumber'] ?? '';
+        _contactNumberController.text = _formatIndianPhone(draftData['contactNumber'] ?? '');
         category = draftData['category'] ?? '';
         _customCategoryController.text = draftData['customCategory'] ?? '';
         _currentEnquiryController.text = draftData['currentEnquiry'] ?? '';
@@ -287,6 +287,15 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
     await prefs.remove(HotelResortCustomerForm.DRAFT_KEY);
   }
 
+  String _formatIndianPhone(String raw) {
+    final digits = RegExp(r'\d').allMatches(raw).map((m) => m.group(0)).join();
+    if (digits.length >= 10) {
+      final tenDigits = digits.substring(digits.length - 10);
+      return '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
+    }
+    return '+91 ';
+  }
+
   Future<void> _submitForm() async {
     // Update state variables from controllers before validation
     firmName = _firmNameController.text;
@@ -308,7 +317,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
     setState(() {
       _firmNameError = firmName.trim().isEmpty;
       _placeError = place.trim().isEmpty;
-      _contactNumberError = contactNumber.trim().isEmpty || contactNumber.length != 10;
+      _contactNumberError = contactNumber.replaceAll(RegExp(r'\D'), '').length != 12;
       _categoryError = category.isEmpty; // This was already here, but ensure it's not affected by date removal
       _customCategoryError = category == 'OTHERS' && customCategory.trim().isEmpty; // <-- Add this line
       _currentEnquiryError = currentEnquiry.trim().isEmpty; // This was already here, but ensure it's not affected by date removal
@@ -396,7 +405,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
         _firmNameController.clear();
         _placeController.clear();
         _contactPersonController.clear();
-        _contactNumberController.clear();
+        _contactNumberController.text = '+91 ';
         _currentEnquiryController.clear();
         _confirmedOrderController.clear();
         _newProductSuggestionController.clear();
@@ -473,20 +482,93 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                       controller: _contactPersonController,
                       onChanged: (v) => contactPerson = v,
                     ),
-                    _buildTextField(
-                      label: 'CONTACT NUMBER',
-                      controller: _contactNumberController,
-                      required: true,
-                      keyboardType: TextInputType.phone,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(10),
-                      ],
-                      error: _contactNumberError,
-                      errorText: contactNumber.isEmpty
-                          ? 'Enter phone number'
-                          : (contactNumber.length != 10 ? 'Phone number must be 10 digits' : null),
-                      onChanged: (v) => contactNumber = v,
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: const Color.fromARGB(255, 255, 255, 255),
+                        borderRadius: const BorderRadius.only(
+                          topRight: Radius.circular(22),
+                          bottomLeft: Radius.circular(22),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black12,
+                            blurRadius: 6,
+                            offset: const Offset(2, 3),
+                          ),
+                        ],
+                      ),
+                      child: TextFormField(
+                        controller: _contactNumberController,
+                        keyboardType: TextInputType.phone,
+                        decoration: _inputDecoration(
+                          'CONTACT NUMBER',
+                          required: true,
+                          error: _contactNumberError,
+                          errorText: 'Enter a valid 10-digit number',
+                        ).copyWith(
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.paste),
+                            tooltip: 'Paste from clipboard',
+                            onPressed: () async {
+                              final clipboardData = await Clipboard.getData('text/plain');
+                              if (clipboardData?.text != null) {
+                                final formatted = _formatIndianPhone(clipboardData!.text!);
+                                if (formatted != '+91 ') {
+                                  setState(() {
+                                    _contactNumberController.text = formatted;
+                                    _contactNumberController.selection =
+                                        TextSelection.fromPosition(
+                                      TextPosition(offset: formatted.length),
+                                    );
+                                    contactNumber = formatted;
+                                    _contactNumberError = false;
+                                  });
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content: Text(
+                                            'Clipboard does not contain a valid 10-digit number')),
+                                  );
+                                }
+                              }
+                            },
+                          ),
+                        ),
+                        onChanged: (val) {
+                          if (!val.startsWith('+91 ')) {
+                            _contactNumberController.text = '+91 ';
+                            _contactNumberController.selection =
+                                TextSelection.fromPosition(
+                              TextPosition(
+                                  offset: _contactNumberController.text.length),
+                            );
+                            contactNumber = '+91 ';
+                            return;
+                          }
+                          String raw =
+                              val.replaceAll('+91 ', '').replaceAll(' ', '');
+                          if (raw.length > 10) raw = raw.substring(0, 10);
+                          String formatted = raw.length > 5
+                              ? '+91 ${raw.substring(0, 5)} ${raw.substring(5)}'
+                              : '+91 $raw';
+                          if (_contactNumberController.text != formatted) {
+                            _contactNumberController.text = formatted;
+                            _contactNumberController.selection =
+                                TextSelection.fromPosition(
+                              TextPosition(offset: formatted.length),
+                            );
+                          }
+                          contactNumber = formatted;
+                          _saveDraft();
+                          if (_contactNumberError) {
+                            setState(() {
+                              _contactNumberError =
+                                  formatted.replaceAll(RegExp(r'\D'), '').length != 12;
+                            });
+                          }
+                        },
+                      ),
                     ),
 
                     // CATEGORY

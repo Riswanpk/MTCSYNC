@@ -98,7 +98,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
     super.initState();
     _shopNameController = TextEditingController();
     _placeController = TextEditingController();
-    _phoneNoController = TextEditingController();
+    _phoneNoController = TextEditingController(text: '+91 ');
     _customNatureOfBusinessController = TextEditingController();
     _currentEnquiriesController = TextEditingController();
     _confirmedOrderController = TextEditingController();
@@ -170,7 +170,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
       setState(() {
         _shopNameController.text = draftData['shopName'] ?? '';
         _placeController.text = draftData['place'] ?? '';
-        _phoneNoController.text = draftData['phoneNo'] ?? '';
+        _phoneNoController.text = _formatIndianPhone(draftData['phoneNo'] ?? '');
         natureOfBusiness = draftData['natureOfBusiness'] ?? '';
         _customNatureOfBusinessController.text = draftData['customNatureOfBusiness'] ?? '';
         _currentEnquiriesController.text = draftData['currentEnquiries'] ?? '';
@@ -195,6 +195,15 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
   Future<void> _clearDraft() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(GeneralCustomerForm.DRAFT_KEY);
+  }
+
+  String _formatIndianPhone(String raw) {
+    final digits = RegExp(r'\d').allMatches(raw).map((m) => m.group(0)).join();
+    if (digits.length >= 10) {
+      final tenDigits = digits.substring(digits.length - 10);
+      return '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
+    }
+    return '+91 ';
   }
 
   Future<void> _submitForm() async {
@@ -271,7 +280,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
         customNatureOfBusiness = '';
         _shopNameController.clear();
         _placeController.clear();
-        _phoneNoController.clear();
+        _phoneNoController.text = '+91 ';
         _customNatureOfBusinessController.clear();
         _currentEnquiriesController.clear();
         _confirmedOrderController.clear();
@@ -420,18 +429,62 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                       ),
                       child: TextFormField(
                         controller: _phoneNoController,
-                        decoration: _inputDecoration('PHONE NO', required: true),
+                        decoration: _inputDecoration('PHONE NO', required: true).copyWith(
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.paste),
+                            tooltip: 'Paste from clipboard',
+                            onPressed: () async {
+                              final clipboardData = await Clipboard.getData('text/plain');
+                              if (clipboardData?.text != null) {
+                                final formatted = _formatIndianPhone(clipboardData!.text!);
+                                if (formatted != '+91 ') {
+                                  setState(() {
+                                    _phoneNoController.text = formatted;
+                                    _phoneNoController.selection =
+                                        TextSelection.fromPosition(
+                                      TextPosition(offset: formatted.length),
+                                    );
+                                  });
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content: Text('Clipboard does not contain a valid 10-digit number')),
+                                  );
+                                }
+                              }
+                            },
+                          ),
+                        ),
                         keyboardType: TextInputType.phone,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(10),
-                        ],
                         validator: (v) {
-                          if (v == null || v.isEmpty) return 'Enter phone number';
-                          if (v.length != 10) return 'Phone number must be 10 digits';
+                          if (v == null || v.trim() == '+91 ' || v.trim().isEmpty) {
+                            return 'Enter phone number';
+                          }
+                          final digits = v.replaceAll(RegExp(r'\D'), '');
+                          if (digits.length != 12) return 'Enter a valid 10-digit number after +91';
                           return null;
                         },
-                        onChanged: (v) => _saveDraft(),
+                        onChanged: (val) {
+                          _saveDraft();
+                          if (!val.startsWith('+91 ')) {
+                            _phoneNoController.text = '+91 ';
+                            _phoneNoController.selection = TextSelection.fromPosition(
+                              TextPosition(offset: _phoneNoController.text.length),
+                            );
+                            return;
+                          }
+                          String raw = val.replaceAll('+91 ', '').replaceAll(' ', '');
+                          if (raw.length > 10) raw = raw.substring(0, 10);
+                          String formatted = raw.length > 5
+                              ? '+91 ${raw.substring(0, 5)} ${raw.substring(5)}'
+                              : '+91 $raw';
+                          if (_phoneNoController.text != formatted) {
+                            _phoneNoController.text = formatted;
+                            _phoneNoController.selection = TextSelection.fromPosition(
+                              TextPosition(offset: formatted.length),
+                            );
+                          }
+                        },
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -496,6 +549,16 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                         RadioListTile<String>(
                           title: const Text('AUDITORIUM & HALLS', style: TextStyle(fontFamily: 'Electorize')),
                           value: 'AUDITORIUM & HALLS',
+                          groupValue: natureOfBusiness,
+                          onChanged: (v) => setState(() {
+                            natureOfBusiness = v ?? '';
+                            customNatureOfBusiness = '';
+                            _saveDraft();
+                          }),
+                        ),
+                        RadioListTile<String>(
+                          title: const Text('DECORATION', style: TextStyle(fontFamily: 'Electorize')),
+                          value: 'DECORATION',
                           groupValue: natureOfBusiness,
                           onChanged: (v) => setState(() {
                             natureOfBusiness = v ?? '';
