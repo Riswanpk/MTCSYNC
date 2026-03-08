@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../Misc/user_cache_service.dart';
 import 'package:mtcsync/Performance/insights_detail_viewer.dart';
 
 class InsightsPerformancePage extends StatefulWidget {
@@ -22,14 +23,9 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
 
   Future<void> fetchBranches() async {
     setState(() { isLoadingBranches = true; });
-    final snap = await FirebaseFirestore.instance.collection('users').get();
-    final branchSet = <String>{};
-    for (var doc in snap.docs) {
-      final branch = doc.data()['branch'];
-      if (branch != null) branchSet.add(branch);
-    }
+    final cachedBranches = await UserCacheService.instance.getBranches();
     setState(() {
-      branches = branchSet.toList()..sort();
+      branches = cachedBranches;
       isLoadingBranches = false;
     });
   }
@@ -58,15 +54,42 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
     final perfYear = now.year;
 
     List<_UserPerf> perfList = [];
+
+    // Batch fetch: get all dailyforms for the timestamp range at once
+    final allFormsSnap = await FirebaseFirestore.instance
+        .collection('dailyform')
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
+        .where('timestamp', isLessThan: Timestamp.fromDate(monthEnd))
+        .get();
+
+    // Group forms by userId
+    final formsByUser = <String, List<Map<String, dynamic>>>{};
+    for (final doc in allFormsSnap.docs) {
+      final data = doc.data();
+      final userId = data['userId'] as String?;
+      if (userId == null) continue;
+      formsByUser.putIfAbsent(userId, () => []);
+      formsByUser[userId]!.add(data);
+    }
+
+    // Batch fetch: get all performance marks for current month at once
+    final allPerfSnap = await FirebaseFirestore.instance
+        .collection('performance_mark')
+        .where('month', isEqualTo: perfMonth)
+        .where('year', isEqualTo: perfYear)
+        .get();
+
+    // Map userId to performance mark
+    final perfMarkByUser = <String, int>{};
+    for (final doc in allPerfSnap.docs) {
+      final data = doc.data();
+      final userId = data['userId'] as String?;
+      if (userId == null) continue;
+      perfMarkByUser[userId] = data['score'] is int ? data['score'] : 0;
+    }
+
     for (final user in users) {
-      // Fetch dailyforms for previous month
-      final formsSnap = await FirebaseFirestore.instance
-          .collection('dailyform')
-          .where('userId', isEqualTo: user['id'])
-          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
-          .where('timestamp', isLessThan: Timestamp.fromDate(monthEnd))
-          .get();
-      final forms = formsSnap.docs.map((doc) => doc.data() as Map<String, dynamic>).toList();
+      final forms = formsByUser[user['id']] ?? [];
 
       // Group forms by week
       Map<int, List<Map<String, dynamic>>> weekMap = {};
@@ -108,18 +131,7 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
       }
       double avgWeeklyMark = weekCount > 0 ? totalSum / weekCount : 0;
 
-      // Fetch performance mark for current month (out of 30)
-      final perfSnap = await FirebaseFirestore.instance
-          .collection('performance_mark')
-          .where('userId', isEqualTo: user['id'])
-          .where('month', isEqualTo: perfMonth)
-          .where('year', isEqualTo: perfYear)
-          .get();
-      int perfMark = 0;
-      if (perfSnap.docs.isNotEmpty) {
-        final data = perfSnap.docs.first.data();
-        perfMark = data['score'] is int ? data['score'] : 0;
-      }
+      int perfMark = perfMarkByUser[user['id']] ?? 0;
 
       int total = avgWeeklyMark.round() + perfMark;
       perfList.add(_UserPerf(

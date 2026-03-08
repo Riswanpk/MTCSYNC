@@ -489,17 +489,27 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
       ];
       final List<Map<String, String>> results = [];
 
+      // Parallelize: fetch all 3 months at once instead of sequentially
+      final futures = <Future<DocumentSnapshot>>[];
+      final monthYears = <String>[];
       for (int i = 1; i <= 3; i++) {
         final prev = DateTime(now.year, now.month - i, 1);
         final monthYear = "${months[prev.month - 1]} ${prev.year}";
-        final doc = await FirebaseFirestore.instance
+        monthYears.add(monthYear);
+        futures.add(FirebaseFirestore.instance
             .collection('customer_target')
             .doc(monthYear)
             .collection('users')
             .doc(user.email)
-            .get();
-        if (doc.exists && doc.data()?['customers'] != null) {
-          final List customerList = doc.data()!['customers'];
+            .get());
+      }
+      final docs = await Future.wait(futures);
+
+      for (int i = 0; i < docs.length; i++) {
+        final doc = docs[i];
+        final monthYear = monthYears[i];
+        if (doc.exists && doc.data() != null && (doc.data() as Map<String, dynamic>)['customers'] != null) {
+          final List customerList = (doc.data() as Map<String, dynamic>)['customers'];
           dynamic prevCustomer;
           if (contact1 != null && contact1.isNotEmpty) {
             prevCustomer = customerList.firstWhere(

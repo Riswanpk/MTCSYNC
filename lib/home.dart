@@ -38,6 +38,7 @@ class _HomePageState extends State<HomePage>
   int _logoTapCount = 0;
   List<Contact>? _cachedContacts;
   bool _contactsLoaded = false;
+  DateTime? _lastTodoWarningCheck;
 
   final _userCache = UserCacheService.instance;
 
@@ -226,6 +227,11 @@ class _HomePageState extends State<HomePage>
   }
 
   Future<void> _checkTodoWarning() async {
+    // Debounce: skip if checked less than 2 minutes ago
+    if (_lastTodoWarningCheck != null &&
+        DateTime.now().difference(_lastTodoWarningCheck!) < const Duration(minutes: 2)) {
+      return;
+    }
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
@@ -249,6 +255,7 @@ class _HomePageState extends State<HomePage>
         .where('timestamp', isLessThan: Timestamp.fromDate(windowEnd))
         .get();
 
+    _lastTodoWarningCheck = DateTime.now();
     setState(() => _showTodoWarning = todosSnapshot.docs.isEmpty);
   }
 
@@ -264,6 +271,7 @@ class _HomePageState extends State<HomePage>
         .collection('todo')
         .where('email', isEqualTo: user.email)
         .where('status', isEqualTo: 'pending')
+        .limit(20)
         .get();
 
     bool hasOverdueTask = false;

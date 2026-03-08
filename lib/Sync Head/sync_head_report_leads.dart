@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../Misc/user_cache_service.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 import 'package:mailer/mailer.dart';
@@ -37,14 +38,10 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
   }
 
   Future<void> _fetchBranches() async {
-    final snap = await FirebaseFirestore.instance.collection('users').get();
-    final branches = snap.docs
-        .map((d) => d.data()['branch'] as String?)
-        .where((b) => b != null && b.isNotEmpty && b.toLowerCase() != 'admin')
-        .toSet()
-        .cast<String>()
-        .toList()
-      ..sort();
+    final allBranches = await UserCacheService.instance.getBranches();
+    final branches = allBranches
+        .where((b) => b.toLowerCase() != 'admin')
+        .toList();
     setState(() {
       _branches = ['All Branches', ...branches];
       _branchesLoading = false;

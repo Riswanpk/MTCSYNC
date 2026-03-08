@@ -130,7 +130,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
         backgroundColor: const Color(0xFF005BAC),
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: customerQuery.snapshots(),
+        stream: customerQuery.limit(100).snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());

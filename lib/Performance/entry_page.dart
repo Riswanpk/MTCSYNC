@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../Misc/user_cache_service.dart';
 
 class EntryPage extends StatefulWidget {
   @override
@@ -20,11 +21,11 @@ class _EntryPageState extends State<EntryPage> {
   }
 
   Future<void> fetchBranches() async {
-    final usersSnap = await FirebaseFirestore.instance.collection('users').get();
+    final cachedUsers = await UserCacheService.instance.getAllUsers();
     final branchSet = <String>{};
-    for (var doc in usersSnap.docs) {
-      final branch = doc.data()['branch'];
-      if (branch != null) branchSet.add(branch);
+    for (var u in cachedUsers) {
+      final branch = u['branch'];
+      if (branch != null && branch.toString().isNotEmpty) branchSet.add(branch);
     }
     final sortedBranches = branchSet.toList()..sort();
     setState(() {

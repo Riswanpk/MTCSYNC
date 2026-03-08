@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../Misc/user_cache_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart';
 
@@ -29,13 +30,13 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
   }
 
   Future<void> _fetchUsersAndBranches() async {
-    // Fetch all users from Firestore
-    final snapshot = await FirebaseFirestore.instance.collection('users').get();
-    final users = snapshot.docs
-        .map((doc) => {
-              'email': doc['email'],
-              'name': doc['username'],
-              'branch': doc['branch'],
+    // Fetch all users from cache
+    final cachedUsers = await UserCacheService.instance.getAllUsers();
+    final users = cachedUsers
+        .map((u) => {
+              'email': u['email'],
+              'name': u['username'],
+              'branch': u['branch'],
             })
         .toList();
 

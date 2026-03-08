@@ -6,6 +6,7 @@ import 'package:mailer/smtp_server.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../Misc/user_cache_service.dart';
 
 Future<void> sendDailyLeadsReport(BuildContext context) async {
   try {
@@ -16,9 +17,9 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
     final start = DateTime(yesterday.year, yesterday.month, yesterday.day, 12); // yesterday 12:00 PM
     final end = DateTime(now.year, now.month, now.day, 12); // today 12:00 PM
 
-    // Fetch users
-    final usersSnap = await FirebaseFirestore.instance.collection('users').get();
-    final userMap = {for (var doc in usersSnap.docs) doc.id: doc.data()};
+    // Fetch users (from cache)
+    final cachedUsers = await UserCacheService.instance.getAllUsers();
+    final userMap = {for (var u in cachedUsers) u['uid'] as String: u};
     final branchUserStatus = <String, Map<String, Map<String, bool>>>{};
 
     // Prepare user status per branch
@@ -32,45 +33,53 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
       };
     }
 
-    // For each user, check leads and todos in the noon-to-noon window
-    for (var branch in branchUserStatus.keys) {
-      for (var userId in branchUserStatus[branch]!.keys) {
-        // Check leads
-        final leadSnap = await FirebaseFirestore.instance
-            .collection('daily_report')
-            .where('userId', isEqualTo: userId)
-            .where('type', isEqualTo: 'leads')
-            .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
-            .where('timestamp', isLessThan: Timestamp.fromDate(end))
-            .limit(1)
-            .get();
-        branchUserStatus[branch]![userId]!['lead'] = leadSnap.docs.isNotEmpty;
+    // Batch fetch daily_report for all users in the window (instead of N+1 queries)
+    final dailyReportSnap = await FirebaseFirestore.instance
+        .collection('daily_report')
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('timestamp', isLessThan: Timestamp.fromDate(end))
+        .get();
 
-        // Check todos
-        final todoSnap = await FirebaseFirestore.instance
-            .collection('daily_report')
-            .where('userId', isEqualTo: userId)
-            .where('type', isEqualTo: 'todo')
-            .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
-            .where('timestamp', isLessThan: Timestamp.fromDate(end))
-            .limit(1)
-            .get();
-        branchUserStatus[branch]![userId]!['todo'] = todoSnap.docs.isNotEmpty;
+    for (final doc in dailyReportSnap.docs) {
+      final data = doc.data();
+      final userId = data['userId'] as String?;
+      final type = data['type'] as String?;
+      if (userId == null || type == null) continue;
+      if (!userMap.containsKey(userId)) continue;
+      final branch = userMap[userId]?['branch'] ?? 'Unknown';
+      if (branchUserStatus.containsKey(branch) &&
+          branchUserStatus[branch]!.containsKey(userId)) {
+        if (type == 'leads') {
+          branchUserStatus[branch]![userId]!['lead'] = true;
+        } else if (type == 'todo') {
+          branchUserStatus[branch]![userId]!['todo'] = true;
+        }
       }
     }
 
-    // --- Fetch todos created by each user in the noon-to-noon window ---
-    final todosByUser = <String, List<Map<String, dynamic>>>{};
+    // Batch fetch todos for all users in the window (instead of N queries)
+    final allTodosSnap = await FirebaseFirestore.instance
+        .collection('todo')
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('timestamp', isLessThan: Timestamp.fromDate(end))
+        .get();
+
+    // Build email→userId lookup
+    final emailToUserId = <String, String>{};
     for (var userId in userMap.keys) {
-      final userEmail = userMap[userId]?['email'];
-      if (userEmail == null) continue;
-      final todosSnap = await FirebaseFirestore.instance
-          .collection('todo')
-          .where('email', isEqualTo: userEmail)
-          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
-          .where('timestamp', isLessThan: Timestamp.fromDate(end))
-          .get();
-      todosByUser[userId] = todosSnap.docs.map((d) => d.data()).toList();
+      final email = userMap[userId]?['email'];
+      if (email != null) emailToUserId[email] = userId;
+    }
+
+    final todosByUser = <String, List<Map<String, dynamic>>>{};
+    for (final doc in allTodosSnap.docs) {
+      final data = doc.data();
+      final email = data['email'] as String?;
+      if (email == null) continue;
+      final userId = emailToUserId[email];
+      if (userId == null) continue;
+      todosByUser.putIfAbsent(userId, () => []);
+      todosByUser[userId]!.add(data);
     }
 
     // Generate Excel

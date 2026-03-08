@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../Misc/user_cache_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 import 'package:share_plus/share_plus.dart';
@@ -55,18 +56,17 @@ class _TodoLeadsFullMonthPageState extends State<TodoLeadsFullMonthPage> {
     }
     end = today.add(const Duration(hours: 12)); // Today 12 PM
 
-    // Fetch all users except admin
-    final usersSnap = await FirebaseFirestore.instance
-        .collection('users')
-        .where('role', isNotEqualTo: 'admin')
-        .get();
+    // Fetch all users except admin (from cache)
+    final allCachedUsers = await UserCacheService.instance.getAllUsers();
     final userMap = <String, Map<String, dynamic>>{};
     final emailToUserId = <String, String>{};
-    for (var doc in usersSnap.docs) {
-      userMap[doc.id] = doc.data();
-      final email = doc['email'];
-      if (email != null) {
-        emailToUserId[email] = doc.id;
+    for (var u in allCachedUsers) {
+      if (u['role'] == 'admin') continue;
+      final uid = u['uid'] as String;
+      userMap[uid] = u;
+      final email = u['email'];
+      if (email != null && email.toString().isNotEmpty) {
+        emailToUserId[email] = uid;
       }
     }
 

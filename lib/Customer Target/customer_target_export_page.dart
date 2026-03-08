@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../Misc/user_cache_service.dart';
 import 'package:share_plus/share_plus.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
@@ -45,12 +46,12 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
     try {
       final workbook = syncfusion.Workbook();
 
-      // Fetch username map from users collection
-      final usersCollSnapshot = await FirebaseFirestore.instance.collection('users').get();
+      // Fetch username map from cached users
+      final allUsers = await UserCacheService.instance.getAllUsers();
       final Map<String, String> emailToUsername = {};
-      for (final doc in usersCollSnapshot.docs) {
-        final email = (doc.data()['email'] as String? ?? '').toLowerCase();
-        final username = doc.data()['username'] as String? ?? '';
+      for (final u in allUsers) {
+        final email = (u['email'] as String? ?? '').toLowerCase();
+        final username = u['username'] as String? ?? '';
         if (email.isNotEmpty) emailToUsername[email] = username;
       }
 

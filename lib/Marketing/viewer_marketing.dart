@@ -296,6 +296,6 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
           .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(end));
     }
 
-    return query.orderBy('timestamp', descending: true).snapshots();
+    return query.orderBy('timestamp', descending: true).limit(50).snapshots();
   }
 }

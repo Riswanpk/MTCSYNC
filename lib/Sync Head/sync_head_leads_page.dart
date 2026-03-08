@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../Misc/user_cache_service.dart';
 import 'package:intl/intl.dart';
 import 'sync_head_report_leads.dart';
 
@@ -39,14 +40,7 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
   }
 
   Future<void> _fetchBranches() async {
-    final snap = await FirebaseFirestore.instance.collection('users').get();
-    final branches = snap.docs
-        .map((d) => d.data()['branch'] as String?)
-        .where((b) => b != null && b.isNotEmpty)
-        .toSet()
-        .cast<String>()
-        .toList()
-      ..sort();
+    final branches = await UserCacheService.instance.getBranches();
     setState(() {
       _branches = branches;
       // No auto-selection — user must pick a branch

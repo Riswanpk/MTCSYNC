@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../Misc/user_cache_service.dart';
 import 'package:excel/excel.dart' as ex;
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
@@ -37,8 +38,8 @@ Future<void> exportAndSendExcel(BuildContext context, {int? year, int? month}) a
         .where('timestamp', isLessThan: Timestamp.fromDate(monthEnd))
         .get();
 
-    final usersSnap = await FirebaseFirestore.instance.collection('users').get();
-    final userMap = {for (var doc in usersSnap.docs) doc.id: doc.data()};
+    final cachedUsers = await UserCacheService.instance.getAllUsers();
+    final userMap = {for (var u in cachedUsers) u['uid'] as String: u};
     final branchMap = <String, Map<String, List<Map<String, dynamic>>>>{};
 
     for (var doc in formsSnap.docs) {

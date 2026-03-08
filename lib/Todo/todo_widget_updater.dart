@@ -10,6 +10,7 @@ Future<void> updateTodoWidgetFromFirestore() async {
       .collection('todo')
       .where('email', isEqualTo: user.email)
       .where('status', isEqualTo: 'pending')
+      .limit(20)
       .get();
 
   final todoCount = snapshot.docs.isNotEmpty

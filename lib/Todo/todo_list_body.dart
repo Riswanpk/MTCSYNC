@@ -51,6 +51,7 @@ class TodoListBody extends StatelessWidget {
               .where('email', isEqualTo: userEmail)
               .where('status', isEqualTo: status)
               .orderBy('timestamp', descending: true)
+              .limit(50)
               .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.hasError)
