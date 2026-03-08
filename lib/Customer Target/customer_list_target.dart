@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:call_log/call_log.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -33,12 +35,11 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _fetchCustomerData();
+    _fetchCustomerData().then((_) => _autoScanCallLog());
   }
 
   Future<void> _fetchCustomerData() async {
     setState(() {
-      _loading = true;
       _error = null;
     });
     try {
@@ -51,7 +52,23 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
         return;
       }
       _docId = user.email!.toLowerCase();
-      // Get current month-year string, e.g., "Jan 2026"
+
+      // Load from local cache for instant display on first load
+      if (_customers == null) {
+        final cached = await _loadFromLocalCache();
+        if (cached != null) {
+          setState(() {
+            _customers = cached;
+            _loading = false;
+          });
+        } else {
+          setState(() {
+            _loading = true;
+          });
+        }
+      }
+
+      // Fetch latest from Firestore
       final now = DateTime.now();
       final monthYear = "${_monthName(now.month)} ${now.year}";
 
@@ -67,17 +84,24 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
           _customers = data.map((e) => Map<String, dynamic>.from(e)).toList();
           _loading = false;
         });
+        await _saveToLocalCache();
       } else {
         setState(() {
-          _customers = null;
           _loading = false;
         });
       }
     } catch (e) {
-      setState(() {
-        _error = "Error: $e";
-        _loading = false;
-      });
+      // If we have cached data, just dismiss loading
+      if (_customers != null) {
+        setState(() {
+          _loading = false;
+        });
+      } else {
+        setState(() {
+          _error = "Error: $e";
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -90,6 +114,29 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
     return months[month - 1];
   }
 
+  String _cacheKey() {
+    final now = DateTime.now();
+    final monthYear = "${_monthName(now.month)} ${now.year}";
+    return 'customer_list_${_docId}_$monthYear';
+  }
+
+  Future<void> _saveToLocalCache() async {
+    if (_customers == null || _docId == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_cacheKey(), jsonEncode(_customers));
+  }
+
+  Future<List<Map<String, dynamic>>?> _loadFromLocalCache() async {
+    if (_docId == null) return null;
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getString(_cacheKey());
+    if (cached != null) {
+      final List<dynamic> data = jsonDecode(cached);
+      return data.map((e) => Map<String, dynamic>.from(e)).toList();
+    }
+    return null;
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -98,8 +145,8 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _pendingCallNumber != null) {
-      _checkIfCallWasMade();
+    if (state == AppLifecycleState.resumed) {
+      _autoScanCallLog();
     }
   }
 
@@ -133,6 +180,58 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
     } finally {
       _pendingCallNumber = null;
       _pendingCallIndex = null;
+    }
+  }
+
+  /// Silently scans today's call log and auto-marks customers as called
+  /// without showing any dialog. Runs on list entry and every app resume.
+  Future<void> _autoScanCallLog() async {
+    if (_customers == null || _customers!.isEmpty) return;
+    final permStatus = await Permission.phone.status;
+    if (!permStatus.isGranted) return;
+
+    try {
+      final now = DateTime.now();
+      final startOfDay = DateTime(now.year, now.month, now.day);
+      final Iterable<CallLogEntry> entries = await CallLog.query(
+        dateFrom: startOfDay.millisecondsSinceEpoch,
+        dateTo: now.millisecondsSinceEpoch,
+      );
+
+      bool numberMatches(String logNumber, String? contact) {
+        if (contact == null || contact.isEmpty) return false;
+        String clean = contact.replaceAll(RegExp(r'\D'), '');
+        return logNumber.endsWith(clean) || clean.endsWith(logNumber);
+      }
+
+      bool anyChanged = false;
+
+      for (var customer in _customers!) {
+        if (customer['callMade'] == true) continue;
+
+        String? c1 = customer['contact1'] ?? customer['contact'];
+        String? c2 = customer['contact2'];
+
+        // Check for any call >15s to this customer today
+        bool hasLongCall = entries.any((entry) {
+          String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
+          if (logNumber.isEmpty) return false;
+          bool longEnough = (entry.duration ?? 0) > 15;
+          return (numberMatches(logNumber, c1) || numberMatches(logNumber, c2)) && longEnough;
+        });
+
+        if (hasLongCall) {
+          customer['callMade'] = true;
+          anyChanged = true;
+        }
+      }
+
+      if (anyChanged && mounted) {
+        setState(() {});
+        await _updateFirestore();
+      }
+    } catch (e) {
+      debugPrint('Error in auto scan: $e');
     }
   }
 
@@ -176,6 +275,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
     } catch (e) {
       debugPrint('Failed to update Firestore: $e');
     }
+    await _saveToLocalCache();
   }
 
   /// Scan today's call log and find customers where:
@@ -233,7 +333,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
         int latestOutgoingTime = -1;
         for (final entry in entries) {
           if (entry.callType != CallType.outgoing) continue;
-          String logNumber = entry.number?.replaceAll(RegExp(r'\\D'), '') ?? '';
+          String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
           if (logNumber.isEmpty) continue;
           if (_numberMatches(logNumber, c1) || _numberMatches(logNumber, c2)) {
             if (entry.timestamp != null && entry.timestamp! > latestOutgoingTime) {
@@ -246,7 +346,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
         // Step 2: Find any call (incoming or outgoing) > 15s AFTER the outgoing call
         bool hasLongCallAfter = entries.any((entry) {
           if (entry.timestamp == null || entry.timestamp! <= latestOutgoingTime) return false;
-          String logNumber = entry.number?.replaceAll(RegExp(r'\\D'), '') ?? '';
+          String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
           if (logNumber.isEmpty) return false;
           bool longEnough = (entry.duration ?? 0) > 15;
           return (_numberMatches(logNumber, c1) || _numberMatches(logNumber, c2)) && longEnough;
@@ -468,7 +568,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
           filteredCustomers = filteredCustomers
               .where((c) =>
                   (c['name'] ?? '').toString().toLowerCase().contains(_searchText.toLowerCase()) ||
-                  (c['contact'] ?? '').toString().toLowerCase().contains(_searchText.toLowerCase()))
+                  (c['contact1'] ?? c['contact'] ?? '').toString().toLowerCase().contains(_searchText.toLowerCase()))
               .toList();
         }
 
@@ -708,7 +808,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                                   },
                                 ),
                               ),
-                            );
+                            ).then((_) => _fetchCustomerData());
                           }
 
                           return Material(

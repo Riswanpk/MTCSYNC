@@ -141,8 +141,21 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _pendingCallNumber != null) {
-      _checkIfCallWasMade();
+    if (state == AppLifecycleState.resumed) {
+      if (_pendingCallNumber != null) {
+        // Call log may not be updated yet right after hang-up.
+        // Try immediately, then retry after a delay.
+        _checkIfCallWasMade().then((_) {
+          if (!called && _pendingCallNumber != null && mounted) {
+            Future.delayed(const Duration(seconds: 3), () {
+              if (mounted && !called) _checkIfCallWasMade();
+            });
+          }
+        });
+      } else if (!called) {
+        // No pending call but still not called — scan today's log
+        _checkForAnyRecentCall();
+      }
     }
   }
 
@@ -158,10 +171,10 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
       String? c1 = customer['contact1'] ?? customer['contact'];
       String? c2 = customer['contact2'];
       bool callMade = entries.any((entry) {
-        String logNumber = entry.number?.replaceAll(RegExp(r'\\D'), '') ?? '';
+        String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
         bool wasConnected = (entry.duration ?? 0) > 15; // Require call duration > 15 seconds
-        bool matches1 = c1 != null && logNumber.endsWith(c1.replaceAll(RegExp(r'\\D'), ''));
-        bool matches2 = c2 != null && c2.isNotEmpty && logNumber.endsWith(c2.replaceAll(RegExp(r'\\D'), ''));
+        bool matches1 = c1 != null && logNumber.endsWith(c1.replaceAll(RegExp(r'\D'), ''));
+        bool matches2 = c2 != null && c2.isNotEmpty && logNumber.endsWith(c2.replaceAll(RegExp(r'\D'), ''));
         return (matches1 || matches2) && wasConnected;
       });
       if (callMade) {
@@ -229,7 +242,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
       int latestOutgoingTime = -1;
       for (final entry in entries) {
         if (entry.callType != CallType.outgoing) continue;
-        String logNumber = entry.number?.replaceAll(RegExp(r'\\D'), '') ?? '';
+        String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
         if (logNumber.isEmpty) continue;
         if (_numberMatches(logNumber, c1) || _numberMatches(logNumber, c2)) {
           if (entry.timestamp != null && entry.timestamp! > latestOutgoingTime) {
@@ -242,7 +255,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
       // Step 2: Find any call (incoming or outgoing) > 15s AFTER the outgoing call
       bool hasLongCallAfter = entries.any((entry) {
         if (entry.timestamp == null || entry.timestamp! <= latestOutgoingTime) return false;
-        String logNumber = entry.number?.replaceAll(RegExp(r'\\D'), '') ?? '';
+        String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
         if (logNumber.isEmpty) return false;
         bool longEnough = (entry.duration ?? 0) > 15;
         return (_numberMatches(logNumber, c1) || _numberMatches(logNumber, c2)) && longEnough;
@@ -271,6 +284,77 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
       debugPrint('Error scanning today call log: $e');
     }
   }
+  /// Manual reload: checks if user made an outgoing call >15s to this customer today.
+  Future<void> _reloadCallStatus() async {
+    if (called) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Call already marked.'), backgroundColor: Colors.green),
+        );
+      }
+      return;
+    }
+    try {
+      final now = DateTime.now();
+      final startOfDay = DateTime(now.year, now.month, now.day);
+      final Iterable<CallLogEntry> entries = await CallLog.query(
+        dateFrom: startOfDay.millisecondsSinceEpoch,
+        dateTo: now.millisecondsSinceEpoch,
+      );
+      String? c1 = customer['contact1'] ?? customer['contact'];
+      String? c2 = customer['contact2'];
+
+      bool numberMatches(String logNumber, String? contact) {
+        if (contact == null || contact.isEmpty) return false;
+        String clean = contact.replaceAll(RegExp(r'\D'), '');
+        return logNumber.endsWith(clean) || clean.endsWith(logNumber);
+      }
+
+      bool hasOutgoingLongCall = entries.any((entry) {
+        if (entry.callType != CallType.outgoing) return false;
+        String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
+        if (logNumber.isEmpty) return false;
+        bool longEnough = (entry.duration ?? 0) > 15;
+        return (numberMatches(logNumber, c1) || numberMatches(logNumber, c2)) && longEnough;
+      });
+
+      if (hasOutgoingLongCall) {
+        setState(() {
+          called = true;
+          customer['callMade'] = true;
+        });
+        _pendingCallNumber = null;
+        _callStartTime = null;
+        await _clearPendingCallState();
+        await _updateCallStatusInFirestore();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Call detected! Please add remarks.'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No outgoing call (>15s) found today.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error reloading call status: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error checking call log: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
 
   Future<void> _updateCallStatusInFirestore() async {
     try {
@@ -294,7 +378,8 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
         String? c1 = customer['contact1'] ?? customer['contact'];
         String? c2 = customer['contact2'];
         int idx = customers.indexWhere((c) =>
-          (c['contact'] == c1) || (c2 != null && c2.isNotEmpty && c['contact'] == c2)
+          (c['contact'] == c1 || c['contact1'] == c1) ||
+          (c2 != null && c2.isNotEmpty && (c['contact'] == c2 || c['contact2'] == c2))
         );
         if (idx != -1) {
           customers[idx]['callMade'] = true;
@@ -591,6 +676,13 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
           backgroundColor: primaryColor,
           iconTheme: const IconThemeData(color: Colors.white),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Reload Call Status',
+              onPressed: () async {
+                await _reloadCallStatus();
+              },
+            ),
             IconButton(
               icon: const Icon(Icons.edit),
               tooltip: 'Edit Customer',
