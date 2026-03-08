@@ -4,6 +4,10 @@ import '../Performance/excel_view_performance.dart';
 import '../Performance/insights_performance.dart';
 import '../Performance/entry_page.dart';
 
+const Color _primaryBlue = Color(0xFF005BAC);
+const Color _darkSurface = Color(0xFF1E2028);
+const Color _darkCard = Color(0xFF252830);
+
 class SyncHeadPerformancePage extends StatelessWidget {
   const SyncHeadPerformancePage({super.key});
 
@@ -11,142 +15,208 @@ class SyncHeadPerformancePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Performance'),
-        backgroundColor: const Color(0xFF005BAC),
-        foregroundColor: Colors.white,
+    final tiles = [
+      _TileData(
+        icon: Icons.edit_note_rounded,
+        gradient: const LinearGradient(colors: [Color(0xFF6A11CB), Color(0xFF9C27B0)]),
+        title: 'Edit Performance Form',
+        subtitle: 'Add or edit performance fields',
+        onTap: () => Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const AdminPerformancePage())),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 16),
-            _PerformanceTile(
-              icon: Icons.edit_note,
-              iconColor: Colors.deepPurple,
-              title: 'Edit Performance Form',
-              subtitle: 'Add or edit performance fields',
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const AdminPerformancePage()),
+      _TileData(
+        icon: Icons.insert_chart_rounded,
+        gradient: const LinearGradient(colors: [Color(0xFFFF8F00), Color(0xFFFFC107)]),
+        title: 'Performance Monthly',
+        subtitle: 'View monthly performance reports',
+        onTap: () => Navigator.push(context,
+            MaterialPageRoute(builder: (_) => ExcelViewPerformancePage())),
+      ),
+      _TileData(
+        icon: Icons.insights_rounded,
+        gradient: const LinearGradient(colors: [Color(0xFF1B5E20), Color(0xFF8CC63F)]),
+        title: 'Performance Insights',
+        subtitle: 'Analyse performance trends',
+        onTap: () => Navigator.push(context,
+            MaterialPageRoute(builder: (_) => InsightsPerformancePage())),
+      ),
+      _TileData(
+        icon: Icons.add_box_rounded,
+        gradient: const LinearGradient(colors: [Color(0xFF003D73), _primaryBlue]),
+        title: 'Entry Page',
+        subtitle: 'Submit a new performance entry',
+        onTap: () => Navigator.push(context,
+            MaterialPageRoute(builder: (_) => EntryPage())),
+      ),
+    ];
+
+    return Scaffold(
+      backgroundColor: isDark ? _darkSurface : const Color(0xFFF5F7FA),
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            expandedHeight: 160,
+            pinned: true,
+            backgroundColor: _primaryBlue,
+            foregroundColor: Colors.white,
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF003D73), _primaryBlue, Color(0xFF0078E7)],
+                  ),
+                ),
+                child: SafeArea(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 36),
+                      Container(
+                        width: 56, height: 56,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Icon(Icons.bar_chart_rounded, color: Colors.white, size: 32),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Performance',
+                        style: TextStyle(
+                          fontSize: 22, fontWeight: FontWeight.bold,
+                          color: Colors.white, letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Manage & review team performance',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.white.withOpacity(0.7),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              isDark: isDark,
+              collapseMode: CollapseMode.pin,
             ),
-            const SizedBox(height: 16),
-            _PerformanceTile(
-              icon: Icons.insert_chart,
-              iconColor: const Color.fromARGB(255, 255, 175, 3),
-              title: 'Performance Monthly',
-              subtitle: 'View monthly performance reports',
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => ExcelViewPerformancePage()),
+          ),
+
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, idx) {
+                  final tile = tiles[idx];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _PerformanceTile(data: tile, isDark: isDark),
+                  );
+                },
+                childCount: tiles.length,
               ),
-              isDark: isDark,
             ),
-            const SizedBox(height: 16),
-            _PerformanceTile(
-              icon: Icons.insights,
-              iconColor: Colors.green,
-              title: 'Performance Insights',
-              subtitle: 'Analyse performance trends',
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => InsightsPerformancePage()),
-              ),
-              isDark: isDark,
-            ),
-            const SizedBox(height: 16),
-            _PerformanceTile(
-              icon: Icons.add_box,
-              iconColor: Colors.blue,
-              title: 'Entry Page',
-              subtitle: 'Submit a new performance entry',
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => EntryPage()),
-              ),
-              isDark: isDark,
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _PerformanceTile extends StatelessWidget {
+class _TileData {
   final IconData icon;
-  final Color iconColor;
+  final LinearGradient gradient;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
-  final bool isDark;
 
-  const _PerformanceTile({
+  const _TileData({
     required this.icon,
-    required this.iconColor,
+    required this.gradient,
     required this.title,
     required this.subtitle,
     required this.onTap,
-    required this.isDark,
   });
+}
+
+class _PerformanceTile extends StatelessWidget {
+  final _TileData data;
+  final bool isDark;
+
+  const _PerformanceTile({required this.data, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: isDark ? const Color(0xFF1E2A3A) : Colors.white,
-      borderRadius: BorderRadius.circular(14),
-      elevation: 2,
-      shadowColor: Colors.black.withOpacity(0.08),
+      color: isDark ? _darkCard : Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      elevation: isDark ? 0 : 2,
+      shadowColor: Colors.black.withOpacity(0.06),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        onTap: data.onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          padding: const EdgeInsets.all(18),
           child: Row(
             children: [
+              // Gradient icon container
               Container(
-                width: 48,
-                height: 48,
+                width: 52, height: 52,
                 decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  gradient: data.gradient,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: data.gradient.colors.first.withOpacity(0.35),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-                child: Icon(icon, color: iconColor, size: 26),
+                child: Icon(data.icon, color: Colors.white, size: 28),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 18),
+              // Text
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
+                      data.title,
                       style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 15, fontWeight: FontWeight.bold,
                         color: isDark ? Colors.white : Colors.black87,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     Text(
-                      subtitle,
+                      data.subtitle,
                       style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.white54 : Colors.black45,
+                        fontSize: 12.5,
+                        color: isDark ? Colors.white54 : Colors.grey[500],
                       ),
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.arrow_forward_ios,
-                  size: 14,
-                  color: isDark ? Colors.white38 : Colors.black26),
+              // Chevron
+              Container(
+                width: 30, height: 30,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.06)
+                      : Colors.grey.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: isDark ? Colors.white38 : Colors.grey[400],
+                ),
+              ),
             ],
           ),
         ),

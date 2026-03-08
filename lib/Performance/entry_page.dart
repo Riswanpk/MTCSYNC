@@ -4,6 +4,8 @@ import '../Misc/user_cache_service.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);
 const Color _primaryGreen = Color(0xFF8CC63F);
+const Color _darkSurface = Color(0xFF1E2028);
+const Color _darkCard = Color(0xFF252830);
 
 class EntryPage extends StatefulWidget {
   @override
@@ -152,117 +154,222 @@ class _EntryPageState extends State<EntryPage> {
     final prevMonth = now.month == 1 ? 12 : now.month - 1;
     final prevYear = now.month == 1 ? now.year - 1 : now.year;
     final monthLabel = '${_monthName(prevMonth)} $prevYear';
+    final bgColor = isDark ? _darkSurface : const Color(0xFFF5F7FA);
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF181A20) : Colors.white,
-      appBar: AppBar(
-        title: Text('Performance Entry - $monthLabel'),
-        backgroundColor: _primaryBlue,
-        foregroundColor: Colors.white,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            DropdownButtonFormField<String>(
-              value: selectedBranch,
-              hint: const Text('Select Branch'),
-              items: branches
-                  .map((b) => DropdownMenuItem<String>(
-                        value: b['branch'] as String,
-                        child: Text(b['branch'] as String),
-                      ))
-                  .toList(),
-              onChanged: (val) {
-                setState(() {
-                  selectedBranch = val;
-                });
-                fetchUsersForBranch(val);
-              },
-              decoration: InputDecoration(
-                labelText: 'Select Branch',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: _primaryBlue.withOpacity(0.3)),
+      backgroundColor: bgColor,
+      body: CustomScrollView(
+        slivers: [
+          // Gradient header
+          SliverAppBar(
+            expandedHeight: 140,
+            pinned: true,
+            backgroundColor: _primaryBlue,
+            foregroundColor: Colors.white,
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF003D73), _primaryBlue, Color(0xFF0078E7)],
+                  ),
                 ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: _primaryBlue, width: 2),
+                child: SafeArea(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 30),
+                      const Text(
+                        'Performance Entry',
+                        style: TextStyle(
+                          fontSize: 22, fontWeight: FontWeight.bold,
+                          color: Colors.white, letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          monthLabel,
+                          style: TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w500,
+                            color: Colors.white.withOpacity(0.9),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              collapseMode: CollapseMode.pin,
+            ),
+          ),
+
+          // Branch dropdown
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isDark ? _darkCard : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    if (!isDark)
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                  ],
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: DropdownButtonFormField<String>(
+                  value: selectedBranch,
+                  hint: Text(
+                    'Select Branch',
+                    style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
+                  ),
+                  dropdownColor: isDark ? _darkCard : Colors.white,
+                  items: branches
+                      .map((b) => DropdownMenuItem<String>(
+                            value: b['branch'] as String,
+                            child: Text(b['branch'] as String),
+                          ))
+                      .toList(),
+                  onChanged: (val) {
+                    setState(() { selectedBranch = val; });
+                    fetchUsersForBranch(val);
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'Select Branch',
+                    labelStyle: TextStyle(
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                    prefixIcon: Icon(
+                      Icons.store_rounded,
+                      color: _primaryBlue.withOpacity(0.7),
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            if (selectedBranch == null)
-              Expanded(
-                child: Center(
-                  child: Text(
-                    'Select a branch to enter marks',
-                    style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                  ),
+          ),
+
+          // Body states
+          if (selectedBranch == null)
+            SliverFillRemaining(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.edit_note_rounded, size: 64,
+                        color: isDark ? Colors.grey[700] : Colors.grey[300]),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Select a branch to enter marks',
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: isDark ? Colors.grey[500] : Colors.grey[500],
+                      ),
+                    ),
+                  ],
                 ),
-              )
-            else if (isLoading)
-              const Expanded(child: Center(child: CircularProgressIndicator()))
-            else
-              Expanded(
-                child: ListView.builder(
-                  itemCount: users.length,
-                  itemBuilder: (context, idx) {
+              ),
+            )
+          else if (isLoading)
+            const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else ...[
+            // User cards list
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, idx) {
                     final user = users[idx];
-                    return Card(
-                      color: isDark ? Colors.grey[900] : Colors.white,
-                      elevation: 2,
-                      margin: const EdgeInsets.symmetric(vertical: 6),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    return Container(
+                      margin: const EdgeInsets.symmetric(vertical: 5),
+                      decoration: BoxDecoration(
+                        color: isDark ? _darkCard : Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          if (!isDark)
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.04),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            ),
+                        ],
+                      ),
                       child: Padding(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(14),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(user['username'], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : _primaryBlue)),
-                            const SizedBox(height: 8),
+                            // User name row
                             Row(
                               children: [
-                                Expanded(
-                                  child: TextField(
-                                    controller: controllers[user['id']],
-                                    keyboardType: TextInputType.number,
-                                    decoration: InputDecoration(
-                                      labelText: 'Performance Mark',
-                                      hintText: '0-30',
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                        borderSide: BorderSide(color: _primaryBlue.withOpacity(0.2)),
+                                Container(
+                                  width: 38, height: 38,
+                                  decoration: BoxDecoration(
+                                    color: _primaryBlue.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '${idx + 1}',
+                                      style: TextStyle(
+                                        color: _primaryBlue,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
                                       ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                        borderSide: const BorderSide(color: _primaryBlue, width: 2),
-                                      ),
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                                     ),
                                   ),
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
-                                  child: TextField(
-                                    controller: bdaControllers[user['id']],
-                                    keyboardType: TextInputType.number,
-                                    decoration: InputDecoration(
-                                      labelText: 'BDA Marks',
-                                      hintText: '0-20',
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                        borderSide: BorderSide(color: _primaryGreen.withOpacity(0.2)),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                        borderSide: const BorderSide(color: _primaryGreen, width: 2),
-                                      ),
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                  child: Text(
+                                    user['username'],
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                      color: isDark ? Colors.white : Colors.black87,
                                     ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            // Input fields row
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _ScoreField(
+                                    controller: controllers[user['id']]!,
+                                    label: 'Performance',
+                                    hint: '0 – 30',
+                                    icon: Icons.trending_up_rounded,
+                                    accentColor: const Color(0xFFEF5350),
+                                    isDark: isDark,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _ScoreField(
+                                    controller: bdaControllers[user['id']]!,
+                                    label: 'BDA',
+                                    hint: '0 – 20',
+                                    icon: Icons.business_center_rounded,
+                                    accentColor: const Color(0xFF26A69A),
+                                    isDark: isDark,
                                   ),
                                 ),
                               ],
@@ -272,25 +379,111 @@ class _EntryPageState extends State<EntryPage> {
                       ),
                     );
                   },
+                  childCount: users.length,
                 ),
               ),
-            const SizedBox(height: 16),
-            if (selectedBranch != null && !isLoading)
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: saveMarks,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _primaryBlue,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+
+            // Save button
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF003D73), _primaryBlue, Color(0xFF0078E7)],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _primaryBlue.withOpacity(0.35),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                  child: const Text('Save Marks', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  child: Material(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(14),
+                    child: InkWell(
+                      onTap: saveMarks,
+                      borderRadius: BorderRadius.circular(14),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.save_rounded, color: Colors.white, size: 20),
+                            SizedBox(width: 10),
+                            Text(
+                              'Save Marks',
+                              style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.bold,
+                                color: Colors.white, letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
+            ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ScoreField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final String hint;
+  final IconData icon;
+  final Color accentColor;
+  final bool isDark;
+
+  const _ScoreField({
+    required this.controller,
+    required this.label,
+    required this.hint,
+    required this.icon,
+    required this.accentColor,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      style: TextStyle(
+        fontWeight: FontWeight.w600,
+        color: isDark ? Colors.white : Colors.black87,
+      ),
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        labelStyle: TextStyle(color: accentColor, fontWeight: FontWeight.w600, fontSize: 13),
+        hintStyle: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400], fontSize: 13),
+        prefixIcon: Icon(icon, color: accentColor, size: 20),
+        filled: true,
+        fillColor: accentColor.withOpacity(isDark ? 0.08 : 0.05),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide.none,
         ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: accentColor.withOpacity(0.2)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: accentColor, width: 2),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       ),
     );
   }

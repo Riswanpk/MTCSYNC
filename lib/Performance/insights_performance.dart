@@ -5,6 +5,8 @@ import 'insights_detail_viewer.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);
 const Color _primaryGreen = Color(0xFF8CC63F);
+const Color _darkSurface = Color(0xFF1E2028);
+const Color _darkCard = Color(0xFF252830);
 
 class InsightsPerformancePage extends StatefulWidget {
   @override
@@ -172,128 +174,362 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? _darkSurface : const Color(0xFFF5F7FA);
+
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF181A20) : Colors.white,
-      appBar: AppBar(
-        title: const Text('Performance Insights'),
-        backgroundColor: _primaryBlue,
-        foregroundColor: Colors.white,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            isLoadingBranches
-                ? const Center(child: CircularProgressIndicator())
-                : DropdownButtonFormField<String>(
-                    decoration: InputDecoration(
-                      labelText: 'Select Branch',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: _primaryBlue.withOpacity(0.3)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: _primaryBlue, width: 2),
-                      ),
-                    ),
-                    value: selectedBranch,
-                    hint: const Text('Select Branch'),
-                    items: branches
-                        .map((b) => DropdownMenuItem(value: b, child: Text(b)))
-                        .toList(),
-                    onChanged: (val) {
-                      setState(() {
-                        selectedBranch = val;
-                        userPerformances.clear();
-                      });
-                      if (val != null) fetchUserPerformances(val);
-                    },
-                  ),
-            const SizedBox(height: 24),
-            if (selectedBranch == null)
-              Expanded(
-                child: Center(
-                  child: Text(
-                    'Select a branch to view insights',
-                    style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
+      backgroundColor: bgColor,
+      body: CustomScrollView(
+        slivers: [
+          // Gradient header
+          SliverAppBar(
+            expandedHeight: 140,
+            pinned: true,
+            backgroundColor: _primaryBlue,
+            foregroundColor: Colors.white,
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF003D73), _primaryBlue, Color(0xFF0078E7)],
                   ),
                 ),
-              )
-            else if (isLoadingUsers)
-              const Expanded(child: Center(child: CircularProgressIndicator()))
-            else
-              Expanded(
-                child: userPerformances.isEmpty
-                    ? Center(child: Text('No data for this branch', style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600])))
-                    : ListView.builder(
-                        itemCount: userPerformances.length,
-                        itemBuilder: (context, idx) {
-                          final user = userPerformances[idx];
-                          return GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => InsightsDetailViewerPage(
-                                    userId: user.userId,
-                                    username: user.username,
-                                    avgWeeklyMark: user.avgWeeklyMark,
-                                    perfMark: user.perfMark,
-                                    bdaMark: user.bdaMark,
-                                    percentage: user.percentage,
-                                    avgAttendance: user.avgAttendance,
-                                    avgDress: user.avgDress,
-                                    avgAttitude: user.avgAttitude,
-                                    avgMeeting: user.avgMeeting,
-                                  ),
-                                ),
-                              );
-                            },
-                            child: Card(
-                              color: isDark ? Colors.grey[900] : Colors.white,
-                              elevation: 2,
-                              margin: const EdgeInsets.symmetric(vertical: 6),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: _primaryBlue,
-                                  child: Text(
-                                    '${idx + 1}',
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                                title: Text(user.username, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                subtitle: Text(
-                                  'Weekly: ${user.avgWeeklyMark}/70 | Perf: ${user.perfMark}/30 | BDA: ${user.bdaMark}/20',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                                trailing: Text(
-                                  '${user.percentage.round()}%',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                    color: user.percentage >= 80
-                                        ? _primaryGreen
-                                        : user.percentage >= 60
-                                            ? Colors.orange
-                                            : Colors.red,
-                                  ),
-                                ),
-                              ),
+                child: SafeArea(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 30),
+                      const Text(
+                        'Performance Insights',
+                        style: TextStyle(
+                          fontSize: 22, fontWeight: FontWeight.bold,
+                          color: Colors.white, letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Monthly employee performance overview',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.white.withOpacity(0.7),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              collapseMode: CollapseMode.pin,
+            ),
+          ),
+
+          // Branch selector
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+              child: isLoadingBranches
+                  ? const Center(child: Padding(
+                      padding: EdgeInsets.all(20),
+                      child: CircularProgressIndicator(),
+                    ))
+                  : Container(
+                      decoration: BoxDecoration(
+                        color: isDark ? _darkCard : Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          if (!isDark)
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
                             ),
-                          );
+                        ],
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: DropdownButtonFormField<String>(
+                        decoration: InputDecoration(
+                          labelText: 'Select Branch',
+                          labelStyle: TextStyle(
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          ),
+                          prefixIcon: Icon(
+                            Icons.store_rounded,
+                            color: _primaryBlue.withOpacity(0.7),
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                        ),
+                        dropdownColor: isDark ? _darkCard : Colors.white,
+                        value: selectedBranch,
+                        hint: Text(
+                          'Select Branch',
+                          style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
+                        ),
+                        items: branches
+                            .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                            .toList(),
+                        onChanged: (val) {
+                          setState(() {
+                            selectedBranch = val;
+                            userPerformances.clear();
+                          });
+                          if (val != null) fetchUserPerformances(val);
                         },
                       ),
+                    ),
+            ),
+          ),
+
+          // Content
+          if (selectedBranch == null)
+            SliverFillRemaining(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.analytics_outlined, size: 64,
+                      color: isDark ? Colors.grey[700] : Colors.grey[300]),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Select a branch to view insights',
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: isDark ? Colors.grey[500] : Colors.grey[500],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-          ],
-        ),
+            )
+          else if (isLoadingUsers)
+            const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (userPerformances.isEmpty)
+            SliverFillRemaining(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.people_outline_rounded, size: 64,
+                      color: isDark ? Colors.grey[700] : Colors.grey[300]),
+                    const SizedBox(height: 12),
+                    Text(
+                      'No data for this branch',
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: isDark ? Colors.grey[500] : Colors.grey[500],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, idx) {
+                    final user = userPerformances[idx];
+                    final pctColor = user.percentage >= 80
+                        ? _primaryGreen
+                        : user.percentage >= 60
+                            ? Colors.orange
+                            : Colors.red;
+
+                    // Rank decoration for top 3
+                    Widget? rankBadge;
+                    if (idx == 0) {
+                      rankBadge = _RankBadge(icon: Icons.emoji_events_rounded, color: const Color(0xFFFFD700));
+                    } else if (idx == 1) {
+                      rankBadge = _RankBadge(icon: Icons.emoji_events_rounded, color: const Color(0xFFC0C0C0));
+                    } else if (idx == 2) {
+                      rankBadge = _RankBadge(icon: Icons.emoji_events_rounded, color: const Color(0xFFCD7F32));
+                    }
+
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => InsightsDetailViewerPage(
+                              userId: user.userId,
+                              username: user.username,
+                              avgWeeklyMark: user.avgWeeklyMark,
+                              perfMark: user.perfMark,
+                              bdaMark: user.bdaMark,
+                              percentage: user.percentage,
+                              avgAttendance: user.avgAttendance,
+                              avgDress: user.avgDress,
+                              avgAttitude: user.avgAttitude,
+                              avgMeeting: user.avgMeeting,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 5),
+                        decoration: BoxDecoration(
+                          color: isDark ? _darkCard : Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            if (!isDark)
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.04),
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
+                              ),
+                          ],
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  // Rank number or badge
+                                  SizedBox(
+                                    width: 44, height: 44,
+                                    child: rankBadge ?? CircleAvatar(
+                                      backgroundColor: _primaryBlue.withOpacity(0.1),
+                                      child: Text(
+                                        '${idx + 1}',
+                                        style: TextStyle(
+                                          color: _primaryBlue,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  // Name & breakdown
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          user.username,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15,
+                                            color: isDark ? Colors.white : Colors.black87,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            _MiniTag(label: 'W: ${user.avgWeeklyMark}/70', color: _primaryBlue, isDark: isDark),
+                                            const SizedBox(width: 6),
+                                            _MiniTag(label: 'P: ${user.perfMark}/30', color: const Color(0xFFEF5350), isDark: isDark),
+                                            const SizedBox(width: 6),
+                                            _MiniTag(label: 'B: ${user.bdaMark}/20', color: const Color(0xFF26A69A), isDark: isDark),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Percentage
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: pctColor.withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      '${user.percentage.round()}%',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 18,
+                                        color: pctColor,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              // Mini progress bar
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: Stack(
+                                  children: [
+                                    Container(
+                                      height: 5,
+                                      decoration: BoxDecoration(
+                                        color: isDark ? Colors.white.withOpacity(0.06) : Colors.grey[200],
+                                      ),
+                                    ),
+                                    FractionallySizedBox(
+                                      widthFactor: (user.percentage / 100).clamp(0.0, 1.0),
+                                      child: Container(
+                                        height: 5,
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [pctColor, pctColor.withOpacity(0.6)],
+                                          ),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                  childCount: userPerformances.length,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
 
+}
+
+class _RankBadge extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  const _RankBadge({required this.icon, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 44, height: 44,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(icon, color: color, size: 26),
+    );
+  }
+}
+
+class _MiniTag extends StatelessWidget {
+  final String label;
+  final Color color;
+  final bool isDark;
+  const _MiniTag({required this.label, required this.color, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(isDark ? 0.15 : 0.08),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
+      ),
+    );
+  }
 }
 
 class _UserPerf {

@@ -13,6 +13,7 @@ import '../Performance/dailyform.dart';
 import '../Instructions/instructions.dart';
 import '../Misc/theme_notifier.dart';
 import '../Sync Head/sync_head_performance_drawer.dart';
+import '../Performance/my_performance_page.dart';
 
 /// Builds the drawer widget for the home page.
 class HomeDrawer extends StatelessWidget {
@@ -41,6 +42,7 @@ class HomeDrawer extends StatelessWidget {
           _buildSettingsTile(context),
           if (role == 'admin' || role == 'sync_head' || role == 'Sync Head') _buildManageUsersTile(context),
           if (role == 'manager') _buildDailyFormTile(context),
+          if (role == 'sales') _buildMyPerformanceTile(context),
 
           if (role == 'admin') _buildAdminPerformanceTile(context),
           if (role == 'sync_head' || role == 'Sync Head') _buildSyncHeadPerformanceTile(context),
@@ -173,7 +175,21 @@ class HomeDrawer extends StatelessWidget {
     );
   }
 
-  // Removed performance tile for sales role
+  Widget _buildMyPerformanceTile(BuildContext context) {
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: const Icon(Icons.bar_chart_rounded, color: Color(0xFF005BAC)),
+      title: const Text('My Performance'),
+      onTap: () {
+        Navigator.pop(context);
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const MyPerformancePage()),
+        );
+      },
+    );
+  }
 
   Widget _buildSyncHeadPerformanceTile(BuildContext context) {
     return ListTile(
