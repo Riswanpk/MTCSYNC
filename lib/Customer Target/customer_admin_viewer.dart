@@ -63,16 +63,15 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
   Future<void> _fetchUsersAndBranches() async {
     setState(() { _loading = true; });
     try {
-      final snapshot = await FirebaseFirestore.instance.collection('users').get();
-      final users = snapshot.docs
-          .map((doc) => {
-                'email': doc['email'],
-                'name': doc['username'],
-                'branch': doc['branch'],
+      final allCachedUsers = await UserCacheService.instance.getAllUsers();
+      final users = allCachedUsers
+          .map((u) => {
+                'email': u['email'],
+                'name': u['username'],
+                'branch': u['branch'],
               })
           .toList();
-      final branches = users.map((u) => u['branch'] as String).toSet().toList();
-      branches.sort(); // Sort branches in ascending order
+      final branches = await UserCacheService.instance.getBranches();
       String? autoBranch = widget.forceBranch;
       List<Map<String, dynamic>> filteredUsers = users;
       if (autoBranch != null) {

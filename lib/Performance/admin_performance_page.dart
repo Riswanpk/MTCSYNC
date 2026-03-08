@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../Misc/user_cache_service.dart';
 
 class AdminPerformancePage extends StatefulWidget {
   const AdminPerformancePage({Key? key}) : super(key: key);
@@ -27,15 +28,9 @@ class _AdminPerformancePageState extends State<AdminPerformancePage> {
   }
 
   Future<void> fetchBranches() async {
-    final usersSnap = await FirebaseFirestore.instance.collection('users').get();
-    final branchSet = <String>{};
-    for (var doc in usersSnap.docs) {
-      final branch = doc.data()['branch'];
-      if (branch != null) branchSet.add(branch);
-    }
-    final sortedBranches = branchSet.toList()..sort();
+    final branchList = await UserCacheService.instance.getBranches();
     setState(() {
-      branches = sortedBranches.map((b) => {'branch': b}).toList();
+      branches = branchList.map((b) => {'branch': b}).toList();
     });
   }
 

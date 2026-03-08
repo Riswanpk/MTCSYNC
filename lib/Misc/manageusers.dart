@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:collection/collection.dart'; // Add this for groupBy
 import 'user_detail_page.dart';
+import 'user_cache_service.dart';
 
 class ManageUsersPage extends StatefulWidget {
   final String userRole;
@@ -17,13 +18,25 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
     bool _filterByVersion = false;
   final List<String> _roles = ['sales', 'manager', 'admin', 'sync_head'];
   String? _currentUserId;
-  String _searchQuery = ''; // <-- Add this line
-  final TextEditingController _searchController = TextEditingController(); // <-- Add this line
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+  List<QueryDocumentSnapshot>? _userDocs;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    _loadUsers();
+  }
+
+  Future<void> _loadUsers() async {
+    setState(() => _isLoading = true);
+    final snapshot = await FirebaseFirestore.instance.collection('users').get();
+    setState(() {
+      _userDocs = snapshot.docs;
+      _isLoading = false;
+    });
   }
 
   @override
@@ -41,7 +54,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         duration: const Duration(seconds: 2),
       ),
     );
-    setState(() {}); // Refresh UI
+    _loadUsers(); // Refresh UI
   }
 
   void _confirmDeleteUser(String uid, String email) {
@@ -176,7 +189,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
   }
 
   Future<Map<String, List<Map<String, dynamic>>>> _fetchUserVersionsByBranch() async {
-    final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
+    final allUsers = await UserCacheService.instance.getAllUsers();
     final versionsSnapshot = await FirebaseFirestore.instance.collection('user_version').get();
 
     // Map user uid to version info
@@ -185,13 +198,12 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
     };
 
     // Build user info list with branch and version
-    final userInfoList = usersSnapshot.docs.map((doc) {
-      final data = doc.data();
-      final uid = doc.id;
+    final userInfoList = allUsers.map((u) {
+      final uid = u['uid'] as String;
       return {
-        'username': data['username'] ?? '',
-        'email': data['email'] ?? '',
-        'branch': data['branch'] ?? 'Unknown',
+        'username': u['username'] ?? '',
+        'email': u['email'] ?? '',
+        'branch': (u['branch'] as String?)?.isNotEmpty == true ? u['branch'] : 'Unknown',
         'version': versionMap[uid]?['appVersion'] ?? 'N/A',
       };
     }).toList();
@@ -357,6 +369,11 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         elevation: 0,
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh Users',
+            onPressed: _loadUsers,
+          ),
+          IconButton(
             icon: const Icon(Icons.info_outline),
             tooltip: 'Show User Versions',
             onPressed: _showUserVersionsDialog,
@@ -390,17 +407,16 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('users').snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
+              child: Builder(
+                builder: (context) {
+                  if (_isLoading) {
                     return const Center(child: CircularProgressIndicator());
                   }
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  if (_userDocs == null || _userDocs!.isEmpty) {
                     return const Center(child: Text('No users found.'));
                   }
                   // Filter out the current user
-                  final users = snapshot.data!.docs
+                  final users = _userDocs!
                       .where((doc) => doc.id != _currentUserId)
                       .where((doc) {
                         final username = (doc['username'] ?? '').toString().toLowerCase();
@@ -438,7 +454,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                 ),
                               ),
                             );
-                            if (result == true) setState(() {});
+                            if (result == true) _loadUsers();
                           },
                           leading: CircleAvatar(
                             backgroundColor: const Color(0xFF005BAC),

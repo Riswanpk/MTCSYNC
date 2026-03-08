@@ -7,8 +7,6 @@ import 'package:provider/provider.dart';
 import '../login.dart';
 import '../Misc/settings.dart';
 import '../Misc/user_cache_service.dart';
-import '../Feedback/feedback.dart';
-import '../Feedback/feedback_admin.dart';
 import '../Misc/manageusers.dart';
 import '../Performance/dailyform.dart';
 
@@ -41,7 +39,6 @@ class HomeDrawer extends StatelessWidget {
         children: [
           _buildDrawerHeader(context),
           _buildSettingsTile(context),
-          _buildFeedbackTile(context),
           if (role == 'admin' || role == 'sync_head' || role == 'Sync Head') _buildManageUsersTile(context),
           if (role == 'manager') _buildDailyFormTile(context),
 
@@ -139,34 +136,6 @@ class HomeDrawer extends StatelessWidget {
                 userRole: role ?? '', themeProvider: themeProvider),
           ),
         );
-      },
-    );
-  }
-
-  Widget _buildFeedbackTile(BuildContext context) {
-    return ListTile(
-      dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: const Icon(Icons.feedback, color: Color(0xFF8CC63F)),
-      title: const Text('Feedback'),
-      onTap: () async {
-        Navigator.pop(context);
-
-        final cache = UserCacheService.instance;
-        await cache.ensureLoaded();
-        final userRole = cache.role;
-
-        if (userRole == 'admin' || userRole == 'Sync Head' || userRole == 'sync_head') {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const FeedbackAdminPage()),
-          );
-        } else {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const FeedbackPage()),
-          );
-        }
       },
     );
   }

@@ -8,6 +8,7 @@ import 'monthly.dart';
 import '../Leads/leads.dart';
 import 'daily.dart';
 import 'insights.dart';
+import '../Misc/user_cache_service.dart';
 
 // Theme colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -64,15 +65,7 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
   Future<void> _fetchBranches() async {
-    final usersSnapshot =
-        await FirebaseFirestore.instance.collection('users').get();
-    final branches = usersSnapshot.docs
-        .map((doc) => doc['branch'] ?? '')
-        .where((b) => b != null && b.toString().isNotEmpty)
-        .toSet()
-        .cast<String>()
-        .toList()
-      ..sort();
+    final branches = await UserCacheService.instance.getBranches();
     setState(() {
       _branches = branches;
       _selectedBranch = null;
@@ -974,15 +967,7 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
   }
 
   Future<void> _fetchBranches() async {
-    final usersSnapshot =
-        await FirebaseFirestore.instance.collection('users').get();
-    final branches = usersSnapshot.docs
-        .map((doc) => doc['branch'] ?? '')
-        .where((b) => b != null && b.toString().isNotEmpty)
-        .toSet()
-        .cast<String>()
-        .toList()
-      ..sort();
+    final branches = await UserCacheService.instance.getBranches();
     setState(() {
       _branches = branches;
       if (_branches.isNotEmpty && _selectedBranch == null) {

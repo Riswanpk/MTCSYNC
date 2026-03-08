@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../Misc/theme_notifier.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../Misc/user_cache_service.dart';
 
 // Theme colors (matching dashboard)
 const Color _primaryBlue = Color(0xFF005BAC);
@@ -46,14 +47,9 @@ class _ExcelViewPerformancePageState extends State<ExcelViewPerformancePage>
     setState(() {
       isLoadingBranches = true;
     });
-    final snap = await FirebaseFirestore.instance.collection('users').get();
-    final branchSet = <String>{};
-    for (var doc in snap.docs) {
-      final branch = doc.data()['branch'];
-      if (branch != null) branchSet.add(branch);
-    }
+    final branchList = await UserCacheService.instance.getBranches();
     setState(() {
-      branches = branchSet.toList()..sort();
+      branches = branchList;
       isLoadingBranches = false;
     });
     _animController.forward();

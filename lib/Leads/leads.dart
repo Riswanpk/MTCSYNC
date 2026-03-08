@@ -7,7 +7,7 @@ import 'leadsform.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:intl/intl.dart';
 import 'customer_list.dart'; 
-
+import '../Misc/user_cache_service.dart';
 
 class LeadsPage extends StatefulWidget {
   final String branch;
@@ -98,14 +98,7 @@ class _LeadsPageState extends State<LeadsPage> {
   }
 
   Future<void> _fetchBranches() async {
-    final snapshot = await FirebaseFirestore.instance.collection('users').get();
-    final branches = snapshot.docs
-        .map((doc) => doc.data()['branch'] as String?)
-        .where((branch) => branch != null)
-        .toSet()
-        .cast<String>()
-        .toList()
-      ..sort();
+    final branches = await UserCacheService.instance.getBranches();
     setState(() {
       availableBranches = branches;
       // Do not auto-select a branch or load leads here

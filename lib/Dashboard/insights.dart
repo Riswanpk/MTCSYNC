@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../Misc/user_cache_service.dart';
 
 // Add your theme colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -32,13 +33,7 @@ class _InsightsPageState extends State<InsightsPage> {
     final role = userData['role'] ?? 'sales';
     final userBranch = userData['branch'] ?? '';
 
-    final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
-    final branches = usersSnapshot.docs
-        .map((doc) => doc['branch'] ?? '')
-        .where((b) => b != null && b.toString().isNotEmpty)
-        .toSet()
-        .cast<String>()
-        .toList();
+    final branches = await UserCacheService.instance.getBranches();
 
     setState(() {
       _role = role;
@@ -55,21 +50,21 @@ class _InsightsPageState extends State<InsightsPage> {
     final monthStart = DateTime(now.year, now.month, 1);
 
     // Fetch all users and exclude admin/manager roles, filter by branch if manager or admin selected branch
-    final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
+    final allUsers = await UserCacheService.instance.getAllUsers();
     final users = {
-      for (var doc in usersSnapshot.docs)
-        if ((doc['role'] ?? 'sales') != 'admin' &&
-            (doc['role'] ?? 'sales') != 'manager' &&
+      for (var u in allUsers)
+        if ((u['role'] ?? 'sales') != 'admin' &&
+            (u['role'] ?? 'sales') != 'manager' &&
             (
-              (_role == 'manager' && (doc['branch'] ?? '') == _userBranch) ||
-              ((_role == 'admin' || _role == 'Sync Head' || _role == 'sync_head') && _selectedBranch != null && (doc['branch'] ?? '') == _selectedBranch) ||
+              (_role == 'manager' && (u['branch'] ?? '') == _userBranch) ||
+              ((_role == 'admin' || _role == 'Sync Head' || _role == 'sync_head') && _selectedBranch != null && (u['branch'] ?? '') == _selectedBranch) ||
               (_role != 'admin' && _role != 'manager')
             )
         )
-          doc.id: {
-            'username': doc['username'] ?? '',
-            'email': doc['email'] ?? '',
-            'branch': doc['branch'] ?? '',
+          u['uid'] as String: {
+            'username': u['username'] ?? '',
+            'email': u['email'] ?? '',
+            'branch': u['branch'] ?? '',
           }
     };
 

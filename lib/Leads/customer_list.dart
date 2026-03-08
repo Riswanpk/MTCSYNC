@@ -118,8 +118,11 @@ class _CustomerListPageState extends State<CustomerListPage> {
       );
     }
 
-    // Always fetch all customer, filter in Dart for matching branch
-    final customerQuery = FirebaseFirestore.instance.collection('customer');
+    // Filter by branch on Firestore side for non-admin users
+    Query customerQuery = FirebaseFirestore.instance.collection('customer');
+    if (userRole != 'admin' && userRole != 'Sync Head' && userRole != 'sync_head') {
+      customerQuery = customerQuery.where('branch', isEqualTo: userBranch);
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -133,15 +136,12 @@ class _CustomerListPageState extends State<CustomerListPage> {
             return const Center(child: CircularProgressIndicator());
           }
           final docs = snapshot.data!.docs;
-          // Filter by branch in Dart
+          // Filter by search query in Dart
           final filteredDocs = docs.where((doc) {
             final data = doc.data() as Map<String, dynamic>;
-            final branch = (data['branch'] ?? '').toString();
             final name = (data['name'] ?? '').toString().toLowerCase();
-            // Admin: show all, others: only matching branch
-            final branchMatch = (userRole == 'admin' || userRole == 'Sync Head' || userRole == 'sync_head') ? true : branch == userBranch;
             final nameMatch = searchQuery.isEmpty || name.contains(searchQuery);
-            return branchMatch && nameMatch;
+            return nameMatch;
           }).toList();
 
           if (filteredDocs.isEmpty) {

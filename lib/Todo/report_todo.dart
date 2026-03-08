@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
+import '../Misc/user_cache_service.dart';
 
 class ReportTodoPage extends StatefulWidget {
   const ReportTodoPage({super.key});
@@ -31,12 +32,7 @@ class _ReportTodoPageState extends State<ReportTodoPage> {
   }
 
   Future<void> _fetchBranches() async {
-    final snapshot = await FirebaseFirestore.instance.collection('users').get();
-    final branches = snapshot.docs
-        .map((doc) => doc.data()['branch'] as String?)
-        .where((branch) => branch != null)
-        .toSet()
-        .cast<String>() .toList();
+    final branches = await UserCacheService.instance.getBranches();
     setState(() {
       _branches = branches;
     });

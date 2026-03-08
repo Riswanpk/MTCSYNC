@@ -6,6 +6,7 @@ import '../Todo/todo_leads_full_month.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:intl/intl.dart';
+import '../Misc/user_cache_service.dart';
 
 class DailyDashboardPage extends StatefulWidget {
   const DailyDashboardPage({super.key});
@@ -51,14 +52,7 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
     _role = userDoc['role'];
     _userBranch = userDoc['branch'];
     if (_role == 'admin' || _role == 'Sync Head' || _role == 'sync_head') {
-      final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
-        _branches = usersSnapshot.docs
-            .map((doc) => doc['branch'] ?? '')
-            .where((b) => b != null && b.toString().isNotEmpty)
-            .toSet()
-            .cast<String>()
-            .toList()
-            ..sort();
+      _branches = await UserCacheService.instance.getBranches();
         _selectedBranch = _branches.isNotEmpty ? _branches.first : null;
     } else {
       _selectedBranch = _userBranch;
