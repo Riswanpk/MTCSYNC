@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../Misc/user_cache_service.dart';
-import 'package:mtcsync/Performance/insights_detail_viewer.dart';
+import 'insights_detail_viewer.dart';
+
+const Color _primaryBlue = Color(0xFF005BAC);
+const Color _primaryGreen = Color(0xFF8CC63F);
 
 class InsightsPerformancePage extends StatefulWidget {
   @override
@@ -49,10 +52,6 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
     final monthStart = DateTime(prevMonthYear, prevMonth, 1);
     final monthEnd = DateTime(prevMonthYear, prevMonth + 1, 1);
 
-    // Get current month for performance mark
-    final perfMonth = now.month;
-    final perfYear = now.year;
-
     List<_UserPerf> perfList = [];
 
     // Batch fetch: get all dailyforms for the timestamp range at once
@@ -72,20 +71,25 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
       formsByUser[userId]!.add(data);
     }
 
-    // Batch fetch: get all performance marks for current month at once
-    final allPerfSnap = await FirebaseFirestore.instance
+    // Fetch performance marks from new structure: performance_mark/{monthYear}/branches/{branch}
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    final perfMonthYear = "${monthNames[prevMonth - 1]} $prevMonthYear";
+    final branchDoc = await FirebaseFirestore.instance
         .collection('performance_mark')
-        .where('month', isEqualTo: perfMonth)
-        .where('year', isEqualTo: perfYear)
+        .doc(perfMonthYear)
+        .collection('branches')
+        .doc(branch)
         .get();
 
-    // Map userId to performance mark
     final perfMarkByUser = <String, int>{};
-    for (final doc in allPerfSnap.docs) {
-      final data = doc.data();
-      final userId = data['userId'] as String?;
-      if (userId == null) continue;
-      perfMarkByUser[userId] = data['score'] is int ? data['score'] : 0;
+    final bdaMarkByUser = <String, int>{};
+    if (branchDoc.exists && branchDoc.data()?['users'] != null) {
+      final usersMap = Map<String, dynamic>.from(branchDoc.data()!['users']);
+      for (final entry in usersMap.entries) {
+        final userData = Map<String, dynamic>.from(entry.value);
+        perfMarkByUser[entry.key] = userData['score'] is int ? userData['score'] : 0;
+        bdaMarkByUser[entry.key] = userData['bdaScore'] is int ? userData['bdaScore'] : 0;
+      }
     }
 
     for (final user in users) {
@@ -132,17 +136,20 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
       double avgWeeklyMark = weekCount > 0 ? totalSum / weekCount : 0;
 
       int perfMark = perfMarkByUser[user['id']] ?? 0;
+      int bdaMark = bdaMarkByUser[user['id']] ?? 0;
 
-      int total = avgWeeklyMark.round() + perfMark;
+      int rawTotal = avgWeeklyMark.round() + perfMark + bdaMark;
+      double percentage = (rawTotal / 120) * 100;
       perfList.add(_UserPerf(
         userId: user['id'],
         username: user['username'],
         avgWeeklyMark: avgWeeklyMark.round(),
         perfMark: perfMark,
-        total: total,
+        bdaMark: bdaMark,
+        percentage: percentage,
       ));
     }
-    perfList.sort((a, b) => b.total.compareTo(a.total));
+    perfList.sort((a, b) => b.percentage.compareTo(a.percentage));
     setState(() {
       userPerformances = perfList;
       isLoadingUsers = false;
@@ -151,12 +158,12 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF181A20) : Colors.white,
       appBar: AppBar(
         title: const Text('Performance Insights'),
-        backgroundColor: theme.colorScheme.primary,
+        backgroundColor: _primaryBlue,
         foregroundColor: Colors.white,
       ),
       body: Padding(
@@ -167,8 +174,20 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
             isLoadingBranches
                 ? const Center(child: CircularProgressIndicator())
                 : DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(labelText: 'Select Branch'),
+                    decoration: InputDecoration(
+                      labelText: 'Select Branch',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: _primaryBlue.withOpacity(0.3)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: _primaryBlue, width: 2),
+                      ),
+                    ),
                     value: selectedBranch,
+                    hint: const Text('Select Branch'),
                     items: branches
                         .map((b) => DropdownMenuItem(value: b, child: Text(b)))
                         .toList(),
@@ -181,69 +200,83 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
                     },
                   ),
             const SizedBox(height: 24),
-            if (selectedBranch != null)
-              isLoadingUsers
-                  ? const Center(child: CircularProgressIndicator())
-                  : Expanded(
-                      child: userPerformances.isEmpty
-                          ? Center(child: Text('No data for this branch'))
-                          : ListView.builder(
-                              itemCount: userPerformances.length,
-                              itemBuilder: (context, idx) {
-                                final user = userPerformances[idx];
-                                return GestureDetector(
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => InsightsDetailViewerPage(
-                                          userId: user.userId,
-                                          username: user.username,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                  child: Card(
-                                    color: isDark ? Colors.grey[900] : Colors.white,
-                                    elevation: 2,
-                                    margin: const EdgeInsets.symmetric(vertical: 6),
-                                    child: ListTile(
-                                      leading: CircleAvatar(
-                                        backgroundColor: Colors.blue,
-                                        child: Text(
-                                          '${idx + 1}',
-                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                        ),
-                                      ),
-                                      title: Text(user.username, style: TextStyle(fontWeight: FontWeight.bold)),
-                                      subtitle: Text(
-                                        'Avg Weekly: ${user.avgWeeklyMark} / 70 | Perf: ${user.perfMark} / 30',
-                                        style: TextStyle(fontSize: 13),
-                                      ),
-                                      trailing: Text(
-                                        '${user.total} / 100',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 18,
-                                          color: user.total >= 80
-                                              ? Colors.green
-                                              : user.total >= 60
-                                                  ? Colors.orange
-                                                  : Colors.red,
-                                        ),
-                                      ),
-                                    ),
+            if (selectedBranch == null)
+              Expanded(
+                child: Center(
+                  child: Text(
+                    'Select a branch to view insights',
+                    style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                  ),
+                ),
+              )
+            else if (isLoadingUsers)
+              const Expanded(child: Center(child: CircularProgressIndicator()))
+            else
+              Expanded(
+                child: userPerformances.isEmpty
+                    ? Center(child: Text('No data for this branch', style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600])))
+                    : ListView.builder(
+                        itemCount: userPerformances.length,
+                        itemBuilder: (context, idx) {
+                          final user = userPerformances[idx];
+                          return GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => InsightsDetailViewerPage(
+                                    userId: user.userId,
+                                    username: user.username,
+                                    avgWeeklyMark: user.avgWeeklyMark,
+                                    perfMark: user.perfMark,
+                                    bdaMark: user.bdaMark,
+                                    percentage: user.percentage,
                                   ),
-                                );
-                              },
+                                ),
+                              );
+                            },
+                            child: Card(
+                              color: isDark ? Colors.grey[900] : Colors.white,
+                              elevation: 2,
+                              margin: const EdgeInsets.symmetric(vertical: 6),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: _primaryBlue,
+                                  child: Text(
+                                    '${idx + 1}',
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                title: Text(user.username, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                subtitle: Text(
+                                  'Weekly: ${user.avgWeeklyMark}/70 | Perf: ${user.perfMark}/30 | BDA: ${user.bdaMark}/20',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                trailing: Text(
+                                  '${user.percentage.round()}%',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                    color: user.percentage >= 80
+                                        ? _primaryGreen
+                                        : user.percentage >= 60
+                                            ? Colors.orange
+                                            : Colors.red,
+                                  ),
+                                ),
+                              ),
                             ),
-                    ),
+                          );
+                        },
+                      ),
+              ),
           ],
         ),
       ),
-      backgroundColor: isDark ? const Color(0xFF181A20) : Colors.white,
     );
   }
+
 }
 
 class _UserPerf {
@@ -251,13 +284,15 @@ class _UserPerf {
   final String username;
   final int avgWeeklyMark;
   final int perfMark;
-  final int total;
+  final int bdaMark;
+  final double percentage;
 
   _UserPerf({
     required this.userId,
     required this.username,
     required this.avgWeeklyMark,
     required this.perfMark,
-    required this.total,
+    required this.bdaMark,
+    required this.percentage,
   });
 }
