@@ -519,7 +519,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
       final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
       final message = Message()
         ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
-        ..recipients.addAll(['crmmalabar@gmail.com'])
+        ..recipients.addAll(['crmmalabar@gmail.com','performancemtc@gmail.com'])
         ..subject = 'Leads Report — $_selectedBranch'
         ..text = 'Please find attached the leads report for $_selectedBranch.'
         ..attachments = [FileAttachment(file)];

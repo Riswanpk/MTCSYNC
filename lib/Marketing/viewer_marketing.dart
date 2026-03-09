@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'viewer_marketing_detail.dart';
 import 'report_marketing.dart';
 import 'package:intl/intl.dart'; // Add for date formatting
@@ -13,6 +14,7 @@ class ViewerMarketingPage extends StatefulWidget {
 
 class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
   String? selectedBranch;
+  bool _isDeletingOldForms = false;
   String? selectedUsername;
   DateTimeRange? selectedDateRange;
 
@@ -110,6 +112,23 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
                 );
               },
             ),
+            _isDeletingOldForms
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  )
+                : IconButton(
+                    icon: const Icon(Icons.delete_sweep_outlined),
+                    tooltip: 'Delete forms older than 40 days',
+                    onPressed: () => _deleteOldForms(context),
+                  ),
           ],
         ),
         backgroundColor: theme.scaffoldBackgroundColor,
@@ -267,6 +286,72 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _deleteOldForms(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Old Marketing Forms'),
+        content: const Text(
+          'This will permanently delete all marketing forms and their images that are more than 40 days old. This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isDeletingOldForms = true);
+
+    try {
+      final cutoff = DateTime.now().subtract(const Duration(days: 40));
+      final snapshot = await FirebaseFirestore.instance
+          .collection('marketing')
+          .where('timestamp', isLessThan: Timestamp.fromDate(cutoff))
+          .get();
+
+      int deleted = 0;
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final imageUrl = data['imageUrl'] as String?;
+
+        if (imageUrl != null && imageUrl.isNotEmpty) {
+          try {
+            await FirebaseStorage.instance.refFromURL(imageUrl).delete();
+          } catch (e) {
+            // Image may already be deleted or inaccessible — continue
+            debugPrint('Could not delete image for doc ${doc.id}: $e');
+          }
+        }
+
+        await doc.reference.delete();
+        deleted++;
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Deleted \$deleted old marketing form(s).')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error deleting old forms: \$e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isDeletingOldForms = false);
+    }
   }
 
   // Helper to build the Firestore query with filters
