@@ -25,6 +25,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
   DateTimeRange? _selectedRange;
   bool _branchesLoading = true;
   bool _isGenerating = false;
+  bool _detailedReport = false;
 
   @override
   void initState() {
@@ -176,6 +177,8 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           'created': (results[0] as QuerySnapshot).size,
           'sale': (results[1] as QuerySnapshot).size,
           'cancelled': (results[2] as QuerySnapshot).size,
+          'saleLeads': (results[1] as QuerySnapshot).docs,
+          'cancelledLeads': (results[2] as QuerySnapshot).docs,
         });
         }));
 
@@ -218,124 +221,194 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           titleRange.cellStyle.fontColor = '#FFFFFF';
           sheet.getRangeByName('A1').rowHeight = 30;
 
-          // Header row — unique style name per sheet to avoid collision
-          const headers = ['User', 'Role', 'Created', 'Sale', 'Cancelled'];
-          final headerStyle = workbook.styles.add('header_$sheetIdx');
-          headerStyle.bold = true;
-          headerStyle.fontSize = 11;
-          headerStyle.backColor = '#8CC63F';
-          headerStyle.fontColor = '#FFFFFF';
-          headerStyle.hAlign = xlsio.HAlignType.center;
-          headerStyle.borders.bottom.lineStyle = xlsio.LineStyle.thin;
+          if (!_detailedReport) {
+            // Header row — unique style name per sheet to avoid collision
+            const headers = ['User', 'Role', 'Created', 'Sale', 'Cancelled'];
+            final headerStyle = workbook.styles.add('header_$sheetIdx');
+            headerStyle.bold = true;
+            headerStyle.fontSize = 11;
+            headerStyle.backColor = '#8CC63F';
+            headerStyle.fontColor = '#FFFFFF';
+            headerStyle.hAlign = xlsio.HAlignType.center;
+            headerStyle.borders.bottom.lineStyle = xlsio.LineStyle.thin;
 
-          for (int c = 0; c < headers.length; c++) {
-            final cell = sheet.getRangeByIndex(2, c + 1);
-            cell.setText(headers[c]);
-            cell.cellStyle = headerStyle;
+            for (int c = 0; c < headers.length; c++) {
+              final cell = sheet.getRangeByIndex(2, c + 1);
+              cell.setText(headers[c]);
+              cell.cellStyle = headerStyle;
+            }
+
+            // Data rows
+            int totalCreated = 0, totalSale = 0, totalCancelled = 0;
+
+            final dataStyle = workbook.styles.add('data_$sheetIdx');
+            dataStyle.fontSize = 11;
+            dataStyle.hAlign = xlsio.HAlignType.center;
+
+            final nameStyle = workbook.styles.add('nameStyle_$sheetIdx');
+            nameStyle.fontSize = 11;
+            nameStyle.hAlign = xlsio.HAlignType.left;
+
+            final altStyle = workbook.styles.add('altData_$sheetIdx');
+            altStyle.fontSize = 11;
+            altStyle.hAlign = xlsio.HAlignType.center;
+            altStyle.backColor = '#F0F5FF';
+
+            final altNameStyle = workbook.styles.add('altNameStyle_$sheetIdx');
+            altNameStyle.fontSize = 11;
+            altNameStyle.hAlign = xlsio.HAlignType.left;
+            altNameStyle.backColor = '#F0F5FF';
+
+            for (int i = 0; i < usersForBranch.length; i++) {
+              final row = i + 3;
+              final s = usersForBranch[i];
+              final created = s['created'] as int;
+              final sale = s['sale'] as int;
+              final cancelled = s['cancelled'] as int;
+              totalCreated += created;
+              totalSale += sale;
+              totalCancelled += cancelled;
+
+              final isAlt = i % 2 == 1;
+              final currentNameStyle = isAlt ? altNameStyle : nameStyle;
+              final currentDataStyle = isAlt ? altStyle : dataStyle;
+
+              final cellA = sheet.getRangeByIndex(row, 1);
+              cellA.setText(s['username'] as String);
+              cellA.cellStyle = currentNameStyle;
+
+              final cellB = sheet.getRangeByIndex(row, 2);
+              final role = s['role'] as String;
+              cellB.setText(
+                  role.isNotEmpty ? role[0].toUpperCase() + role.substring(1) : role);
+              cellB.cellStyle = currentDataStyle;
+
+              final cellC = sheet.getRangeByIndex(row, 3);
+              cellC.setNumber(created.toDouble());
+              cellC.cellStyle = currentDataStyle;
+
+              final cellD = sheet.getRangeByIndex(row, 4);
+              cellD.setNumber(sale.toDouble());
+              cellD.cellStyle = currentDataStyle;
+
+              final cellE = sheet.getRangeByIndex(row, 5);
+              cellE.setNumber(cancelled.toDouble());
+              cellE.cellStyle = currentDataStyle;
+            }
+
+            // Totals row
+            final totalsRow = usersForBranch.length + 3;
+            final totalsStyle = workbook.styles.add('totals_$sheetIdx');
+            totalsStyle.bold = true;
+            totalsStyle.fontSize = 12;
+            totalsStyle.hAlign = xlsio.HAlignType.center;
+            totalsStyle.backColor = '#005BAC';
+            totalsStyle.fontColor = '#FFFFFF';
+            totalsStyle.borders.top.lineStyle = xlsio.LineStyle.medium;
+
+            final totalsNameStyle = workbook.styles.add('totalsName_$sheetIdx');
+            totalsNameStyle.bold = true;
+            totalsNameStyle.fontSize = 12;
+            totalsNameStyle.hAlign = xlsio.HAlignType.left;
+            totalsNameStyle.backColor = '#005BAC';
+            totalsNameStyle.fontColor = '#FFFFFF';
+            totalsNameStyle.borders.top.lineStyle = xlsio.LineStyle.medium;
+
+            final tA = sheet.getRangeByIndex(totalsRow, 1);
+            tA.setText('TOTAL');
+            tA.cellStyle = totalsNameStyle;
+
+            final tB = sheet.getRangeByIndex(totalsRow, 2);
+            tB.setText('');
+            tB.cellStyle = totalsStyle;
+
+            final tC = sheet.getRangeByIndex(totalsRow, 3);
+            tC.setNumber(totalCreated.toDouble());
+            tC.cellStyle = totalsStyle;
+
+            final tD = sheet.getRangeByIndex(totalsRow, 4);
+            tD.setNumber(totalSale.toDouble());
+            tD.cellStyle = totalsStyle;
+
+            final tE = sheet.getRangeByIndex(totalsRow, 5);
+            tE.setNumber(totalCancelled.toDouble());
+            tE.cellStyle = totalsStyle;
+
+            // Column widths
+            sheet.getRangeByIndex(1, 1).columnWidth = 25;
+            sheet.getRangeByIndex(1, 2).columnWidth = 15;
+            sheet.getRangeByIndex(1, 3).columnWidth = 14;
+            sheet.getRangeByIndex(1, 4).columnWidth = 14;
+            sheet.getRangeByIndex(1, 5).columnWidth = 14;
+          } else {
+            // Column widths for detail view
+            sheet.getRangeByIndex(1, 1).columnWidth = 25;
+            sheet.getRangeByIndex(1, 2).columnWidth = 20;
+            sheet.getRangeByIndex(1, 3).columnWidth = 40;
+
+            // ── Detailed Lead Breakdown ────────────────────────────────────
+            int detailRow = 2;
+
+            final detailUserHdrSt = workbook.styles.add('detailUserHdr_$sheetIdx');
+            detailUserHdrSt.bold = true;
+            detailUserHdrSt.fontSize = 11;
+            detailUserHdrSt.backColor = '#005BAC';
+            detailUserHdrSt.fontColor = '#FFFFFF';
+            detailUserHdrSt.hAlign = xlsio.HAlignType.left;
+
+            final detailColHdrSt = workbook.styles.add('detailColHdr_$sheetIdx');
+            detailColHdrSt.bold = true;
+            detailColHdrSt.fontSize = 10;
+            detailColHdrSt.backColor = '#8CC63F';
+            detailColHdrSt.fontColor = '#FFFFFF';
+            detailColHdrSt.hAlign = xlsio.HAlignType.center;
+
+            final detailDataSt = workbook.styles.add('detailData_$sheetIdx');
+            detailDataSt.fontSize = 10;
+            detailDataSt.hAlign = xlsio.HAlignType.left;
+
+            final detailAltSt = workbook.styles.add('detailAlt_$sheetIdx');
+            detailAltSt.fontSize = 10;
+            detailAltSt.hAlign = xlsio.HAlignType.left;
+            detailAltSt.backColor = '#F0F5FF';
+
+            for (final userStat in usersForBranch) {
+              final saleLeadsDocs = userStat['saleLeads'] as List<dynamic>;
+              final cancelledLeadsDocs = userStat['cancelledLeads'] as List<dynamic>;
+              if (saleLeadsDocs.isEmpty && cancelledLeadsDocs.isEmpty) continue;
+
+              final userHdrRange = sheet.getRangeByIndex(detailRow, 1, detailRow, 3);
+              userHdrRange.merge();
+              userHdrRange.setText(userStat['username'] as String);
+              userHdrRange.cellStyle = detailUserHdrSt;
+              detailRow++;
+
+              const detailHeaders = ['Customer Name', 'Sold/Cancelled', 'Comments'];
+              for (int c = 0; c < detailHeaders.length; c++) {
+                final cell = sheet.getRangeByIndex(detailRow, c + 1);
+                cell.setText(detailHeaders[c]);
+                cell.cellStyle = detailColHdrSt;
+              }
+              detailRow++;
+
+              int leadIdx = 0;
+              for (final doc in [...saleLeadsDocs, ...cancelledLeadsDocs]) {
+                final d = (doc as QueryDocumentSnapshot).data() as Map<String, dynamic>;
+                final isAlt = leadIdx % 2 == 1;
+                final st = isAlt ? detailAltSt : detailDataSt;
+                final statusLabel = (d['status'] == 'Sale') ? 'Sold' : 'Cancelled';
+                sheet.getRangeByIndex(detailRow, 1).setText(d['name'] ?? '');
+                sheet.getRangeByIndex(detailRow, 1).cellStyle = st;
+                sheet.getRangeByIndex(detailRow, 2).setText(statusLabel);
+                sheet.getRangeByIndex(detailRow, 2).cellStyle = st;
+                sheet.getRangeByIndex(detailRow, 3).setText(d['comments'] ?? '');
+                sheet.getRangeByIndex(detailRow, 3).cellStyle = st;
+                detailRow++;
+                leadIdx++;
+              }
+              detailRow++;
+            }
           }
-
-          // Data rows
-          int totalCreated = 0, totalSale = 0, totalCancelled = 0;
-
-          final dataStyle = workbook.styles.add('data_$sheetIdx');
-          dataStyle.fontSize = 11;
-          dataStyle.hAlign = xlsio.HAlignType.center;
-
-          final nameStyle = workbook.styles.add('nameStyle_$sheetIdx');
-          nameStyle.fontSize = 11;
-          nameStyle.hAlign = xlsio.HAlignType.left;
-
-          final altStyle = workbook.styles.add('altData_$sheetIdx');
-          altStyle.fontSize = 11;
-          altStyle.hAlign = xlsio.HAlignType.center;
-          altStyle.backColor = '#F0F5FF';
-
-          final altNameStyle = workbook.styles.add('altNameStyle_$sheetIdx');
-          altNameStyle.fontSize = 11;
-          altNameStyle.hAlign = xlsio.HAlignType.left;
-          altNameStyle.backColor = '#F0F5FF';
-
-          for (int i = 0; i < usersForBranch.length; i++) {
-            final row = i + 3;
-            final s = usersForBranch[i];
-            final created = s['created'] as int;
-            final sale = s['sale'] as int;
-            final cancelled = s['cancelled'] as int;
-            totalCreated += created;
-            totalSale += sale;
-            totalCancelled += cancelled;
-
-            final isAlt = i % 2 == 1;
-            final currentNameStyle = isAlt ? altNameStyle : nameStyle;
-            final currentDataStyle = isAlt ? altStyle : dataStyle;
-
-            final cellA = sheet.getRangeByIndex(row, 1);
-            cellA.setText(s['username'] as String);
-            cellA.cellStyle = currentNameStyle;
-
-            final cellB = sheet.getRangeByIndex(row, 2);
-            final role = s['role'] as String;
-            cellB.setText(
-                role.isNotEmpty ? role[0].toUpperCase() + role.substring(1) : role);
-            cellB.cellStyle = currentDataStyle;
-
-            final cellC = sheet.getRangeByIndex(row, 3);
-            cellC.setNumber(created.toDouble());
-            cellC.cellStyle = currentDataStyle;
-
-            final cellD = sheet.getRangeByIndex(row, 4);
-            cellD.setNumber(sale.toDouble());
-            cellD.cellStyle = currentDataStyle;
-
-            final cellE = sheet.getRangeByIndex(row, 5);
-            cellE.setNumber(cancelled.toDouble());
-            cellE.cellStyle = currentDataStyle;
-          }
-
-          // Totals row
-          final totalsRow = usersForBranch.length + 3;
-          final totalsStyle = workbook.styles.add('totals_$sheetIdx');
-          totalsStyle.bold = true;
-          totalsStyle.fontSize = 12;
-          totalsStyle.hAlign = xlsio.HAlignType.center;
-          totalsStyle.backColor = '#005BAC';
-          totalsStyle.fontColor = '#FFFFFF';
-          totalsStyle.borders.top.lineStyle = xlsio.LineStyle.medium;
-
-          final totalsNameStyle = workbook.styles.add('totalsName_$sheetIdx');
-          totalsNameStyle.bold = true;
-          totalsNameStyle.fontSize = 12;
-          totalsNameStyle.hAlign = xlsio.HAlignType.left;
-          totalsNameStyle.backColor = '#005BAC';
-          totalsNameStyle.fontColor = '#FFFFFF';
-          totalsNameStyle.borders.top.lineStyle = xlsio.LineStyle.medium;
-
-          final tA = sheet.getRangeByIndex(totalsRow, 1);
-          tA.setText('TOTAL');
-          tA.cellStyle = totalsNameStyle;
-
-          final tB = sheet.getRangeByIndex(totalsRow, 2);
-          tB.setText('');
-          tB.cellStyle = totalsStyle;
-
-          final tC = sheet.getRangeByIndex(totalsRow, 3);
-          tC.setNumber(totalCreated.toDouble());
-          tC.cellStyle = totalsStyle;
-
-          final tD = sheet.getRangeByIndex(totalsRow, 4);
-          tD.setNumber(totalSale.toDouble());
-          tD.cellStyle = totalsStyle;
-
-          final tE = sheet.getRangeByIndex(totalsRow, 5);
-          tE.setNumber(totalCancelled.toDouble());
-          tE.cellStyle = totalsStyle;
-
-          // Column widths
-          sheet.getRangeByIndex(1, 1).columnWidth = 25;
-          sheet.getRangeByIndex(1, 2).columnWidth = 15;
-          sheet.getRangeByIndex(1, 3).columnWidth = 14;
-          sheet.getRangeByIndex(1, 4).columnWidth = 14;
-          sheet.getRangeByIndex(1, 5).columnWidth = 14;
         }
         // Save & send email (moved below)
         final List<int> bytes = workbook.saveAsStream();
@@ -351,7 +424,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
         final message = Message()
           ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
-          ..recipients.addAll(['crmmalabar@gmail.com','performancemtc@gmail.com'])
+          ..recipients.addAll(['crmmalabar@gmail.com'])
           ..subject = 'Leads Report — All Branches'
           ..text = 'Please find attached the leads report for all branches.'
           ..attachments = [FileAttachment(file)];
@@ -386,124 +459,194 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
       titleRange.cellStyle.fontColor = '#FFFFFF';
       sheet.getRangeByName('A1').rowHeight = 30;
 
-      // Header row
-      const headers = ['User', 'Role', 'Created', 'Sale', 'Cancelled'];
-      final headerStyle = workbook.styles.add('header');
-      headerStyle.bold = true;
-      headerStyle.fontSize = 11;
-      headerStyle.backColor = '#8CC63F';
-      headerStyle.fontColor = '#FFFFFF';
-      headerStyle.hAlign = xlsio.HAlignType.center;
-      headerStyle.borders.bottom.lineStyle = xlsio.LineStyle.thin;
+      if (!_detailedReport) {
+        // Header row
+        const headers = ['User', 'Role', 'Created', 'Sale', 'Cancelled'];
+        final headerStyle = workbook.styles.add('header');
+        headerStyle.bold = true;
+        headerStyle.fontSize = 11;
+        headerStyle.backColor = '#8CC63F';
+        headerStyle.fontColor = '#FFFFFF';
+        headerStyle.hAlign = xlsio.HAlignType.center;
+        headerStyle.borders.bottom.lineStyle = xlsio.LineStyle.thin;
 
-      for (int c = 0; c < headers.length; c++) {
-        final cell = sheet.getRangeByIndex(2, c + 1);
-        cell.setText(headers[c]);
-        cell.cellStyle = headerStyle;
+        for (int c = 0; c < headers.length; c++) {
+          final cell = sheet.getRangeByIndex(2, c + 1);
+          cell.setText(headers[c]);
+          cell.cellStyle = headerStyle;
+        }
+
+        // Data rows
+        int totalCreated = 0, totalSale = 0, totalCancelled = 0;
+
+        final dataStyle = workbook.styles.add('data');
+        dataStyle.fontSize = 11;
+        dataStyle.hAlign = xlsio.HAlignType.center;
+
+        final nameStyle = workbook.styles.add('nameStyle');
+        nameStyle.fontSize = 11;
+        nameStyle.hAlign = xlsio.HAlignType.left;
+
+        final altStyle = workbook.styles.add('altData');
+        altStyle.fontSize = 11;
+        altStyle.hAlign = xlsio.HAlignType.center;
+        altStyle.backColor = '#F0F5FF';
+
+        final altNameStyle = workbook.styles.add('altNameStyle');
+        altNameStyle.fontSize = 11;
+        altNameStyle.hAlign = xlsio.HAlignType.left;
+        altNameStyle.backColor = '#F0F5FF';
+
+        for (int i = 0; i < stats.length; i++) {
+          final row = i + 3;
+          final s = stats[i];
+          final created = s['created'] as int;
+          final sale = s['sale'] as int;
+          final cancelled = s['cancelled'] as int;
+          totalCreated += created;
+          totalSale += sale;
+          totalCancelled += cancelled;
+
+          final isAlt = i % 2 == 1;
+          final currentNameStyle = isAlt ? altNameStyle : nameStyle;
+          final currentDataStyle = isAlt ? altStyle : dataStyle;
+
+          final cellA = sheet.getRangeByIndex(row, 1);
+          cellA.setText(s['username'] as String);
+          cellA.cellStyle = currentNameStyle;
+
+          final cellB = sheet.getRangeByIndex(row, 2);
+          final role = s['role'] as String;
+          cellB.setText(
+              role.isNotEmpty ? role[0].toUpperCase() + role.substring(1) : role);
+          cellB.cellStyle = currentDataStyle;
+
+          final cellC = sheet.getRangeByIndex(row, 3);
+          cellC.setNumber(created.toDouble());
+          cellC.cellStyle = currentDataStyle;
+
+          final cellD = sheet.getRangeByIndex(row, 4);
+          cellD.setNumber(sale.toDouble());
+          cellD.cellStyle = currentDataStyle;
+
+          final cellE = sheet.getRangeByIndex(row, 5);
+          cellE.setNumber(cancelled.toDouble());
+          cellE.cellStyle = currentDataStyle;
+        }
+
+        // Totals row
+        final totalsRow = stats.length + 3;
+        final totalsStyle = workbook.styles.add('totals');
+        totalsStyle.bold = true;
+        totalsStyle.fontSize = 12;
+        totalsStyle.hAlign = xlsio.HAlignType.center;
+        totalsStyle.backColor = '#005BAC';
+        totalsStyle.fontColor = '#FFFFFF';
+        totalsStyle.borders.top.lineStyle = xlsio.LineStyle.medium;
+
+        final totalsNameStyle = workbook.styles.add('totalsName');
+        totalsNameStyle.bold = true;
+        totalsNameStyle.fontSize = 12;
+        totalsNameStyle.hAlign = xlsio.HAlignType.left;
+        totalsNameStyle.backColor = '#005BAC';
+        totalsNameStyle.fontColor = '#FFFFFF';
+        totalsNameStyle.borders.top.lineStyle = xlsio.LineStyle.medium;
+
+        final tA = sheet.getRangeByIndex(totalsRow, 1);
+        tA.setText('TOTAL');
+        tA.cellStyle = totalsNameStyle;
+
+        final tB = sheet.getRangeByIndex(totalsRow, 2);
+        tB.setText('');
+        tB.cellStyle = totalsStyle;
+
+        final tC = sheet.getRangeByIndex(totalsRow, 3);
+        tC.setNumber(totalCreated.toDouble());
+        tC.cellStyle = totalsStyle;
+
+        final tD = sheet.getRangeByIndex(totalsRow, 4);
+        tD.setNumber(totalSale.toDouble());
+        tD.cellStyle = totalsStyle;
+
+        final tE = sheet.getRangeByIndex(totalsRow, 5);
+        tE.setNumber(totalCancelled.toDouble());
+        tE.cellStyle = totalsStyle;
+
+        // Column widths
+        sheet.getRangeByIndex(1, 1).columnWidth = 25;
+        sheet.getRangeByIndex(1, 2).columnWidth = 15;
+        sheet.getRangeByIndex(1, 3).columnWidth = 14;
+        sheet.getRangeByIndex(1, 4).columnWidth = 14;
+        sheet.getRangeByIndex(1, 5).columnWidth = 14;
+      } else {
+        // Column widths for detail view
+        sheet.getRangeByIndex(1, 1).columnWidth = 25;
+        sheet.getRangeByIndex(1, 2).columnWidth = 20;
+        sheet.getRangeByIndex(1, 3).columnWidth = 40;
+
+        // ── Detailed Lead Breakdown ──────────────────────────────────────
+        int detailRow = 2;
+
+        final detailUserHdrSt = workbook.styles.add('detailUserHdr');
+        detailUserHdrSt.bold = true;
+        detailUserHdrSt.fontSize = 11;
+        detailUserHdrSt.backColor = '#005BAC';
+        detailUserHdrSt.fontColor = '#FFFFFF';
+        detailUserHdrSt.hAlign = xlsio.HAlignType.left;
+
+        final detailColHdrSt = workbook.styles.add('detailColHdr');
+        detailColHdrSt.bold = true;
+        detailColHdrSt.fontSize = 10;
+        detailColHdrSt.backColor = '#8CC63F';
+        detailColHdrSt.fontColor = '#FFFFFF';
+        detailColHdrSt.hAlign = xlsio.HAlignType.center;
+
+        final detailDataSt = workbook.styles.add('detailData');
+        detailDataSt.fontSize = 10;
+        detailDataSt.hAlign = xlsio.HAlignType.left;
+
+        final detailAltSt = workbook.styles.add('detailAlt');
+        detailAltSt.fontSize = 10;
+        detailAltSt.hAlign = xlsio.HAlignType.left;
+        detailAltSt.backColor = '#F0F5FF';
+
+        for (final userStat in stats) {
+          final saleLeadsDocs = userStat['saleLeads'] as List<dynamic>;
+          final cancelledLeadsDocs = userStat['cancelledLeads'] as List<dynamic>;
+          if (saleLeadsDocs.isEmpty && cancelledLeadsDocs.isEmpty) continue;
+
+          final userHdrRange = sheet.getRangeByIndex(detailRow, 1, detailRow, 3);
+          userHdrRange.merge();
+          userHdrRange.setText(userStat['username'] as String);
+          userHdrRange.cellStyle = detailUserHdrSt;
+          detailRow++;
+
+          const detailHeaders = ['Customer Name', 'Sold/Cancelled', 'Comments'];
+          for (int c = 0; c < detailHeaders.length; c++) {
+            final cell = sheet.getRangeByIndex(detailRow, c + 1);
+            cell.setText(detailHeaders[c]);
+            cell.cellStyle = detailColHdrSt;
+          }
+          detailRow++;
+
+          int leadIdx = 0;
+          for (final doc in [...saleLeadsDocs, ...cancelledLeadsDocs]) {
+            final d = (doc as QueryDocumentSnapshot).data() as Map<String, dynamic>;
+            final isAlt = leadIdx % 2 == 1;
+            final st = isAlt ? detailAltSt : detailDataSt;
+            final statusLabel = (d['status'] == 'Sale') ? 'Sold' : 'Cancelled';
+            sheet.getRangeByIndex(detailRow, 1).setText(d['name'] ?? '');
+            sheet.getRangeByIndex(detailRow, 1).cellStyle = st;
+            sheet.getRangeByIndex(detailRow, 2).setText(statusLabel);
+            sheet.getRangeByIndex(detailRow, 2).cellStyle = st;
+            sheet.getRangeByIndex(detailRow, 3).setText(d['comments'] ?? '');
+            sheet.getRangeByIndex(detailRow, 3).cellStyle = st;
+            detailRow++;
+            leadIdx++;
+          }
+          detailRow++;
+        }
       }
-
-      // Data rows
-      int totalCreated = 0, totalSale = 0, totalCancelled = 0;
-
-      final dataStyle = workbook.styles.add('data');
-      dataStyle.fontSize = 11;
-      dataStyle.hAlign = xlsio.HAlignType.center;
-
-      final nameStyle = workbook.styles.add('nameStyle');
-      nameStyle.fontSize = 11;
-      nameStyle.hAlign = xlsio.HAlignType.left;
-
-      final altStyle = workbook.styles.add('altData');
-      altStyle.fontSize = 11;
-      altStyle.hAlign = xlsio.HAlignType.center;
-      altStyle.backColor = '#F0F5FF';
-
-      final altNameStyle = workbook.styles.add('altNameStyle');
-      altNameStyle.fontSize = 11;
-      altNameStyle.hAlign = xlsio.HAlignType.left;
-      altNameStyle.backColor = '#F0F5FF';
-
-      for (int i = 0; i < stats.length; i++) {
-        final row = i + 3;
-        final s = stats[i];
-        final created = s['created'] as int;
-        final sale = s['sale'] as int;
-        final cancelled = s['cancelled'] as int;
-        totalCreated += created;
-        totalSale += sale;
-        totalCancelled += cancelled;
-
-        final isAlt = i % 2 == 1;
-        final currentNameStyle = isAlt ? altNameStyle : nameStyle;
-        final currentDataStyle = isAlt ? altStyle : dataStyle;
-
-        final cellA = sheet.getRangeByIndex(row, 1);
-        cellA.setText(s['username'] as String);
-        cellA.cellStyle = currentNameStyle;
-
-        final cellB = sheet.getRangeByIndex(row, 2);
-        final role = s['role'] as String;
-        cellB.setText(
-            role.isNotEmpty ? role[0].toUpperCase() + role.substring(1) : role);
-        cellB.cellStyle = currentDataStyle;
-
-        final cellC = sheet.getRangeByIndex(row, 3);
-        cellC.setNumber(created.toDouble());
-        cellC.cellStyle = currentDataStyle;
-
-        final cellD = sheet.getRangeByIndex(row, 4);
-        cellD.setNumber(sale.toDouble());
-        cellD.cellStyle = currentDataStyle;
-
-        final cellE = sheet.getRangeByIndex(row, 5);
-        cellE.setNumber(cancelled.toDouble());
-        cellE.cellStyle = currentDataStyle;
-      }
-
-      // Totals row
-      final totalsRow = stats.length + 3;
-      final totalsStyle = workbook.styles.add('totals');
-      totalsStyle.bold = true;
-      totalsStyle.fontSize = 12;
-      totalsStyle.hAlign = xlsio.HAlignType.center;
-      totalsStyle.backColor = '#005BAC';
-      totalsStyle.fontColor = '#FFFFFF';
-      totalsStyle.borders.top.lineStyle = xlsio.LineStyle.medium;
-
-      final totalsNameStyle = workbook.styles.add('totalsName');
-      totalsNameStyle.bold = true;
-      totalsNameStyle.fontSize = 12;
-      totalsNameStyle.hAlign = xlsio.HAlignType.left;
-      totalsNameStyle.backColor = '#005BAC';
-      totalsNameStyle.fontColor = '#FFFFFF';
-      totalsNameStyle.borders.top.lineStyle = xlsio.LineStyle.medium;
-
-      final tA = sheet.getRangeByIndex(totalsRow, 1);
-      tA.setText('TOTAL');
-      tA.cellStyle = totalsNameStyle;
-
-      final tB = sheet.getRangeByIndex(totalsRow, 2);
-      tB.setText('');
-      tB.cellStyle = totalsStyle;
-
-      final tC = sheet.getRangeByIndex(totalsRow, 3);
-      tC.setNumber(totalCreated.toDouble());
-      tC.cellStyle = totalsStyle;
-
-      final tD = sheet.getRangeByIndex(totalsRow, 4);
-      tD.setNumber(totalSale.toDouble());
-      tD.cellStyle = totalsStyle;
-
-      final tE = sheet.getRangeByIndex(totalsRow, 5);
-      tE.setNumber(totalCancelled.toDouble());
-      tE.cellStyle = totalsStyle;
-
-      // Column widths
-      sheet.getRangeByIndex(1, 1).columnWidth = 25;
-      sheet.getRangeByIndex(1, 2).columnWidth = 15;
-      sheet.getRangeByIndex(1, 3).columnWidth = 14;
-      sheet.getRangeByIndex(1, 4).columnWidth = 14;
-      sheet.getRangeByIndex(1, 5).columnWidth = 14;
 
       // ── 4. Save & send email ─────────────────────────────────────────
       final List<int> bytes = workbook.saveAsStream();
@@ -519,7 +662,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
       final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
       final message = Message()
         ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
-        ..recipients.addAll(['crmmalabar@gmail.com','performancemtc@gmail.com'])
+        ..recipients.addAll(['crmmalabar@gmail.com'])
         ..subject = 'Leads Report — $_selectedBranch'
         ..text = 'Please find attached the leads report for $_selectedBranch.'
         ..attachments = [FileAttachment(file)];
@@ -652,7 +795,23 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
                         setState(() => _selectedBranch = val),
                   ),
 
-            const SizedBox(height: 32),
+            const SizedBox(height: 16),
+            // ── Detailed Report checkbox ──────────────────────────────
+            Row(
+              children: [
+                Checkbox(
+                  value: _detailedReport,
+                  activeColor: _primaryBlue,
+                  onChanged: (val) =>
+                      setState(() => _detailedReport = val ?? false),
+                ),
+                const Text(
+                  'Detailed Report',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
 
             // ── Generate button ────────────────────────────────────────
             ElevatedButton.icon(
@@ -691,40 +850,6 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                     color: _primaryBlue.withOpacity(0.15)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.info_outline_rounded,
-                          color: _primaryBlue.withOpacity(0.7),
-                          size: 18),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Report Contents',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : _primaryBlue,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  _infoLine(Icons.person_rounded, 'User name & role',
-                      isDark),
-                  _infoLine(
-                      Icons.add_circle_outline_rounded,
-                      'Leads created in date range',
-                      isDark),
-                  _infoLine(Icons.handshake_rounded,
-                      'Leads converted to Sale', isDark),
-                  _infoLine(Icons.cancel_rounded,
-                      'Leads marked Cancelled', isDark),
-                  _infoLine(Icons.functions_rounded,
-                      'Branch totals row', isDark),
-                ],
               ),
             ),
           ],
