@@ -239,6 +239,9 @@ class HomeButtonsContainer extends StatelessWidget {
             Expanded(
               child: NeumorphicButton(
                 onTap: () => _navigateToLeads(context),
+                onLongPress: role == 'admin'
+                    ? () => _navigateToSyncHeadLeads(context)
+                    : null,
                 text: 'Leads',
                 color: primaryBlue,
                 textColor: Colors.white,
@@ -249,10 +252,13 @@ class HomeButtonsContainer extends StatelessWidget {
             Expanded(
               child: NeumorphicButton(
                 onTap: () => _navigateToTodo(context),
-                text: 'ToDo List',
-                color: primaryGreen,
-                textColor: Colors.white,
-                icon: Icons.check_circle_outline_rounded,
+                  onLongPress: role == 'admin'
+                      ? () => _navigateToSyncHeadTodos(context)
+                      : null,
+                  text: 'ToDo List',
+                  color: primaryGreen,
+                  textColor: Colors.white,
+                  icon: Icons.check_circle_outline_rounded,
               ),
             ),
           ],

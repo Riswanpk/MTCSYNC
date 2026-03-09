@@ -28,7 +28,12 @@ class _LeadsPageState extends State<LeadsPage> {
   final List<String> statusOptions = [
     'All',
     'In Progress',
-    'Completed',
+    'Sold',
+    'Cancelled',
+  ];
+
+  final List<String> priorityOptions = [
+    'All',
     'High',
     'Medium',
     'Low',
@@ -36,6 +41,7 @@ class _LeadsPageState extends State<LeadsPage> {
 
   // Add this for sort order
   bool sortAscending = false;
+  String selectedPriority = 'All';
 
   // --- NEW: State for Pagination ---
   List<DocumentSnapshot> _leads = [];
@@ -166,13 +172,16 @@ class _LeadsPageState extends State<LeadsPage> {
       query = query.where('created_by', isEqualTo: selectedUser);
     }
     if (selectedStatus != 'All') {
-      if (selectedStatus == 'Completed') {
-        query = query.where('status', whereIn: ['Sale', 'Cancelled']);
+      if (selectedStatus == 'Sold') {
+        query = query.where('status', isEqualTo: 'Sale');
+      } else if (selectedStatus == 'Cancelled') {
+        query = query.where('status', isEqualTo: 'Cancelled');
       } else if (selectedStatus == 'In Progress') {
         query = query.where('status', isEqualTo: 'In Progress');
-      } else {
-        query = query.where('priority', isEqualTo: selectedStatus);
       }
+    }
+    if (selectedPriority != 'All') {
+      query = query.where('priority', isEqualTo: selectedPriority);
     }
     }
 
@@ -493,6 +502,48 @@ class _LeadsPageState extends State<LeadsPage> {
                                     flex: 1,
                                     child: SizedBox(
                                       height: 36,
+                                      child: DropdownButtonFormField<String>(
+                                        value: selectedPriority,
+                                        items: priorityOptions.map((priority) {
+                                          return DropdownMenuItem<String>(
+                                            value: priority,
+                                            child: Text(
+                                              priority,
+                                              style: const TextStyle(fontSize: 10),
+                                            ),
+                                          );
+                                        }).toList(),
+                                        onChanged: (val) {
+                                          setState(() {
+                                            selectedPriority = val!;
+                                            _pageStartCursors.clear();
+                                            _pageStartCursors[1] = null;
+                                            _currentPage = 1;
+                                          });
+                                          _fetchLeadsPage();
+                                        },
+                                        decoration: InputDecoration(
+                                          labelText: 'Priority',
+                                          labelStyle: const TextStyle(fontSize: 9),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          filled: true,
+                                          fillColor: const Color.fromARGB(255, 229, 237, 229),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                        ),
+                                        style: const TextStyle(fontSize: 10, color: Colors.black),
+                                        dropdownColor: Colors.white,
+                                        icon: const Icon(Icons.arrow_drop_down, size: 14),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Flexible(
+                                    flex: 1,
+                                    child: SizedBox(
+                                      height: 36,
                                       child: DropdownButtonFormField<bool>(
                                         value: sortAscending,
                                         items: const [
@@ -535,138 +586,188 @@ class _LeadsPageState extends State<LeadsPage> {
                               ),
                             ],
                           )
-                        : Row(
+                        : Column(
                             children: [
-                              // --- USER FILTER DROPDOWN ---
-                              Flexible(
-                                flex: 1,
-                                child: SizedBox(
-                                  height: 36,
-                                  child: DropdownButtonFormField<String>(
-                                    value: selectedUser,
-                                    items: [
-                                      const DropdownMenuItem(
-                                        value: null,
-                                        child: Text('All Users', style: TextStyle(fontSize: 9)),
-                                      ),
-                                      ...availableUsers.map((user) => DropdownMenuItem(
-                                            value: user['id'],
-                                            child: Text(
-                                              user['username'],
-                                              style: const TextStyle(fontSize: 9),
-                                            ),
-                                          )),
-                                    ],
-                                    onChanged: (val) {
-                                      setState(() {
-                                        selectedUser = val;
-                                        _pageStartCursors.clear();
-                                        _pageStartCursors[1] = null;
-                                       _currentPage = 1;
-                                      });
-                                      _fetchLeadsPage();
-                                    },
-                                    decoration: InputDecoration(
-                                      labelText: 'User',
-                                      labelStyle: const TextStyle(fontSize: 9),
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                        borderSide: BorderSide.none,
-                                      ),
-                                      filled: true,
-                                      fillColor: const Color.fromARGB(255, 229, 237, 229),
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 1, vertical: 10),
-                                    ),
-                                    style: const TextStyle(fontSize: 8, color: Colors.black),
-                                    dropdownColor: Colors.white,
-                                    icon: const Icon(Icons.arrow_drop_down, size: 14),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 2),
-                              Flexible(
-                                flex: 1,
-                                child: SizedBox(
-                                  height: 36,
-                                  child: DropdownButtonFormField<String>(
-                                    value: selectedStatus,
-                                    items: statusOptions.map((status) {
-                                      return DropdownMenuItem<String>(
-                                        value: status,
-                                        child: Text(
-                                          status,
-                                          style: const TextStyle(fontSize: 10),
+                              Row(
+                                children: [
+                                  // --- USER FILTER DROPDOWN ---
+                                  Flexible(
+                                    flex: 1,
+                                    child: SizedBox(
+                                      height: 36,
+                                      child: DropdownButtonFormField<String>(
+                                        value: selectedUser,
+                                        items: [
+                                          const DropdownMenuItem(
+                                            value: null,
+                                            child: Text('All Users', style: TextStyle(fontSize: 9)),
+                                          ),
+                                          ...availableUsers.map((user) => DropdownMenuItem(
+                                                value: user['id'],
+                                                child: Text(
+                                                  user['username'],
+                                                  style: const TextStyle(fontSize: 9),
+                                                ),
+                                              )),
+                                        ],
+                                        onChanged: (val) {
+                                          setState(() {
+                                            selectedUser = val;
+                                            _pageStartCursors.clear();
+                                            _pageStartCursors[1] = null;
+                                           _currentPage = 1;
+                                          });
+                                          _fetchLeadsPage();
+                                        },
+                                        decoration: InputDecoration(
+                                          labelText: 'User',
+                                          labelStyle: const TextStyle(fontSize: 9),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          filled: true,
+                                          fillColor: const Color.fromARGB(255, 229, 237, 229),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 1, vertical: 10),
                                         ),
-                                      );
-                                    }).toList(),
-                                    onChanged: (val) {
-                                      setState(() {
-                                        selectedStatus = val!;
-                                        _pageStartCursors.clear();
-                                        _pageStartCursors[1] = null;
-                                       _currentPage = 1;
-                                      });
-                                      _fetchLeadsPage();
-                                    },
-                                    decoration: InputDecoration(
-                                      labelText: 'Status',
-                                      labelStyle: const TextStyle(fontSize: 9),
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                        borderSide: BorderSide.none,
+                                        style: const TextStyle(fontSize: 8, color: Colors.black),
+                                        dropdownColor: Colors.white,
+                                        icon: const Icon(Icons.arrow_drop_down, size: 14),
                                       ),
-                                      filled: true,
-                                      fillColor: const Color.fromARGB(255, 229, 237, 229),
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                                     ),
-                                    style: const TextStyle(fontSize: 10, color: Colors.black),
-                                    dropdownColor: Colors.white,
-                                    icon: const Icon(Icons.arrow_drop_down, size: 14),
                                   ),
-                                ),
+                                  const SizedBox(width: 2),
+                                  Flexible(
+                                    flex: 1,
+                                    child: SizedBox(
+                                      height: 36,
+                                      child: DropdownButtonFormField<String>(
+                                        value: selectedStatus,
+                                        items: statusOptions.map((status) {
+                                          return DropdownMenuItem<String>(
+                                            value: status,
+                                            child: Text(
+                                              status,
+                                              style: const TextStyle(fontSize: 10),
+                                            ),
+                                          );
+                                        }).toList(),
+                                        onChanged: (val) {
+                                          setState(() {
+                                            selectedStatus = val!;
+                                            _pageStartCursors.clear();
+                                            _pageStartCursors[1] = null;
+                                           _currentPage = 1;
+                                          });
+                                          _fetchLeadsPage();
+                                        },
+                                        decoration: InputDecoration(
+                                          labelText: 'Status',
+                                          labelStyle: const TextStyle(fontSize: 9),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          filled: true,
+                                          fillColor: const Color.fromARGB(255, 229, 237, 229),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                        ),
+                                        style: const TextStyle(fontSize: 10, color: Colors.black),
+                                        dropdownColor: Colors.white,
+                                        icon: const Icon(Icons.arrow_drop_down, size: 14),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 2),
-                              Flexible(
-                                flex: 1,
-                                child: SizedBox(
-                                  height: 36,
-                                  child: DropdownButtonFormField<bool>(
-                                    value: sortAscending,
-                                    items: const [
-                                      DropdownMenuItem(
-                                        value: false,
-                                        child: Text('Newest', style: TextStyle(fontSize: 10)),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Flexible(
+                                    flex: 1,
+                                    child: SizedBox(
+                                      height: 36,
+                                      child: DropdownButtonFormField<String>(
+                                        value: selectedPriority,
+                                        items: priorityOptions.map((priority) {
+                                          return DropdownMenuItem<String>(
+                                            value: priority,
+                                            child: Text(
+                                              priority,
+                                              style: const TextStyle(fontSize: 10),
+                                            ),
+                                          );
+                                        }).toList(),
+                                        onChanged: (val) {
+                                          setState(() {
+                                            selectedPriority = val!;
+                                            _pageStartCursors.clear();
+                                            _pageStartCursors[1] = null;
+                                            _currentPage = 1;
+                                          });
+                                          _fetchLeadsPage();
+                                        },
+                                        decoration: InputDecoration(
+                                          labelText: 'Priority',
+                                          labelStyle: const TextStyle(fontSize: 9),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          filled: true,
+                                          fillColor: const Color.fromARGB(255, 229, 237, 229),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                        ),
+                                        style: const TextStyle(fontSize: 10, color: Colors.black),
+                                        dropdownColor: Colors.white,
+                                        icon: const Icon(Icons.arrow_drop_down, size: 14),
                                       ),
-                                      DropdownMenuItem(
-                                        value: true,
-                                        child: Text('Oldest', style: TextStyle(fontSize: 10)),
-                                      ),
-                                    ],
-                                    onChanged: (val) {
-                                      setState(() {
-                                        sortAscending = val!;
-                                        _pageStartCursors.clear();
-                                        _pageStartCursors[1] = null;
-                                       _currentPage = 1;
-                                      });
-                                      _fetchLeadsPage();
-                                    },
-                                    decoration: InputDecoration(
-                                      labelText: 'Sort',
-                                      labelStyle: const TextStyle(fontSize: 9),
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                        borderSide: BorderSide.none,
-                                      ),
-                                      filled: true,
-                                      fillColor: const Color.fromARGB(255, 229, 237, 229),
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                                     ),
-                                    style: const TextStyle(fontSize: 10, color: Colors.black),
-                                    dropdownColor: Colors.white,
-                                    icon: const Icon(Icons.arrow_drop_down, size: 14),
                                   ),
-                                ),
+                                  const SizedBox(width: 2),
+                                  Flexible(
+                                    flex: 1,
+                                    child: SizedBox(
+                                      height: 36,
+                                      child: DropdownButtonFormField<bool>(
+                                        value: sortAscending,
+                                        items: const [
+                                          DropdownMenuItem(
+                                            value: false,
+                                            child: Text('Newest', style: TextStyle(fontSize: 10)),
+                                          ),
+                                          DropdownMenuItem(
+                                            value: true,
+                                            child: Text('Oldest', style: TextStyle(fontSize: 10)),
+                                          ),
+                                        ],
+                                        onChanged: (val) {
+                                          setState(() {
+                                            sortAscending = val!;
+                                            _pageStartCursors.clear();
+                                            _pageStartCursors[1] = null;
+                                           _currentPage = 1;
+                                          });
+                                          _fetchLeadsPage();
+                                        },
+                                        decoration: InputDecoration(
+                                          labelText: 'Sort',
+                                          labelStyle: const TextStyle(fontSize: 9),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          filled: true,
+                                          fillColor: const Color.fromARGB(255, 229, 237, 229),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                        ),
+                                        style: const TextStyle(fontSize: 10, color: Colors.black),
+                                        dropdownColor: Colors.white,
+                                        icon: const Icon(Icons.arrow_drop_down, size: 14),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
