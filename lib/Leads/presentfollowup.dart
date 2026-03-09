@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart'; // Import to use clearNotificationOpened
+import 'leads_detail_widgets.dart';
 class PresentFollowUp extends StatefulWidget {
   final String docId;
   final bool editMode; // <-- Add this
@@ -323,15 +324,15 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
                       children: [
                         Text('Edit Lead', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black)),
                         const SizedBox(height: 20),
-                        _editField('Name', _nameController, Theme.of(context).brightness == Brightness.dark),
-                        _editField('Company', _companyController, Theme.of(context).brightness == Brightness.dark),
-                        _editField('Address', _addressController, Theme.of(context).brightness == Brightness.dark),
-                        _editField('Phone', _phoneController, Theme.of(context).brightness == Brightness.dark, keyboardType: TextInputType.phone),
-                        _editField('Comments', _commentsController, Theme.of(context).brightness == Brightness.dark, maxLines: 2),
+                        leadEditField('Name', _nameController, Theme.of(context).brightness == Brightness.dark),
+                        leadEditField('Company', _companyController, Theme.of(context).brightness == Brightness.dark),
+                        leadEditField('Address', _addressController, Theme.of(context).brightness == Brightness.dark),
+                        leadEditField('Phone', _phoneController, Theme.of(context).brightness == Brightness.dark, keyboardType: TextInputType.phone),
+                        leadEditField('Comments', _commentsController, Theme.of(context).brightness == Brightness.dark, maxLines: 2),
                         const SizedBox(height: 12),
-                        _editDropdown('Status', ['In Progress', 'Completed'], _status, (val) => setState(() => _status = val), Theme.of(context).brightness == Brightness.dark),
+                        leadEditDropdown('Status', ['In Progress', 'Completed'], _status, (val) => setState(() => _status = val), Theme.of(context).brightness == Brightness.dark),
                         const SizedBox(height: 12),
-                        _editField(
+                        leadEditField(
                           'Reminder',
                           _reminderController,
                           Theme.of(context).brightness == Brightness.dark,
@@ -339,7 +340,7 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
                           onTap: () => _pickDateTime(context),
                           suffixIcon: const Icon(Icons.calendar_today),
                         ),
-                        _editField('Branch', TextEditingController(text: _branch ?? ''), Theme.of(context).brightness == Brightness.dark, enabled: false),
+                        leadEditField('Branch', TextEditingController(text: _branch ?? ''), Theme.of(context).brightness == Brightness.dark, enabled: false),
                         const SizedBox(height: 24),
                         SizedBox(
                           width: double.infinity,
@@ -390,9 +391,9 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   children: [
-                    _buildInfoCard(Icons.person, 'Name', _data?['name'], isDark),
-                    _buildInfoCard(Icons.apartment, 'Company', _data?['company'], isDark),
-                    _buildInfoCard(Icons.location_on, 'Address', _data?['address'], isDark),
+                    leadInfoCard(Icons.person, 'Name', _data?['name'], isDark),
+                    leadInfoCard(Icons.apartment, 'Company', _data?['company'], isDark),
+                    leadInfoCard(Icons.location_on, 'Address', _data?['address'], isDark),
                     Showcase(
                       key: _phoneShowcaseKey,
                       description: 'Tap here to quickly call this lead!',
@@ -403,7 +404,7 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
                             _launchDialer(phoneNumber);
                           }
                         },
-                        child: _buildInfoCard(Icons.phone, 'Phone', _data?['phone'], isDark),
+                        child: leadInfoCard(Icons.phone, 'Phone', _data?['phone'], isDark),
                       ),
                     ),
                   ],
@@ -421,7 +422,7 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
                 Row(
                   children: [
                     Expanded(
-                      child: _buildInfoTile(
+                      child: leadInfoTile(
                         Icons.flag,
                         'Status',
                         DropdownButton<String>(
@@ -458,10 +459,10 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
                     ),
                   ],
                 ),
-                _buildInfoTile(Icons.calendar_today, 'Date', Text(_formatDisplayDate(_data?['date']), style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
-                _buildInfoTile(Icons.alarm, 'Reminder', Text(_formatDisplayDate(_data?['reminder'], isReminder: true), style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
-                _buildInfoTile(Icons.comment, 'Comments', Text(_data?['comments'] ?? 'N/A', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
-                _buildInfoTile(Icons.location_city, 'Branch', Text(_data?['branch'] ?? 'N/A', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
+                leadInfoTile(Icons.calendar_today, 'Date', Text(formatLeadDisplayDate(_data?['date']), style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
+                leadInfoTile(Icons.alarm, 'Reminder', Text(formatLeadDisplayDate(_data?['reminder'], isReminder: true), style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
+                leadInfoTile(Icons.comment, 'Comments', Text(_data?['comments'] ?? 'N/A', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
+                leadInfoTile(Icons.location_city, 'Branch', Text(_data?['branch'] ?? 'N/A', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
               ],
             ),
           );
@@ -469,134 +470,5 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
       ),
     );
   }
-
-  String _formatDisplayDate(dynamic value, {bool isReminder = false}) {
-    if (value == null) return 'N/A';
-    if (value is Timestamp) {
-      final format = isReminder ? 'yyyy-MM-dd hh:mm a' : 'yyyy-MM-dd';
-      return DateFormat(format).format(value.toDate());
-    }
-    return value.toString();
-  }
-
-  Widget _editField(
-    String label,
-    TextEditingController controller,
-    bool isDark, {
-    bool enabled = true,
-    int maxLines = 1,
-    TextInputType keyboardType = TextInputType.text,
-    bool readOnly = false,
-    VoidCallback? onTap,
-    Widget? suffixIcon,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: TextFormField(
-        controller: controller,
-        enabled: enabled,
-        maxLines: maxLines,
-        keyboardType: keyboardType,
-        readOnly: readOnly,
-        onTap: onTap,
-        style: TextStyle(color: isDark ? Colors.white : Colors.black),
-        decoration: InputDecoration(
-          labelText: label,
-          suffixIcon: suffixIcon,
-          filled: true,
-          fillColor: isDark ? const Color(0xFF23262F) : Colors.white,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-        validator: (val) {
-          if ((label == 'Name' || label == 'Phone') && (val == null || val.trim().isEmpty)) {
-            return '$label is required';
-          }
-          return null;
-        },
-      ),
-    );
-  }
-
-  Widget _editDropdown(
-    String label,
-    List<String> options,
-    String? value,
-    ValueChanged<String?> onChanged,
-    bool isDark,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: label,
-          filled: true,
-          fillColor: isDark ? const Color(0xFF23262F) : Colors.white,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: value,
-            isExpanded: true,
-            dropdownColor: isDark ? const Color(0xFF23262F) : Colors.white,
-            style: TextStyle(color: isDark ? Colors.white : Colors.black),
-            items: options.map((opt) => DropdownMenuItem(value: opt, child: Text(opt))).toList(),
-            onChanged: onChanged,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoCard(IconData icon, String label, String? value, bool isDark) {
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF23262F) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          if (!isDark) BoxShadow(color: Colors.black12, blurRadius: 6),
-        ],
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 28, color: const Color(0xFF005BAC)),
-          const SizedBox(height: 12),
-          Text(label, style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
-          const SizedBox(height: 4),
-          Text(value ?? 'N/A', textAlign: TextAlign.center, style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoTile(IconData icon, String title, Widget valueWidget, bool isDark) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF23262F) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          if (!isDark) BoxShadow(color: Colors.black12, blurRadius: 4),
-        ],
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: const Color(0xFF005BAC)),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
-                const SizedBox(height: 4),
-                valueWidget,
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
+
