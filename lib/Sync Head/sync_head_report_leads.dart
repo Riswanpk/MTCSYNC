@@ -345,6 +345,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
             sheet.getRangeByIndex(1, 1).columnWidth = 25;
             sheet.getRangeByIndex(1, 2).columnWidth = 20;
             sheet.getRangeByIndex(1, 3).columnWidth = 40;
+            sheet.getRangeByIndex(1, 4).columnWidth = 35;
 
             // ── Detailed Lead Breakdown ────────────────────────────────────
             int detailRow = 2;
@@ -377,13 +378,13 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
               final cancelledLeadsDocs = userStat['cancelledLeads'] as List<dynamic>;
               if (saleLeadsDocs.isEmpty && cancelledLeadsDocs.isEmpty) continue;
 
-              final userHdrRange = sheet.getRangeByIndex(detailRow, 1, detailRow, 3);
+              final userHdrRange = sheet.getRangeByIndex(detailRow, 1, detailRow, 4);
               userHdrRange.merge();
               userHdrRange.setText(userStat['username'] as String);
               userHdrRange.cellStyle = detailUserHdrSt;
               detailRow++;
 
-              const detailHeaders = ['Customer Name', 'Sold/Cancelled', 'Comments'];
+              const detailHeaders = ['Customer Name', 'Sold/Cancelled', 'Comments', 'Cancellation Reason'];
               for (int c = 0; c < detailHeaders.length; c++) {
                 final cell = sheet.getRangeByIndex(detailRow, c + 1);
                 cell.setText(detailHeaders[c]);
@@ -403,6 +404,9 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
                 sheet.getRangeByIndex(detailRow, 2).cellStyle = st;
                 sheet.getRangeByIndex(detailRow, 3).setText(d['comments'] ?? '');
                 sheet.getRangeByIndex(detailRow, 3).cellStyle = st;
+                sheet.getRangeByIndex(detailRow, 4).setText(
+                    d['status'] == 'Cancelled' ? (d['cancellation_reason'] ?? '') : '');
+                sheet.getRangeByIndex(detailRow, 4).cellStyle = st;
                 detailRow++;
                 leadIdx++;
               }
@@ -424,7 +428,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
         final message = Message()
           ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
-          ..recipients.addAll(['crmmalabar@gmail.com'])
+          ..recipients.addAll(['crmmalabar@gmail.com','performancemtc@gmail.com'])
           ..subject = 'Leads Report — All Branches'
           ..text = 'Please find attached the leads report for all branches.'
           ..attachments = [FileAttachment(file)];
@@ -583,6 +587,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         sheet.getRangeByIndex(1, 1).columnWidth = 25;
         sheet.getRangeByIndex(1, 2).columnWidth = 20;
         sheet.getRangeByIndex(1, 3).columnWidth = 40;
+        sheet.getRangeByIndex(1, 4).columnWidth = 35;
 
         // ── Detailed Lead Breakdown ──────────────────────────────────────
         int detailRow = 2;
@@ -615,13 +620,13 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           final cancelledLeadsDocs = userStat['cancelledLeads'] as List<dynamic>;
           if (saleLeadsDocs.isEmpty && cancelledLeadsDocs.isEmpty) continue;
 
-          final userHdrRange = sheet.getRangeByIndex(detailRow, 1, detailRow, 3);
+          final userHdrRange = sheet.getRangeByIndex(detailRow, 1, detailRow, 4);
           userHdrRange.merge();
           userHdrRange.setText(userStat['username'] as String);
           userHdrRange.cellStyle = detailUserHdrSt;
           detailRow++;
 
-          const detailHeaders = ['Customer Name', 'Sold/Cancelled', 'Comments'];
+          const detailHeaders = ['Customer Name', 'Sold/Cancelled', 'Comments', 'Cancellation Reason'];
           for (int c = 0; c < detailHeaders.length; c++) {
             final cell = sheet.getRangeByIndex(detailRow, c + 1);
             cell.setText(detailHeaders[c]);
@@ -641,6 +646,9 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
             sheet.getRangeByIndex(detailRow, 2).cellStyle = st;
             sheet.getRangeByIndex(detailRow, 3).setText(d['comments'] ?? '');
             sheet.getRangeByIndex(detailRow, 3).cellStyle = st;
+            sheet.getRangeByIndex(detailRow, 4).setText(
+                d['status'] == 'Cancelled' ? (d['cancellation_reason'] ?? '') : '');
+            sheet.getRangeByIndex(detailRow, 4).cellStyle = st;
             detailRow++;
             leadIdx++;
           }
@@ -662,7 +670,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
       final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
       final message = Message()
         ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
-        ..recipients.addAll(['crmmalabar@gmail.com'])
+        ..recipients.addAll(['crmmalabar@gmail.com','performancemtc@gmail.com'])
         ..subject = 'Leads Report — $_selectedBranch'
         ..text = 'Please find attached the leads report for $_selectedBranch.'
         ..attachments = [FileAttachment(file)];

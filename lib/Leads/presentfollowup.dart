@@ -259,6 +259,47 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _showPhoneShowcaseIfNeeded());
   }
 
+  Future<String?> _showCancellationReasonDialog() async {
+    final controller = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancellation Reason'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: controller,
+            autofocus: true,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              hintText: 'Enter reason for cancellation...',
+              border: OutlineInputBorder(),
+            ),
+            validator: (v) =>
+                (v == null || v.trim().isEmpty) ? 'Reason is required' : null,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(null),
+            child: const Text('Back'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.of(ctx).pop(controller.text.trim());
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Confirm', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _showPhoneShowcaseIfNeeded() async {
     final prefs = await SharedPreferences.getInstance();
     final seen = prefs.getBool('seen_phone_showcase') ?? false;
@@ -437,9 +478,17 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
                           }).toList(),
                           onChanged: (newStatus) async {
                             if (newStatus != null && newStatus != _data?['status']) {
+                              String? cancellationReason;
+                              if (newStatus == 'Cancelled') {
+                                cancellationReason = await _showCancellationReasonDialog();
+                                if (cancellationReason == null) return;
+                              }
                               final updateMap = <String, dynamic>{'status': newStatus};
                               if (newStatus == 'Sale' || newStatus == 'Cancelled') {
                                 updateMap['completed_at'] = FieldValue.serverTimestamp();
+                              }
+                              if (cancellationReason != null) {
+                                updateMap['cancellation_reason'] = cancellationReason;
                               }
                               await FirebaseFirestore.instance
                                   .collection('follow_ups')

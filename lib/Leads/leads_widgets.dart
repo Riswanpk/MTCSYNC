@@ -18,6 +18,49 @@ Color getPriorityColor(String priority) {
   }
 }
 
+/// Shows a dialog requiring the user to enter a reason before cancelling.
+/// Returns the reason string, or null if the user dismissed/backed out.
+Future<String?> showCancellationReasonDialog(BuildContext context) async {
+  final controller = TextEditingController();
+  final formKey = GlobalKey<FormState>();
+  return showDialog<String>(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Cancellation Reason'),
+      content: Form(
+        key: formKey,
+        child: TextFormField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: 'Enter reason for cancellation...',
+            border: OutlineInputBorder(),
+          ),
+          validator: (v) =>
+              (v == null || v.trim().isEmpty) ? 'Reason is required' : null,
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(null),
+          child: const Text('Back'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            if (formKey.currentState!.validate()) {
+              Navigator.of(ctx).pop(controller.text.trim());
+            }
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+          child: const Text('Confirm', style: TextStyle(color: Colors.white)),
+        ),
+      ],
+    ),
+  );
+}
+
 Color getPriorityBackgroundColor(String priority, bool isDark) {
   if (isDark) {
     switch (priority) {
@@ -158,12 +201,15 @@ class LeadCard extends StatelessWidget {
         children: [
           SlidableAction(
             onPressed: (context) async {
+              final reason = await showCancellationReasonDialog(context);
+              if (reason == null) return;
               await FirebaseFirestore.instance
                   .collection('follow_ups')
                   .doc(docId)
                   .update({
                 'status': 'Cancelled',
                 'completed_at': FieldValue.serverTimestamp(),
+                'cancellation_reason': reason,
               });
               onStatusChanged?.call();
               if (context.mounted) {

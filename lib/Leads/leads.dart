@@ -71,7 +71,6 @@ class _LeadsPageState extends State<LeadsPage> {
         final role = userData['role'] ?? 'sales';
         final branch = userData['branch'] ?? '';
         if (role != 'admin') {
-          await _fetchUsers(branch, uid);
           _applyDefaultFiltersAndFetch(role, branch, uid);
         }
       }
@@ -590,53 +589,6 @@ class _LeadsPageState extends State<LeadsPage> {
                             children: [
                               Row(
                                 children: [
-                                  // --- USER FILTER DROPDOWN ---
-                                  Flexible(
-                                    flex: 1,
-                                    child: SizedBox(
-                                      height: 36,
-                                      child: DropdownButtonFormField<String>(
-                                        value: selectedUser,
-                                        items: [
-                                          const DropdownMenuItem(
-                                            value: null,
-                                            child: Text('All Users', style: TextStyle(fontSize: 9)),
-                                          ),
-                                          ...availableUsers.map((user) => DropdownMenuItem(
-                                                value: user['id'],
-                                                child: Text(
-                                                  user['username'],
-                                                  style: const TextStyle(fontSize: 9),
-                                                ),
-                                              )),
-                                        ],
-                                        onChanged: (val) {
-                                          setState(() {
-                                            selectedUser = val;
-                                            _pageStartCursors.clear();
-                                            _pageStartCursors[1] = null;
-                                           _currentPage = 1;
-                                          });
-                                          _fetchLeadsPage();
-                                        },
-                                        decoration: InputDecoration(
-                                          labelText: 'User',
-                                          labelStyle: const TextStyle(fontSize: 9),
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(8),
-                                            borderSide: BorderSide.none,
-                                          ),
-                                          filled: true,
-                                          fillColor: const Color.fromARGB(255, 229, 237, 229),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 1, vertical: 10),
-                                        ),
-                                        style: const TextStyle(fontSize: 8, color: Colors.black),
-                                        dropdownColor: Colors.white,
-                                        icon: const Icon(Icons.arrow_drop_down, size: 14),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 2),
                                   Flexible(
                                     flex: 1,
                                     child: SizedBox(
@@ -657,7 +609,7 @@ class _LeadsPageState extends State<LeadsPage> {
                                             selectedStatus = val!;
                                             _pageStartCursors.clear();
                                             _pageStartCursors[1] = null;
-                                           _currentPage = 1;
+                                            _currentPage = 1;
                                           });
                                           _fetchLeadsPage();
                                         },
@@ -678,11 +630,7 @@ class _LeadsPageState extends State<LeadsPage> {
                                       ),
                                     ),
                                   ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
+                                  const SizedBox(width: 2),
                                   Flexible(
                                     flex: 1,
                                     child: SizedBox(

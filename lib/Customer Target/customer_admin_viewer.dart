@@ -396,7 +396,7 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                     builder: (context) {
                       final isDark = Theme.of(context).brightness == Brightness.dark;
                       return SizedBox(
-                        width: 120,
+                        width: 122,
                         child: Text(
                           'Customer Name',
                           style: tableTextStyle.copyWith(
