@@ -24,6 +24,7 @@ class _AdminPerformancePageState extends State<AdminPerformancePage>
   List<Map<String, dynamic>> users = [];
   List<Map<String, dynamic>> forms = [];
   List<DateTime> availableDates = [];
+  int selectedYear = DateTime.now().year;
   bool isLoading = false;
   bool isLoadingBranches = true;
   bool isLoadingUsers = false;
@@ -115,10 +116,11 @@ class _AdminPerformancePageState extends State<AdminPerformancePage>
     }
     setState(() {
       isLoading = false;
-      selectedMonth = monthsSet.isNotEmpty ? monthsSet.first : null;
-      availableDates = datesSet.where((d) => selectedMonth == null || d.month == selectedMonth).toList()
-        ..sort((a, b) => b.compareTo(a));
-      selectedDate = null; // Don't auto-select date
+      selectedMonth = monthsSet.isNotEmpty ? monthsSet.first : DateTime.now().month;
+      final _m = selectedMonth!;
+      final _daysInMonth = DateTime(selectedYear, _m + 1, 0).day;
+      availableDates = List.generate(_daysInMonth, (i) => DateTime(selectedYear, _m, i + 1)).reversed.toList();
+      selectedDate = null;
       selectedDocId = null;
     });
   }
@@ -132,14 +134,9 @@ class _AdminPerformancePageState extends State<AdminPerformancePage>
       });
       return;
     }
-    availableDates = forms
-        .map((f) => (f['timestamp'] as Timestamp?)?.toDate())
-        .where((d) => d != null && d.month == selectedMonth)
-        .map((d) => DateTime(d!.year, d.month, d.day))
-        .toSet()
-        .toList()
-      ..sort((a, b) => b.compareTo(a));
+    final daysInMonth = DateTime(selectedYear, selectedMonth! + 1, 0).day;
     setState(() {
+      availableDates = List.generate(daysInMonth, (i) => DateTime(selectedYear, selectedMonth!, i + 1)).reversed.toList();
       selectedDate = null;
       selectedDocId = null;
     });
@@ -240,14 +237,8 @@ class _AdminPerformancePageState extends State<AdminPerformancePage>
     final surfaceColor = isDark ? const Color(0xFF1A1B22) : const Color(0xFFF5F7FA);
     final cardColor = isDark ? const Color(0xFF23242B) : Colors.white;
 
-    // Get all months present in forms
-    final monthsList = forms
-        .map((f) => (f['timestamp'] as Timestamp?)?.toDate())
-        .where((d) => d != null)
-        .map((d) => d!.month)
-        .toSet()
-        .toList()
-      ..sort((a, b) => b.compareTo(a));
+    // Show all months of the year (Jan–Dec, descending)
+    final monthsList = List<int>.generate(12, (i) => 12 - i);
 
     if (isLoadingBranches) {
       return Scaffold(
@@ -528,29 +519,54 @@ class _AdminPerformancePageState extends State<AdminPerformancePage>
                                       isDark: isDark,
                                       cardColor: cardColor,
                                       items: availableDates
-                                          .map((d) => DropdownMenuItem<DateTime>(
-                                                value: d,
-                                                child: Row(
-                                                  children: [
-                                                    Container(
-                                                      padding: const EdgeInsets.all(6),
-                                                      decoration: BoxDecoration(
-                                                        color: _primaryBlue.withOpacity(0.12),
-                                                        borderRadius: BorderRadius.circular(8),
-                                                      ),
-                                                      child: Icon(Icons.today_rounded, size: 16, color: _primaryBlue),
+                                          .map((d) {
+                                            final hasForm = forms.any((f) {
+                                              final ts = f['timestamp'] as Timestamp?;
+                                              final fd = ts?.toDate();
+                                              return fd != null &&
+                                                  fd.year == d.year &&
+                                                  fd.month == d.month &&
+                                                  fd.day == d.day;
+                                            });
+                                            return DropdownMenuItem<DateTime>(
+                                              value: d,
+                                              child: Row(
+                                                children: [
+                                                  Container(
+                                                    padding: const EdgeInsets.all(6),
+                                                    decoration: BoxDecoration(
+                                                      color: (hasForm ? _primaryGreen : _primaryBlue).withOpacity(0.12),
+                                                      borderRadius: BorderRadius.circular(8),
                                                     ),
-                                                    const SizedBox(width: 10),
-                                                    Text('${d.day}/${d.month < 10 ? '0' : ''}${d.month}'),
+                                                    child: Icon(
+                                                      hasForm ? Icons.edit_rounded : Icons.add_rounded,
+                                                      size: 16,
+                                                      color: hasForm ? _primaryGreen : _primaryBlue,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 10),
+                                                  Text('${d.day}/${d.month < 10 ? '0' : ''}${d.month}'),
+                                                  if (hasForm) ...[
+                                                    const SizedBox(width: 6),
+                                                    Container(
+                                                      width: 6,
+                                                      height: 6,
+                                                      decoration: const BoxDecoration(
+                                                        color: _primaryGreen,
+                                                        shape: BoxShape.circle,
+                                                      ),
+                                                    ),
                                                   ],
-                                                ),
-                                              ))
+                                                ],
+                                              ),
+                                            );
+                                          })
                                           .toList(),
                                       onChanged: (val) {
                                         setState(() {
                                           selectedDate = val;
-                                          updateSelectedDocId();
                                         });
+                                        updateSelectedDocId();
                                       },
                                     ),
                                   ],
@@ -566,9 +582,9 @@ class _AdminPerformancePageState extends State<AdminPerformancePage>
                   const SizedBox(height: 16),
 
                   // ── Form Section ──
-                  if (selectedDocId != null)
+                  if (selectedDate != null)
                     Container(
-                      key: ValueKey(selectedDocId),
+                      key: ValueKey('${selectedDate?.toIso8601String()}_$selectedDocId'),
                       decoration: BoxDecoration(
                         color: cardColor,
                         borderRadius: BorderRadius.circular(20),
@@ -583,10 +599,30 @@ class _AdminPerformancePageState extends State<AdminPerformancePage>
                       child: Padding(
                         padding: const EdgeInsets.all(16.0),
                         child: _AdminEditForm(
-                          form: forms.firstWhere((f) => f['docId'] == selectedDocId),
-                          docId: selectedDocId!,
+                          form: selectedDocId != null
+                              ? forms.firstWhere((f) => f['docId'] == selectedDocId)
+                              : {},
+                          docId: selectedDocId,
+                          userId: selectedUserId!,
+                          userName: users.firstWhere(
+                            (u) => u['id'] == selectedUserId,
+                            orElse: () => {'username': 'Unknown'},
+                          )['username'] ?? 'Unknown',
+                          selectedDate: selectedDate!,
                           onSaved: () async {
-                            if (selectedUserId != null) await fetchFormsForUser(selectedUserId!);
+                            if (selectedUserId != null) {
+                              final prevDate = selectedDate;
+                              await fetchFormsForUser(selectedUserId!);
+                              if (prevDate != null) {
+                                final daysInMonth = DateTime(selectedYear, prevDate.month + 1, 0).day;
+                                setState(() {
+                                  selectedMonth = prevDate.month;
+                                  availableDates = List.generate(daysInMonth, (i) => DateTime(selectedYear, prevDate.month, i + 1)).reversed.toList();
+                                  selectedDate = prevDate;
+                                });
+                                updateSelectedDocId();
+                              }
+                            }
                           },
                         ),
                       ),
@@ -605,12 +641,18 @@ class _AdminPerformancePageState extends State<AdminPerformancePage>
 
 class _AdminEditForm extends StatefulWidget {
   final Map<String, dynamic> form;
-  final String docId;
+  final String? docId;
+  final String userId;
+  final String userName;
+  final DateTime selectedDate;
   final VoidCallback onSaved;
 
   const _AdminEditForm({
     required this.form,
     required this.docId,
+    required this.userId,
+    required this.userName,
+    required this.selectedDate,
     required this.onSaved,
   });
 
@@ -716,7 +758,7 @@ class _AdminEditFormState extends State<_AdminEditForm> {
   }
 
   Future<void> save() async {
-    await FirebaseFirestore.instance.collection('dailyform').doc(widget.docId).update({
+    final data = <String, dynamic>{
       'attendance': attendanceStatus,
       'dressCode': {
         'cleanUniform': cleanUniform,
@@ -756,11 +798,35 @@ class _AdminEditFormState extends State<_AdminEditForm> {
       'productComplaintsDescription': productComplaints ? productComplaintsDescriptionController.text : null,
       'achievedDailyTarget': achievedDailyTarget,
       'achievedDailyTargetDescription': achievedDailyTarget ? achievedDailyTargetDescriptionController.text : null,
-    });
+    };
+
+    if (widget.docId != null) {
+      await FirebaseFirestore.instance
+          .collection('dailyform')
+          .doc(widget.docId)
+          .update(data);
+    } else {
+      final now = DateTime.now();
+      final submissionTimestamp = DateTime(
+        widget.selectedDate.year,
+        widget.selectedDate.month,
+        widget.selectedDate.day,
+        now.hour,
+        now.minute,
+        now.second,
+      );
+      data['userId'] = widget.userId;
+      data['userName'] = widget.userName;
+      data['timestamp'] = Timestamp.fromDate(submissionTimestamp);
+      await FirebaseFirestore.instance.collection('dailyform').add(data);
+    }
+
     widget.onSaved();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Entry updated!')),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.docId != null ? 'Entry updated!' : 'Entry created!')),
+      );
+    }
   }
 
   @override
@@ -1063,9 +1129,9 @@ class _AdminEditFormState extends State<_AdminEditForm> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                   onPressed: save,
-                  child: const Text(
-                    'Save Changes',
-                    style: TextStyle(
+                  child: Text(
+                    widget.docId != null ? 'Save Changes' : 'Create Form',
+                    style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
                       fontSize: 16,

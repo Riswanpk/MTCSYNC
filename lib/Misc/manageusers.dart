@@ -491,19 +491,23 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                             children: [
                                               Icon(
                                                 r == 'admin'
-                                                    ? Icons.security
-                                                    : r == 'manager'
-                                                        ? Icons.supervisor_account
-                                                        : r == 'asst_manager'
-                                                            ? Icons.manage_accounts
-                                                            : Icons.person,
+                                                  ? Icons.security
+                                                  : r == 'manager'
+                                                    ? Icons.supervisor_account
+                                                    : r == 'asst_manager'
+                                                      ? Icons.manage_accounts
+                                                      : r == 'sync_head'
+                                                        ? Icons.hub
+                                                        : Icons.person,
                                                 color: r == 'admin'
-                                                    ? Colors.deepPurple
-                                                    : r == 'manager'
-                                                        ? Colors.orange
-                                                        : r == 'asst_manager'
-                                                            ? Colors.deepOrange
-                                                            : Colors.green,
+                                                  ? Colors.deepPurple
+                                                  : r == 'manager'
+                                                    ? Colors.orange
+                                                    : r == 'asst_manager'
+                                                      ? Colors.deepOrange
+                                                      : r == 'sync_head'
+                                                        ? Colors.blue
+                                                        : Colors.green,
                                                 size: 20,
                                               ),
                                               const SizedBox(width: 8),
