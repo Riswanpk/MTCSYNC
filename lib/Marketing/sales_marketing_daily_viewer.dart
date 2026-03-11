@@ -34,12 +34,21 @@ class SalesMarketingDailyViewer extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Today's Marketing Forms"),
+        title: const Text("Today's Marketing Forms", style: TextStyle(fontFamily: 'Electorize', fontWeight: FontWeight.bold, letterSpacing: 0.5)),
         centerTitle: true,
-        backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
-        elevation: 3,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
       ),
+      backgroundColor: const Color(0xFFF0F2F5),
       body: StreamBuilder<QuerySnapshot>(
         stream: query.snapshots(),
         builder: (context, snapshot) {
@@ -47,10 +56,16 @@ class SalesMarketingDailyViewer extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(
+            return Center(
               child: Text(
                 "No forms submitted today.",
-                style: TextStyle(fontSize: 16, color: Colors.black54),
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white38
+                      : Colors.black38,
+                  fontFamily: 'Electorize',
+                ),
               ),
             );
           }
@@ -66,34 +81,81 @@ class SalesMarketingDailyViewer extends StatelessWidget {
               final displayName = _getDisplayName(data);
 
               return Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                elevation: 4,
-                shadowColor: Colors.black26,
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: const Color(0xFF005BAC).withOpacity(0.1),
-                    child: Icon(
-                      formType == 'Premium Customer'
-                          ? Icons.star
-                          : formType == 'General Customer'
-                              ? Icons.store
-                              : Icons.hotel,
-                      color: const Color(0xFF005BAC),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 3,
+                shadowColor: (formType == 'Premium Customer'
+                        ? const Color(0xFFD4AF37)
+                        : formType == 'General Customer'
+                            ? const Color(0xFFFF6B35)
+                            : const Color(0xFF009688))
+                    .withOpacity(0.15),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border(
+                      left: BorderSide(
+                        color: formType == 'Premium Customer'
+                            ? const Color(0xFFD4AF37)
+                            : formType == 'General Customer'
+                                ? const Color(0xFFFF6B35)
+                                : const Color(0xFF009688),
+                        width: 4,
+                      ),
                     ),
                   ),
-                  title: Text(
-                    displayName.isNotEmpty ? displayName : 'No Name',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    leading: CircleAvatar(
+                      backgroundColor: (formType == 'Premium Customer'
+                              ? const Color(0xFFD4AF37)
+                              : formType == 'General Customer'
+                                  ? const Color(0xFFFF6B35)
+                                  : const Color(0xFF009688))
+                          .withOpacity(0.12),
+                      child: Icon(
+                        formType == 'Premium Customer'
+                            ? Icons.workspace_premium_rounded
+                            : formType == 'General Customer'
+                                ? Icons.storefront_rounded
+                                : Icons.hotel_rounded,
+                        color: formType == 'Premium Customer'
+                            ? const Color(0xFFD4AF37)
+                            : formType == 'General Customer'
+                                ? const Color(0xFFFF6B35)
+                                : const Color(0xFF009688),
+                      ),
                     ),
-                  ),
-                  subtitle: Text(
-                    formType,
-                    style: const TextStyle(color: Colors.black54, fontSize: 14),
-                  ),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 18, color: Colors.black38),
-                  onTap: () {
+                    title: Text(
+                      displayName.isNotEmpty ? displayName : 'No Name',
+                      style: const TextStyle(
+                        fontFamily: 'Electorize',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                      ),
+                    ),
+                    subtitle: Text(
+                      formType,
+                      style: TextStyle(
+                        fontFamily: 'Electorize',
+                        color: formType == 'Premium Customer'
+                            ? const Color(0xFFD4AF37)
+                            : formType == 'General Customer'
+                                ? const Color(0xFFFF6B35)
+                                : const Color(0xFF009688),
+                        fontSize: 12,
+                      ),
+                    ),
+                    trailing: Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 16,
+                      color: (formType == 'Premium Customer'
+                              ? const Color(0xFFD4AF37)
+                              : formType == 'General Customer'
+                                  ? const Color(0xFFFF6B35)
+                                  : const Color(0xFF009688))
+                          .withOpacity(0.6),
+                    ),
+                    onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (context) => MarketingFormDetailsPage(
@@ -106,6 +168,7 @@ class SalesMarketingDailyViewer extends StatelessWidget {
                     );
                   },
                 ),
+              )
               );
             },
           );
@@ -175,11 +238,19 @@ class MarketingFormDetailsPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('$formType Details'),
+        title: Text('$formType Details', style: const TextStyle(fontFamily: 'Electorize', fontWeight: FontWeight.bold, letterSpacing: 0.5)),
         centerTitle: true,
-        backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
-        elevation: 3,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.edit_rounded),
@@ -215,14 +286,14 @@ class MarketingFormDetailsPage extends StatelessWidget {
                       Center(
                         child: Text(
                           displayName.isNotEmpty ? displayName : 'No Name',
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, fontFamily: 'Electorize'),
                         ),
                       ),
                       const SizedBox(height: 8),
                       Center(
                         child: Text(
                           formType,
-                          style: const TextStyle(fontSize: 16, color: Colors.black54),
+                          style: const TextStyle(fontSize: 14, fontFamily: 'Electorize', color: Color(0xFF16213E)),
                         ),
                       ),
                       const Divider(height: 32, thickness: 1.2),
@@ -237,8 +308,9 @@ class MarketingFormDetailsPage extends StatelessWidget {
                                     '${_beautifyKey(e.key)}:',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w600,
-                                      color: Color(0xFF005BAC),
-                                      fontSize: 15,
+                                      color: Color(0xFF1A1A2E),
+                                      fontSize: 14,
+                                      fontFamily: 'Electorize',
                                     ),
                                   ),
                                 ),
@@ -246,7 +318,7 @@ class MarketingFormDetailsPage extends StatelessWidget {
                                   flex: 3,
                                   child: Text(
                                     _isPhoneNumberKey(e.key) ? e.value.toString() : _formatIfDate(e.value),
-                                    style: const TextStyle(fontSize: 16),
+                                    style: const TextStyle(fontSize: 15, fontFamily: 'Electorize', color: Color(0xFF444E5C)),
                                   ),
                                 ),
                               ],
@@ -263,12 +335,15 @@ class MarketingFormDetailsPage extends StatelessWidget {
             child: SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                icon: const Icon(Icons.add),
-                label: const Text('Add To Leads', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF005BAC),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Add To Leads', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, fontFamily: 'Electorize')),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1A1A2E),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 4,
+                shadowColor: const Color(0xFF1A1A2E).withOpacity(0.3),
                 ),
                 onPressed: () {
                   Navigator.of(context).push(
@@ -380,11 +455,19 @@ class _EditMarketingFormPageState extends State<EditMarketingFormPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Edit Form'),
+        title: const Text('Edit Form', style: TextStyle(fontFamily: 'Electorize', fontWeight: FontWeight.bold, letterSpacing: 0.5)),
         centerTitle: true,
-        backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
-        elevation: 3,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -442,16 +525,19 @@ class _EditMarketingFormPageState extends State<EditMarketingFormPage> {
                 if (context.mounted) Navigator.of(context).pop();
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF005BAC),
+                backgroundColor: const Color(0xFF1A1A2E),
+                foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
                 ),
+                elevation: 4,
+                shadowColor: const Color(0xFF1A1A2E).withOpacity(0.3),
               ),
               icon: const Icon(Icons.save_rounded, color: Colors.white),
               label: const Text(
                 'Save Changes',
-                style: TextStyle(fontSize: 16, color: Colors.white),
+                style: TextStyle(fontSize: 16, color: Colors.white, fontFamily: 'Electorize'),
               ),
             ),
           ],

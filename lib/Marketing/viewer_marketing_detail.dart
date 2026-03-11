@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+
 class ViewerMarketingDetailPage extends StatelessWidget {
   final Map<String, dynamic> data;
   const ViewerMarketingDetailPage({super.key, required this.data});
@@ -16,24 +17,43 @@ class ViewerMarketingDetailPage extends StatelessWidget {
             (data['formType'] == 'Hotel / Resort Customer')
                 ? (data['firmName'] ?? 'Form Details')
                 : (data['shopName'] ?? 'Form Details'),
+            style: const TextStyle(fontFamily: 'Electorize', fontWeight: FontWeight.bold, letterSpacing: 0.5),
           ),
-          backgroundColor: const Color(0xFF2C3E50),
+          centerTitle: true,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          flexibleSpace: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          ),
         ),
-        backgroundColor: const Color(0xFFE3E8EA),
+        backgroundColor: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF0F0F1E)
+            : const Color(0xFFF0F2F5),
         body: Stack(
           children: [
             SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Card(
-                color: const Color(0xFFF7F2F2),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xFF1A1A2E)
+                    : Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                elevation: 4,
+                shadowColor: const Color(0xFF1A1A2E).withOpacity(0.12),
                 child: Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _detail('Form Type', data['formType']),
+                      _detail(context, 'Form Type', data['formType']),
                       _detail(
+                        context,
                         (data['formType'] == 'Hotel / Resort Customer')
                             ? 'Firm Name'
                             : 'Shop Name',
@@ -42,29 +62,29 @@ class ViewerMarketingDetailPage extends StatelessWidget {
                             : data['shopName'],
                       ),
                       if (data['formType'] == 'Hotel / Resort Customer') ...[
-                        _detail('Place', data['place']),
-                        _detail('Contact Person', data['contactPerson']),
-                        _detail('Contact Number', data['contactNumber']),
-                        _detail('Category', data['category']),
-                        _detail('Feedback Rating', data['feedbackRating']),
+                        _detail(context, 'Place', data['place']),
+                        _detail(context, 'Contact Person', data['contactPerson']),
+                        _detail(context, 'Contact Number', data['contactNumber']),
+                        _detail(context, 'Category', data['category']),
+                        _detail(context, 'Feedback Rating', data['feedbackRating']),
                       ],
-                      _detail('Phone No', data['phoneNo']),
-                      _detail('Last Item Purchased Date', _formatDateOrString(data['lastItemPurchasedDate'], data['lastPurchasedMonth'])),
-                      _detail('Last Purchased Item', data['lastPurchasedItem']),
-                      _detail('Current Enquiries', data['currentEnquiries']),
-                      _detail('Current Enquiry', data['currentEnquiry']), // For hotel/resort
-                      _detail('Confirmed Order', data['confirmedOrder']),
-                      _detail('Other Purchases', data['otherPurchases'] == 'yes' ? 'Yes' : (data['otherPurchases'] == 'no' ? 'No' : null)),
-                      _detail('Reason for Other Purchase', data['otherPurchasesReason']),
-                      _detail('Upcoming Big Events Date', _formatDate(data['upcomingEventDate'])),
-                      _detail('Upcoming Big Events Details', data['upcomingEvents']),
-                      _detail('New Product Suggestion', data['newProductSuggestion']),
-                      _detail('Upcoming Trends', data['upcomingTrends']),
-                      _detail('Any Suggestion', data['anySuggestion']), // For hotel/resort
-                      _detail('Feedback', data['feedback']),
-                      _detail('Branch', data['branch']),
-                      _detail('Username', data['username']),
-                      _detail('User ID', data['userid']),
+                      _detail(context, 'Phone No', data['phoneNo']),
+                      _detail(context, 'Last Item Purchased Date', _formatDateOrString(data['lastItemPurchasedDate'], data['lastPurchasedMonth'])),
+                      _detail(context, 'Last Purchased Item', data['lastPurchasedItem']),
+                      _detail(context, 'Current Enquiries', data['currentEnquiries']),
+                      _detail(context, 'Current Enquiry', data['currentEnquiry']), // For hotel/resort
+                      _detail(context, 'Confirmed Order', data['confirmedOrder']),
+                      _detail(context, 'Other Purchases', data['otherPurchases'] == 'yes' ? 'Yes' : (data['otherPurchases'] == 'no' ? 'No' : null)),
+                      _detail(context, 'Reason for Other Purchase', data['otherPurchasesReason']),
+                      _detail(context, 'Upcoming Big Events Date', _formatDate(data['upcomingEventDate'])),
+                      _detail(context, 'Upcoming Big Events Details', data['upcomingEvents']),
+                      _detail(context, 'New Product Suggestion', data['newProductSuggestion']),
+                      _detail(context, 'Upcoming Trends', data['upcomingTrends']),
+                      _detail(context, 'Any Suggestion', data['anySuggestion']), // For hotel/resort
+                      _detail(context, 'Feedback', data['feedback']),
+                      _detail(context, 'Branch', data['branch']),
+                      _detail(context, 'Username', data['username']),
+                      _detail(context, 'User ID', data['userid']),
                       const SizedBox(height: 16),
                       if (data['locationString'] != null && data['locationString'].toString().isNotEmpty)
                         Padding(
@@ -72,22 +92,31 @@ class ViewerMarketingDetailPage extends StatelessWidget {
                           child: InkWell(
                             onTap: () => _openMap(context, data['locationString']),
                             child: Container(
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                               decoration: BoxDecoration(
-                                color: Colors.blue[50],
-                                borderRadius: BorderRadius.circular(10),
+                                color: const Color(0xFF16213E).withOpacity(0.06),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: const Color(0xFF16213E).withOpacity(0.12)),
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.location_on, color: Colors.blue),
-                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF1A1A2E).withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Icon(Icons.location_on_rounded, color: Color(0xFF1A1A2E), size: 22),
+                                  ),
+                                  const SizedBox(width: 12),
                                   Expanded(
                                     child: Text(
                                       data['locationString'],
                                       style: const TextStyle(
-                                        color: Colors.blue,
+                                        color: Color(0xFF1A1A2E),
                                         decoration: TextDecoration.underline,
-                                        fontSize: 15,
+                                        fontSize: 14,
+                                        fontFamily: 'Electorize',
                                       ),
                                     ),
                                   ),
@@ -122,24 +151,63 @@ class ViewerMarketingDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _detail(String label, dynamic value) {
+  Widget _detail(BuildContext context, String label, dynamic value) {
     if (value == null || value.toString().isEmpty) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: RichText(
-        text: TextSpan(
-          style: const TextStyle(fontSize: 16, color: Color(0xFF2C3E50)),
-          children: [
-            TextSpan(
-              text: '$label: ',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 4,
+            height: 18,
+            margin: const EdgeInsets.only(right: 10, top: 2),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(2),
+              gradient: LinearGradient(
+                colors: Theme.of(context).brightness == Brightness.dark
+                    ? [const Color(0xFF0EA5E9), const Color(0xFF3B82F6)]
+                    : [const Color(0xFF1A1A2E), const Color(0xFF16213E)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
             ),
-            TextSpan(
-              text: value.toString(),
-              style: const TextStyle(fontWeight: FontWeight.normal),
+          ),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white70
+                      : const Color(0xFF2C3E50),
+                  fontFamily: 'Electorize',
+                ),
+                children: [
+                  TextSpan(
+                    text: '$label: ',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white
+                          : const Color(0xFF1A1A2E),
+                    ),
+                  ),
+                  TextSpan(
+                    text: value.toString(),
+                    style: TextStyle(
+                      fontWeight: FontWeight.normal,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white54
+                          : const Color(0xFF444E5C),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+            ),
+          
+        ],
       ),
     );
   }

@@ -168,13 +168,23 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
     return Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(
-        title: const Text('Marketing Form'),
-        backgroundColor: const Color(0xFF005BAC),
+        title: const Text('Marketing', style: TextStyle(fontFamily: 'Electorize', fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
+            ),
+          ),
+        ),
+        backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
+        elevation: 0,
         automaticallyImplyLeading: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.menu),
+            icon: const Icon(Icons.menu_rounded),
             onPressed: () {
               _scaffoldKey.currentState?.openEndDrawer();
             },
@@ -182,66 +192,155 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
         ],
       ),
       endDrawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
+        child: Column(
           children: [
-            const DrawerHeader(
-              decoration: BoxDecoration(
-                color: Color(0xFF005BAC),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(20, 60, 20, 24),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
+                ),
               ),
-              child: Text('Marketing Menu', style: TextStyle(color: Colors.white, fontSize: 20)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.view_list),
-              title: const Text("View Today's Forms"),
-              onTap: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => SalesMarketingDailyViewer(
-                      userId: widget.userid,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
                     ),
+                    child: const Icon(Icons.campaign_outlined, color: Colors.white, size: 28),
                   ),
-                );
-              },
+                  const SizedBox(height: 14),
+                  const Text('Marketing', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700, fontFamily: 'Electorize')),
+                  const SizedBox(height: 4),
+                  Text('Quick Actions', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14, fontFamily: 'Electorize')),
+                ],
+              ),
             ),
-            ListTile(
-              leading: const Icon(Icons.calendar_month_rounded),
-              title: const Text("View This Month's Forms"),
-              onTap: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => SalesMarketingMonthlyViewer(
-                      userId: widget.userid,
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: [
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF16213E).withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.today_rounded, color: Color(0xFF16213E), size: 22),
                     ),
+                    title: const Text("Today's Forms", style: TextStyle(fontWeight: FontWeight.w600, fontFamily: 'Electorize')),
+                    subtitle: const Text('View submissions from today', style: TextStyle(fontSize: 12)),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => SalesMarketingDailyViewer(
+                            userId: widget.userid,
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
+                  const Divider(height: 1, indent: 72),
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF16213E).withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.calendar_month_rounded, color: Color(0xFF16213E), size: 22),
+                    ),
+                    title: const Text("Monthly Forms", style: TextStyle(fontWeight: FontWeight.w600, fontFamily: 'Electorize')),
+                    subtitle: const Text('View this month\'s submissions', style: TextStyle(fontSize: 12)),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => SalesMarketingMonthlyViewer(
+                            userId: widget.userid,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ],
         ),
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: DropdownButtonFormField<String>(
-              value: _selectedForm,
-              items: const [
-                DropdownMenuItem(value: 'General Customer', child: Text('General Marketing')),
-                DropdownMenuItem(value: 'Premium Customer', child: Text('Premium Customer')),
-                DropdownMenuItem(value: 'Hotel / Resort Customer', child: Text('Hotel / Resort')),
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                _buildFormTab('General Customer', 'General', Icons.storefront_outlined, const Color(0xFFFF6B35)),
+                _buildFormTab('Premium Customer', 'Premium', Icons.workspace_premium_outlined, const Color(0xFFD4AF37)),
+                _buildFormTab('Hotel / Resort Customer', 'Hotel', Icons.hotel_outlined, const Color(0xFF009688)),
               ],
-              onChanged: _handleFormChange,
-              decoration: const InputDecoration(
-                labelText: 'Select Form Type',
-                border: OutlineInputBorder(),
-              ),
             ),
           ),
           Expanded(child: formWidget),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFormTab(String value, String label, IconData icon, Color color) {
+    final isSelected = _selectedForm == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _handleFormChange(value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(11),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: color.withOpacity(0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : [],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 22, color: isSelected ? color : Colors.grey[500]),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? color : Colors.grey[600],
+                  fontFamily: 'Electorize',
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -98,9 +98,19 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
       style: const TextStyle(fontFamily: 'Electorize'),
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('View Marketing Forms', selectionColor: Colors.white70),
-          backgroundColor: const Color.fromARGB(255, 13, 112, 192),
-          foregroundColor: theme.colorScheme.onPrimary,
+          title: const Text('View Marketing Forms', style: TextStyle(fontFamily: 'Electorize', fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+          centerTitle: true,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          flexibleSpace: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          ),
           actions: [
             IconButton(
               icon: const Icon(Icons.insert_chart_outlined),
@@ -251,29 +261,52 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
                             itemBuilder: (context, i) {
                               final data = docs[i].data() as Map<String, dynamic>;
                               final isHotelResort = data['formType'] == 'Hotel / Resort Customer';
+                              final isPremium = data['formType'] == 'Premium Customer';
+                              final accentColor = isPremium
+                                  ? const Color(0xFFD4AF37)
+                                  : isHotelResort
+                                      ? const Color(0xFF009688)
+                                      : const Color(0xFFFF6B35);
                               return Card(
                                 color: theme.cardColor,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                                child: ListTile(
-                                  title: Text(
-                                    isHotelResort
-                                        ? (data['firmName'] ?? 'No Firm Name')
-                                        : (data['shopName'] ?? 'No Shop Name'),
-                                    style: theme.textTheme.titleMedium,
+                                elevation: 3,
+                                shadowColor: accentColor.withOpacity(0.15),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border(left: BorderSide(color: accentColor, width: 4)),
                                   ),
-                                  subtitle: Text(
-                                    data['formType'] ?? '',
-                                    style: theme.textTheme.bodySmall,
-                                  ),
-                                  trailing: const Icon(Icons.arrow_forward_ios, size: 18),
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => ViewerMarketingDetailPage(data: data),
+                                  child: ListTile(
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                                    leading: CircleAvatar(
+                                      backgroundColor: accentColor.withOpacity(0.12),
+                                      child: Icon(
+                                        isPremium ? Icons.workspace_premium_rounded : isHotelResort ? Icons.hotel_rounded : Icons.storefront_rounded,
+                                        color: accentColor,
+                                        size: 22,
                                       ),
-                                    );
-                                  },
+                                    ),
+                                    title: Text(
+                                      isHotelResort
+                                          ? (data['firmName'] ?? 'No Firm Name')
+                                          : (data['shopName'] ?? 'No Shop Name'),
+                                      style: TextStyle(fontFamily: 'Electorize', fontWeight: FontWeight.w600, fontSize: 15, color: theme.textTheme.titleMedium?.color),
+                                    ),
+                                    subtitle: Text(
+                                      data['formType'] ?? '',
+                                      style: TextStyle(fontFamily: 'Electorize', fontSize: 12, color: accentColor),
+                                    ),
+                                    trailing: Icon(Icons.arrow_forward_ios_rounded, size: 16, color: accentColor.withOpacity(0.6)),
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => ViewerMarketingDetailPage(data: data),
+                                        ),
+                                      );
+                                    },
+                                  ),
                                 ),
                               );
                             },

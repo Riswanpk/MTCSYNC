@@ -325,14 +325,16 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
 
   InputDecoration _inputDecoration(String label, {bool error = false, String? errorText}) => InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(
-          fontSize: 12,
+        labelStyle: TextStyle(
+          fontSize: 13,
           fontFamily: 'Electorize',
+          color: const Color(0xFFD4AF37).withOpacity(0.7),
+          letterSpacing: 0.5,
         ),
         filled: true,
         fillColor: Theme.of(context).brightness == Brightness.dark
-            ? Colors.grey[900]
-            : const Color.fromARGB(255, 238, 232, 205),
+            ? const Color(0xFF1E1E2C)
+            : const Color(0xFFFAF6EE),
         border: const OutlineInputBorder(
           borderRadius: BorderRadius.only(
             topRight: Radius.circular(22),
@@ -342,9 +344,27 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
           ),
           borderSide: BorderSide.none,
         ),
-        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: const BorderRadius.only(
+            topRight: Radius.circular(22),
+            topLeft: Radius.circular(0),
+            bottomLeft: Radius.circular(22),
+            bottomRight: Radius.circular(0),
+          ),
+          borderSide: BorderSide(color: const Color(0xFFD4AF37).withOpacity(0.25), width: 1),
+        ),
+        focusedBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.only(
+            topRight: Radius.circular(22),
+            topLeft: Radius.circular(0),
+            bottomLeft: Radius.circular(22),
+            bottomRight: Radius.circular(0),
+          ),
+          borderSide: BorderSide(color: Color(0xFFD4AF37), width: 1.5),
+        ),
+        contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
         errorText: error ? errorText : null,
-        errorStyle: const TextStyle(color: Colors.red, fontSize: 13, fontFamily: 'Electorize'),
+        errorStyle: const TextStyle(color: Colors.redAccent, fontSize: 12, fontFamily: 'Electorize'),
       );
 
   @override
@@ -361,17 +381,36 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const SizedBox(height: 12),
-                    Text(
-                      'Premium Customer Visit Form',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Electorize',
-                        color: Color.fromARGB(255, 255, 192, 18),
+                    ShaderMask(
+                      shaderCallback: (bounds) => const LinearGradient(
+                        colors: [Color(0xFFD4AF37), Color(0xFFF5D060), Color(0xFFD4AF37)],
+                      ).createShader(bounds),
+                      child: const Text(
+                        'Premium Customer Visit Form',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Electorize',
+                          color: Colors.white,
+                          letterSpacing: 1.2,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 8),
+                    Center(
+                      child: Container(
+                        width: 60,
+                        height: 3,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFD4AF37), Color(0xFFF5D060)],
+                          ),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
 
                     // SECTION: CUSTOMER INFO
                     _buildSectionTitle('Customer Information'),
@@ -768,33 +807,46 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                     const SizedBox(height: 10),
                     _imageFile == null
                         ? OutlinedButton.icon(
-                            icon: const Icon(Icons.camera_alt_outlined),
-                            label: const Text('Take Photo'),
+                            icon: const Icon(Icons.camera_alt_outlined, color: Color(0xFFD4AF37)),
+                            label: const Text('Take Photo', style: TextStyle(color: Color(0xFFD4AF37), letterSpacing: 0.5)),
                             onPressed: _openCamera,
                             style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              side: const BorderSide(color: Color(0xFFD4AF37), width: 1.5),
                               shape: const RoundedRectangleBorder(
                                 borderRadius: BorderRadius.only(
                                   topRight: Radius.circular(22),
-                                  topLeft: Radius.circular(0),
                                   bottomLeft: Radius.circular(22),
-                                  bottomRight: Radius.circular(0),
                                 ),
                               ),
                             ),
                           )
                         : Column(
                             children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Image.file(_imageFile!, height: 150, fit: BoxFit.cover),
+                              Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: const Color(0xFFD4AF37).withOpacity(0.3), width: 1.5),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFD4AF37).withOpacity(0.15),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(13),
+                                  child: Image.file(_imageFile!, height: 160, fit: BoxFit.cover),
+                                ),
                               ),
-                              TextButton(
+                              TextButton.icon(
                                 onPressed: () {
                                   setState(() => _imageFile = null);
                                   _saveDraft();
                                 },
-                                child: const Text('Remove Photo'),
+                                icon: const Icon(Icons.close, size: 18, color: Colors.redAccent),
+                                label: const Text('Remove Photo', style: TextStyle(color: Colors.redAccent)),
                               ),
                             ],
                           ),
@@ -809,24 +861,40 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                     const SizedBox(height: 30),
 
                     // SUBMIT BUTTON
-                    ElevatedButton(
-                      onPressed: _submitForm,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1E3D59),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.only(
-                            topRight: Radius.circular(22),
-                            topLeft: Radius.circular(0),
-                            bottomLeft: Radius.circular(22),
-                            bottomRight: Radius.circular(0),
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: const BorderRadius.only(
+                          topRight: Radius.circular(22),
+                          bottomLeft: Radius.circular(22),
+                        ),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFD4AF37), Color(0xFFF5D060), Color(0xFFD4AF37)],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFD4AF37).withOpacity(0.4),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ElevatedButton(
+                        onPressed: _submitForm,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          foregroundColor: const Color(0xFF1A1A2E),
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: 1.2),
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.only(
+                              topRight: Radius.circular(22),
+                              bottomLeft: Radius.circular(22),
+                            ),
                           ),
                         ),
-                        elevation: 3,
+                        child: const Text('Submit'),
                       ),
-                      child: const Text('Submit'),
                     ),
                   ],
                 ),
@@ -835,14 +903,37 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
     );
   }
 
-  // --- Helpers for section titles and date fields ---
   Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.bold,
-        color: Color(0xFF34495E),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4, top: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 22,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFFD4AF37), Color(0xFFF5D060)],
+              ),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white
+                  : const Color(0xFF2C1810),
+              letterSpacing: 0.8,
+              fontFamily: 'Electorize',
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -861,15 +952,23 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
           onTap: onTap,
           child: InputDecorator(
             decoration: _inputDecoration(label, error: error, errorText: errorText),
-            child: Text(
-              date != null
-                  ? "${date.day}/${date.month}/${date.year}"
-                  : 'Select date',
-              style: TextStyle(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white
-                    : Colors.black,
-              ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  date != null
+                      ? "${date.day}/${date.month}/${date.year}"
+                      : 'Select date',
+                  style: TextStyle(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : Colors.black87,
+                  ),
+                ),
+                Icon(Icons.calendar_today_outlined,
+                    size: 20,
+                    color: const Color(0xFFD4AF37).withOpacity(0.7)),
+              ],
             ),
           ),
         ),
@@ -878,7 +977,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
             padding: const EdgeInsets.only(top: 8, left: 4),
             child: Text(
               errorText,
-              style: const TextStyle(color: Colors.red, fontSize: 13, fontFamily: 'Electorize'),
+              style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontFamily: 'Electorize'),
             ),
           ),
       ],

@@ -90,18 +90,32 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
   }) =>
       InputDecoration(
         labelText: required ? '$label *' : label,
-        labelStyle: const TextStyle(
-          fontSize: 16,
+        labelStyle: TextStyle(
+          fontSize: 14,
           fontFamily: 'Electorize',
+          color: Theme.of(context).brightness == Brightness.dark
+              ? Colors.white70
+              : const Color(0xFF00695C),
         ),
         filled: true,
         fillColor: Theme.of(context).brightness == Brightness.dark
             ? Colors.grey[900]
-            : const Color.fromARGB(255, 255, 255, 255),
-        border: InputBorder.none,
-        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+            : const Color(0xFFF0F9F7),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: const Color(0xFF009688).withOpacity(0.2), width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF009688), width: 1.5),
+        ),
+        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
         errorText: error ? errorText : null,
-        errorStyle: const TextStyle(color: Colors.red, fontSize: 13, fontFamily: 'Electorize'),
+        errorStyle: const TextStyle(color: Colors.redAccent, fontSize: 12, fontFamily: 'Electorize'),
       );
 
   // 🔹 Reusable styled textfield with shadow & corners
@@ -118,19 +132,19 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
     String? initialValue,
   }) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: const Color.fromARGB(255, 255, 255, 255),
-        borderRadius: const BorderRadius.only(
-          topRight: Radius.circular(22),
-          bottomLeft: Radius.circular(22),
-        ),
+        color: Theme.of(context).brightness == Brightness.dark
+            ? Colors.grey[900]
+            : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF009688).withOpacity(0.12)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            spreadRadius: 1,
-            blurRadius: 8,
-            offset: const Offset(2, 4),
+            color: const Color(0xFF009688).withOpacity(0.06),
+            spreadRadius: 0,
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -147,10 +161,10 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
             if (label == 'PLACE') _placeError = v.trim().isEmpty;
             if (label == 'CONTACT PERSON NAME') _contactPersonError = v.trim().isEmpty;
             if (label == 'CONTACT NUMBER') _contactNumberError = v.trim().isEmpty || v.length != 10;
-            if (label == 'CURRENT ENQUIRY') _currentEnquiryError = v.trim().isEmpty; // This was already here, but ensure it's not affected by date removal
+            if (label == 'CURRENT ENQUIRY') _currentEnquiryError = v.trim().isEmpty;
           });
         },
-        inputFormatters: inputFormatters, // Add this line
+        inputFormatters: inputFormatters,
       ),
     );
   }
@@ -444,14 +458,33 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const SizedBox(height: 12),
-                    Text(
-                      'Hotel/Resort Visit Form',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Electorize',
-                        color: Color(0xFF1E3D59),
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [const Color(0xFF009688).withOpacity(0.1), const Color(0xFF00695C).withOpacity(0.05)],
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF009688).withOpacity(0.15)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.hotel_outlined, color: const Color(0xFF00695C), size: 26),
+                          const SizedBox(width: 10),
+                          const Flexible(
+                            child: Text(
+                              'Hotel/Resort Visit Form',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                                fontFamily: 'Electorize',
+                                color: Color(0xFF00695C),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -483,18 +516,18 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                       onChanged: (v) => contactPerson = v,
                     ),
                     Container(
-                      margin: const EdgeInsets.only(bottom: 16),
+                      margin: const EdgeInsets.only(bottom: 14),
                       decoration: BoxDecoration(
-                        color: const Color.fromARGB(255, 255, 255, 255),
-                        borderRadius: const BorderRadius.only(
-                          topRight: Radius.circular(22),
-                          bottomLeft: Radius.circular(22),
-                        ),
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.grey[900]
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF009688).withOpacity(0.12)),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black12,
-                            blurRadius: 6,
-                            offset: const Offset(2, 3),
+                            color: const Color(0xFF009688).withOpacity(0.06),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
                           ),
                         ],
                       ),
@@ -576,7 +609,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                     Column(
                       children: [
                         RadioListTile<String>(
-                          title: const Text('HOTEL'),
+                          title: const Text('HOTEL', style: TextStyle(fontFamily: 'Electorize')),
                           value: 'HOTEL',
                           groupValue: category,
                           onChanged: (v) => setState(() {
@@ -587,7 +620,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                           }),
                         ),
                         RadioListTile<String>(
-                          title: const Text('RESORT'),
+                          title: const Text('RESORT', style: TextStyle(fontFamily: 'Electorize')),
                           value: 'RESORT',
                           groupValue: category,
                           onChanged: (v) => setState(() {
@@ -598,7 +631,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                           }),
                         ),
                         RadioListTile<String>(
-                          title: const Text('RESTAURANT'),
+                          title: const Text('RESTAURANT', style: TextStyle(fontFamily: 'Electorize')),
                           value: 'RESTAURANT',
                           groupValue: category,
                           onChanged: (v) => setState(() {
@@ -609,7 +642,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                           }),
                         ),
                         RadioListTile<String>(
-                          title: const Text('AUDITORIUM & HALLS'),
+                          title: const Text('AUDITORIUM & HALLS', style: TextStyle(fontFamily: 'Electorize')),
                           value: 'AUDITORIUM & HALLS',
                           groupValue: category,
                           onChanged: (v) => setState(() {
@@ -620,7 +653,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                           }),
                         ),
                         RadioListTile<String>(
-                          title: const Text('OTHERS'),
+                          title: const Text('OTHERS', style: TextStyle(fontFamily: 'Electorize')),
                           value: 'OTHERS',
                           groupValue: category,
                           onChanged: (v) => setState(() {
@@ -680,7 +713,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                       children: [
                         Expanded(
                           child: RadioListTile<String>(
-                            title: const Text('Yes'),
+                            title: const Text('Yes', style: TextStyle(fontFamily: 'Electorize')),
                             value: 'yes',
                             groupValue: _otherPurchases,
                             onChanged: (value) {
@@ -694,7 +727,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                         ),
                         Expanded(
                           child: RadioListTile<String>(
-                            title: const Text('No'),
+                            title: const Text('No', style: TextStyle(fontFamily: 'Electorize')),
                             value: 'no',
                             groupValue: _otherPurchases,
                             onChanged: (value) {
@@ -781,16 +814,16 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                           final starNumber = index + 1;
                           return Column(
                             children: [
-                              Text('$starNumber', style: const TextStyle(fontSize: 15)),
+                              Text('$starNumber', style: const TextStyle(fontSize: 14, fontFamily: 'Electorize', color: Color(0xFF00695C))),
                               IconButton(
                                 icon: Icon(
                                   feedbackRating >= starNumber
-                                      ? Icons.star
-                                      : Icons.star_border,
+                                      ? Icons.star_rounded
+                                      : Icons.star_border_rounded,
                                   color: feedbackRating >= starNumber
-                                      ? Colors.amber
-                                      : Colors.grey,
-                                  size: 32,
+                                      ? const Color(0xFF009688)
+                                      : Colors.grey[400],
+                                  size: 36,
                                 ),
                                 onPressed: () {
                                   setState(() {
@@ -818,18 +851,15 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                     const SizedBox(height: 10),
                     _imageFile == null
                         ? OutlinedButton.icon(
-                            icon: const Icon(Icons.camera_alt),
-                            label: const Text('Take Photo'),
+                            icon: Icon(Icons.camera_alt, color: const Color(0xFF009688)),
+                            label: const Text('Take Photo', style: TextStyle(color: Color(0xFF009688))),
                             onPressed: _openCamera,
                             style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
                               side: const BorderSide(
-                                  color: Color(0xFF1E3D59), width: 1.2),
-                              shape: const RoundedRectangleBorder(
-                                borderRadius: BorderRadius.only(
-                                  topRight: Radius.circular(22),
-                                  bottomLeft: Radius.circular(22),
-                                ),
+                                  color: Color(0xFF009688), width: 1.2),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
                             ),
                           )
@@ -876,24 +906,35 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                     const SizedBox(height: 28),
 
                     // SUBMIT BUTTON
-                    ElevatedButton(
-                      onPressed: _submitForm,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1E3D59),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        textStyle: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.only(
-                            topRight: Radius.circular(22),
-                            bottomLeft: Radius.circular(22),
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF009688), Color(0xFF00796B)],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF009688).withOpacity(0.3),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ElevatedButton(
+                        onPressed: _submitForm,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          textStyle: const TextStyle(
+                              fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        elevation: 6,
-                        shadowColor: Colors.black.withOpacity(0.25),
+                        child: const Text('Submit'),
                       ),
-                      child: const Text('Submit'),
                     ),
                   ],
                 ),
@@ -904,14 +945,32 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
 
   Widget _buildSectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10, top: 12),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          color: Color(0xFF34495E),
-        ),
+      padding: const EdgeInsets.only(bottom: 8, top: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white
+                  : const Color(0xFF00695C),
+              letterSpacing: 0.3,
+              fontFamily: 'Electorize',
+            ),
+          ),
+          const SizedBox(height: 4),
+          Container(
+            width: 40,
+            height: 3,
+            decoration: BoxDecoration(
+              color: const Color(0xFF009688),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ],
       ),
     );
   }

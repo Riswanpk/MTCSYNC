@@ -32,35 +32,58 @@ class _CameraPageState extends State<CameraPage> {
   /// Uses medium accuracy — sufficient for watermark text, much faster than high.
   Future<_LocationResult?> _getLocation() async {
     try {
-      LocationPermission permission;
-      int retries = 0;
-      const maxRetries = 3;
+      // Check if location services are enabled
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      while (!serviceEnabled && retries < maxRetries) {
-        retries++;
-        await Geolocator.openLocationSettings();
-        serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      }
-      if (!serviceEnabled) return null;
-
-      retries = 0;
-      permission = await Geolocator.checkPermission();
-      while ((permission == LocationPermission.denied ||
-              permission == LocationPermission.deniedForever) &&
-          retries < maxRetries) {
-        retries++;
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
+      debugPrint('Location service enabled: $serviceEnabled');
+      if (!serviceEnabled) {
+        debugPrint('Location service is not enabled');
         return null;
       }
 
-      // Medium accuracy is much faster than high — good enough for a watermark
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-      );
-      return _LocationResult(position);
+      // Check current permission status
+      LocationPermission permission = await Geolocator.checkPermission();
+      debugPrint('Initial permission status: $permission');
+      
+      // If denied, request permission once
+      if (permission == LocationPermission.denied) {
+        debugPrint('Requesting location permission...');
+        permission = await Geolocator.requestPermission();
+        debugPrint('Permission after request: $permission');
+      }
+      
+      // If still denied or permanently denied, return null
+      if (permission == LocationPermission.denied || 
+          permission == LocationPermission.deniedForever) {
+        debugPrint('Location permission denied: $permission');
+        return null;
+      }
+
+      debugPrint('Attempting to get current position...');
+      // Get position - use last known location as fallback for speed
+      Position? position;
+      try {
+        // Try to get last known position first (instant)
+        position = await Geolocator.getLastKnownPosition();
+        if (position != null) {
+          debugPrint('Using last known position: lat=${position.latitude}, lon=${position.longitude}');
+          return _LocationResult(position);
+        }
+      } catch (e) {
+        debugPrint('Could not get last known position: $e');
+      }
+      
+      // If no last known position, get current position with adequate timeout for GPS fix
+      try {
+        position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.medium,
+          timeLimit: const Duration(seconds: 20), // GPS can take 10-15s for initial fix
+        );
+        debugPrint('Got current position: lat=${position.latitude}, lon=${position.longitude}');
+        return _LocationResult(position);
+      } catch (timeoutError) {
+        debugPrint('Timeout getting current position: $timeoutError');
+        return null;
+      }
     } catch (e) {
       debugPrint('Error getting location: $e');
       return null;
@@ -106,7 +129,13 @@ class _CameraPageState extends State<CameraPage> {
       if (pickedFile != null) {
         // --- OPTIMIZATION: Run compression and location fetch in parallel ---
         final compressionFuture = _compressImage(File(pickedFile.path));
-        final locationFuture = _getLocation();
+        final locationFuture = _getLocation().timeout(
+          const Duration(seconds: 25), // Allow enough time for GPS fix
+          onTimeout: () {
+            debugPrint('Location fetch timed out after 25 seconds');
+            return null;
+          },
+        );
 
         final results = await Future.wait([compressionFuture, locationFuture]);
         final compressedImageFile = results[0] as File?;
@@ -114,12 +143,23 @@ class _CameraPageState extends State<CameraPage> {
 
         if (compressedImageFile == null) {
           if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to process image. Please try again.')),
+          );
           setState(() => _isLoading = false);
           return;
         }
 
+        // GPS is MANDATORY - cannot proceed without location
         if (locationResult == null) {
           if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ GPS location is required. Please:\n• Go outdoors or near a window\n• Wait for GPS signal to lock\n• Ensure Location is High Accuracy mode'),
+              duration: Duration(seconds: 7),
+              backgroundColor: Colors.red,
+            ),
+          );
           setState(() => _isLoading = false);
           return;
         }
@@ -174,93 +214,196 @@ class _CameraPageState extends State<CameraPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Camera')),
+      appBar: AppBar(
+        title: const Text('Camera', style: TextStyle(fontFamily: 'Electorize', fontWeight: FontWeight.bold, letterSpacing: 1)),
+        centerTitle: true,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+      ),
+      backgroundColor: const Color(0xFF0F0F1A),
       body: Stack(
         children: [
           Center(
             child: _isLoading
-                ? const CircularProgressIndicator()
+                ? Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 56, height: 56,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.tealAccent.shade200),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text('Acquiring GPS location...', style: TextStyle(color: Colors.grey.shade400, fontFamily: 'Electorize', fontSize: 14)),
+                      const SizedBox(height: 8),
+                      Text('Please wait up to 20 seconds', style: TextStyle(color: Colors.grey.shade500, fontFamily: 'Electorize', fontSize: 12)),
+                    ],
+                  )
                 : _capturedImage == null
-                    ? ElevatedButton.icon(
-                        icon: const Icon(Icons.camera_alt),
-                        label: const Text('Take Photo'),
-                        onPressed: _takePhoto,
+                    ? GestureDetector(
+                        onTap: _takePhoto,
+                        child: Container(
+                          width: 200,
+                          height: 200,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            border: Border.all(color: Colors.tealAccent.withOpacity(0.5), width: 2.5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.tealAccent.withOpacity(0.15),
+                                blurRadius: 30,
+                                spreadRadius: 5,
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.camera_alt_rounded, size: 56, color: Colors.tealAccent.shade200),
+                              const SizedBox(height: 12),
+                              Text('Tap to Capture', style: TextStyle(fontFamily: 'Electorize', color: Colors.grey.shade300, fontSize: 14, letterSpacing: 0.5)),
+                            ],
+                          ),
+                        ),
                       )
-                    : Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Image.file(_capturedImage!, height: 300),
-                          const SizedBox(height: 16),
-                          ElevatedButton.icon(
-                            icon: const Icon(Icons.save),
-                            label: const Text('Use This Photo'),
-                            onPressed: () async {
-                              if (_capturedImage != null &&
-                                  _locationString != null &&
-                                  _dateTimeString != null) {
-                                setState(() {
-                                  _isUploading = true;
-                                });
-                                try {
-                                  final watermarkText = "${_locationString!}\n$_dateTimeString";
-                                  // Process watermark in background to avoid blocking UI
-                                  final watermarkedFile = await addWatermark(
-                                    imageFile: _capturedImage!,
-                                    watermarkText: watermarkText,
-                                  );
-                                  // Re-compress after watermarking — the watermark library
-                                  // may output a much larger file (decoded/re-encoded pixels).
-                                  // This re-compression is the #1 upload speed optimization.
-                                  final reCompressed = await _compressImage(watermarkedFile);
-                                  final finalFile = reCompressed ?? watermarkedFile;
-                                  if (!mounted) return;
-                                  setState(() {
-                                    _isUploading = false;
-                                  });
-                                  // Return the image and location to the previous page
-                                  Navigator.pop(context, {
-                                    'image': finalFile,
-                                    'location': _locationString,
-                                  });
-                                } catch (e) {
-                                  debugPrint('Error adding watermark: $e');
-                                  if (!mounted) return;
-                                  setState(() {
-                                    _isUploading = false;
-                                  });
-                                  // Return image without watermark if watermarking fails
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Could not add watermark, using original image')),
-                                  );
-                                  Navigator.pop(context, {
-                                    'image': _capturedImage,
-                                    'location': _locationString,
-                                  });
-                                }
-                              }
-                            },
-                          ),
-                          const SizedBox(height: 8),
-                          ElevatedButton.icon(
-                            icon: const Icon(Icons.camera_alt),
-                            label: const Text('Retake'),
-                            onPressed: _takePhoto,
-                          ),
-                        ],
+                    : Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.tealAccent.withOpacity(0.3), width: 1.5),
+                                boxShadow: [
+                                  BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 20, offset: const Offset(0, 8)),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: Image.file(_capturedImage!, height: 300, fit: BoxFit.cover),
+                              ),
+                            ),
+                            const SizedBox(height: 28),
+                            SizedBox(
+                              width: double.infinity,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(14),
+                                  gradient: const LinearGradient(colors: [Color(0xFF009688), Color(0xFF00796B)]),
+                                  boxShadow: [
+                                    BoxShadow(color: const Color(0xFF009688).withOpacity(0.35), blurRadius: 12, offset: const Offset(0, 4)),
+                                  ],
+                                ),
+                                child: ElevatedButton.icon(
+                                  icon: const Icon(Icons.check_circle_rounded, color: Colors.white),
+                                  label: const Text('Use This Photo', style: TextStyle(fontFamily: 'Electorize', fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.transparent,
+                                    shadowColor: Colors.transparent,
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                  ),
+                                  onPressed: () async {
+                                    if (_capturedImage != null &&
+                                        _locationString != null &&
+                                        _dateTimeString != null) {
+                                      setState(() {
+                                        _isUploading = true;
+                                      });
+                                      try {
+                                        final watermarkText = "${_locationString!}\n$_dateTimeString";
+                                        // Process watermark in background to avoid blocking UI
+                                        final watermarkedFile = await addWatermark(
+                                          imageFile: _capturedImage!,
+                                          watermarkText: watermarkText,
+                                        );
+                                        // Re-compress after watermarking — the watermark library
+                                        // may output a much larger file (decoded/re-encoded pixels).
+                                        // This re-compression is the #1 upload speed optimization.
+                                        final reCompressed = await _compressImage(watermarkedFile);
+                                        final finalFile = reCompressed ?? watermarkedFile;
+                                        if (!mounted) return;
+                                        setState(() {
+                                          _isUploading = false;
+                                        });
+                                        // Return the image and location to the previous page
+                                        Navigator.pop(context, {
+                                          'image': finalFile,
+                                          'location': _locationString,
+                                        });
+                                      } catch (e) {
+                                        debugPrint('Error adding watermark: $e');
+                                        if (!mounted) return;
+                                        setState(() {
+                                          _isUploading = false;
+                                        });
+                                        // Return image without watermark if watermarking fails
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Could not add watermark, using original image')),
+                                        );
+                                        Navigator.pop(context, {
+                                          'image': _capturedImage,
+                                          'location': _locationString,
+                                        });
+                                      }
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                icon: Icon(Icons.camera_alt_rounded, color: Colors.tealAccent.shade200),
+                                label: Text('Retake', style: TextStyle(fontFamily: 'Electorize', fontSize: 15, color: Colors.tealAccent.shade200)),
+                                style: OutlinedButton.styleFrom(
+                                  side: BorderSide(color: Colors.tealAccent.shade200.withOpacity(0.5), width: 1.5),
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                ),
+                                onPressed: _takePhoto,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
           ),
           if (_isUploading)
             Container(
-              color: Colors.black54,
-              child: const Center(
+              color: const Color(0xCC0F0F1A),
+              child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 16),
-                    Text(
+                    SizedBox(
+                      width: 56, height: 56,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.tealAccent.shade200),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
                       'Processing image...',
-                      style: TextStyle(color: Colors.white, fontSize: 16),
+                      style: TextStyle(color: Colors.white, fontSize: 16, fontFamily: 'Electorize', letterSpacing: 0.5),
                     ),
                   ],
                 ),

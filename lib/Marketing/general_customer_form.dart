@@ -61,20 +61,57 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
 
   InputDecoration _inputDecoration(String label, {bool required = false}) => InputDecoration(
         labelText: required ? '$label *' : label,
-        labelStyle: const TextStyle(
+        labelStyle: TextStyle(
           fontSize: 13,
           fontFamily: 'Electorize',
+          fontWeight: FontWeight.w500,
+          color: Theme.of(context).brightness == Brightness.dark
+              ? Colors.white70
+              : const Color(0xFF78909C),
         ),
         filled: true,
         fillColor: Theme.of(context).brightness == Brightness.dark
             ? Colors.grey[900]
-            : const Color(0xFFF7F2F2),
+            : Colors.white,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
         ),
-        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: const Color(0xFFFF6B35).withOpacity(0.15), width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFFF6B35), width: 1.5),
+        ),
+        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
       );
+
+  Widget _buildFieldCard({required Widget child}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: Theme.of(context).brightness == Brightness.dark
+            ? Colors.grey[900]
+            : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFF6B35).withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
 
   Future<void> _openCamera() async {
     final result = await Navigator.push(
@@ -338,40 +375,53 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const SizedBox(height: 12),
-                    Text(
-                      'General Marketing Visit Form',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Electorize',
-                        color: Color(0xFF1E3D59),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    // SECTION: CUSTOMER INFO
-                    _buildSectionTitle('Customer Information'),
-                    const SizedBox(height: 10),
                     Container(
+                      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.grey[900]
-                            : const Color.fromARGB(255, 247, 242, 242),
-                        borderRadius: const BorderRadius.only(
-                          topRight: Radius.circular(22),
-                          topLeft: Radius.circular(0),
-                          bottomLeft: Radius.circular(22),
-                          bottomRight: Radius.circular(0),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            const Color(0xFFFF6B35).withOpacity(0.12),
+                            const Color(0xFFFF8F65).withOpacity(0.06),
+                          ],
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.3),
-                            spreadRadius: 1,
-                            blurRadius: 6,
-                            offset: const Offset(2, 3),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0xFFFF6B35).withOpacity(0.15)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF6B35).withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.storefront_outlined, color: Color(0xFFFF6B35), size: 24),
+                          ),
+                          const SizedBox(width: 12),
+                          const Flexible(
+                            child: Text(
+                              'General Marketing\nVisit Form',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                fontFamily: 'Electorize',
+                                color: Color(0xFF2D3436),
+                                height: 1.3,
+                              ),
+                            ),
                           ),
                         ],
                       ),
+                    ),
+                    const SizedBox(height: 24),
+                    // SECTION: CUSTOMER INFO
+                    _buildSectionTitle('Customer Information', Icons.person_outline),
+                    const SizedBox(height: 8),
+                    _buildFieldCard(
                       child: TextFormField(
                         controller: _shopNameController,
                         decoration: _inputDecoration('SHOP NAME', required: true),
@@ -379,54 +429,14 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                         onChanged: (v) => _saveDraft(),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.grey[900]
-                            : const Color.fromARGB(255, 247, 242, 242),
-                        borderRadius: const BorderRadius.only(
-                          topRight: Radius.circular(22),
-                          topLeft: Radius.circular(0),
-                          bottomLeft: Radius.circular(22),
-                          bottomRight: Radius.circular(0),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.3),
-                            spreadRadius: 1,
-                            blurRadius: 6,
-                            offset: const Offset(2, 3),
-                          ),
-                        ],
-                      ),
+                    _buildFieldCard(
                       child: TextFormField(
                         controller: _placeController,
                         decoration: _inputDecoration('PLACE', required: true),
                         onChanged: (v) => _saveDraft(),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.grey[900]
-                            : const Color.fromARGB(255, 247, 242, 242),
-                        borderRadius: const BorderRadius.only(
-                          topRight: Radius.circular(22),
-                          topLeft: Radius.circular(0),
-                          bottomLeft: Radius.circular(22),
-                          bottomRight: Radius.circular(0),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.3),
-                            spreadRadius: 1,
-                            blurRadius: 6,
-                            offset: const Offset(2, 3),
-                          ),
-                        ],
-                      ),
+                    _buildFieldCard(
                       child: TextFormField(
                         controller: _phoneNoController,
                         decoration: _inputDecoration('PHONE NO', required: true).copyWith(
@@ -489,8 +499,8 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                     ),
                     const SizedBox(height: 20),
                     // SECTION: BUSINESS INFO
-                    _buildSectionTitle('Business Information'),
-                    const SizedBox(height: 10),
+                    _buildSectionTitle('Business Information', Icons.business_outlined),
+                    const SizedBox(height: 8),
                     Padding(
                       padding: const EdgeInsets.only(left: 4, bottom: 8),
                       child: Text(
@@ -602,8 +612,8 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                       ),
                     const SizedBox(height: 20),
                     // SECTION: OTHER PURCHASES
-                    _buildSectionTitle('Other Purchases'),
-                    const SizedBox(height: 10),
+                    _buildSectionTitle('Other Purchases', Icons.shopping_bag_outlined),
+                    const SizedBox(height: 8),
                     Padding(
                       padding: const EdgeInsets.only(left: 4, bottom: 4),
                       child: Text(
@@ -663,26 +673,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).brightness == Brightness.dark
-                                    ? Colors.grey[900]
-                                    : const Color.fromARGB(255, 247, 242, 242),
-                                borderRadius: const BorderRadius.only(
-                                  topRight: Radius.circular(22),
-                                  topLeft: Radius.circular(0),
-                                  bottomLeft: Radius.circular(22),
-                                  bottomRight: Radius.circular(0),
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.grey.withOpacity(0.3),
-                                    spreadRadius: 1,
-                                    blurRadius: 6,
-                                    offset: const Offset(2, 3),
-                                  ),
-                                ],
-                              ),
+                            _buildFieldCard(
                               child: TextFormField(
                                 controller: _otherPurchasesReasonController,
                                 decoration: _inputDecoration('REASON FOR OUTSIDE PURCHASING', required: true),
@@ -707,82 +698,23 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                       ),
                     const SizedBox(height: 20),
                     // SECTION: ORDERS & ENQUIRIES
-                    _buildSectionTitle('Orders & Enquiries'),
-                    const SizedBox(height: 10),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.grey[900]
-                            : const Color.fromARGB(255, 247, 242, 242),
-                        borderRadius: const BorderRadius.only(
-                          topRight: Radius.circular(22),
-                          topLeft: Radius.circular(0),
-                          bottomLeft: Radius.circular(22),
-                          bottomRight: Radius.circular(0),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.3),
-                            spreadRadius: 1,
-                            blurRadius: 6,
-                            offset: const Offset(2, 3),
-                          ),
-                        ],
-                      ),
+                    _buildSectionTitle('Orders & Enquiries', Icons.receipt_long_outlined),
+                    const SizedBox(height: 8),
+                    _buildFieldCard(
                       child: TextFormField(
                         controller: _currentEnquiriesController,
-                        decoration: _inputDecoration('CURRENT ENQUIRIES',required: true),
+                        decoration: _inputDecoration('CURRENT ENQUIRIES', required: true),
                         onChanged: (v) => _saveDraft(),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.grey[900]
-                            : const Color.fromARGB(255, 247, 242, 242),
-                        borderRadius: const BorderRadius.only(
-                          topRight: Radius.circular(22),
-                          topLeft: Radius.circular(0),
-                          bottomLeft: Radius.circular(22),
-                          bottomRight: Radius.circular(0),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.3),
-                            spreadRadius: 1,
-                            blurRadius: 6,
-                            offset: const Offset(2, 3),
-                          ),
-                        ],
-                      ),
+                    _buildFieldCard(
                       child: TextFormField(
                         controller: _confirmedOrderController,
                         decoration: _inputDecoration('CONFIRMED ORDER'),
                         onChanged: (v) => _saveDraft(),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.grey[900]
-                            : const Color.fromARGB(255, 247, 242, 242),
-                        borderRadius: const BorderRadius.only(
-                          topRight: Radius.circular(22),
-                          topLeft: Radius.circular(0),
-                          bottomLeft: Radius.circular(22),
-                          bottomRight: Radius.circular(0),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.3),
-                            spreadRadius: 1,
-                            blurRadius: 6,
-                            offset: const Offset(2, 3),
-                          ),
-                        ],
-                      ),
+                    _buildFieldCard(
                       child: TextFormField(
                         controller: _newProductSuggestionController,
                         decoration: _inputDecoration('REMARKS & SUGGESTIONS'),
@@ -791,37 +723,59 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                     ),
                     const SizedBox(height: 20),
                     // SECTION: PHOTO
-                    _buildSectionTitle('Attach Shop Photo'),
-                    const SizedBox(height: 10),
+                    _buildSectionTitle('Attach Shop Photo', Icons.camera_alt_outlined),
+                    const SizedBox(height: 8),
                     _imageFile == null
-                        ? OutlinedButton.icon(
-                            icon: const Icon(Icons.camera_alt),
-                            label: const Text('Take Photo'),
-                            onPressed: _openCamera,
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: const RoundedRectangleBorder(
-                                borderRadius: BorderRadius.only(
-                                  topRight: Radius.circular(22),
-                                  topLeft: Radius.circular(0),
-                                  bottomLeft: Radius.circular(22),
-                                  bottomRight: Radius.circular(0),
+                        ? Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: const Color(0xFFFF6B35).withOpacity(0.3),
+                                width: 1.5,
+                                strokeAlign: BorderSide.strokeAlignInside,
+                              ),
+                              color: const Color(0xFFFF6B35).withOpacity(0.04),
+                            ),
+                            child: InkWell(
+                              onTap: _openCamera,
+                              borderRadius: BorderRadius.circular(14),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 24),
+                                child: Column(
+                                  children: [
+                                    Icon(Icons.add_a_photo_outlined, color: const Color(0xFFFF6B35), size: 32),
+                                    const SizedBox(height: 8),
+                                    const Text('Tap to take photo', style: TextStyle(color: Color(0xFFFF6B35), fontFamily: 'Electorize', fontWeight: FontWeight.w600)),
+                                  ],
                                 ),
                               ),
                             ),
                           )
                         : Column(
                             children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Image.file(_imageFile!, height: 120, fit: BoxFit.cover),
+                              Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(14),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFFF6B35).withOpacity(0.15),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(14),
+                                  child: Image.file(_imageFile!, height: 140, fit: BoxFit.cover),
+                                ),
                               ),
-                              TextButton(
+                              TextButton.icon(
                                 onPressed: () {
                                   setState(() => _imageFile = null);
                                   _saveDraft();
                                 },
-                                child: const Text('Remove Photo'),
+                                icon: const Icon(Icons.close, size: 18, color: Colors.redAccent),
+                                label: const Text('Remove Photo', style: TextStyle(color: Colors.redAccent)),
                               ),
                             ],
                           ),
@@ -834,24 +788,35 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                         ),
                       ),
                     const SizedBox(height: 28),
-                    ElevatedButton(
-                      onPressed: _submitForm,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color.fromARGB(192, 31, 113, 255),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.only(
-                            topRight: Radius.circular(22),
-                            topLeft: Radius.circular(0),
-                            bottomLeft: Radius.circular(22),
-                            bottomRight: Radius.circular(0),
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFF6B35), Color(0xFFFF8F65)],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFF6B35).withOpacity(0.35),
+                            blurRadius: 14,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: ElevatedButton.icon(
+                        onPressed: _submitForm,
+                        icon: const Icon(Icons.send_rounded, size: 20),
+                        label: const Text('Submit Form'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
                           ),
                         ),
-                        elevation: 3,
                       ),
-                      child: const Text('Submit'),
                     ),
                   ],
                 ),
@@ -860,15 +825,36 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.bold,
-        color: Color(0xFF34495E),
+  Widget _buildSectionTitle(String title, [IconData? icon]) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 4),
+      child: Row(
+        children: [
+          if (icon != null) ...[
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF6B35).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, size: 18, color: const Color(0xFFFF6B35)),
+            ),
+            const SizedBox(width: 10),
+          ],
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white
+                  : const Color(0xFF2D3436),
+              letterSpacing: 0.3,
+              fontFamily: 'Electorize',
+            ),
+          ),
+        ],
       ),
     );
   }
 }
-//aaa
