@@ -305,7 +305,7 @@ class HomeButtonsContainer extends StatelessWidget {
           ),
         ],
         // Admin/Manager buttons
-        if (role == 'admin' || role == 'manager') ...[
+        if (role == 'admin' || role == 'manager' || role == 'asst_manager') ...[
           const SizedBox(height: 14),
           Row(
             children: [
@@ -333,7 +333,7 @@ class HomeButtonsContainer extends StatelessWidget {
           const SizedBox(height: 14),
           NeumorphicButton(
             onTap: () => _navigateToCustomerList(context),
-            onLongPress: role == 'manager'
+            onLongPress: role == 'manager' || role == 'asst_manager'
                 ? () {
                     Navigator.push(
                       context,

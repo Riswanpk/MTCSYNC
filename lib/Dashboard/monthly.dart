@@ -74,7 +74,7 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
         .toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase())); // Sort branches alphabetically
 
-    if (userRole == 'manager' && userBranch != null) {
+    if ((userRole == 'manager' || userRole == 'asst_manager') && userBranch != null) {
       await _fetchUsersForBranch(userBranch);
       setState(() {
         _selectedBranch = userBranch;

@@ -135,8 +135,8 @@ class _SyncHeadTodosPageState extends State<SyncHeadTodosPage> {
       final roleA = a['role'] as String;
       final roleB = b['role'] as String;
       if (roleA != roleB) {
-        if (roleA == 'manager') return -1;
-        if (roleB == 'manager') return 1;
+        if (roleA == 'manager' || roleA == 'asst_manager') return -1;
+        if (roleB == 'manager' || roleB == 'asst_manager') return 1;
       }
       return (a['username'] as String)
           .compareTo(b['username'] as String);

@@ -91,7 +91,7 @@ class _TodoPageState extends State<TodoPage>
               body: Center(child: CircularProgressIndicator()));
         }
 
-        final isManager = _userRole == 'manager';
+        final isManager = _userRole == 'manager' || _userRole == 'asst_manager';
         final tabCount = isManager ? 3 : 2;
         final isDark = theme.brightness == Brightness.dark;
 

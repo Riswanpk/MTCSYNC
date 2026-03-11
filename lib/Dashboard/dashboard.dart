@@ -224,7 +224,7 @@ class _DashboardPageState extends State<DashboardPage>
                   // ── Stat Cards ──
                   FutureBuilder<Map<String, int>>(
                     future:
-                        _fetchCounts(branch: role == 'manager' ? branch : null),
+                        _fetchCounts(branch: (role == 'manager' || role == 'asst_manager') ? branch : null),
                     builder: (context, snapshot) {
                       if (!snapshot.hasData) {
                         return const SizedBox(
@@ -246,7 +246,7 @@ class _DashboardPageState extends State<DashboardPage>
                               context,
                               MaterialPageRoute(
                                 builder: (_) => LeadsPage(
-                                    branch: role == 'manager' ? branch : ""),
+                                    branch: (role == 'manager' || role == 'asst_manager') ? branch : ""),
                               ),
                             );
                           },
@@ -257,7 +257,7 @@ class _DashboardPageState extends State<DashboardPage>
                           Icons.calendar_month_rounded,
                           1,
                           () async {
-                            if (role == 'manager' || isAdminLike) {
+                            if (role == 'manager' || role == 'asst_manager' || isAdminLike) {
                               final usersSnapshot = await FirebaseFirestore
                                   .instance
                                   .collection('users')
@@ -972,7 +972,7 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
       _branches = branches;
       if (_branches.isNotEmpty && _selectedBranch == null) {
         _selectedBranch =
-            widget.role == 'manager' ? widget.branch : _branches.first;
+            (widget.role == 'manager' || widget.role == 'asst_manager') ? widget.branch : _branches.first;
       }
     });
   }
@@ -981,7 +981,7 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
     Query usersQuery = FirebaseFirestore.instance
         .collection('users')
         .where('role', isEqualTo: 'sales');
-    if (widget.role == 'manager') {
+    if (widget.role == 'manager' || widget.role == 'asst_manager') {
       usersQuery = usersQuery.where('branch', isEqualTo: widget.branch);
     } else if (_selectedBranch != null) {
       usersQuery = usersQuery.where('branch', isEqualTo: _selectedBranch);

@@ -196,8 +196,8 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           final usersForBranch = branchMap[branch]!;
           // Sort by created ascending, managers at the bottom
           usersForBranch.sort((a, b) {
-            final aIsManager = (a['role'] as String).toLowerCase() == 'manager';
-            final bIsManager = (b['role'] as String).toLowerCase() == 'manager';
+            final aIsManager = (a['role'] as String).toLowerCase() == 'manager' || (a['role'] as String).toLowerCase() == 'asst_manager';
+            final bIsManager = (b['role'] as String).toLowerCase() == 'manager' || (b['role'] as String).toLowerCase() == 'asst_manager';
             if (aIsManager && !bIsManager) return 1;
             if (!aIsManager && bIsManager) return -1;
             return (a['created'] as int).compareTo(b['created'] as int);

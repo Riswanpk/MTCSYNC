@@ -43,7 +43,7 @@ class TaskDetailPage extends StatelessWidget {
               // Conditions to show the edit button:
               // 1. User is a manager AND they are the one who assigned the task.
               // 2. The task was NOT assigned by a manager (i.e., it's a self-created task).
-              final bool canEdit = (currentUserRole == 'manager' &&
+              final bool canEdit = ((currentUserRole == 'manager' || currentUserRole == 'asst_manager') &&
                       data['assigned_by'] == currentUserId) ||
                   !isAssignedByManager;
 

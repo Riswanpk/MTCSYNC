@@ -18,7 +18,7 @@ class UserDetailPage extends StatefulWidget {
 class _UserDetailPageState extends State<UserDetailPage> {
   static const Color _primaryBlue = Color(0xFF005BAC);
 
-  final List<String> _roles = ['sales', 'manager', 'admin', 'sync_head'];
+  final List<String> _roles = ['sales', 'manager', 'asst_manager', 'admin', 'sync_head'];
   final List<String> _branches = [
     'BGR', 'CBE', 'CHN', 'CLT', 'EKM', 'JBL', 'KKM', 'KSD',
     'KTM', 'PKD', 'PKTR', 'PMNA', 'TRR', 'TSR', 'TLY', 'TVM',
@@ -227,9 +227,11 @@ class _UserDetailPageState extends State<UserDetailPage> {
                   ? Colors.deepPurple
                   : role == 'manager'
                       ? Colors.orange
-                      : role == 'sync_head'
-                          ? Colors.blue
-                          : Colors.green,
+                      : role == 'asst_manager'
+                          ? Colors.deepOrange
+                          : role == 'sync_head'
+                              ? Colors.blue
+                              : Colors.green,
             ),
             const Divider(height: 20),
             _infoRow(Icons.business, 'Branch', branch, isDark),
@@ -328,16 +330,20 @@ class _UserDetailPageState extends State<UserDetailPage> {
                                   ? Icons.security
                                   : r == 'manager'
                                       ? Icons.supervisor_account
-                                      : r == 'sync_head'
-                                          ? Icons.hub
-                                          : Icons.person,
+                                      : r == 'asst_manager'
+                                          ? Icons.manage_accounts
+                                          : r == 'sync_head'
+                                              ? Icons.hub
+                                              : Icons.person,
                               color: r == 'admin'
                                   ? Colors.deepPurple
                                   : r == 'manager'
                                       ? Colors.orange
-                                      : r == 'sync_head'
-                                          ? Colors.blue
-                                          : Colors.green,
+                                      : r == 'asst_manager'
+                                          ? Colors.deepOrange
+                                          : r == 'sync_head'
+                                              ? Colors.blue
+                                              : Colors.green,
                               size: 20,
                             ),
                             const SizedBox(width: 10),

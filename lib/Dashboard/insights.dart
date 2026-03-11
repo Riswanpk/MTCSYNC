@@ -55,10 +55,11 @@ class _InsightsPageState extends State<InsightsPage> {
       for (var u in allUsers)
         if ((u['role'] ?? 'sales') != 'admin' &&
             (u['role'] ?? 'sales') != 'manager' &&
+            (u['role'] ?? 'sales') != 'asst_manager' &&
             (
-              (_role == 'manager' && (u['branch'] ?? '') == _userBranch) ||
+              ((_role == 'manager' || _role == 'asst_manager') && (u['branch'] ?? '') == _userBranch) ||
               ((_role == 'admin' || _role == 'Sync Head' || _role == 'sync_head') && _selectedBranch != null && (u['branch'] ?? '') == _selectedBranch) ||
-              (_role != 'admin' && _role != 'manager')
+              (_role != 'admin' && _role != 'manager' && _role != 'asst_manager')
             )
         )
           u['uid'] as String: {
@@ -72,7 +73,7 @@ class _InsightsPageState extends State<InsightsPage> {
     Query leadsQuery = FirebaseFirestore.instance
         .collection('follow_ups')
         .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart));
-    if (_role == 'manager') {
+    if (_role == 'manager' || _role == 'asst_manager') {
       leadsQuery = leadsQuery.where('branch', isEqualTo: _userBranch);
     } else if ((_role == 'admin' || _role == 'Sync Head' || _role == 'sync_head') && _selectedBranch != null) {
       leadsQuery = leadsQuery.where('branch', isEqualTo: _selectedBranch);
@@ -109,7 +110,7 @@ class _InsightsPageState extends State<InsightsPage> {
     Query todosQuery = FirebaseFirestore.instance
         .collection('todo')
         .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart));
-    if (_role == 'manager') {
+    if (_role == 'manager' || _role == 'asst_manager') {
       // Only include todos created by users in the manager's branch
       final branchUserIds = users.entries
           .where((e) => e.value['branch'] == _userBranch)

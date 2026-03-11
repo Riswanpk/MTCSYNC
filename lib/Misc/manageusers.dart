@@ -16,7 +16,7 @@ class ManageUsersPage extends StatefulWidget {
 
 class _ManageUsersPageState extends State<ManageUsersPage> {
     bool _filterByVersion = false;
-  final List<String> _roles = ['sales', 'manager', 'admin', 'sync_head'];
+  final List<String> _roles = ['sales', 'manager', 'asst_manager', 'admin', 'sync_head'];
   String? _currentUserId;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
@@ -494,12 +494,16 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                                     ? Icons.security
                                                     : r == 'manager'
                                                         ? Icons.supervisor_account
-                                                        : Icons.person,
+                                                        : r == 'asst_manager'
+                                                            ? Icons.manage_accounts
+                                                            : Icons.person,
                                                 color: r == 'admin'
                                                     ? Colors.deepPurple
                                                     : r == 'manager'
                                                         ? Colors.orange
-                                                        : Colors.green,
+                                                        : r == 'asst_manager'
+                                                            ? Colors.deepOrange
+                                                            : Colors.green,
                                                 size: 20,
                                               ),
                                               const SizedBox(width: 8),

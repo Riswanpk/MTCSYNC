@@ -238,7 +238,7 @@ class _HomePageState extends State<HomePage>
     await _userCache.ensureLoaded();
     final role = _userCache.role;
     final email = _userCache.email;
-    if (role != 'sales' && role != 'manager') {
+    if (role != 'sales' && role != 'manager' && role != 'asst_manager') {
       setState(() => _showTodoWarning = false);
       return;
     }
