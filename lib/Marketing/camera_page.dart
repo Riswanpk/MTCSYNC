@@ -213,23 +213,32 @@ class _CameraPageState extends State<CameraPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cameraIconColor = isDark ? Colors.white : Colors.black;
+    final cameraTextColor = isDark ? Colors.white : Colors.black;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Camera', style: TextStyle(fontFamily: 'Electorize', fontWeight: FontWeight.bold, letterSpacing: 1)),
         centerTitle: true,
-        foregroundColor: Colors.white,
+        foregroundColor: isDark ? Colors.white : Colors.black,
         elevation: 0,
         flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+          decoration: BoxDecoration(
+            gradient: isDark
+                ? const LinearGradient(
+                    colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : const LinearGradient(
+                    colors: [Colors.white, Color(0xFFF5F5F5)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
           ),
         ),
       ),
-      backgroundColor: const Color(0xFF0F0F1A),
+      backgroundColor: isDark ? const Color(0xFF0F0F1A) : Colors.white,
       body: Stack(
         children: [
           Center(
@@ -241,7 +250,7 @@ class _CameraPageState extends State<CameraPage> {
                         width: 56, height: 56,
                         child: CircularProgressIndicator(
                           strokeWidth: 3,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.tealAccent.shade200),
+                          valueColor: AlwaysStoppedAnimation<Color>(const Color.fromARGB(255, 0, 0, 0)),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -258,15 +267,23 @@ class _CameraPageState extends State<CameraPage> {
                           height: 200,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            border: Border.all(color: Colors.tealAccent.withOpacity(0.5), width: 2.5),
+                            gradient: isDark
+                                ? const LinearGradient(
+                                    colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  )
+                                : const LinearGradient(
+                                    colors: [Colors.white, Color(0xFFF5F5F5)],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                            border: Border.all(color: const Color.fromARGB(255, 0, 0, 0).withOpacity(0.5), width: 2.5),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.tealAccent.withOpacity(0.15),
+                                color: isDark
+                                    ? Colors.white.withOpacity(0.15)
+                                    : const Color.fromARGB(255, 4, 4, 4).withOpacity(0.15),
                                 blurRadius: 30,
                                 spreadRadius: 5,
                               ),
@@ -275,9 +292,9 @@ class _CameraPageState extends State<CameraPage> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.camera_alt_rounded, size: 56, color: Colors.tealAccent.shade200),
+                              Icon(Icons.camera_alt_rounded, size: 56, color: cameraIconColor),
                               const SizedBox(height: 12),
-                              Text('Tap to Capture', style: TextStyle(fontFamily: 'Electorize', color: Colors.grey.shade300, fontSize: 14, letterSpacing: 0.5)),
+                              Text('Tap to Capture', style: TextStyle(fontFamily: 'Electorize', color: cameraTextColor, fontSize: 14, letterSpacing: 0.5)),
                             ],
                           ),
                         ),
@@ -290,7 +307,7 @@ class _CameraPageState extends State<CameraPage> {
                             Container(
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: Colors.tealAccent.withOpacity(0.3), width: 1.5),
+                                border: Border.all(color: const Color.fromARGB(255, 0, 0, 0).withOpacity(0.3), width: 1.5),
                                 boxShadow: [
                                   BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 20, offset: const Offset(0, 8)),
                                 ],
@@ -306,7 +323,9 @@ class _CameraPageState extends State<CameraPage> {
                               child: Container(
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(14),
-                                  gradient: const LinearGradient(colors: [Color(0xFF009688), Color(0xFF00796B)]),
+                                    gradient: isDark
+                                      ? const LinearGradient(colors: [Color(0xFF009688), Color(0xFF00796B)])
+                                      : const LinearGradient(colors: [Color(0xFF80CBC4), Color(0xFFB2DFDB)]),
                                   boxShadow: [
                                     BoxShadow(color: const Color(0xFF009688).withOpacity(0.35), blurRadius: 12, offset: const Offset(0, 4)),
                                   ],
@@ -372,10 +391,10 @@ class _CameraPageState extends State<CameraPage> {
                             SizedBox(
                               width: double.infinity,
                               child: OutlinedButton.icon(
-                                icon: Icon(Icons.camera_alt_rounded, color: Colors.tealAccent.shade200),
-                                label: Text('Retake', style: TextStyle(fontFamily: 'Electorize', fontSize: 15, color: Colors.tealAccent.shade200)),
+                                icon: Icon(Icons.camera_alt_rounded, color: cameraIconColor),
+                                label: Text('Retake', style: TextStyle(fontFamily: 'Electorize', fontSize: 15, color: cameraTextColor)),
                                 style: OutlinedButton.styleFrom(
-                                  side: BorderSide(color: Colors.tealAccent.shade200.withOpacity(0.5), width: 1.5),
+                                  side: BorderSide(color: cameraIconColor.withOpacity(0.5), width: 1.5),
                                   padding: const EdgeInsets.symmetric(vertical: 14),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                                 ),
@@ -388,7 +407,7 @@ class _CameraPageState extends State<CameraPage> {
           ),
           if (_isUploading)
             Container(
-              color: const Color(0xCC0F0F1A),
+              color: isDark ? const Color(0xCC0F0F1A) : Colors.white.withOpacity(0.85),
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -397,13 +416,13 @@ class _CameraPageState extends State<CameraPage> {
                       width: 56, height: 56,
                       child: CircularProgressIndicator(
                         strokeWidth: 3,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.tealAccent.shade200),
+                        valueColor: AlwaysStoppedAnimation<Color>(const Color.fromARGB(255, 0, 0, 0)),
                       ),
                     ),
                     const SizedBox(height: 20),
-                    const Text(
+                    Text(
                       'Processing image...',
-                      style: TextStyle(color: Colors.white, fontSize: 16, fontFamily: 'Electorize', letterSpacing: 0.5),
+                      style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16, fontFamily: 'Electorize', letterSpacing: 0.5),
                     ),
                   ],
                 ),
