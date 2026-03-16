@@ -95,6 +95,7 @@ class LeadCard extends StatelessWidget {
   final String createdBy;
   final String priority;
   final String reminder;
+  final String? source;
   final VoidCallback? onStatusChanged;
 
   const LeadCard({
@@ -106,6 +107,7 @@ class LeadCard extends StatelessWidget {
     required this.createdBy,
     required this.priority,
     required this.reminder,
+    this.source,
     this.onStatusChanged,
   });
 
@@ -240,7 +242,9 @@ class LeadCard extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 16),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: getPriorityBackgroundColor(priority, isDark),
+            color: source == 'sme'
+                ? (isDark ? const Color(0xFF1A3333) : const Color(0xFFE0F2F1))
+                : getPriorityBackgroundColor(priority, isDark),
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
@@ -257,7 +261,7 @@ class LeadCard extends StatelessWidget {
                 width: 12,
                 height: 12,
                 decoration: BoxDecoration(
-                  color: getPriorityColor(priority),
+                  color: source == 'sme' ? Colors.teal : getPriorityColor(priority),
                   shape: BoxShape.circle,
                 ),
               ),

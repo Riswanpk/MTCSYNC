@@ -18,6 +18,7 @@ import 'widgets/home_drawer.dart';
 import 'widgets/home_body.dart';
 import 'Misc/battery_optimization_helper.dart';
 import 'Misc/user_cache_service.dart';
+import 'SME/sme_notification_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -51,6 +52,7 @@ class _HomePageState extends State<HomePage>
     _checkTodoWarning();
     _checkPendingTodosReminder();
     _setupPerformanceNotifications();
+    _startSmeNotificationService();
     _fetchAndCacheContacts();
     _printCustomClaims();
     _checkBatteryOptimization();
@@ -90,6 +92,10 @@ class _HomePageState extends State<HomePage>
     });
   }
 
+  void _startSmeNotificationService() {
+    SmeNotificationService.instance.startListening();
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -103,6 +109,7 @@ class _HomePageState extends State<HomePage>
   @override
   void dispose() {
     _authSubscription?.cancel();
+    SmeNotificationService.instance.stopListening();
     routeObserver.unsubscribe(this);
     _swingController.dispose();
     super.dispose();

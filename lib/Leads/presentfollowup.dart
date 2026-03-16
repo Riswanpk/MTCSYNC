@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart'; // Import to use clearNotificationOpened
@@ -317,156 +318,234 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
-      appBar: AppBar(
-        title: const Text('Follow-Up Details'),
-        backgroundColor: const Color(0xFF005BAC),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          !_isEditing
-              ? IconButton(
-                  icon: const Icon(Icons.edit, color: Colors.white),
-                  onPressed: () => setState(() => _isEditing = true),
-                )
-              : IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white),
-                  onPressed: () => setState(() => _isEditing = false),
-                ),
-        ],
-      ),
-      body: FutureBuilder<DocumentSnapshot>(
-        future: FirebaseFirestore.instance.collection('follow_ups').doc(widget.docId).get(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance.collection('follow_ups').doc(widget.docId).get(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Scaffold(
+            backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
+            appBar: AppBar(
+              title: const Text('Follow-Up Details'),
+              backgroundColor: const Color(0xFF005BAC),
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
+            body: const Center(child: CircularProgressIndicator()),
+          );
+        }
 
-          if (!snapshot.hasData || !snapshot.data!.exists) {
-            return const Center(child: Text('Follow-up not found.'));
-          }
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return Scaffold(
+            backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
+            appBar: AppBar(
+              title: const Text('Follow-Up Details'),
+              backgroundColor: const Color(0xFF005BAC),
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
+            body: const Center(child: Text('Follow-up not found.')),
+          );
+        }
 
-          final data = snapshot.data!.data() as Map<String, dynamic>;
-          if (_data == null) {
-            _data = data;
-            _initControllers(data);
-          }
+        final data = snapshot.data!.data() as Map<String, dynamic>;
+        if (_data == null) {
+          _data = data;
+          _initControllers(data);
+        }
 
-          if (_isEditing) {
-            return Stack(
-              children: [
-                SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Edit Lead', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black)),
-                        const SizedBox(height: 20),
-                        leadEditField('Name', _nameController, Theme.of(context).brightness == Brightness.dark),
-                        leadEditField('Company', _companyController, Theme.of(context).brightness == Brightness.dark),
-                        leadEditField('Address', _addressController, Theme.of(context).brightness == Brightness.dark),
-                        leadEditField('Phone', _phoneController, Theme.of(context).brightness == Brightness.dark, keyboardType: TextInputType.phone),
-                        leadEditField('Comments', _commentsController, Theme.of(context).brightness == Brightness.dark, maxLines: 2),
-                        const SizedBox(height: 12),
-                        leadEditDropdown('Status', ['In Progress', 'Completed'], _status, (val) => setState(() => _status = val), Theme.of(context).brightness == Brightness.dark),
-                        const SizedBox(height: 12),
-                        leadEditField(
-                          'Reminder',
-                          _reminderController,
-                          Theme.of(context).brightness == Brightness.dark,
-                          readOnly: true,
-                          onTap: () => _pickDateTime(context),
-                          suffixIcon: const Icon(Icons.calendar_today),
-                        ),
-                        leadEditField('Branch', TextEditingController(text: _branch ?? ''), Theme.of(context).brightness == Brightness.dark, enabled: false),
-                        const SizedBox(height: 24),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            icon: const Icon(Icons.save),
-                            label: const Text('Save Changes'),
-                            onPressed: _isSaving ? null : _saveEdits,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF005BAC),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (_isSaving)
-                  Container(
-                    color: Colors.black.withOpacity(0.3),
-                    child: const Center(child: CircularProgressIndicator()),
-                  ),
-              ],
-            );
-          }
+        // Check if the current user is the SME who assigned this lead (read-only for SME)
+        final currentUid = FirebaseAuth.instance.currentUser?.uid;
+        final assignedBy = _data?['assigned_by'] as String?;
+        final isSmeCreator = assignedBy != null && assignedBy == currentUid && _data?['source'] == 'sme';
 
-          // --- View Mode ---
-          return SingleChildScrollView(
+        // Build edit button only if NOT the SME creator
+        final editAction = isSmeCreator
+            ? null
+            : (!_isEditing
+                ? IconButton(
+                    icon: const Icon(Icons.edit, color: Colors.white),
+                    onPressed: () => setState(() => _isEditing = true),
+                  )
+                : IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => setState(() => _isEditing = false),
+                  ));
+
+        return Scaffold(
+          backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
+          appBar: AppBar(
+            title: const Text('Follow-Up Details'),
+            backgroundColor: const Color(0xFF005BAC),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            actions: [
+              if (editAction != null) editAction,
+            ],
+          ),
+          body: _buildBody(context, data, isSmeCreator),
+        );
+      },
+    );
+  }
+
+  Widget _buildBody(BuildContext context, Map<String, dynamic> data, bool isSmeCreator) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    if (_isEditing) {
+      return Stack(
+        children: [
+          SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Account Details',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.black,
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Edit Lead', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black)),
+                  const SizedBox(height: 20),
+                  leadEditField('Name', _nameController, isDark),
+                  leadEditField('Company', _companyController, isDark),
+                  leadEditField('Address', _addressController, isDark),
+                  leadEditField('Phone', _phoneController, isDark, keyboardType: TextInputType.phone),
+                  leadEditField('Comments', _commentsController, isDark, maxLines: 2),
+                  const SizedBox(height: 12),
+                  leadEditDropdown('Status', ['In Progress', 'Completed'], _status, (val) => setState(() => _status = val), isDark),
+                  const SizedBox(height: 12),
+                  leadEditField(
+                    'Reminder',
+                    _reminderController,
+                    isDark,
+                    readOnly: true,
+                    onTap: () => _pickDateTime(context),
+                    suffixIcon: const Icon(Icons.calendar_today),
                   ),
-                ),
-                const SizedBox(height: 20),
-                GridView.count(
-                  crossAxisCount: 2,
-                  childAspectRatio: 1.2,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    leadInfoCard(Icons.person, 'Name', _data?['name'], isDark),
-                    leadInfoCard(Icons.apartment, 'Company', _data?['company'], isDark),
-                    leadInfoCard(Icons.location_on, 'Address', _data?['address'], isDark),
-                    Showcase(
-                      key: _phoneShowcaseKey,
-                      description: 'Tap here to quickly call this lead!',
-                      child: GestureDetector(
-                        onTap: () {
-                          final phoneNumber = _data?['phone'];
-                          if (phoneNumber != null && phoneNumber.isNotEmpty) {
-                            _launchDialer(phoneNumber);
-                          }
-                        },
-                        child: leadInfoCard(Icons.phone, 'Phone', _data?['phone'], isDark),
+                  leadEditField('Branch', TextEditingController(text: _branch ?? ''), isDark, enabled: false),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.save),
+                      label: const Text('Save Changes'),
+                      onPressed: _isSaving ? null : _saveEdits,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF005BAC),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 32),
-                Text(
-                  'Follow-Up Info',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.black,
                   ),
+                ],
+              ),
+            ),
+          ),
+          if (_isSaving)
+            Container(
+              color: Colors.black.withOpacity(0.3),
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+        ],
+      );
+    }
+
+    // --- View Mode ---
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Account Details',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : Colors.black,
+            ),
+          ),
+          const SizedBox(height: 20),
+          GridView.count(
+            crossAxisCount: 2,
+            childAspectRatio: 1.2,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            children: [
+              leadInfoCard(Icons.person, 'Name', _data?['name'], isDark),
+              leadInfoCard(Icons.apartment, 'Company', _data?['company'], isDark),
+              leadInfoCard(Icons.location_on, 'Address', _data?['address'], isDark),
+              Showcase(
+                key: _phoneShowcaseKey,
+                description: 'Tap here to quickly call this lead!',
+                child: GestureDetector(
+                  onTap: () {
+                    final phoneNumber = _data?['phone'];
+                    if (phoneNumber != null && phoneNumber.isNotEmpty) {
+                      _launchDialer(phoneNumber);
+                    }
+                  },
+                  child: leadInfoCard(Icons.phone, 'Phone', _data?['phone'], isDark),
                 ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: leadInfoTile(
-                        Icons.flag,
-                        'Status',
-                        DropdownButton<String>(
+              ),
+            ],
+          ),
+          // --- SME Assignment Info ---
+          if (_data?['source'] == 'sme') ...[
+            const SizedBox(height: 32),
+            Text(
+              'SME Assignment',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black,
+              ),
+            ),
+            const SizedBox(height: 20),
+            leadInfoTile(
+              Icons.person_outline,
+              'Assigned To',
+              Text(_data?['assigned_to_name'] ?? 'N/A', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
+              isDark,
+            ),
+            leadInfoTile(
+              Icons.campaign,
+              'Source',
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.teal.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text('SME Lead', style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold)),
+              ),
+              isDark,
+            ),
+          ],
+          const SizedBox(height: 32),
+          Text(
+            'Follow-Up Info',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : Colors.black,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: leadInfoTile(
+                  Icons.flag,
+                  'Status',
+                  isSmeCreator
+                      ? Text(
+                          _data?['status'] ?? 'N/A',
+                          style: TextStyle(
+                            color: isDark ? Colors.white70 : Colors.black87,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        )
+                      : DropdownButton<String>(
                           value: _data?['status'],
                           dropdownColor: isDark ? const Color(0xFF23262F) : Colors.white,
                           style: TextStyle(color: isDark ? Colors.white : Colors.black),
@@ -503,19 +582,16 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
                             }
                           },
                         ),
-                        isDark,
-                      ),
-                    ),
-                  ],
+                  isDark,
                 ),
-                leadInfoTile(Icons.calendar_today, 'Date', Text(formatLeadDisplayDate(_data?['date']), style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
-                leadInfoTile(Icons.alarm, 'Reminder', Text(formatLeadDisplayDate(_data?['reminder'], isReminder: true), style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
-                leadInfoTile(Icons.comment, 'Comments', Text(_data?['comments'] ?? 'N/A', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
-                leadInfoTile(Icons.location_city, 'Branch', Text(_data?['branch'] ?? 'N/A', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
-              ],
-            ),
-          );
-        },
+              ),
+            ],
+          ),
+          leadInfoTile(Icons.calendar_today, 'Date', Text(formatLeadDisplayDate(_data?['date']), style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
+          leadInfoTile(Icons.alarm, 'Reminder', Text(formatLeadDisplayDate(_data?['reminder'], isReminder: true), style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
+          leadInfoTile(Icons.comment, 'Comments', Text(_data?['comments'] ?? 'N/A', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
+          leadInfoTile(Icons.location_city, 'Branch', Text(_data?['branch'] ?? 'N/A', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
+        ],
       ),
     );
   }

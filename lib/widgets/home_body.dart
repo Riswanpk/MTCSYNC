@@ -19,6 +19,8 @@ import '../Todo/todo_widget_updater.dart';
 import 'home_widgets.dart';
 import '../Sync Head/sync_head_leads_page.dart';
 import '../Sync Head/sync_head_todos_page.dart';
+import '../SME/sme_leads_page.dart';
+import '../SME/sme_dashboard.dart';
 
 /// App brand colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -231,6 +233,11 @@ class HomeButtonsContainer extends StatelessWidget {
       return _buildSyncHeadTiles(context);
     }
 
+    // SME has a dedicated homepage with Leads + Dashboard only
+    if (role == 'sme') {
+      return _buildSmeTiles(context);
+    }
+
     return Column(
       children: [
         // Row 1: Leads & ToDo (logo colors)
@@ -411,6 +418,55 @@ class HomeButtonsContainer extends StatelessWidget {
                 color: isDark ? const Color(0xFF23272A) : Colors.white,
                 textColor: isDark ? Colors.white70 : const Color(0xFF607D8B),
                 icon: Icons.phone_rounded,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// Builds the SME-specific home tiles.
+  Widget _buildSmeTiles(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: NeumorphicButton(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const LoadingOverlayPage(
+                        child: SmeLeadsPage(),
+                      ),
+                    ),
+                  );
+                },
+                text: 'Leads',
+                color: primaryBlue,
+                textColor: Colors.white,
+                icon: Icons.people_alt_rounded,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: NeumorphicButton(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const LoadingOverlayPage(
+                        child: SmeDashboard(),
+                      ),
+                    ),
+                  );
+                },
+                text: 'Dashboard',
+                color: Colors.teal,
+                textColor: Colors.white,
+                icon: Icons.dashboard_rounded,
               ),
             ),
           ],

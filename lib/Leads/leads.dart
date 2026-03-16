@@ -171,7 +171,13 @@ class _LeadsPageState extends State<LeadsPage> {
 
     // Apply filters
     if (selectedUser != null) {
-      query = query.where('created_by', isEqualTo: selectedUser);
+      // Include leads created by OR assigned to the selected user
+      query = query.where(
+        Filter.or(
+          Filter('created_by', isEqualTo: selectedUser),
+          Filter('assigned_to', isEqualTo: selectedUser),
+        ),
+      );
     }
     if (selectedStatus != 'All') {
       if (selectedStatus == 'Sold') {
@@ -927,6 +933,7 @@ class _LeadsPageState extends State<LeadsPage> {
                                   final reminder = data['reminder'] ?? 'No Reminder';
                                   final createdById = data['created_by'] ?? '';
                                   final priority = data['priority'] ?? 'High';
+                                  final source = data['source'] as String?;
 
                                   // Client-side search filtering
                                   if (searchQuery.isNotEmpty &&
@@ -952,6 +959,7 @@ class _LeadsPageState extends State<LeadsPage> {
                                         createdBy: creatorUsername,
                                         reminder: reminder,
                                         priority: priority,
+                                        source: source,
                                         onStatusChanged: () => _fetchLeadsPage(),
                                       );
                                     },

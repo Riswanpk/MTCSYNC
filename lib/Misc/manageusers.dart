@@ -16,7 +16,7 @@ class ManageUsersPage extends StatefulWidget {
 
 class _ManageUsersPageState extends State<ManageUsersPage> {
     bool _filterByVersion = false;
-  final List<String> _roles = ['sales', 'manager', 'asst_manager', 'admin', 'sync_head'];
+  final List<String> _roles = ['sales', 'manager', 'asst_manager', 'admin', 'sync_head', 'sme'];
   String? _currentUserId;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
@@ -116,6 +116,9 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
       final callable = FirebaseFunctions.instanceFor(region: 'asia-south1')
           .httpsCallable('deleteUserFromAuth');
       final result = await callable.call({'uid': uid});
+
+      // Delete from user_version collection
+      await FirebaseFirestore.instance.collection('user_version').doc(uid).delete();
 
       // Close loading dialog
       if (mounted) Navigator.of(context).pop();
