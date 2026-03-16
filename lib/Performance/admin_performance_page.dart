@@ -119,7 +119,12 @@ class _AdminPerformancePageState extends State<AdminPerformancePage>
       selectedMonth = monthsSet.isNotEmpty ? monthsSet.first : DateTime.now().month;
       final _m = selectedMonth!;
       final _daysInMonth = DateTime(selectedYear, _m + 1, 0).day;
-      availableDates = List.generate(_daysInMonth, (i) => DateTime(selectedYear, _m, i + 1)).reversed.toList();
+      // Exclude Sundays from availableDates
+      availableDates = List.generate(_daysInMonth, (i) => DateTime(selectedYear, _m, i + 1))
+        .where((d) => d.weekday != DateTime.sunday)
+        .toList()
+        .reversed
+        .toList();
       selectedDate = null;
       selectedDocId = null;
     });
@@ -135,8 +140,13 @@ class _AdminPerformancePageState extends State<AdminPerformancePage>
       return;
     }
     final daysInMonth = DateTime(selectedYear, selectedMonth! + 1, 0).day;
+    // Exclude Sundays from availableDates
     setState(() {
-      availableDates = List.generate(daysInMonth, (i) => DateTime(selectedYear, selectedMonth!, i + 1)).reversed.toList();
+      availableDates = List.generate(daysInMonth, (i) => DateTime(selectedYear, selectedMonth!, i + 1))
+        .where((d) => d.weekday != DateTime.sunday)
+        .toList()
+        .reversed
+        .toList();
       selectedDate = null;
       selectedDocId = null;
     });
@@ -353,6 +363,56 @@ class _AdminPerformancePageState extends State<AdminPerformancePage>
                                 letterSpacing: -0.2,
                               ),
                             ),
+                            // Delete button if a form is selected
+                            if (selectedDocId != null && selectedDate != null)
+                              Spacer(),
+                            if (selectedDocId != null && selectedDate != null)
+                              IconButton(
+                                icon: Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                                tooltip: 'Delete Entry',
+                                onPressed: () async {
+                                  final confirm = await showDialog<bool>(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      title: const Text('Delete Entry'),
+                                      content: const Text('Are you sure you want to delete this entry?'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.of(ctx).pop(false),
+                                          child: const Text('Cancel'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => Navigator.of(ctx).pop(true),
+                                          child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (confirm == true) {
+                                    try {
+                                      await FirebaseFirestore.instance
+                                          .collection('dailyform')
+                                          .doc(selectedDocId)
+                                          .delete();
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Entry deleted!')),
+                                      );
+                                      // Refresh forms for user
+                                      if (selectedUserId != null) {
+                                        await fetchFormsForUser(selectedUserId!);
+                                        setState(() {
+                                          selectedDate = null;
+                                          selectedDocId = null;
+                                        });
+                                      }
+                                    } catch (e) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Failed to delete entry: $e')),
+                                      );
+                                    }
+                                  }
+                                },
+                              ),
                           ],
                         ),
                         const SizedBox(height: 20),
@@ -699,39 +759,48 @@ class _AdminEditFormState extends State<_AdminEditForm> {
   late TextEditingController confirmPurchaseReasonController;
   late TextEditingController offerHelpReasonController;
 
+  bool _parseBool(dynamic value) {
+    if (value == null) return false;
+    if (value is bool) return value;
+    if (value is String) {
+      return value.toLowerCase() == 'true';
+    }
+    return false;
+  }
+
   @override
   void initState() {
     super.initState();
     final f = widget.form;
     attendance = f['attendance']?.toString() ?? '';
     attendanceStatus = f['attendance']?.toString() ?? '';
-    cleanUniform = f['dressCode']?['cleanUniform'] ?? false;
-    keepInside = f['dressCode']?['keepInside'] ?? false;
-    neatHair = f['dressCode']?['neatHair'] ?? false;
-    greetSmile = f['attitude']?['greetSmile'] ?? false;
+    cleanUniform = _parseBool(f['dressCode']?['cleanUniform']);
+    keepInside = _parseBool(f['dressCode']?['keepInside']);
+    neatHair = _parseBool(f['dressCode']?['neatHair']);
+    greetSmile = _parseBool(f['attitude']?['greetSmile']);
     greetSmileLevel = f['attitude']?['greetSmileLevel'];
-    askNeeds = f['attitude']?['askNeeds'] ?? false;
+    askNeeds = _parseBool(f['attitude']?['askNeeds']);
     askNeedsLevel = f['attitude']?['askNeedsLevel'];
-    helpFindProduct = f['attitude']?['helpFindProduct'] ?? false;
+    helpFindProduct = _parseBool(f['attitude']?['helpFindProduct']);
     helpFindProductLevel = f['attitude']?['helpFindProductLevel'];
-    confirmPurchase = f['attitude']?['confirmPurchase'] ?? false;
+    confirmPurchase = _parseBool(f['attitude']?['confirmPurchase']);
     confirmPurchaseLevel = f['attitude']?['confirmPurchaseLevel'];
-    offerHelp = f['attitude']?['offerHelp'] ?? false;
+    offerHelp = _parseBool(f['attitude']?['offerHelp']);
     offerHelpLevel = f['attitude']?['offerHelpLevel'];
-    meetingAttended = f['meeting']?['attended'] ?? false;
-    meetingNoMeeting = f['meeting']?['noMeeting'] ?? false;
+    meetingAttended = _parseBool(f['meeting']?['attended']);
+    meetingNoMeeting = _parseBool(f['meeting']?['noMeeting']);
 
     // New questions (5-9)
-    timeTakenOtherTasks = f['timeTakenOtherTasks'] ?? false;
+    timeTakenOtherTasks = _parseBool(f['timeTakenOtherTasks']);
     timeTakenOtherTasksController = TextEditingController(text: (f['timeTakenOtherTasksTime'] ?? '').toString());
     timeTakenOtherTasksDescriptionController = TextEditingController(text: (f['timeTakenOtherTasksDescription'] ?? '').toString());
-    oldStockOfferGiven = f['oldStockOfferGiven'] ?? false;
+    oldStockOfferGiven = _parseBool(f['oldStockOfferGiven']);
     oldStockOfferDescriptionController = TextEditingController(text: (f['oldStockOfferDescription'] ?? '').toString());
-    crossSellingUpselling = f['crossSellingUpselling'] ?? false;
+    crossSellingUpselling = _parseBool(f['crossSellingUpselling']);
     crossSellingUpsellingDescriptionController = TextEditingController(text: (f['crossSellingUpsellingDescription'] ?? '').toString());
-    productComplaints = f['productComplaints'] ?? false;
+    productComplaints = _parseBool(f['productComplaints']);
     productComplaintsDescriptionController = TextEditingController(text: (f['productComplaintsDescription'] ?? '').toString());
-    achievedDailyTarget = f['achievedDailyTarget'] ?? false;
+    achievedDailyTarget = _parseBool(f['achievedDailyTarget']);
     achievedDailyTargetDescriptionController = TextEditingController(text: (f['achievedDailyTargetDescription'] ?? '').toString());
 
     greetSmileReasonController = TextEditingController(text: f['attitude']?['greetSmileReason'] ?? '');
