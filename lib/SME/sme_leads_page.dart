@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../Leads/presentfollowup.dart';
 import 'sme_lead_form.dart';
+import '../Misc/user_cache_service.dart';
 
 class SmeLeadsPage extends StatefulWidget {
   const SmeLeadsPage({super.key});
@@ -16,6 +17,7 @@ class SmeLeadsPage extends StatefulWidget {
 class _SmeLeadsPageState extends State<SmeLeadsPage> {
   String selectedStatus = 'All';
   String selectedPriority = 'All';
+  String? selectedBranch;
   String searchQuery = '';
   bool sortAscending = false;
   bool _isSearching = false;
@@ -27,16 +29,34 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
   final int _leadsPerPage = 15;
   final Map<int, DocumentSnapshot?> _pageStartCursors = {1: null};
 
-  final List<String> statusOptions = ['All', 'In Progress', 'Sold', 'Cancelled'];
+  final List<String> statusOptions = [
+    'All',
+    'In Progress',
+    'Sold',
+    'Cancelled'
+  ];
   final List<String> priorityOptions = ['All', 'High', 'Medium', 'Low'];
+  List<String> branchOptions = [];
 
   @override
   void initState() {
     super.initState();
-    _fetchLeadsPage();
+    _loadBranches();
   }
 
-  Future<void> _fetchLeadsPage({bool nextPage = false, bool prevPage = false, bool isSearch = false}) async {
+  Future<void> _loadBranches() async {
+    final branches = await UserCacheService.instance.getBranches();
+    setState(() {
+      branchOptions = ['All', ...branches];
+      selectedBranch = null;
+      _leads = [];
+    });
+  }
+
+  Future<void> _fetchLeadsPage(
+      {bool nextPage = false,
+      bool prevPage = false,
+      bool isSearch = false}) async {
     if (_isLoading) return;
     setState(() => _isLoading = true);
 
@@ -46,9 +66,19 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
       return;
     }
 
+    if (selectedBranch == null) {
+      setState(() {
+        _leads = [];
+        _isLoading = false;
+      });
+      return;
+    }
     Query query = FirebaseFirestore.instance
         .collection('follow_ups')
         .where('assigned_by', isEqualTo: uid);
+    if (selectedBranch != 'All') {
+      query = query.where('branch', isEqualTo: selectedBranch);
+    }
 
     if (!isSearch || searchQuery.isEmpty) {
       if (selectedStatus != 'All') {
@@ -153,57 +183,89 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
           // Filters
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-            child: Row(
-              children: [
-                _buildFilterDropdown<String>(
-                  value: selectedStatus,
-                  items: statusOptions,
-                  label: 'Status',
-                  onChanged: (val) {
-                    setState(() => selectedStatus = val!);
-                    _resetAndFetch();
-                  },
-                ),
-                const SizedBox(width: 2),
-                _buildFilterDropdown<String>(
-                  value: selectedPriority,
-                  items: priorityOptions,
-                  label: 'Priority',
-                  onChanged: (val) {
-                    setState(() => selectedPriority = val!);
-                    _resetAndFetch();
-                  },
-                ),
-                const SizedBox(width: 2),
-                Flexible(
-                  flex: 1,
-                  child: SizedBox(
-                    height: 36,
-                    child: DropdownButtonFormField<bool>(
-                      value: sortAscending,
-                      items: const [
-                        DropdownMenuItem(value: false, child: Text('Newest', style: TextStyle(fontSize: 10))),
-                        DropdownMenuItem(value: true, child: Text('Oldest', style: TextStyle(fontSize: 10))),
-                      ],
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 120,
+                    child: _buildFilterDropdown<String>(
+                      value: selectedBranch,
+                      items: branchOptions,
+                      label: 'Branch',
                       onChanged: (val) {
-                        setState(() => sortAscending = val!);
+                        setState(() => selectedBranch = val);
                         _resetAndFetch();
                       },
-                      decoration: InputDecoration(
-                        labelText: 'Sort',
-                        labelStyle: const TextStyle(fontSize: 9),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                        filled: true,
-                        fillColor: const Color.fromARGB(255, 229, 237, 229),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                      ),
-                      style: const TextStyle(fontSize: 10, color: Colors.black),
-                      dropdownColor: Colors.white,
-                      icon: const Icon(Icons.arrow_drop_down, size: 14),
+                      hint: const Text('Select Branch', style: TextStyle(fontSize: 10, color: Colors.grey)),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 120,
+                    child: _buildFilterDropdown<String>(
+                      value: selectedStatus,
+                      items: statusOptions,
+                      label: 'Status',
+                      onChanged: (val) {
+                        setState(() => selectedStatus = val!);
+                        _resetAndFetch();
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 120,
+                    child: _buildFilterDropdown<String>(
+                      value: selectedPriority,
+                      items: priorityOptions,
+                      label: 'Priority',
+                      onChanged: (val) {
+                        setState(() => selectedPriority = val!);
+                        _resetAndFetch();
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 120,
+                    child: SizedBox(
+                      height: 36,
+                      child: DropdownButtonFormField<bool>(
+                        value: sortAscending,
+                        items: const [
+                          DropdownMenuItem(
+                              value: false,
+                              child:
+                                  Text('Newest', style: TextStyle(fontSize: 10))),
+                          DropdownMenuItem(
+                              value: true,
+                              child:
+                                  Text('Oldest', style: TextStyle(fontSize: 10))),
+                        ],
+                        onChanged: (val) {
+                          setState(() => sortAscending = val!);
+                          _resetAndFetch();
+                        },
+                        decoration: InputDecoration(
+                          labelText: 'Sort',
+                          labelStyle: const TextStyle(fontSize: 9),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide.none),
+                          filled: true,
+                          fillColor: const Color.fromARGB(255, 229, 237, 229),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 2),
+                        ),
+                        style: const TextStyle(fontSize: 10, color: Colors.black),
+                        dropdownColor: Colors.white,
+                        icon: const Icon(Icons.arrow_drop_down, size: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           // Leads list
@@ -221,10 +283,12 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                           final name = data['name'] ?? 'No Name';
                           final status = data['status'] ?? 'Unknown';
                           final priority = data['priority'] ?? 'High';
-                          final assignedToName = data['assigned_to_name'] ?? 'Unknown';
+                          final assignedToName =
+                              data['assigned_to_name'] ?? 'Unknown';
                           final branch = data['branch'] ?? '';
 
-                          if (searchQuery.isNotEmpty && !name.toLowerCase().contains(searchQuery)) {
+                          if (searchQuery.isNotEmpty &&
+                              !name.toLowerCase().contains(searchQuery)) {
                             return const SizedBox.shrink();
                           }
 
@@ -238,7 +302,8 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                             parsedDate = date;
                           }
                           if (parsedDate != null) {
-                            formattedDate = DateFormat('dd-MM-yyyy').format(parsedDate);
+                            formattedDate =
+                                DateFormat('dd-MM-yyyy').format(parsedDate);
                           }
 
                           return GestureDetector(
@@ -247,7 +312,8 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => PresentFollowUp(docId: doc.id),
+                                  builder: (_) =>
+                                      PresentFollowUp(docId: doc.id),
                                 ),
                               ).then((_) => _fetchLeadsPage());
                             },
@@ -255,11 +321,15 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                               margin: const EdgeInsets.only(bottom: 16),
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
-                                color: isDark ? const Color(0xFF1A3333) : const Color(0xFFE0F2F1),
+                                color: isDark
+                                    ? const Color(0xFF1A3333)
+                                    : const Color(0xFFE0F2F1),
                                 borderRadius: BorderRadius.circular(20),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Theme.of(context).shadowColor.withOpacity(isDark ? 0.2 : 0.05),
+                                    color: Theme.of(context)
+                                        .shadowColor
+                                        .withOpacity(isDark ? 0.2 : 0.05),
                                     blurRadius: 12,
                                     offset: const Offset(0, 6),
                                   ),
@@ -278,27 +348,56 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         RichText(
                                           text: TextSpan(
-                                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 16),
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyLarge
+                                                ?.copyWith(fontSize: 16),
                                             children: [
-                                              TextSpan(text: name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                              TextSpan(
+                                                  text: name,
+                                                  style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.bold)),
                                               const TextSpan(text: ' '),
-                                              TextSpan(text: '($status)', style: TextStyle(color: Theme.of(context).hintColor)),
+                                              TextSpan(
+                                                  text: '($status)',
+                                                  style: TextStyle(
+                                                      color: Theme.of(context)
+                                                          .hintColor)),
                                             ],
                                           ),
                                         ),
                                         const SizedBox(height: 4),
                                         Text('Date: $formattedDate',
-                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 13, color: Theme.of(context).hintColor)),
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                    fontSize: 13,
+                                                    color: Theme.of(context)
+                                                        .hintColor)),
                                         const SizedBox(height: 2),
-                                        Text('Assigned to: $assignedToName ($branch)',
-                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 12, color: Colors.teal)),
+                                        Text(
+                                            'Assigned to: $assignedToName ($branch)',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                    fontSize: 12,
+                                                    color: Colors.teal)),
                                         const SizedBox(height: 2),
                                         Text('Priority: $priority',
-                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 12, color: Colors.grey)),
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                    fontSize: 12,
+                                                    color: Colors.grey)),
                                       ],
                                     ),
                                   ),
@@ -318,14 +417,19 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back),
-                    onPressed: _currentPage > 1 ? () => _fetchLeadsPage(prevPage: true) : null,
+                    onPressed: _currentPage > 1
+                        ? () => _fetchLeadsPage(prevPage: true)
+                        : null,
                   ),
-                  Text('$_currentPage', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text('$_currentPage',
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold)),
                   IconButton(
                     icon: const Icon(Icons.arrow_forward),
-                    onPressed: _lastDocument != null && _leads.length == _leadsPerPage
-                        ? () => _fetchLeadsPage(nextPage: true)
-                        : null,
+                    onPressed:
+                        _lastDocument != null && _leads.length == _leadsPerPage
+                            ? () => _fetchLeadsPage(nextPage: true)
+                            : null,
                   ),
                 ],
               ),
@@ -347,31 +451,38 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
   }
 
   Widget _buildFilterDropdown<T>({
-    required T value,
+    required T? value,
     required List<T> items,
     required String label,
     required ValueChanged<T?> onChanged,
+    Widget? hint,
   }) {
-    return Flexible(
-      flex: 1,
-      child: SizedBox(
-        height: 36,
-        child: DropdownButtonFormField<T>(
-          value: value,
-          items: items.map((item) => DropdownMenuItem(value: item, child: Text(item.toString(), style: const TextStyle(fontSize: 10)))).toList(),
-          onChanged: onChanged,
-          decoration: InputDecoration(
-            labelText: label,
-            labelStyle: const TextStyle(fontSize: 9),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-            filled: true,
-            fillColor: const Color.fromARGB(255, 229, 237, 229),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-          ),
-          style: const TextStyle(fontSize: 10, color: Colors.black),
-          dropdownColor: Colors.white,
-          icon: const Icon(Icons.arrow_drop_down, size: 14),
+    return SizedBox(
+      height: 36,
+      child: DropdownButtonFormField<T>(
+        value: value,
+        items: items
+            .map((item) => DropdownMenuItem(
+                value: item,
+                child: Text(item.toString(),
+                    style: const TextStyle(fontSize: 10))))
+            .toList(),
+        onChanged: onChanged,
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(fontSize: 9),
+          border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none),
+          filled: true,
+          fillColor: const Color.fromARGB(255, 229, 237, 229),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
         ),
+        style: const TextStyle(fontSize: 10, color: Colors.black),
+        dropdownColor: Colors.white,
+        icon: const Icon(Icons.arrow_drop_down, size: 14),
+        hint: hint,
       ),
     );
   }

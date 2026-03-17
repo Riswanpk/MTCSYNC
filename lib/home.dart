@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:in_app_update/in_app_update.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'dart:convert';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -32,6 +33,7 @@ class _HomePageState extends State<HomePage>
   late AnimationController _swingController;
   late Animation<double> _swingAnimation;
   StreamSubscription<User?>? _authSubscription;
+  StreamSubscription<String>? _fcmTokenSubscription;
 
   File? _profileImage;
   String? _profileImagePath;
@@ -52,6 +54,7 @@ class _HomePageState extends State<HomePage>
     _checkTodoWarning();
     _checkPendingTodosReminder();
     _setupPerformanceNotifications();
+    _setupFcmTokenSync();
     _startSmeNotificationService();
     _fetchAndCacheContacts();
     _printCustomClaims();
@@ -109,10 +112,33 @@ class _HomePageState extends State<HomePage>
   @override
   void dispose() {
     _authSubscription?.cancel();
+    _fcmTokenSubscription?.cancel();
     SmeNotificationService.instance.stopListening();
     routeObserver.unsubscribe(this);
     _swingController.dispose();
     super.dispose();
+  }
+
+  Future<void> _setupFcmTokenSync() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final token = await FirebaseMessaging.instance.getToken();
+      await _saveFcmToken(user.uid, token);
+    }
+
+    _fcmTokenSubscription =
+        FirebaseMessaging.instance.onTokenRefresh.listen((token) async {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      await _saveFcmToken(uid, token);
+    });
+  }
+
+  Future<void> _saveFcmToken(String? uid, String? token) async {
+    if (uid == null || token == null || token.isEmpty) return;
+
+    await FirebaseFirestore.instance.collection('users').doc(uid).set({
+      'fcm_token': token,
+    }, SetOptions(merge: true));
   }
 
   @override
