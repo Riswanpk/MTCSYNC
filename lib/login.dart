@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'home.dart';
 import 'dart:math';
@@ -122,6 +124,16 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       } else {
         await prefs.remove(_kEmailKey);
         await prefs.remove(_kPasswordKey);
+      }
+
+      // Save FCM token so Cloud Functions can send push notifications to this device
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (fcmToken != null && uid != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .update({'fcm_token': fcmToken});
       }
 
       if (mounted) {

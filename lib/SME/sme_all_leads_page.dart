@@ -71,23 +71,9 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
       return data;
     }).toList();
 
-    final branchSet = <String>{};
-    final userNameSet = <String>{};
-
-    for (final lead in leads) {
-      final branch = lead['branch'] as String? ?? '';
-      if (branch.isNotEmpty) branchSet.add(branch);
-
-      final userName = lead['assigned_to_name'] as String? ?? '';
-      if (userName.isNotEmpty) userNameSet.add(userName);
-    }
-
-    final sortedBranches = branchSet.toList()..sort();
-    final sortedUsers = userNameSet.toList()..sort();
-
     _leads = leads;
-    _branches = sortedBranches;
-    _users = sortedUsers;
+    _branches = [];
+    _users = [];
 
     // Reset everything when date range changes
     _selectedBranch = null;

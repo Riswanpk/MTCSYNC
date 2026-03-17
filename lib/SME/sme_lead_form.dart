@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -184,21 +185,20 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
         reminderTimestamp = Timestamp.fromDate(scheduledDate);
       }
 
-      // Create notification record for the assigned user
-      final notifData = <String, dynamic>{
-        'recipient_uid': _selectedUserId,
+      // Call Cloud Function to send FCM push notification to assigned user
+      final notifPayload = <String, dynamic>{
+        'recipientUid': _selectedUserId,
         'title': 'New Lead Assigned',
         'body': 'A new lead "${_nameController.text.trim()}" has been assigned to you by SME.',
-        'lead_doc_id': followUpRef.id,
-        'lead_name': _nameController.text.trim(),
-        'created_at': FieldValue.serverTimestamp(),
-        'read': false,
-        'type': 'sme_lead_assignment',
+        'leadDocId': followUpRef.id,
+        'leadName': _nameController.text.trim(),
       };
       if (reminderTimestamp != null) {
-        notifData['reminder_at'] = reminderTimestamp;
+        notifPayload['reminderAt'] = reminderTimestamp.millisecondsSinceEpoch;
       }
-      await FirebaseFirestore.instance.collection('notifications').add(notifData);
+      await FirebaseFunctions.instanceFor(region: 'asia-south1')
+          .httpsCallable('sendLeadAssignmentNotification')
+          .call(notifPayload);
 
       // Daily report tracking
       await createDailyReportIfNeededLeads(

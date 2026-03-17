@@ -1,71 +1,56 @@
 import 'dart:async';
 import 'package:awesome_notifications/awesome_notifications.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
-/// Listens for SME lead assignment notifications in Firestore and
-/// triggers local push notifications for the assigned user.
+/// Listens for SME lead assignment FCM messages and triggers local push
+/// notifications (foreground) for the assigned user.
+/// Background / terminated state messages are handled automatically by the OS.
 class SmeNotificationService {
   SmeNotificationService._();
   static final SmeNotificationService instance = SmeNotificationService._();
 
-  StreamSubscription<QuerySnapshot>? _subscription;
+  StreamSubscription<RemoteMessage>? _subscription;
   bool _isListening = false;
 
-  /// Start listening for new unread notifications addressed to the current user.
+  /// Start listening for foreground FCM messages of type [sme_lead_assignment].
   /// Should be called once after login/home page init.
   void startListening() {
     if (_isListening) return;
-
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-
     _isListening = true;
-    _subscription = FirebaseFirestore.instance
-        .collection('notifications')
-        .where('recipient_uid', isEqualTo: uid)
-        .where('read', isEqualTo: false)
-        .where('type', isEqualTo: 'sme_lead_assignment')
-        .orderBy('created_at', descending: true)
-        .limit(10)
-        .snapshots()
-        .listen((snapshot) {
-      for (final change in snapshot.docChanges) {
-        if (change.type == DocumentChangeType.added) {
-          final data = change.doc.data();
-          if (data == null) continue;
 
-          final title = data['title'] as String? ?? 'New Lead Assigned';
-          final body = data['body'] as String? ?? 'A new lead has been assigned to you.';
-          final leadDocId = data['lead_doc_id'] as String? ?? '';
+    _subscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      final data = message.data;
+      if (data['type'] != 'sme_lead_assignment') return;
 
-          // Show local assignment notification
-          AwesomeNotifications().createNotification(
-            content: NotificationContent(
-              id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-              channelKey: 'basic_channel',
-              title: title,
-              body: body,
-              notificationLayout: NotificationLayout.Default,
-              payload: {
-                'docId': leadDocId,
-                'type': 'lead',
-              },
-            ),
-          );
+      final title = message.notification?.title ?? data['title'] ?? 'New Lead Assigned';
+      final body = message.notification?.body ?? data['body'] ?? 'A new lead has been assigned to you.';
+      final leadDocId = data['leadDocId'] ?? '';
 
-          // Schedule reminder on assigned user's device if the SME set one
-          final reminderTs = data['reminder_at'];
-          final leadName = data['lead_name'] as String? ?? 'Lead';
-          if (reminderTs is Timestamp) {
-            final reminderDate = reminderTs.toDate();
-            if (reminderDate.isAfter(DateTime.now())) {
-              _scheduleReminder(leadDocId, leadName, reminderDate);
-            }
+      // Show local notification so AwesomeNotifications action buttons work
+      AwesomeNotifications().createNotification(
+        content: NotificationContent(
+          id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+          channelKey: 'basic_channel',
+          title: title,
+          body: body,
+          notificationLayout: NotificationLayout.Default,
+          payload: {
+            'docId': leadDocId,
+            'type': 'lead',
+          },
+        ),
+      );
+
+      // Schedule device-side reminder if the Cloud Function forwarded one
+      final reminderAtStr = data['reminderAt'];
+      final leadName = data['leadName'] ?? 'Lead';
+      if (reminderAtStr != null) {
+        final reminderMs = int.tryParse(reminderAtStr);
+        if (reminderMs != null) {
+          final reminderDate = DateTime.fromMillisecondsSinceEpoch(reminderMs);
+          if (reminderDate.isAfter(DateTime.now())) {
+            _scheduleReminder(leadDocId, leadName, reminderDate);
           }
-
-          // Mark as read so it doesn't trigger again
-          change.doc.reference.update({'read': true});
         }
       }
     });
@@ -114,3 +99,4 @@ class SmeNotificationService {
     _isListening = false;
   }
 }
+
