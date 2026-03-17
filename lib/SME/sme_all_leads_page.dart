@@ -17,19 +17,20 @@ class SmeAllLeadsPage extends StatefulWidget {
 
 class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
   bool _isLoading = true;
+  bool _isReady = false;
   List<Map<String, dynamic>> _leads = [];
   List<Map<String, dynamic>> _filteredLeads = [];
 
   late DateTime _startDate;
   late DateTime _endDate;
 
-  String _selectedBranch = 'All';
-  String _selectedUser = 'All';
-  String _selectedStatus = 'All';
+  String? _selectedBranch;
+  String? _selectedUser;
+  String? _selectedStatus;
 
-  List<String> _branches = ['All'];
-  List<String> _users = ['All'];
-  final List<String> _statuses = ['All', 'In Progress', 'Sale', 'Cancelled'];
+  List<String> _branches = [];
+  List<String> _users = [];
+  final List<String> _statuses = ['In Progress', 'Sale', 'Cancelled'];
 
   @override
   void initState() {
@@ -85,26 +86,31 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
     final sortedUsers = userNameSet.toList()..sort();
 
     _leads = leads;
-    _branches = ['All', ...sortedBranches];
-    _users = ['All', ...sortedUsers];
+    _branches = sortedBranches;
+    _users = sortedUsers;
 
-    // Reset filters that no longer apply
-    if (!_branches.contains(_selectedBranch)) _selectedBranch = 'All';
-    if (!_users.contains(_selectedUser)) _selectedUser = 'All';
+    // Reset everything when date range changes
+    _selectedBranch = null;
+    _selectedUser = null;
+    _selectedStatus = null;
+    _isReady = false;
+    _filteredLeads = [];
 
     setState(() => _isLoading = false);
-    _applyFilters();
   }
 
   void _applyFilters() {
     final filtered = _leads.where((lead) {
-      if (_selectedBranch != 'All' && (lead['branch'] ?? '') != _selectedBranch) return false;
-      if (_selectedUser != 'All' && (lead['assigned_to_name'] ?? '') != _selectedUser) return false;
-      if (_selectedStatus != 'All' && (lead['status'] ?? '') != _selectedStatus) return false;
+      if (_selectedBranch != null && (lead['branch'] ?? '') != _selectedBranch) return false;
+      if (_selectedUser != null && (lead['assigned_to_name'] ?? '') != _selectedUser) return false;
+      if (_selectedStatus != null && (lead['status'] ?? '') != _selectedStatus) return false;
       return true;
     }).toList();
 
-    setState(() => _filteredLeads = filtered);
+    setState(() {
+      _isReady = true;
+      _filteredLeads = filtered;
+    });
   }
 
   Future<void> _pickDateRange() async {
@@ -186,7 +192,7 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
                           options: _branches,
                           isDark: isDark,
                           onChanged: (val) {
-                            setState(() => _selectedBranch = val);
+                            setState(() => _selectedBranch = val.isEmpty ? null : val);
                             _applyFilters();
                           },
                         ),
@@ -197,7 +203,7 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
                           options: _users,
                           isDark: isDark,
                           onChanged: (val) {
-                            setState(() => _selectedUser = val);
+                            setState(() => _selectedUser = val.isEmpty ? null : val);
                             _applyFilters();
                           },
                         ),
@@ -208,7 +214,7 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
                           options: _statuses,
                           isDark: isDark,
                           onChanged: (val) {
-                            setState(() => _selectedStatus = val);
+                            setState(() => _selectedStatus = val.isEmpty ? null : val);
                             _applyFilters();
                           },
                         ),
@@ -216,29 +222,49 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
                     ),
                   ),
                 ),
-                // ── Summary row ─────────────────────────────────────────
-                Container(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1A1B22) : const Color(0xFFF0F4FF),
-                    border: Border(
-                      bottom: BorderSide(
-                        color: isDark ? Colors.white12 : Colors.black.withOpacity(0.07),
+                // ── Summary row (shown only after first filter selection) ──
+                if (_isReady)
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1A1B22) : const Color(0xFFF0F4FF),
+                      border: Border(
+                        bottom: BorderSide(
+                          color: isDark ? Colors.white12 : Colors.black.withOpacity(0.07),
+                        ),
                       ),
                     ),
+                    child: Row(
+                      children: [
+                        _SummaryChip(label: 'Total', count: total, color: _primaryBlue),
+                        _SummaryChip(label: 'Active', count: inProgress, color: Colors.orange),
+                        _SummaryChip(label: 'Sold', count: sold, color: Colors.green),
+                        _SummaryChip(label: 'Cancelled', count: cancelled, color: Colors.red),
+                      ],
+                    ),
                   ),
-                  child: Row(
-                    children: [
-                      _SummaryChip(label: 'Total', count: total, color: _primaryBlue),
-                      _SummaryChip(label: 'Active', count: inProgress, color: Colors.orange),
-                      _SummaryChip(label: 'Sold', count: sold, color: Colors.green),
-                      _SummaryChip(label: 'Cancelled', count: cancelled, color: Colors.red),
-                    ],
-                  ),
-                ),
-                // ── Leads list ──────────────────────────────────────────
+                // ── Leads list / prompt ────────────────────────────────────
                 Expanded(
-                  child: _filteredLeads.isEmpty
+                  child: !_isReady
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.filter_list_rounded,
+                                  size: 56,
+                                  color: isDark ? Colors.white24 : Colors.black26),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Select filters above to view leads',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: isDark ? Colors.white38 : Colors.black45,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : _filteredLeads.isEmpty
                       ? Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -278,7 +304,7 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
 
 class _FilterChip extends StatelessWidget {
   final String label;
-  final String current;
+  final String? current;
   final List<String> options;
   final bool isDark;
   final ValueChanged<String> onChanged;
@@ -293,12 +319,13 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isActive = current != 'All';
+    final isActive = current != null;
     return GestureDetector(
       onTap: () async {
         final selected = await showModalBottomSheet<String>(
           context: context,
           backgroundColor: isDark ? const Color(0xFF23242B) : Colors.white,
+          isScrollControlled: true,
           shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
@@ -329,7 +356,7 @@ class _FilterChip extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              isActive ? '$label: $current' : label,
+              isActive ? '$label: $current' : 'Select $label',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -355,7 +382,7 @@ class _FilterChip extends StatelessWidget {
 
 class _PickerSheet extends StatelessWidget {
   final String label;
-  final String current;
+  final String? current;
   final List<String> options;
   final bool isDark;
 
@@ -368,55 +395,87 @@ class _PickerSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
-          child: Text(
-            'Filter by $label',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 17,
-              color: isDark ? Colors.white : Colors.black87,
+    return DraggableScrollableSheet(
+      initialChildSize: 0.5,
+      minChildSize: 0.3,
+      maxChildSize: 0.85,
+      expand: false,
+      builder: (_, scrollController) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Handle bar
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 10, bottom: 6),
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white24 : Colors.black12,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
           ),
-        ),
-        const Divider(height: 1),
-        Flexible(
-          child: ListView(
-            shrinkWrap: true,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            children: options
-                .map(
-                  (opt) => ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-                    title: Text(
-                      opt,
-                      style: TextStyle(
-                        color: isDark ? Colors.white : Colors.black87,
-                        fontWeight:
-                            current == opt ? FontWeight.bold : FontWeight.normal,
-                      ),
-                    ),
-                    leading: Icon(
-                      current == opt
-                          ? Icons.radio_button_checked
-                          : Icons.radio_button_off,
-                      color: current == opt
-                          ? _primaryBlue
-                          : (isDark ? Colors.white30 : Colors.black26),
-                      size: 22,
-                    ),
-                    onTap: () => Navigator.pop(context, opt),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
+            child: Row(
+              children: [
+                Text(
+                  'Filter by $label',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 17,
+                    color: isDark ? Colors.white : Colors.black87,
                   ),
-                )
-                .toList(),
+                ),
+                const Spacer(),
+                if (current != null)
+                  TextButton.icon(
+                    onPressed: () => Navigator.pop(context, ''),
+                    icon: const Icon(Icons.clear_rounded, size: 16),
+                    label: const Text('Clear', style: TextStyle(fontSize: 13)),
+                    style: TextButton.styleFrom(
+                        foregroundColor: Colors.red.shade400),
+                  ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
-      ],
+          const Divider(height: 1),
+          Expanded(
+            child: ListView(
+              controller: scrollController,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              children: options
+                  .map(
+                    (opt) => ListTile(
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 20),
+                      title: Text(
+                        opt,
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.black87,
+                          fontWeight: current == opt
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                      ),
+                      leading: Icon(
+                        current == opt
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_off,
+                        color: current == opt
+                            ? _primaryBlue
+                            : (isDark ? Colors.white30 : Colors.black26),
+                        size: 22,
+                      ),
+                      onTap: () => Navigator.pop(context, opt),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+      ),
     );
   }
 }

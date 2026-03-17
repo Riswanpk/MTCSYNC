@@ -14,6 +14,9 @@ class SmeUserStatsDashboard extends StatefulWidget {
 class _SmeUserStatsDashboardState extends State<SmeUserStatsDashboard> {
   bool _isLoading = true;
   List<_UserStat> _userStats = [];
+  List<_UserStat> _filteredUserStats = [];
+  List<String> _availableBranches = [];
+  String? _selectedBranch;
   DateTime _startDate = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTime _endDate = DateTime.now();
 
@@ -77,9 +80,27 @@ class _SmeUserStatsDashboardState extends State<SmeUserStatsDashboard> {
     final stats = statMap.values.toList();
     stats.sort((a, b) => b.total.compareTo(a.total));
 
+    final branchSet = <String>{};
+    for (final s in stats) {
+      if (s.branch.isNotEmpty) branchSet.add(s.branch);
+    }
+    final sortedBranches = branchSet.toList()..sort();
+
+    _userStats = stats;
+    _availableBranches = sortedBranches;
+
+    // Always reset branch filter on new fetch
+    _selectedBranch = null;
+
+    setState(() => _isLoading = false);
+    _applyBranchFilter();
+  }
+
+  void _applyBranchFilter() {
     setState(() {
-      _userStats = stats;
-      _isLoading = false;
+      _filteredUserStats = _selectedBranch == null
+          ? []
+          : _userStats.where((s) => s.branch == _selectedBranch).toList();
     });
   }
 
@@ -151,89 +172,152 @@ class _SmeUserStatsDashboardState extends State<SmeUserStatsDashboard> {
                       const SizedBox(width: 8),
                       Text(dateRangeStr, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                       const Spacer(),
-                      Text('${_userStats.length} users',
+                      Text('${_filteredUserStats.length} users',
                           style: TextStyle(fontSize: 12, color: isDark ? Colors.white54 : Colors.black45)),
                     ],
                   ),
                 ),
-                // Summary row
+                // Branch filter dropdown
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   color: isDark ? const Color(0xFF1A1B22) : Colors.white,
                   child: Row(
                     children: [
-                      _summaryChip('Total', _userStats.fold(0, (s, u) => s + u.total), const Color(0xFF005BAC)),
-                      _summaryChip('In Progress', _userStats.fold(0, (s, u) => s + u.inProgress), Colors.orange),
-                      _summaryChip('Sold', _userStats.fold(0, (s, u) => s + u.sold), Colors.green),
-                      _summaryChip('Cancelled', _userStats.fold(0, (s, u) => s + u.cancelled), Colors.red),
+                      const Icon(Icons.corporate_fare_rounded, size: 16, color: Color(0xFF005BAC)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedBranch,
+                          hint: const Text('All Branches'),
+                          items: _availableBranches
+                              .map((branch) => DropdownMenuItem(
+                                    value: branch,
+                                    child: Text(branch),
+                                  ))
+                              .toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedBranch = value;
+                            });
+                            _applyBranchFilter();
+                          },
+                          decoration: InputDecoration(
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          ),
+                        ),
+                      ),
+                      if (_selectedBranch != null)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: InkWell(
+                            onTap: () {
+                              setState(() {
+                                _selectedBranch = null;
+                              });
+                              _applyBranchFilter();
+                            },
+                            child: const Icon(Icons.clear, size: 18, color: Color(0xFF005BAC)),
+                          ),
+                        ),
                     ],
                   ),
                 ),
                 const Divider(height: 1),
-                // Table header
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  color: isDark ? const Color(0xFF1E2028) : const Color(0xFFF5F7FA),
-                  child: const Row(
-                    children: [
-                      Expanded(flex: 3, child: Text('User', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                      Expanded(flex: 1, child: Text('Total', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12), textAlign: TextAlign.center)),
-                      Expanded(flex: 1, child: Text('Active', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.orange), textAlign: TextAlign.center)),
-                      Expanded(flex: 1, child: Text('Sold', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.green), textAlign: TextAlign.center)),
-                      Expanded(flex: 1, child: Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.red), textAlign: TextAlign.center)),
-                    ],
+                // Summary row
+                if (_selectedBranch != null)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    color: isDark ? const Color(0xFF1A1B22) : Colors.white,
+                    child: Row(
+                      children: [
+                        _summaryChip('Total', _filteredUserStats.fold(0, (s, u) => s + u.total), const Color(0xFF005BAC)),
+                        _summaryChip('In Progress', _filteredUserStats.fold(0, (s, u) => s + u.inProgress), Colors.orange),
+                        _summaryChip('Sold', _filteredUserStats.fold(0, (s, u) => s + u.sold), Colors.green),
+                        _summaryChip('Cancelled', _filteredUserStats.fold(0, (s, u) => s + u.cancelled), Colors.red),
+                      ],
+                    ),
                   ),
-                ),
+                if (_selectedBranch != null) const Divider(height: 1),
+                // Table header
+                if (_selectedBranch != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    color: isDark ? const Color(0xFF1E2028) : const Color(0xFFF5F7FA),
+                    child: const Row(
+                      children: [
+                        Expanded(flex: 3, child: Text('User', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                        Expanded(flex: 1, child: Text('Total', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12), textAlign: TextAlign.center)),
+                        Expanded(flex: 1, child: Text('Active', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.orange), textAlign: TextAlign.center)),
+                        Expanded(flex: 1, child: Text('Sold', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.green), textAlign: TextAlign.center)),
+                        Expanded(flex: 1, child: Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.red), textAlign: TextAlign.center)),
+                      ],
+                    ),
+                  ),
                 // User stat rows
                 Expanded(
-                  child: _userStats.isEmpty
+                  child: _selectedBranch == null
                       ? Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.people_outline, size: 48, color: isDark ? Colors.white30 : Colors.black26),
+                              Icon(Icons.filter_list, size: 48, color: isDark ? Colors.white30 : Colors.black26),
                               const SizedBox(height: 8),
-                              Text('No assignments in this period',
+                              Text('Select a branch to view assignments',
                                   style: TextStyle(color: isDark ? Colors.white38 : Colors.black38)),
                             ],
                           ),
                         )
-                      : ListView.separated(
-                          itemCount: _userStats.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (context, index) {
-                            final stat = _userStats[index];
-                            final conversionRate = stat.total > 0
-                                ? (stat.sold / stat.total * 100).toStringAsFixed(1)
-                                : '0.0';
-
-                            return InkWell(
-                              onTap: () => _showUserLeads(stat),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      flex: 3,
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(stat.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                                          Text('${stat.branch} · $conversionRate% conv.',
-                                              style: TextStyle(fontSize: 11, color: isDark ? Colors.white54 : Colors.black45)),
-                                        ],
-                                      ),
-                                    ),
-                                    Expanded(flex: 1, child: Text('${stat.total}', style: const TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
-                                    Expanded(flex: 1, child: Text('${stat.inProgress}', style: const TextStyle(color: Colors.orange), textAlign: TextAlign.center)),
-                                    Expanded(flex: 1, child: Text('${stat.sold}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600), textAlign: TextAlign.center)),
-                                    Expanded(flex: 1, child: Text('${stat.cancelled}', style: const TextStyle(color: Colors.red), textAlign: TextAlign.center)),
-                                  ],
-                                ),
+                      : _filteredUserStats.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.people_outline, size: 48, color: isDark ? Colors.white30 : Colors.black26),
+                                  const SizedBox(height: 8),
+                                  Text('No assignments in this period',
+                                      style: TextStyle(color: isDark ? Colors.white38 : Colors.black38)),
+                                ],
                               ),
-                            );
-                          },
-                        ),
+                            )
+                          : ListView.separated(
+                              itemCount: _filteredUserStats.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              itemBuilder: (context, index) {
+                                final stat = _filteredUserStats[index];
+                                final conversionRate = stat.total > 0
+                                    ? (stat.sold / stat.total * 100).toStringAsFixed(1)
+                                    : '0.0';
+
+                                return InkWell(
+                                  onTap: () => _showUserLeads(stat),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          flex: 3,
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(stat.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                                              Text('${stat.branch} · $conversionRate% conv.',
+                                                  style: TextStyle(fontSize: 11, color: isDark ? Colors.white54 : Colors.black45)),
+                                            ],
+                                          ),
+                                        ),
+                                        Expanded(flex: 1, child: Text('${stat.total}', style: const TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
+                                        Expanded(flex: 1, child: Text('${stat.inProgress}', style: const TextStyle(color: Colors.orange), textAlign: TextAlign.center)),
+                                        Expanded(flex: 1, child: Text('${stat.sold}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600), textAlign: TextAlign.center)),
+                                        Expanded(flex: 1, child: Text('${stat.cancelled}', style: const TextStyle(color: Colors.red), textAlign: TextAlign.center)),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                 ),
               ],
             ),
