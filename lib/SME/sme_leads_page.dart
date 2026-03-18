@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:getwidget/getwidget.dart';
 import '../Leads/presentfollowup.dart';
 import 'sme_lead_form.dart';
 import '../Misc/user_cache_service.dart';
@@ -15,6 +16,10 @@ class SmeLeadsPage extends StatefulWidget {
 }
 
 class _SmeLeadsPageState extends State<SmeLeadsPage> {
+  static const Color _brandPrimary = Color(0xFF005BAC);
+  static const Color _brandAccent = Color(0xFF008BD6);
+  static const Color _successGreen = Color(0xFF8CC63F);
+
   String selectedStatus = 'All';
   String selectedPriority = 'All';
   String? selectedBranch;
@@ -144,7 +149,7 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: GFAppBar(
         title: _isSearching
             ? TextField(
                 autofocus: true,
@@ -161,8 +166,19 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                 },
               )
             : const Text('SME Leads'),
-        backgroundColor: const Color(0xFF005BAC),
-        foregroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.white),
+        textTheme: const TextTheme(
+          titleLarge: TextStyle(color: Colors.white, fontSize: 20),
+        ),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [_brandPrimary, _brandAccent],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         actions: [
           IconButton(
             icon: Icon(_isSearching ? Icons.close : Icons.search),
@@ -180,90 +196,75 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
       ),
       body: Column(
         children: [
-          // Filters
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          // Filter Bar
+          Container(
+            margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1A2A2A) : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.07),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Row(
                 children: [
-                  SizedBox(
-                    width: 120,
-                    child: _buildFilterDropdown<String>(
-                      value: selectedBranch,
-                      items: branchOptions,
-                      label: 'Branch',
-                      onChanged: (val) {
-                        setState(() => selectedBranch = val);
-                        _resetAndFetch();
-                      },
-                      hint: const Text('Select Branch', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 120,
-                    child: _buildFilterDropdown<String>(
-                      value: selectedStatus,
-                      items: statusOptions,
-                      label: 'Status',
-                      onChanged: (val) {
-                        setState(() => selectedStatus = val!);
+                  _buildFilterChip(
+                    label: 'Branch',
+                    value: selectedBranch ?? 'All',
+                    icon: Icons.business_rounded,
+                    color: _brandPrimary,
+                    onTap: () => _showFilterSheet(
+                      'Select Branch',
+                      branchOptions,
+                      selectedBranch ?? 'All',
+                      (val) {
+                        setState(() => selectedBranch = val == 'All' ? null : val);
                         _resetAndFetch();
                       },
                     ),
                   ),
                   const SizedBox(width: 8),
-                  SizedBox(
-                    width: 120,
-                    child: _buildFilterDropdown<String>(
-                      value: selectedPriority,
-                      items: priorityOptions,
-                      label: 'Priority',
-                      onChanged: (val) {
-                        setState(() => selectedPriority = val!);
+                  _buildFilterChip(
+                    label: 'Status',
+                    value: selectedStatus,
+                    icon: Icons.check_circle_rounded,
+                    color: const Color(0xFFFF8F00),
+                    onTap: () => _showFilterSheet(
+                      'Select Status',
+                      statusOptions,
+                      selectedStatus,
+                      (val) {
+                        setState(() => selectedStatus = val);
                         _resetAndFetch();
                       },
                     ),
                   ),
                   const SizedBox(width: 8),
-                  SizedBox(
-                    width: 120,
-                    child: SizedBox(
-                      height: 36,
-                      child: DropdownButtonFormField<bool>(
-                        value: sortAscending,
-                        items: const [
-                          DropdownMenuItem(
-                              value: false,
-                              child:
-                                  Text('Newest', style: TextStyle(fontSize: 10))),
-                          DropdownMenuItem(
-                              value: true,
-                              child:
-                                  Text('Oldest', style: TextStyle(fontSize: 10))),
-                        ],
-                        onChanged: (val) {
-                          setState(() => sortAscending = val!);
-                          _resetAndFetch();
-                        },
-                        decoration: InputDecoration(
-                          labelText: 'Sort',
-                          labelStyle: const TextStyle(fontSize: 9),
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide.none),
-                          filled: true,
-                          fillColor: const Color.fromARGB(255, 229, 237, 229),
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 4, vertical: 2),
-                        ),
-                        style: const TextStyle(fontSize: 10, color: Colors.black),
-                        dropdownColor: Colors.white,
-                        icon: const Icon(Icons.arrow_drop_down, size: 14),
-                      ),
+                  _buildFilterChip(
+                    label: 'Priority',
+                    value: selectedPriority,
+                    icon: Icons.flag_rounded,
+                    color: const Color(0xFFE53935),
+                    onTap: () => _showFilterSheet(
+                      'Select Priority',
+                      priorityOptions,
+                      selectedPriority,
+                      (val) {
+                        setState(() => selectedPriority = val);
+                        _resetAndFetch();
+                      },
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  _buildSortChip(),
                 ],
               ),
             ),
@@ -271,11 +272,55 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
           // Leads list
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? Center(
+                    child: GFLoader(
+                      type: GFLoaderType.android,
+                      androidLoaderColor:
+                          const AlwaysStoppedAnimation<Color>(_brandPrimary),
+                    ),
+                  )
                 : _leads.isEmpty
-                    ? const Center(child: Text('No leads found.'))
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 88,
+                              height: 88,
+                              decoration: BoxDecoration(
+                                color: _brandPrimary.withOpacity(0.08),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.folder_open_rounded,
+                                size: 44,
+                                color: _brandPrimary.withOpacity(0.45),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            Text(
+                              'No leads found',
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.white70 : const Color(0xFF143A52),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              selectedBranch == null
+                                  ? 'Select a branch to view leads'
+                                  : 'Try adjusting your filters',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey.shade500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
                     : ListView.builder(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.fromLTRB(14, 14, 14, 80),
                         itemCount: _leads.length,
                         itemBuilder: (context, index) {
                           final doc = _leads[index];
@@ -306,6 +351,9 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                                 DateFormat('dd-MM-yyyy').format(parsedDate);
                           }
 
+                          final statusColor = _getStatusColor(status);
+                          final priorityColor = _getPriorityColor(priority);
+
                           return GestureDetector(
                             onTap: () async {
                               await _playClickSound();
@@ -318,90 +366,177 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                               ).then((_) => _fetchLeadsPage());
                             },
                             child: Container(
-                              margin: const EdgeInsets.only(bottom: 16),
-                              padding: const EdgeInsets.all(16),
+                              margin: const EdgeInsets.only(bottom: 12),
                               decoration: BoxDecoration(
                                 color: isDark
-                                    ? const Color(0xFF1A3333)
-                                    : const Color(0xFFE0F2F1),
-                                borderRadius: BorderRadius.circular(20),
+                                    ? const Color(0xFF1C2C3C)
+                                    : Colors.white,
+                                borderRadius: BorderRadius.circular(16),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Theme.of(context)
-                                        .shadowColor
-                                        .withOpacity(isDark ? 0.2 : 0.05),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 6),
+                                    color: Colors.black.withOpacity(
+                                        isDark ? 0.25 : 0.07),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 3),
                                   ),
                                 ],
                               ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 12,
-                                    height: 12,
-                                    decoration: const BoxDecoration(
-                                      color: Colors.teal,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        RichText(
-                                          text: TextSpan(
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodyLarge
-                                                ?.copyWith(fontSize: 16),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: IntrinsicHeight(
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      // Status accent bar
+                                      Container(
+                                        width: 5,
+                                        color: statusColor,
+                                      ),
+                                      // Content
+                                      Expanded(
+                                        child: Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                              14, 14, 14, 12),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
-                                              TextSpan(
-                                                  text: name,
-                                                  style: const TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.bold)),
-                                              const TextSpan(text: ' '),
-                                              TextSpan(
-                                                  text: '($status)',
-                                                  style: TextStyle(
-                                                      color: Theme.of(context)
-                                                          .hintColor)),
+                                              // Name + Status badge row
+                                              Row(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      name,
+                                                      style: TextStyle(
+                                                        fontSize: 15,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        color: isDark
+                                                            ? Colors.white
+                                                            : const Color(
+                                                                0xFF0D2B40),
+                                                        height: 1.3,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 4),
+                                                    decoration: BoxDecoration(
+                                                      color: statusColor
+                                                          .withOpacity(0.14),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              20),
+                                                    ),
+                                                    child: Text(
+                                                      status,
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        color: statusColor,
+                                                        letterSpacing: 0.2,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons.calendar_today_rounded,
+                                                    size: 11,
+                                                    color: Colors.grey.shade400,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    formattedDate,
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color: isDark
+                                                          ? Colors.grey.shade400
+                                                          : Colors.grey.shade500,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 12),
+                                              // Bottom info row
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: _infoChip(
+                                                      icon: Icons
+                                                          .person_rounded,
+                                                      label: 'Assigned',
+                                                      value: assignedToName,
+                                                      isDark: isDark,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Expanded(
+                                                    child: _infoChip(
+                                                      icon: Icons
+                                                          .business_rounded,
+                                                      label: 'Branch',
+                                                      value: branch,
+                                                      isDark: isDark,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 7),
+                                                    decoration: BoxDecoration(
+                                                      color: priorityColor
+                                                          .withOpacity(0.12),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              10),
+                                                    ),
+                                                    child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        Icon(
+                                                          Icons.flag_rounded,
+                                                          size: 13,
+                                                          color: priorityColor,
+                                                        ),
+                                                        const SizedBox(
+                                                            width: 4),
+                                                        Text(
+                                                          priority,
+                                                          style: TextStyle(
+                                                            fontSize: 11,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                            color:
+                                                                priorityColor,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
                                             ],
                                           ),
                                         ),
-                                        const SizedBox(height: 4),
-                                        Text('Date: $formattedDate',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodySmall
-                                                ?.copyWith(
-                                                    fontSize: 13,
-                                                    color: Theme.of(context)
-                                                        .hintColor)),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                            'Assigned to: $assignedToName ($branch)',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodySmall
-                                                ?.copyWith(
-                                                    fontSize: 12,
-                                                    color: Colors.teal)),
-                                        const SizedBox(height: 2),
-                                        Text('Priority: $priority',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodySmall
-                                                ?.copyWith(
-                                                    fontSize: 12,
-                                                    color: Colors.grey)),
-                                      ],
-                                    ),
+                                      ),
+                                    ],
                                   ),
-                                ],
+                                ),
                               ),
                             ),
                           );
@@ -410,26 +545,54 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
           ),
           // Pagination
           if (!_isLoading && searchQuery.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1A2A2A) : Colors.white,
+                borderRadius: BorderRadius.circular(40),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.07),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: _currentPage > 1
-                        ? () => _fetchLeadsPage(prevPage: true)
-                        : null,
+                  _paginationButton(
+                    icon: Icons.chevron_left_rounded,
+                    enabled: _currentPage > 1,
+                    onTap: () => _fetchLeadsPage(prevPage: true),
+                    isDark: isDark,
                   ),
-                  Text('$_currentPage',
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 14),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: _brandPrimary,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'Page $_currentPage',
                       style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold)),
-                  IconButton(
-                    icon: const Icon(Icons.arrow_forward),
-                    onPressed:
-                        _lastDocument != null && _leads.length == _leadsPerPage
-                            ? () => _fetchLeadsPage(nextPage: true)
-                            : null,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ),
+                  _paginationButton(
+                    icon: Icons.chevron_right_rounded,
+                    enabled:
+                        _lastDocument != null && _leads.length == _leadsPerPage,
+                    onTap: () => _fetchLeadsPage(nextPage: true),
+                    isDark: isDark,
                   ),
                 ],
               ),
@@ -437,8 +600,9 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF8CC63F),
-        child: const Icon(Icons.add),
+        backgroundColor: _successGreen,
+        elevation: 2,
+        child: const Icon(Icons.add, color: Colors.white),
         onPressed: () async {
           final result = await Navigator.push(
             context,
@@ -450,39 +614,296 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
     );
   }
 
-  Widget _buildFilterDropdown<T>({
-    required T? value,
-    required List<T> items,
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'Sale':
+        return const Color(0xFF4CAF50);
+      case 'In Progress':
+        return const Color(0xFFFFC107);
+      case 'Cancelled':
+        return const Color(0xFFF44336);
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Color _getPriorityColor(String priority) {
+    switch (priority) {
+      case 'High':
+        return const Color(0xFFF44336);
+      case 'Medium':
+        return const Color(0xFFFFA500);
+      case 'Low':
+        return const Color(0xFF4CAF50);
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Widget _infoChip({
+    required IconData icon,
     required String label,
-    required ValueChanged<T?> onChanged,
-    Widget? hint,
+    required String value,
+    required bool isDark,
   }) {
-    return SizedBox(
-      height: 36,
-      child: DropdownButtonFormField<T>(
-        value: value,
-        items: items
-            .map((item) => DropdownMenuItem(
-                value: item,
-                child: Text(item.toString(),
-                    style: const TextStyle(fontSize: 10))))
-            .toList(),
-        onChanged: onChanged,
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: const TextStyle(fontSize: 9),
-          border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide.none),
-          filled: true,
-          fillColor: const Color.fromARGB(255, 229, 237, 229),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 12, color: _brandPrimary),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.white : Colors.black87,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip({
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isActive = value != 'All' && value.isNotEmpty;
+    final displayText = isActive ? value : label;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive
+              ? color.withOpacity(0.13)
+              : (isDark
+                  ? Colors.white.withOpacity(0.06)
+                  : Colors.grey.withOpacity(0.08)),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color:
+                isActive ? color.withOpacity(0.6) : Colors.grey.withOpacity(0.25),
+            width: 1.5,
+          ),
         ),
-        style: const TextStyle(fontSize: 10, color: Colors.black),
-        dropdownColor: Colors.white,
-        icon: const Icon(Icons.arrow_drop_down, size: 14),
-        hint: hint,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon,
+                size: 14, color: isActive ? color : Colors.grey.shade500),
+            const SizedBox(width: 6),
+            Text(
+              displayText,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight:
+                    isActive ? FontWeight.w700 : FontWeight.w500,
+                color: isActive
+                    ? color
+                    : (isDark
+                        ? Colors.grey.shade400
+                        : Colors.grey.shade600),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 15,
+              color: isActive ? color : Colors.grey.shade400,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showFilterSheet(
+    String title,
+    List<String> options,
+    String current,
+    void Function(String) onSelect,
+  ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.45,
+          minChildSize: 0.3,
+          maxChildSize: 0.85,
+          expand: false,
+          builder: (_, scrollController) {
+            return Container(
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1C2C3C) : Colors.white,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 12),
+                  Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color:
+                              isDark ? Colors.white : const Color(0xFF0D2B40),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: scrollController,
+                      itemCount: options.length,
+                      itemBuilder: (_, i) {
+                        final opt = options[i];
+                        final selected = opt == current;
+                        return ListTile(
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 24),
+                          title: Text(
+                            opt,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: selected
+                                  ? FontWeight.w700
+                                  : FontWeight.w400,
+                              color: selected
+                                  ? _brandPrimary
+                                  : (isDark ? Colors.white : Colors.black87),
+                            ),
+                          ),
+                          trailing: selected
+                              ? const Icon(Icons.check_rounded,
+                                  color: _brandPrimary, size: 20)
+                              : null,
+                          onTap: () {
+                            Navigator.pop(context);
+                            onSelect(opt);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildSortChip() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    const color = Color(0xFF43A047);
+    return GestureDetector(
+      onTap: () {
+        setState(() => sortAscending = !sortAscending);
+        _resetAndFetch();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: color.withOpacity(0.5), width: 1.5),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              sortAscending
+                  ? Icons.arrow_upward_rounded
+                  : Icons.arrow_downward_rounded,
+              size: 14,
+              color: color,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              sortAscending ? 'Oldest' : 'Newest',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _paginationButton({
+    required IconData icon,
+    required bool enabled,
+    required VoidCallback onTap,
+    required bool isDark,
+  }) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: enabled
+              ? _brandPrimary.withOpacity(0.1)
+              : Colors.grey.withOpacity(0.07),
+          borderRadius: BorderRadius.circular(19),
+        ),
+        child: Icon(
+          icon,
+          size: 22,
+          color: enabled ? _brandPrimary : Colors.grey.shade400,
+        ),
       ),
     );
   }

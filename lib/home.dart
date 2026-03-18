@@ -136,9 +136,13 @@ class _HomePageState extends State<HomePage>
   Future<void> _saveFcmToken(String? uid, String? token) async {
     if (uid == null || token == null || token.isEmpty) return;
 
-    await FirebaseFirestore.instance.collection('users').doc(uid).set({
-      'fcm_token': token,
-    }, SetOptions(merge: true));
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'fcm_token': token,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Failed to save FCM token: $e');
+    }
   }
 
   @override

@@ -26,6 +26,9 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
   bool _loading = true;
   String? _error;
   String? _docId;
+  /// True only after the current month's doc was confirmed from Firestore.
+  /// Prevents stale cache / fallback data from being written back.
+  bool _firestoreConfirmed = false;
   bool _sortCalledFirst = true;
   String _searchText = '';
   bool _showSearchBar = false;
@@ -72,20 +75,40 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
       final now = DateTime.now();
       final monthYear = "${_monthName(now.month)} ${now.year}";
 
-      final doc = await FirebaseFirestore.instance
+      final usersRef = FirebaseFirestore.instance
           .collection('customer_target')
           .doc(monthYear)
-          .collection('users')
-          .doc(_docId)
-          .get();
+          .collection('users');
+
+      var doc = await usersRef.doc(_docId).get();
+
+      // If not found with lowercase email, search case-insensitively
+      if (!doc.exists || doc.data()?['customers'] == null) {
+        final querySnap = await usersRef.get();
+        for (final d in querySnap.docs) {
+          if (d.id.toLowerCase() == _docId!.toLowerCase() && d.id != _docId) {
+            // Found doc with different casing – migrate to lowercase ID
+            final oldData = d.data();
+            await usersRef.doc(_docId).set(oldData);
+            await usersRef.doc(d.id).delete();
+            doc = await usersRef.doc(_docId).get();
+            break;
+          }
+        }
+      }
+
       if (doc.exists && doc.data()?['customers'] != null) {
         final List<dynamic> data = doc.data()!['customers'];
         setState(() {
           _customers = data.map((e) => Map<String, dynamic>.from(e)).toList();
           _loading = false;
         });
+        _firestoreConfirmed = true;
         await _saveToLocalCache();
       } else {
+        // Document genuinely missing for this month – keep cached data
+        // for display only but do NOT allow writes back to Firestore
+        _firestoreConfirmed = false;
         setState(() {
           _loading = false;
         });
@@ -263,6 +286,12 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
 
   Future<void> _updateFirestore() async {
     if (_docId == null) return;
+    // Never write back data that wasn't confirmed from Firestore.
+    // This prevents stale cache or fallback data from overwriting real data.
+    if (!_firestoreConfirmed) {
+      debugPrint('Skipping Firestore write – data not confirmed from server');
+      return;
+    }
     try {
       // Get current month-year string, e.g., "Jan 2026"
       final now = DateTime.now();

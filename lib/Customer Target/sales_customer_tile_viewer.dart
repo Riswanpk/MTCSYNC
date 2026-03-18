@@ -504,7 +504,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                           // Update Firestore
                           final user = FirebaseAuth.instance.currentUser;
                           if (user != null) {
-                            final docId = user.email;
+                            final docId = user.email!.toLowerCase();
                             final now = DateTime.now();
                             final months = [
                               'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -585,7 +585,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
             .collection('customer_target')
             .doc(monthYear)
             .collection('users')
-            .doc(user.email)
+            .doc(user.email!.toLowerCase())
             .get());
       }
       final docs = await Future.wait(futures);
