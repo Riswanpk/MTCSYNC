@@ -370,7 +370,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
           .collection('customer_target')
           .doc(monthYear)
           .collection('users')
-          .doc(user.email);
+          .doc(user.email!.toLowerCase());
       final doc = await docRef.get();
       if (doc.exists && doc.data()?['customers'] != null) {
         List customers = List.from(doc.data()!['customers']);

@@ -28,6 +28,25 @@ class _ContactPickerModalState extends State<ContactPickerModal> {
   bool _loading = true;
   final TextEditingController _searchController = TextEditingController();
 
+  List<Contact> _getFilteredContacts(String q) {
+    final qLower = q.toLowerCase();
+    final qDigits = RegExp(r'\d').allMatches(q).map((m) => m.group(0)).join();
+    if (q.isEmpty) return List.from(_contacts);
+
+    return _contacts.where((contact) {
+      final name = contact.displayName.toLowerCase();
+      final phoneRaw =
+          contact.phones.isNotEmpty ? contact.phones.first.number : '';
+      final phoneDigits =
+          RegExp(r'\d').allMatches(phoneRaw).map((m) => m.group(0)).join();
+      final matchesName = name.contains(qLower);
+      final matchesPhone = qDigits.isNotEmpty
+          ? phoneDigits.contains(qDigits)
+          : phoneRaw.toLowerCase().contains(qLower);
+      return matchesName || matchesPhone;
+    }).toList();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -68,8 +87,14 @@ class _ContactPickerModalState extends State<ContactPickerModal> {
   Future<void> _refreshContactsInBackground() async {
     try {
       final granted = await FlutterContacts.requestPermission();
-      if (!granted) return;
-      final latest = await FlutterContacts.getContacts(withProperties: true, withPhoto: false);
+      if (!granted) {
+        if (mounted) {
+          setState(() => _loading = false);
+        }
+        return;
+      }
+      final latest = await FlutterContacts.getContacts(
+          withProperties: true, withPhoto: false);
       if (!mounted) return;
       // update shared prefs cache
       final prefs = await SharedPreferences.getInstance();
@@ -78,7 +103,7 @@ class _ContactPickerModalState extends State<ContactPickerModal> {
 
       setState(() {
         _contacts = latest;
-        _applyFilter(_searchController.text);
+        _filtered = _getFilteredContacts(_searchController.text);
         _loading = false;
       });
     } catch (e) {
@@ -88,21 +113,8 @@ class _ContactPickerModalState extends State<ContactPickerModal> {
   }
 
   void _applyFilter(String q) {
-    final qLower = q.toLowerCase();
-    final qDigits = RegExp(r'\d').allMatches(q).map((m) => m.group(0)).join();
     setState(() {
-      if (q.isEmpty) {
-        _filtered = List.from(_contacts);
-        return;
-      }
-      _filtered = _contacts.where((c) {
-        final name = (c.displayName ?? '').toLowerCase();
-        final phoneRaw = c.phones.isNotEmpty ? (c.phones.first.number ?? '') : '';
-        final phoneDigits = RegExp(r'\d').allMatches(phoneRaw).map((m) => m.group(0)).join();
-        final matchesName = name.contains(qLower);
-        final matchesPhone = qDigits.isNotEmpty ? phoneDigits.contains(qDigits) : phoneRaw.toLowerCase().contains(qLower);
-        return matchesName || matchesPhone;
-      }).toList();
+      _filtered = _getFilteredContacts(q);
     });
   }
 
@@ -136,7 +148,8 @@ class _ContactPickerModalState extends State<ContactPickerModal> {
                     _applyFilter('');
                   },
                 ),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
               onChanged: (v) => _applyFilter(v), // filter on each keypress
             ),
@@ -145,19 +158,24 @@ class _ContactPickerModalState extends State<ContactPickerModal> {
             child: _loading && _contacts.isEmpty
                 ? const Center(child: CircularProgressIndicator())
                 : (_filtered.isEmpty
-                    ? Center(child: Text(_contacts.isEmpty ? 'No contacts found' : 'No matching contacts'))
+                    ? Center(
+                        child: Text(_contacts.isEmpty
+                            ? 'No contacts found'
+                            : 'No matching contacts'))
                     : ListView.builder(
                         controller: widget.scrollController,
                         itemCount: _filtered.length,
                         itemBuilder: (context, index) {
                           final contact = _filtered[index];
-                          final phone = contact.phones.isNotEmpty ? (contact.phones.first.number ?? 'No number') : 'No number';
+                          final phone = contact.phones.isNotEmpty
+                              ? contact.phones.first.number
+                              : 'No number';
                           return ListTile(
                             leading: const Icon(Icons.person_outline),
-                            title: Text(contact.displayName ?? ''),
+                            title: Text(contact.displayName),
                             subtitle: Text(phone),
                             onTap: () {
-                              widget.onSelect(contact.displayName ?? '', phone);
+                              widget.onSelect(contact.displayName, phone);
                               Navigator.pop(context);
                             },
                           );

@@ -146,7 +146,9 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _autoScanCallLog();
+      // Always re-fetch from Firestore before scanning so stale in-memory
+      // data cannot overwrite progress saved while the app was backgrounded.
+      _fetchCustomerData().then((_) => _autoScanCallLog());
     }
   }
 

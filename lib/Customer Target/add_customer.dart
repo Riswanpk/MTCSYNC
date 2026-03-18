@@ -3,12 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-// import 'Todo & Leads/leadsform.dart';
-// TODO: Update the import path below to the correct location of leadsform.dart
-import '../Leads/leadsform.dart';
 
 class AddCustomerPage extends StatefulWidget {
   @override
@@ -23,9 +19,6 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
   final TextEditingController _contact2Ctrl = TextEditingController();
   bool _loading = false;
   String? _error;
-
-  List<Contact>? _deviceContacts;
-  bool _deviceContactsLoading = false;
 
   Future<void> _addCustomer() async {
     if (!_formKey.currentState!.validate()) return;
@@ -52,7 +45,8 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
       }
       // Enforce unique name (case-insensitive, trimmed)
       String newName = _nameCtrl.text.trim().toLowerCase();
-      bool nameExists = customers.any((c) => (c['name'] ?? '').toString().trim().toLowerCase() == newName);
+      bool nameExists = customers.any(
+          (c) => (c['name'] ?? '').toString().trim().toLowerCase() == newName);
       if (nameExists) {
         setState(() {
           _error = 'A customer with this name already exists.';
@@ -88,53 +82,24 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
   // Helper to get month name
   String _monthName(int month) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
     ];
     return months[month - 1];
   }
 
-  Future<void> _loadDeviceContacts() async {
-    if (_deviceContactsLoading || (_deviceContacts != null && _deviceContacts!.isNotEmpty)) {
-      return;
-    }
-    setState(() {
-      _deviceContactsLoading = true;
-    });
-    try {
-      var status = await Permission.contacts.status;
-      if (!status.isGranted) {
-        await Permission.contacts.request();
-        status = await Permission.contacts.status;
-      }
-      if (!status.isGranted) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Contact permission denied')));
-        }
-        return;
-      }
-      // Load from cache first
-      final prefs = await SharedPreferences.getInstance();
-      final cached = prefs.getString('contacts_cache');
-      if (cached != null) {
-        final List<dynamic> decoded = jsonDecode(cached);
-        setState(() {
-          _deviceContacts = decoded.map((c) => Contact.fromJson(c)).toList();
-        });
-      }
-      // Fetch latest contacts and update cache/state
-      final latestContacts = await FlutterContacts.getContacts(withProperties: true, withThumbnail: false);
-      final encoded = jsonEncode(latestContacts.map((c) => c.toJson()).toList());
-      await prefs.setString('contacts_cache', encoded);
-      if (mounted) {
-        setState(() => _deviceContacts = latestContacts);
-      }
-    } finally {
-      if (mounted) setState(() => _deviceContactsLoading = false);
-    }
-  }
-
-  void _showContactPicker(TextEditingController controller, {TextEditingController? nameController}) async {
+  void _showContactPicker(TextEditingController controller,
+      {TextEditingController? nameController}) async {
     // Load cached contacts fast for immediate display
     List<Contact> cachedContacts = [];
     final prefs = await SharedPreferences.getInstance();
@@ -151,20 +116,23 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
       builder: (context) {
         return _ContactPickerModal(
           initialContacts: cachedContacts,
-          initialLoading: _deviceContactsLoading,
+          initialLoading: cachedContacts.isEmpty,
           onSelect: (contact) {
             final phones = contact.phones;
-            String phone1 = phones.isNotEmpty ? (phones[0].number ?? '') : '';
-            String phone2 = phones.length > 1 ? (phones[1].number ?? '') : '';
-            String phone1Digits = RegExp(r'\d').allMatches(phone1).map((m) => m.group(0)).join();
-            String phone2Digits = RegExp(r'\d').allMatches(phone2).map((m) => m.group(0)).join();
+            String phone1 = phones.isNotEmpty ? phones[0].number : '';
+            String phone2 = phones.length > 1 ? phones[1].number : '';
+            String phone1Digits =
+                RegExp(r'\d').allMatches(phone1).map((m) => m.group(0)).join();
+            String phone2Digits =
+                RegExp(r'\d').allMatches(phone2).map((m) => m.group(0)).join();
             if (phone1Digits.length >= 10) {
               phone1Digits = phone1Digits.substring(phone1Digits.length - 10);
               controller.text = phone1Digits;
-              controller.selection = TextSelection.fromPosition(TextPosition(offset: controller.text.length));
+              controller.selection = TextSelection.fromPosition(
+                  TextPosition(offset: controller.text.length));
             }
             if (nameController != null && (nameController.text.isEmpty)) {
-              nameController.text = contact.displayName ?? '';
+              nameController.text = contact.displayName;
             }
             if (phone2Digits.length >= 10) {
               phone2Digits = phone2Digits.substring(phone2Digits.length - 10);
@@ -180,14 +148,19 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
   Future<void> _pasteFromClipboard(TextEditingController controller) async {
     final clipboardData = await Clipboard.getData('text/plain');
     if (clipboardData != null && clipboardData.text != null) {
-      final digits = RegExp(r'\d').allMatches(clipboardData.text!).map((m) => m.group(0)).join();
+      final digits = RegExp(r'\d')
+          .allMatches(clipboardData.text!)
+          .map((m) => m.group(0))
+          .join();
       if (digits.length >= 10) {
         // Always select the last 10 digits
         final tenDigits = digits.substring(digits.length - 10);
         controller.text = tenDigits;
-        controller.selection = TextSelection.fromPosition(TextPosition(offset: controller.text.length));
+        controller.selection = TextSelection.fromPosition(
+            TextPosition(offset: controller.text.length));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Clipboard does not contain 10 digits')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Clipboard does not contain 10 digits')));
       }
     }
   }
@@ -196,7 +169,8 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add Customer', style: TextStyle(color: Colors.white)),
+        title:
+            const Text('Add Customer', style: TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xFF8CC63F),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
@@ -209,18 +183,21 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(_error!, style: const TextStyle(color: Colors.red)),
+                  child:
+                      Text(_error!, style: const TextStyle(color: Colors.red)),
                 ),
               TextFormField(
                 controller: _nameCtrl,
                 decoration: const InputDecoration(labelText: 'Customer Name'),
-                validator: (v) => v == null || v.trim().isEmpty ? 'Enter name' : null,
+                validator: (v) =>
+                    v == null || v.trim().isEmpty ? 'Enter name' : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _addressCtrl,
                 decoration: const InputDecoration(labelText: 'Address'),
-                validator: (v) => v == null || v.trim().isEmpty ? 'Enter address' : null,
+                validator: (v) =>
+                    v == null || v.trim().isEmpty ? 'Enter address' : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -238,7 +215,8 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                       IconButton(
                         icon: const Icon(Icons.contacts),
                         tooltip: 'Pick from contacts',
-                        onPressed: () => _showContactPicker(_contactCtrl, nameController: _nameCtrl),
+                        onPressed: () => _showContactPicker(_contactCtrl,
+                            nameController: _nameCtrl),
                       ),
                     ],
                   ),
@@ -266,7 +244,8 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                   LengthLimitingTextInputFormatter(10),
                 ],
                 validator: (v) {
-                  if (v != null && v.isNotEmpty && v.length != 10) return 'Enter exactly 10 digits';
+                  if (v != null && v.isNotEmpty && v.length != 10)
+                    return 'Enter exactly 10 digits';
                   return null;
                 },
               ),
@@ -277,7 +256,10 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                   onPressed: _loading ? null : _addCustomer,
                   child: _loading
                       ? const SizedBox(
-                          width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
                       : const Text('Add Customer'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF8CC63F),
@@ -315,6 +297,28 @@ class _ContactPickerModalState extends State<_ContactPickerModal> {
   bool _loading = true;
   final TextEditingController _searchController = TextEditingController();
 
+  List<Contact> _getFilteredContacts(String q) {
+    final qLower = q.toLowerCase();
+    final qDigits = RegExp(r'\d').allMatches(q).map((m) => m.group(0)).join();
+    if (q.isEmpty) return List.from(_contacts);
+
+    return _contacts.where((contact) {
+      final name = contact.displayName.toLowerCase();
+      final phones = contact.phones;
+      final phone1 = phones.isNotEmpty ? phones[0].number : '';
+      final phone2 = phones.length > 1 ? phones[1].number : '';
+      final phoneRaw =
+          [phone1, phone2].where((phone) => phone.isNotEmpty).join(' ');
+      final phoneDigits =
+          RegExp(r'\d').allMatches(phoneRaw).map((m) => m.group(0)).join();
+      final matchesName = name.contains(qLower);
+      final matchesPhone = qDigits.isNotEmpty
+          ? phoneDigits.contains(qDigits)
+          : phoneRaw.toLowerCase().contains(qLower);
+      return matchesName || matchesPhone;
+    }).toList();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -331,8 +335,14 @@ class _ContactPickerModalState extends State<_ContactPickerModal> {
   Future<void> _refreshContactsInBackground() async {
     try {
       final granted = await FlutterContacts.requestPermission();
-      if (!granted) return;
-      final latest = await FlutterContacts.getContacts(withProperties: true, withPhoto: false);
+      if (!granted) {
+        if (mounted) {
+          setState(() => _loading = false);
+        }
+        return;
+      }
+      final latest = await FlutterContacts.getContacts(
+          withProperties: true, withPhoto: false);
       if (!mounted) return;
       // update shared prefs cache
       final prefs = await SharedPreferences.getInstance();
@@ -341,7 +351,7 @@ class _ContactPickerModalState extends State<_ContactPickerModal> {
 
       setState(() {
         _contacts = latest;
-        _applyFilter(_searchController.text);
+        _filtered = _getFilteredContacts(_searchController.text);
         _loading = false;
       });
     } catch (e) {
@@ -350,21 +360,8 @@ class _ContactPickerModalState extends State<_ContactPickerModal> {
   }
 
   void _applyFilter(String q) {
-    final qLower = q.toLowerCase();
-    final qDigits = RegExp(r'\d').allMatches(q).map((m) => m.group(0)).join();
     setState(() {
-      if (q.isEmpty) {
-        _filtered = List.from(_contacts);
-        return;
-      }
-      _filtered = _contacts.where((c) {
-        final name = (c.displayName ?? '').toLowerCase();
-        final phoneRaw = c.phones.isNotEmpty ? (c.phones.first.number ?? '') : '';
-        final phoneDigits = RegExp(r'\d').allMatches(phoneRaw).map((m) => m.group(0)).join();
-        final matchesName = name.contains(qLower);
-        final matchesPhone = qDigits.isNotEmpty ? phoneDigits.contains(qDigits) : phoneRaw.toLowerCase().contains(qLower);
-        return matchesName || matchesPhone;
-      }).toList();
+      _filtered = _getFilteredContacts(q);
     });
   }
 
@@ -404,7 +401,8 @@ class _ContactPickerModalState extends State<_ContactPickerModal> {
                         _applyFilter('');
                       },
                     ),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8)),
                   ),
                 ),
               ),
@@ -412,18 +410,23 @@ class _ContactPickerModalState extends State<_ContactPickerModal> {
                 child: _loading && _contacts.isEmpty
                     ? const Center(child: CircularProgressIndicator())
                     : (_filtered.isEmpty
-                        ? Center(child: Text(_contacts.isEmpty ? 'No contacts found' : 'No matching contacts'))
+                        ? Center(
+                            child: Text(_contacts.isEmpty
+                                ? 'No contacts found'
+                                : 'No matching contacts'))
                         : ListView.builder(
                             controller: scrollController,
                             itemCount: _filtered.length,
                             itemBuilder: (context, index) {
                               final contact = _filtered[index];
                               final phones = contact.phones;
-                              final phone1 = phones.isNotEmpty ? (phones[0].number ?? '') : '';
-                              final phone2 = phones.length > 1 ? (phones[1].number ?? '') : '';
+                              final phone1 =
+                                  phones.isNotEmpty ? phones[0].number : '';
+                              final phone2 =
+                                  phones.length > 1 ? phones[1].number : '';
                               return ListTile(
                                 leading: const Icon(Icons.person_outline),
-                                title: Text(contact.displayName ?? ''),
+                                title: Text(contact.displayName),
                                 subtitle: Text(
                                   phone2.isNotEmpty
                                       ? '$phone1, $phone2'

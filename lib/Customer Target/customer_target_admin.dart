@@ -196,34 +196,51 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
           .collection('users')
           .doc(_selectedUserEmail!.toLowerCase());
 
-      // Fetch existing customers
-      final docSnap = await docRef.get();
-      List<Map<String, dynamic>> existingCustomers = [];
-      if (docSnap.exists && docSnap.data()?['customers'] != null) {
-        existingCustomers = List<Map<String, dynamic>>.from(docSnap.data()!['customers']);
-      }
+      // Snapshot the imported list before entering the transaction
+      final importedCustomers = List<Map<String, dynamic>>.from(_customers!);
+      int newCount = 0;
 
-      // Use a Set for fast lookup (by name + contact1)
-      final existingSet = existingCustomers
-          .map((c) => "${c['name']}_${c['contact1']}")
-          .toSet();
+      // Use a transaction so the read-then-write is atomic.
+      // This prevents overwriting callMade/remarks changes that users made
+      // between when the admin opened this page and when they hit Assign.
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final docSnap = await transaction.get(docRef);
 
-      // Filter only new customers
-      final newCustomers = _customers!.where((c) =>
-          !existingSet.contains("${c['name']}_${c['contact1']}")).toList();
+        List<Map<String, dynamic>> existingCustomers = [];
+        if (docSnap.exists && docSnap.data()?['customers'] != null) {
+          existingCustomers = List<Map<String, dynamic>>.from(
+            (docSnap.data()!['customers'] as List).map((e) => Map<String, dynamic>.from(e as Map)),
+          );
+        }
 
-      // Combine existing + new
-      final updatedCustomers = [...existingCustomers, ...newCustomers];
+        // Normalize key: lowercase + trimmed, so "John " and "john" are the same
+        String normalizeKey(String name, String contact) =>
+            '${name.toLowerCase().trim()}_${contact.trim()}';
 
-      await docRef.set({
-        'branch': _selectedBranch,
-        'user': _selectedUserEmail!.toLowerCase(),
-        'customers': updatedCustomers,
-        'updated': FieldValue.serverTimestamp(),
+        final existingSet = existingCustomers
+            .map((c) => normalizeKey(c['name'] ?? '', c['contact1'] ?? ''))
+            .toSet();
+
+        // Only add customers not already present; explicitly set callMade: false
+        final newCustomers = importedCustomers
+            .where((c) => !existingSet.contains(
+                normalizeKey(c['name'] ?? '', c['contact1'] ?? '')))
+            .map((c) => {...c, 'callMade': false})
+            .toList();
+
+        newCount = newCustomers.length;
+        final updatedCustomers = [...existingCustomers, ...newCustomers];
+
+        transaction.set(docRef, {
+          'branch': _selectedBranch,
+          'user': _selectedUserEmail!.toLowerCase(),
+          'customers': updatedCustomers,
+          'updated': FieldValue.serverTimestamp(),
+        });
       });
 
       setState(() {
-        _success = "Customer target assigned. ${newCustomers.length} new customers added.";
+        _success = "Customer target assigned. $newCount new customer(s) added.";
       });
     } catch (e) {
       setState(() {
