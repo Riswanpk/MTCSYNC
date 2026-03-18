@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'home.dart';
 
 import 'Misc/register.dart';
+import 'Misc/user_cache_service.dart';
 
 /// App brand colors (matching home page)
 const Color _primaryBlue = Color(0xFF005BAC);
@@ -111,6 +112,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
+
+      // Pre-load user cache so role/branch are ready before HomePage renders
+      await UserCacheService.instance.refresh();
 
       // Save credentials if "Remember Me" is checked
       final prefs = await SharedPreferences.getInstance();

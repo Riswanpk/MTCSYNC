@@ -452,16 +452,22 @@ class _TodoFormPageState extends State<TodoFormPage> {
                   prefixIcon: const Icon(Icons.alarm),
                 ),
                 onTap: () async {
+                  final now = DateTime.now();
+                  final initialDate = now;
+                  final initialTime = TimeOfDay(
+                    hour: now.add(const Duration(minutes: 1)).hour,
+                    minute: now.add(const Duration(minutes: 1)).minute,
+                  );
                   final pickedDate = await showDatePicker(
                     context: context,
-                    initialDate: DateTime.now(),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 30)),
+                    initialDate: initialDate,
+                    firstDate: initialDate,
+                    lastDate: initialDate.add(const Duration(days: 30)),
                   );
                   if (pickedDate != null) {
                     final pickedTime = await showTimePicker(
                       context: context,
-                      initialTime: TimeOfDay.now(),
+                      initialTime: initialTime,
                     );
                     if (pickedTime != null) {
                       _selectedReminderDate = pickedDate;

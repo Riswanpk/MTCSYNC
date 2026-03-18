@@ -691,16 +691,22 @@ class _FollowUpFormState extends State<FollowUpForm> {
                             prefixIcon: Icon(Icons.alarm),
                           ),
                           onTap: () async {
+                            final now = DateTime.now();
+                            final initialDate = now;
+                            final initialTime = TimeOfDay(
+                              hour: now.add(const Duration(minutes: 1)).hour,
+                              minute: now.add(const Duration(minutes: 1)).minute,
+                            );
                             final pickedDate = await showDatePicker(
                               context: context,
-                              initialDate: DateTime.now(),
-                              firstDate: DateTime.now(),
-                              lastDate: DateTime.now().add(const Duration(days: 15)),
+                              initialDate: initialDate,
+                              firstDate: initialDate,
+                              lastDate: initialDate.add(const Duration(days: 15)),
                             );
                             if (pickedDate == null) return;
                             final pickedTime = await showTimePicker(
                               context: context,
-                              initialTime: TimeOfDay.now(),
+                              initialTime: initialTime,
                             );
                             if (pickedTime != null) {
                               _selectedReminderTime = pickedTime;
