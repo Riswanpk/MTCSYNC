@@ -72,8 +72,20 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
     }).toList();
 
     _leads = leads;
-    _branches = [];
-    _users = [];
+
+    _branches = leads
+        .map((l) => l['branch'] as String? ?? '')
+        .where((b) => b.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+
+    _users = leads
+        .map((l) => l['assigned_to_name'] as String? ?? '')
+        .where((u) => u.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
 
     // Reset everything when date range changes
     _selectedBranch = null;
