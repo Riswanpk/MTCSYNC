@@ -37,6 +37,7 @@ class _LeadsPageState extends State<LeadsPage> {
     'High',
     'Medium',
     'Low',
+    'SME Only',
   ];
 
   // Add this for sort order
@@ -188,7 +189,9 @@ class _LeadsPageState extends State<LeadsPage> {
         query = query.where('status', isEqualTo: 'In Progress');
       }
     }
-    if (selectedPriority != 'All') {
+    if (selectedPriority == 'SME Only') {
+      query = query.where('source', isEqualTo: 'sme');
+    } else if (selectedPriority != 'All') {
       query = query.where('priority', isEqualTo: selectedPriority);
     }
     }
