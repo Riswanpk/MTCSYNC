@@ -139,6 +139,20 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
     return users;
   }
 
+  // Fetch both managers and assistant managers and merge them (no duplicates).
+  Future<List<Map<String, dynamic>>> _fetchManagersAndAsst() async {
+    final managers = await _fetchUsersAndLeads(role: 'manager');
+    final assts = await _fetchUsersAndLeads(role: 'asst_manager');
+    final Map<String, Map<String, dynamic>> merged = {};
+    for (var u in managers) {
+      merged[u['uid'] as String] = u;
+    }
+    for (var u in assts) {
+      merged[u['uid'] as String] = u;
+    }
+    return merged.values.toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -236,14 +250,18 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
                         return const Center(child: CircularProgressIndicator());
                       }
                       final salesUsers = salesSnapshot.data!;
-                      return FutureBuilder<List<Map<String, dynamic>>>(
-                        future: _fetchUsersAndLeads(role: 'manager'),
+                      return FutureBuilder<List<dynamic>>(
+                        future: Future.wait([
+                          _fetchUsersAndLeads(role: 'asst_manager'),
+                          _fetchUsersAndLeads(role: 'manager'),
+                        ]),
                         builder: (context, managerSnapshot) {
                           if (!managerSnapshot.hasData) {
                             return const Center(child: CircularProgressIndicator());
                           }
-                          final managerUsers = managerSnapshot.data!;
-                          if (salesUsers.isEmpty && managerUsers.isEmpty) {
+                          final asstUsers = managerSnapshot.data![0] as List<Map<String, dynamic>>;
+                          final managerUsers = managerSnapshot.data![1] as List<Map<String, dynamic>>;
+                          if (salesUsers.isEmpty && asstUsers.isEmpty && managerUsers.isEmpty) {
                             return const Center(child: Text('No users found.'));
                           }
                           return ListView(
@@ -254,6 +272,31 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
                                   child: Text('Sales', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                                 ),
                                 ...salesUsers.map((user) => ListTile(
+                                      leading: CircleAvatar(child: Text(user['username'].toString().substring(0, 1).toUpperCase())),
+                                      title: Text(user['username']),
+                                      subtitle: Text(user['email']),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            user['lead'] ? Icons.check_circle : Icons.cancel,
+                                            color: user['lead'] ? Colors.green : Colors.red,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Icon(
+                                            user['todo'] ? Icons.check_circle : Icons.cancel,
+                                            color: user['todo'] ? Colors.blue : Colors.red,
+                                          ),
+                                        ],
+                                      ),
+                                    )),
+                              ],
+                              if (asstUsers.isNotEmpty) ...[
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  child: Text('Asst Manager', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                ),
+                                ...asstUsers.map((user) => ListTile(
                                       leading: CircleAvatar(child: Text(user['username'].toString().substring(0, 1).toUpperCase())),
                                       title: Text(user['username']),
                                       subtitle: Text(user['email']),

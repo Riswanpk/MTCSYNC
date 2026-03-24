@@ -78,9 +78,9 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
     });
 
     final snapshot = await FirebaseFirestore.instance
-        .collection('users')
-        .where('branch', isEqualTo: branch)
-        .where('role', whereIn: ['manager', 'sales']).get();
+      .collection('users')
+      .where('branch', isEqualTo: branch)
+      .where('role', whereIn: ['manager', 'asst_manager', 'sales']).get();
 
     final users = snapshot.docs.map((doc) {
       final data = doc.data();
