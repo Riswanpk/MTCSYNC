@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'home.dart';
+import '../Homepage/home.dart';
 
 import 'Misc/register.dart';
 import 'Misc/user_cache_service.dart';

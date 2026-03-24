@@ -11,15 +11,14 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'dart:convert';
 import 'package:permission_handler/permission_handler.dart';
-
-import 'main.dart';
-import 'Todo/todoform.dart';
-import 'widgets/home_widgets.dart';
-import 'widgets/home_drawer.dart';
-import 'widgets/home_body.dart';
-import 'Misc/battery_optimization_helper.dart';
-import 'Misc/user_cache_service.dart';
-import 'SME/sme_notification_service.dart';
+import '../main.dart';
+import '../Todo/todoform.dart';
+import '../Homepage/home_widgets.dart';
+import '../Homepage/home_drawer.dart';
+import '../Homepage/home_body.dart';
+import '../Misc/battery_optimization_helper.dart';
+import '../Misc/user_cache_service.dart';
+import '../SME/sme_notification_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});

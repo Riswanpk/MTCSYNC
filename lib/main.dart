@@ -10,7 +10,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'Misc/constant.dart';
 import 'login.dart';
-import 'home.dart';
+import '../Homepage/home.dart';
 import 'Navigation/splash_screen.dart';
 import 'Misc/theme_notifier.dart'; // Now imports ThemeProvider
 import 'Misc/auth_wrapper.dart';

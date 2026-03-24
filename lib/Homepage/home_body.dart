@@ -370,11 +370,12 @@ class HomeButtonsContainer extends StatelessWidget {
           children: [
             Expanded(
               child: NeumorphicButton(
-                onTap: () => _navigateToSyncHeadLeads(context),
+                onTap: () => _navigateToLeads(context),
+                onLongPress: () => _navigateToSyncHeadLeads(context),
                 text: 'Leads',
                 color: primaryBlue,
                 textColor: Colors.white,
-                icon: Icons.bar_chart_rounded,
+                icon: Icons.people_alt_rounded,
               ),
             ),
             const SizedBox(width: 14),

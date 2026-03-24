@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../widgets/home_widgets.dart';
+import '../Homepage/home_widgets.dart';
 
 /// Loading page displayed during navigation transitions.
 /// Uses the shared RotatingLogo widget for consistent animation.
