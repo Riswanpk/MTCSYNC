@@ -5,15 +5,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../login.dart';
-import 'force_update_checker.dart';
-import 'force_update_screen.dart';
+import '../Login/login.dart';
+import '../Version/force_update_checker.dart';
+import '../Version/force_update_screen.dart';
 import '../Homepage/home.dart';
 import '../main.dart'; // For navigatorKey and initialNotificationAction
 import '../Leads/presentfollowup.dart'; // For PresentFollowUp
 import '../Todo/todo.dart'; // For TodoPage and TaskDetailPageFromId
 import '../Marketing/marketing.dart'; // For MarketingFormPage
-import '../Misc/loading_page.dart'; // For LoadingOverlayPage
+import 'loading_page.dart'; // For LoadingOverlayPage
 import 'navigation_state.dart'; // For navigation state restoration
 import 'package:home_widget/home_widget.dart'; // For HomeWidget
 

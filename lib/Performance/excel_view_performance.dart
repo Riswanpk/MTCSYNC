@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../Misc/theme_notifier.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../Misc/user_cache_service.dart';
+import '../Navigation/user_cache_service.dart';
 
 // Theme colors (matching dashboard)
 const Color _primaryBlue = Color(0xFF005BAC);

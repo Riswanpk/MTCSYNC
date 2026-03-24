@@ -17,7 +17,7 @@ import '../Homepage/home_widgets.dart';
 import '../Homepage/home_drawer.dart';
 import '../Homepage/home_body.dart';
 import '../Misc/battery_optimization_helper.dart';
-import '../Misc/user_cache_service.dart';
+import '../Navigation/user_cache_service.dart';
 import '../SME/sme_notification_service.dart';
 
 class HomePage extends StatefulWidget {

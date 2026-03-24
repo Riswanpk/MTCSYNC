@@ -9,15 +9,15 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'Misc/constant.dart';
-import 'login.dart';
+import 'Login/login.dart';
 import '../Homepage/home.dart';
 import 'Navigation/splash_screen.dart';
 import 'Misc/theme_notifier.dart'; // Now imports ThemeProvider
-import 'Misc/auth_wrapper.dart';
+import 'Login/auth_wrapper.dart';
 import 'Leads/presentfollowup.dart';
 import 'Todo/todo.dart'; // <-- Already present
 import 'package:showcaseview/showcaseview.dart';
-import 'Misc/user_version_helper.dart'; // <-- Add this import
+import 'Version/user_version_helper.dart'; // <-- Add this import
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

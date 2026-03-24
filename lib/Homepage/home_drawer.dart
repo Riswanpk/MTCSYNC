@@ -4,10 +4,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
-import '../login.dart';
-import '../Misc/settings.dart';
-import '../Misc/user_cache_service.dart';
-import '../Misc/manageusers.dart';
+import '../Login/login.dart';
+import 'settings.dart';
+import '../Navigation/user_cache_service.dart';
+import 'manageusers.dart';
 import '../Performance/dailyform.dart';
 
 import '../Instructions/instructions.dart';

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../Misc/user_cache_service.dart';
+import '../Navigation/user_cache_service.dart';
 
 // Add your theme colors
 const Color primaryBlue = Color(0xFF005BAC);

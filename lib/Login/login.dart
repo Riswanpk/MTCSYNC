@@ -1,37 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../Homepage/home.dart';
 
-import 'constant.dart';
+import 'register.dart';
+import '../Navigation/user_cache_service.dart';
 
 /// App brand colors (matching home page)
 const Color _primaryBlue = Color(0xFF005BAC);
 const Color _primaryGreen = Color(0xFF8CC63F);
 
-class RegisterPage extends StatefulWidget {
-  const RegisterPage({super.key});
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
 
   @override
-  State<RegisterPage> createState() => _RegisterPageState();
+  State<LoginPage> createState() => _LoginPageState();
 }
 
-class _RegisterPageState extends State<RegisterPage>
-    with TickerProviderStateMixin {
+class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
-  final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _codeController = TextEditingController();
-  String? _selectedBranch;
 
   bool _isLoading = false;
   String? _errorMessage;
+  bool _rememberMe = false;
   bool _obscurePassword = true;
 
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
   late AnimationController _slideController;
   late Animation<Offset> _slideAnimation;
+
+  static const String _kRememberMeKey = 'remember_me_key';
+  static const String _kEmailKey = 'email_key';
+  static const String _kPasswordKey = 'password_key';
 
   @override
   void initState() {
@@ -60,6 +63,31 @@ class _RegisterPageState extends State<RegisterPage>
 
     _fadeController.forward();
     _slideController.forward();
+
+    _loadCredentials();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadCredentials();
+  }
+
+  Future<void> _loadCredentials() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final rememberMe = prefs.getBool(_kRememberMeKey) ?? false;
+      if (!mounted) return;
+      setState(() {
+        _rememberMe = rememberMe;
+        if (_rememberMe) {
+          _emailController.text = prefs.getString(_kEmailKey) ?? '';
+          _passwordController.text = prefs.getString(_kPasswordKey) ?? '';
+        }
+      });
+    } catch (e) {
+      debugPrint("Error loading credentials: $e");
+    }
   }
 
   @override
@@ -67,13 +95,11 @@ class _RegisterPageState extends State<RegisterPage>
     _fadeController.dispose();
     _slideController.dispose();
     _emailController.dispose();
-    _usernameController.dispose();
     _passwordController.dispose();
-    _codeController.dispose();
     super.dispose();
   }
 
-  Future<void> _register() async {
+  Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
@@ -82,48 +108,137 @@ class _RegisterPageState extends State<RegisterPage>
     });
 
     try {
-      // Fetch the current code from Firestore
-      final codeSnap = await FirebaseFirestore.instance
-          .collection('registration_codes')
-          .doc('active')
-          .get();
-      final currentCode = codeSnap.data()?['code'];
-
-      if (_codeController.text.trim() != currentCode) {
-        setState(() {
-          _errorMessage = "Invalid registration code.";
-          _isLoading = false;
-        });
-        return;
-      }
-
-      UserCredential userCredential =
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
-      await FirebaseFirestore.instance
-          .collection(firebaseUsersCollection)
-          .doc(userCredential.user!.uid)
-          .set({
-        'email': _emailController.text.trim(),
-        'username': _usernameController.text.trim(),
-        'role': 'sales',
-        'branch': _selectedBranch,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      // Pre-load user cache so role/branch are ready before HomePage renders
+      await UserCacheService.instance.refresh();
 
-      if (mounted) Navigator.pop(context);
+      // Save credentials if "Remember Me" is checked
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kRememberMeKey, _rememberMe);
+      if (_rememberMe) {
+        await prefs.setString(_kEmailKey, _emailController.text.trim());
+        await prefs.setString(_kPasswordKey, _passwordController.text.trim());
+      } else {
+        await prefs.remove(_kEmailKey);
+        await prefs.remove(_kPasswordKey);
+      }
+
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomePage()),
+        );
+      }
     } on FirebaseAuthException catch (e) {
       setState(() => _errorMessage = e.message);
     } catch (e) {
-      setState(() => _errorMessage = "Unexpected error occurred");
+      setState(() {
+        _errorMessage = 'Unexpected error occurred';
+      });
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
+  }
+
+  Future<void> _showForgotPasswordDialog() async {
+    final emailController = TextEditingController();
+    String? dialogError;
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
+              title: const Text('Reset Password',
+                  style: TextStyle(
+                      color: _primaryBlue, fontWeight: FontWeight.bold)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: emailController,
+                    decoration: InputDecoration(
+                      labelText: 'Enter your email',
+                      prefixIcon:
+                          const Icon(Icons.email_outlined, color: _primaryBlue),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide:
+                            const BorderSide(color: _primaryGreen, width: 2),
+                      ),
+                    ),
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                  if (dialogError != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        dialogError!,
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel',
+                      style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _primaryBlue,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () async {
+                    final email = emailController.text.trim();
+                    if (email.isEmpty) {
+                      setState(() {
+                        dialogError = 'Please enter your email';
+                      });
+                      return;
+                    }
+                    try {
+                      await FirebaseAuth.instance
+                          .sendPasswordResetEmail(email: email);
+                      Navigator.of(context).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('Password reset email sent!')),
+                      );
+                    } on FirebaseAuthException catch (e) {
+                      setState(() {
+                        dialogError = e.message ?? 'Failed to send reset email';
+                      });
+                    } catch (_) {
+                      setState(() {
+                        dialogError = 'Unexpected error occurred';
+                      });
+                    }
+                  },
+                  child: const Text('Send'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   InputDecoration _inputDecoration(String label, IconData icon,
@@ -248,7 +363,7 @@ class _RegisterPageState extends State<RegisterPage>
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Logo container (glass style matching home/login)
+                        // Logo container (matching home page glass style)
                         Container(
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
@@ -277,12 +392,12 @@ class _RegisterPageState extends State<RegisterPage>
                           ),
                           child: Image.asset(
                             'assets/images/logo.png',
-                            height: 80,
+                            height: 100,
                             fit: BoxFit.contain,
                           ),
                         ),
 
-                        const SizedBox(height: 28),
+                        const SizedBox(height: 32),
 
                         // Form card (glass-morphism style)
                         Container(
@@ -317,7 +432,7 @@ class _RegisterPageState extends State<RegisterPage>
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  'Create Account',
+                                  'Welcome Back',
                                   style: TextStyle(
                                     fontSize: 26,
                                     fontWeight: FontWeight.w700,
@@ -328,7 +443,7 @@ class _RegisterPageState extends State<RegisterPage>
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  'Register to get started',
+                                  'Sign in to continue',
                                   style: TextStyle(
                                     fontSize: 14,
                                     color: isDark
@@ -337,9 +452,9 @@ class _RegisterPageState extends State<RegisterPage>
                                     fontFamily: 'Montserrat',
                                   ),
                                 ),
-                                const SizedBox(height: 24),
+                                const SizedBox(height: 28),
 
-                                // Email
+                                // Email field
                                 TextFormField(
                                   controller: _emailController,
                                   decoration: _inputDecoration(
@@ -350,82 +465,14 @@ class _RegisterPageState extends State<RegisterPage>
                                         isDark ? Colors.white : Colors.black87,
                                     fontFamily: 'Montserrat',
                                   ),
-                                  validator: (v) {
-                                    if (v == null || v.isEmpty)
-                                      return 'Please enter email';
-                                    if (!RegExp(r'\S+@\S+\.\S+').hasMatch(v))
-                                      return 'Enter a valid email';
-                                    return null;
-                                  },
+                                  validator: (v) =>
+                                      (v == null || !v.contains('@'))
+                                          ? 'Enter a valid email'
+                                          : null,
                                 ),
-                                const SizedBox(height: 14),
+                                const SizedBox(height: 16),
 
-                                // Username
-                                TextFormField(
-                                  controller: _usernameController,
-                                  decoration: _inputDecoration(
-                                      'Username', Icons.person_outline_rounded),
-                                  style: TextStyle(
-                                    color:
-                                        isDark ? Colors.white : Colors.black87,
-                                    fontFamily: 'Montserrat',
-                                  ),
-                                  validator: (v) => (v == null || v.isEmpty)
-                                      ? 'Please enter username'
-                                      : null,
-                                ),
-                                const SizedBox(height: 14),
-
-                                // Branch dropdown
-                                DropdownButtonFormField<String>(
-                                  value: _selectedBranch,
-                                  decoration: _inputDecoration(
-                                      'Branch', Icons.business_outlined),
-                                  dropdownColor: isDark
-                                      ? const Color(0xFF1A2332)
-                                      : Colors.white,
-                                  style: TextStyle(
-                                    color:
-                                        isDark ? Colors.white : Colors.black87,
-                                    fontFamily: 'Montserrat',
-                                    fontSize: 14,
-                                  ),
-                                  items: [
-                                    'BGR',
-                                    'CBE',
-                                    'CHN',
-                                    'CLT',
-                                    'EKM',
-                                    'JBL',
-                                    'KKM',
-                                    'KSD',
-                                    'KTM',
-                                    'PKD',
-                                    'PKTR',
-                                    'PMNA',
-                                    'TRR',
-                                    'TSR',
-                                    'TLY',
-                                    'TVM',
-                                    'UDP',
-                                    'VDK',
-                                    'WYND',
-                                  ]
-                                      .map((branch) => DropdownMenuItem(
-                                          value: branch, child: Text(branch)))
-                                      .toList(),
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _selectedBranch = value;
-                                    });
-                                  },
-                                  validator: (value) => value == null
-                                      ? 'Please select a branch'
-                                      : null,
-                                ),
-                                const SizedBox(height: 14),
-
-                                // Password
+                                // Password field
                                 TextFormField(
                                   controller: _passwordController,
                                   decoration: _inputDecoration(
@@ -449,42 +496,69 @@ class _RegisterPageState extends State<RegisterPage>
                                     fontFamily: 'Montserrat',
                                   ),
                                   obscureText: _obscurePassword,
-                                  validator: (v) {
-                                    if (v == null || v.isEmpty)
-                                      return 'Please enter password';
-                                    if (v.length < 6)
-                                      return 'Password must be at least 6 characters';
-                                    return null;
-                                  },
+                                  validator: (v) => (v == null || v.isEmpty)
+                                      ? 'Enter your password'
+                                      : null,
                                 ),
-                                const SizedBox(height: 14),
+                                const SizedBox(height: 4),
 
-                                // Registration code
-                                TextFormField(
-                                  controller: _codeController,
-                                  decoration: _inputDecoration(
-                                      'Registration Code',
-                                      Icons.vpn_key_outlined),
-                                  keyboardType: TextInputType.number,
-                                  style: TextStyle(
-                                    color:
-                                        isDark ? Colors.white : Colors.black87,
-                                    fontFamily: 'Montserrat',
-                                  ),
-                                  validator: (v) {
-                                    if (v == null || v.isEmpty)
-                                      return 'Enter registration code';
-                                    if (v.length != 4)
-                                      return 'Code must be 4 digits';
-                                    return null;
-                                  },
+                                // Remember me
+                                Row(
+                                  children: [
+                                    SizedBox(
+                                      height: 40,
+                                      width: 40,
+                                      child: Checkbox(
+                                        value: _rememberMe,
+                                        onChanged: (val) =>
+                                            setState(() => _rememberMe = val!),
+                                        activeColor: _primaryGreen,
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(5)),
+                                      ),
+                                    ),
+                                    GestureDetector(
+                                      onTap: () => setState(
+                                          () => _rememberMe = !_rememberMe),
+                                      child: Text(
+                                        'Remember Me',
+                                        style: TextStyle(
+                                          color: isDark
+                                              ? Colors.white60
+                                              : Colors.black54,
+                                          fontFamily: 'Montserrat',
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    TextButton(
+                                      onPressed: _showForgotPasswordDialog,
+                                      style: TextButton.styleFrom(
+                                        padding: EdgeInsets.zero,
+                                        minimumSize: const Size(0, 0),
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      child: const Text(
+                                        'Forgot Password?',
+                                        style: TextStyle(
+                                          color: _primaryGreen,
+                                          fontWeight: FontWeight.w600,
+                                          fontFamily: 'Montserrat',
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
 
                                 // Error message
                                 if (_errorMessage != null)
                                   Padding(
                                     padding: const EdgeInsets.only(
-                                        top: 12, bottom: 4),
+                                        top: 8, bottom: 4),
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 12, vertical: 8),
@@ -511,10 +585,9 @@ class _RegisterPageState extends State<RegisterPage>
                                       ),
                                     ),
                                   ),
+                                const SizedBox(height: 20),
 
-                                const SizedBox(height: 22),
-
-                                // Register button (neumorphic style)
+                                // Login button (neumorphic style matching home buttons)
                                 SizedBox(
                                   width: double.infinity,
                                   child: Container(
@@ -523,18 +596,18 @@ class _RegisterPageState extends State<RegisterPage>
                                         begin: Alignment.topLeft,
                                         end: Alignment.bottomRight,
                                         colors: [
-                                          Color.lerp(_primaryGreen,
-                                              Colors.white, 0.1)!,
-                                          _primaryGreen,
-                                          Color.lerp(_primaryGreen,
-                                              Colors.black, 0.12)!,
+                                          Color.lerp(
+                                              _primaryBlue, Colors.white, 0.1)!,
+                                          _primaryBlue,
+                                          Color.lerp(_primaryBlue, Colors.black,
+                                              0.12)!,
                                         ],
                                         stops: const [0.0, 0.5, 1.0],
                                       ),
                                       borderRadius: BorderRadius.circular(22),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: _primaryGreen.withOpacity(0.4),
+                                          color: _primaryBlue.withOpacity(0.4),
                                           offset: const Offset(0, 8),
                                           blurRadius: 20,
                                           spreadRadius: -2,
@@ -554,7 +627,7 @@ class _RegisterPageState extends State<RegisterPage>
                                       color: Colors.transparent,
                                       child: InkWell(
                                         borderRadius: BorderRadius.circular(22),
-                                        onTap: _isLoading ? null : _register,
+                                        onTap: _isLoading ? null : _login,
                                         child: Padding(
                                           padding: const EdgeInsets.symmetric(
                                               vertical: 18),
@@ -600,15 +673,14 @@ class _RegisterPageState extends State<RegisterPage>
                                                           ],
                                                         ),
                                                         child: const Icon(
-                                                          Icons
-                                                              .person_add_alt_1_rounded,
+                                                          Icons.login_rounded,
                                                           color: Colors.white,
                                                           size: 20,
                                                         ),
                                                       ),
                                                       const SizedBox(width: 12),
                                                       Text(
-                                                        'REGISTER',
+                                                        'LOGIN',
                                                         style: TextStyle(
                                                           fontWeight:
                                                               FontWeight.w700,
@@ -639,12 +711,18 @@ class _RegisterPageState extends State<RegisterPage>
                                     ),
                                   ),
                                 ),
+                                const SizedBox(height: 16),
 
-                                const SizedBox(height: 14),
-
-                                // Back to login link
+                                // Register link
                                 TextButton(
-                                  onPressed: () => Navigator.pop(context),
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                          builder: (context) =>
+                                              const RegisterPage()),
+                                    );
+                                  },
                                   child: RichText(
                                     text: TextSpan(
                                       style: TextStyle(
@@ -656,9 +734,9 @@ class _RegisterPageState extends State<RegisterPage>
                                       ),
                                       children: const [
                                         TextSpan(
-                                            text: 'Already have an account? '),
+                                            text: "Don't have an account? "),
                                         TextSpan(
-                                          text: 'Login',
+                                          text: 'Register',
                                           style: TextStyle(
                                             color: _primaryBlue,
                                             fontWeight: FontWeight.w700,

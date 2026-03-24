@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../login.dart';
+import 'login.dart';
 
 /// A global auth state wrapper that redirects to login when the user session
 /// becomes invalid (e.g., token expired, account disabled, signed out elsewhere).

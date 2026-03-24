@@ -6,7 +6,7 @@ import '../Todo/todo_leads_full_month.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:intl/intl.dart';
-import '../Misc/user_cache_service.dart';
+import '../Navigation/user_cache_service.dart';
 
 class DailyDashboardPage extends StatefulWidget {
   const DailyDashboardPage({super.key});

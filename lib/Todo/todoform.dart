@@ -8,7 +8,7 @@ import 'dart:convert';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'todo_widget_updater.dart'; // At the top
-import '../Misc/user_cache_service.dart';
+import '../Navigation/user_cache_service.dart';
 
 /// Returns the current 12 PM–12 PM IST window as [windowStart, windowEnd].
 List<DateTime> getCurrentISTWindow() {

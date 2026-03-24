@@ -3,8 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:collection/collection.dart'; // Add this for groupBy
-import 'user_detail_page.dart';
-import 'user_cache_service.dart';
+import '../Navigation/user_detail_page.dart';
+import '../Navigation/user_cache_service.dart';
 
 class ManageUsersPage extends StatefulWidget {
   final String userRole;
