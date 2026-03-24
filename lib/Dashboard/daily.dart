@@ -347,6 +347,77 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
                       );
                     },
                   )
+                : (_role == 'manager'
+                    ? FutureBuilder<List<dynamic>>(
+                        future: Future.wait([
+                          _fetchUsersAndLeads(role: 'sales'),
+                          _fetchUsersAndLeads(role: 'asst_manager'),
+                        ]),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+                          final salesUsers = snapshot.data![0] as List<Map<String, dynamic>>;
+                          final asstUsers = snapshot.data![1] as List<Map<String, dynamic>>;
+                          if (salesUsers.isEmpty && asstUsers.isEmpty) {
+                            return const Center(child: Text('No users found.'));
+                          }
+                          return ListView(
+                            children: [
+                              if (salesUsers.isNotEmpty) ...[
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  child: Text('Sales', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                ),
+                                ...salesUsers.map((user) => ListTile(
+                                      leading: CircleAvatar(child: Text(user['username'].toString().substring(0, 1).toUpperCase())),
+                                      title: Text(user['username']),
+                                      subtitle: Text(user['email']),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            user['lead'] ? Icons.check_circle : Icons.cancel,
+                                            color: user['lead'] ? Colors.green : Colors.red,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Icon(
+                                            user['todo'] ? Icons.check_circle : Icons.cancel,
+                                            color: user['todo'] ? Colors.blue : Colors.red,
+                                          ),
+                                        ],
+                                      ),
+                                    )),
+                              ],
+                              if (asstUsers.isNotEmpty) ...[
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  child: Text('Asst Manager', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                ),
+                                ...asstUsers.map((user) => ListTile(
+                                      leading: CircleAvatar(child: Text(user['username'].toString().substring(0, 1).toUpperCase())),
+                                      title: Text(user['username']),
+                                      subtitle: Text(user['email']),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            user['lead'] ? Icons.check_circle : Icons.cancel,
+                                            color: user['lead'] ? Colors.green : Colors.red,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Icon(
+                                            user['todo'] ? Icons.check_circle : Icons.cancel,
+                                            color: user['todo'] ? Colors.blue : Colors.red,
+                                          ),
+                                        ],
+                                      ),
+                                    )),
+                              ],
+                            ],
+                          );
+                        },
+                      )
                 : FutureBuilder<List<Map<String, dynamic>>>(
                     future: _fetchUsersAndLeads(),
                     builder: (context, snapshot) {
@@ -383,9 +454,9 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
                         },
                       );
                     },
-                  ),
+                  )),
           ),
-        ],
+      ],
       ),
     );
   }
