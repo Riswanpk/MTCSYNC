@@ -71,7 +71,8 @@ class _LeadsPageState extends State<LeadsPage> {
       if (userData != null) {
         final role = userData['role'] ?? 'sales';
         final branch = userData['branch'] ?? '';
-        if (role != 'admin') {
+        final isAdminLike = role == 'admin' || role == 'sync_head' || role == 'Sync Head';
+        if (!isAdminLike) {
           if (role == 'manager' || role == 'asst_manager') {
             await _fetchUsers(branch, uid);
           }
@@ -89,7 +90,8 @@ class _LeadsPageState extends State<LeadsPage> {
   }
 
   void _applyDefaultFiltersAndFetch(String role, String branch, String? uid) {
-    if (role != 'admin') {
+    final isAdminLike = role == 'admin' || role == 'sync_head' || role == 'Sync Head';
+    if (!isAdminLike) {
       setState(() {
         selectedBranch = branch;
         if (uid != null) {
