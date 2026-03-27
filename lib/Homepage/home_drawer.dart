@@ -14,6 +14,7 @@ import '../Instructions/instructions.dart';
 import '../Misc/theme_notifier.dart';
 import '../Sync Head/sync_head_performance_drawer.dart';
 import '../Performance/my_performance_page.dart';
+import '../DME/screens/dme_user_management.dart';
 
 /// Builds the drawer widget for the home page.
 class HomeDrawer extends StatelessWidget {
@@ -41,6 +42,7 @@ class HomeDrawer extends StatelessWidget {
           _buildDrawerHeader(context),
           _buildSettingsTile(context),
           if (role == 'admin' || role == 'sync_head' || role == 'Sync Head') _buildManageUsersTile(context),
+          if (role == 'dme_admin') _buildDmeUsersTile(context),
           if (role == 'manager') _buildDailyFormTile(context),
           if (role == 'sales' || role == 'asst_manager') _buildMyPerformanceTile(context),
 
@@ -154,6 +156,23 @@ class HomeDrawer extends StatelessWidget {
           context,
           MaterialPageRoute(
               builder: (context) => ManageUsersPage(userRole: role ?? 'admin')),
+        );
+      },
+    );
+  }
+
+  Widget _buildDmeUsersTile(BuildContext context) {
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: const Icon(Icons.manage_accounts, color: Colors.indigo),
+      title: const Text('DME Users'),
+      onTap: () {
+        Navigator.pop(context);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (context) => const DmeUserManagementPage()),
         );
       },
     );
