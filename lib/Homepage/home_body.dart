@@ -8,7 +8,6 @@ import '../Navigation/user_cache_service.dart';
 import '../Customer Target/customer_manager_view.dart';
 import '../Todo/todo.dart';
 import '../Leads/leads.dart';
-import '../Todo/todoform.dart';
 import '../Dashboard/dashboard.dart';
 import '../Marketing/marketing.dart';
 import '../Marketing/viewer_marketing.dart';
@@ -21,6 +20,16 @@ import '../Sync Head/sync_head_leads_page.dart';
 import '../Sync Head/sync_head_todos_page.dart';
 import '../SME/sme_leads_page.dart';
 import '../SME/sme_dashboard.dart';
+import '../DME/services/dme_supabase_service.dart';
+import '../DME/screens/dme_sales_upload.dart';
+import '../DME/screens/dme_customer_list.dart';
+import '../DME/screens/dme_reminders.dart';
+import '../DME/screens/dme_call_customers.dart';
+import '../DME/screens/dme_product_upload.dart';
+import '../DME/screens/dme_customer_db_upload.dart';
+import '../DME/screens/dme_branch_management.dart';
+import '../DME/screens/dme_user_management.dart';
+import '../DME/screens/dme_dashboard.dart';
 
 /// App brand colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -238,6 +247,11 @@ class HomeButtonsContainer extends StatelessWidget {
       return _buildSmeTiles(context);
     }
 
+    // DME has a dedicated homepage with DME-only buttons
+    if (role == 'dme_admin' || role == 'dme_user') {
+      return _buildDmeTiles(context);
+    }
+
     return Column(
       children: [
         // Row 1: Leads & ToDo (logo colors)
@@ -423,6 +437,119 @@ class HomeButtonsContainer extends StatelessWidget {
             ),
           ],
         ),
+      ],
+    );
+  }
+
+  /// Builds the DME-specific home tiles.
+  Widget _buildDmeTiles(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: NeumorphicButton(
+                onTap: () => _navigateToDmeSalesUpload(context),
+                text: 'Upload Sales',
+                color: const Color(0xFF8B6914),
+                textColor: Colors.white,
+                icon: Icons.upload_file,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: NeumorphicButton(
+                onTap: () => _navigateToDmeCustomerList(context),
+                text: 'Customers',
+                color: const Color(0xFF6B4423),
+                textColor: Colors.white,
+                icon: Icons.groups_rounded,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: NeumorphicButton(
+                onTap: () => _navigateToDmeReminders(context),
+                text: 'Reminders',
+                color: Colors.orange,
+                textColor: Colors.white,
+                icon: Icons.notifications_active_rounded,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: NeumorphicButton(
+                onTap: () => _navigateToDmeCalls(context),
+                text: 'Call Customers',
+                color: Colors.teal,
+                textColor: Colors.white,
+                icon: Icons.phone_rounded,
+              ),
+            ),
+          ],
+        ),
+        if (role == 'dme_admin') ...[
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: NeumorphicButton(
+                  onTap: () => _navigateToDmeProductUpload(context),
+                  text: 'Products',
+                  color: const Color(0xFF7B68EE),
+                  textColor: Colors.white,
+                  icon: Icons.inventory_2,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: NeumorphicButton(
+                  onTap: () => _navigateToDmeCustomerDbUpload(context),
+                  text: 'Customer DB',
+                  color: const Color(0xFF20B2AA),
+                  textColor: Colors.white,
+                  icon: Icons.storage_rounded,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: NeumorphicButton(
+                  onTap: () => _navigateToDmeBranches(context),
+                  text: 'Branches',
+                  color: const Color(0xFF4169E1),
+                  textColor: Colors.white,
+                  icon: Icons.business_rounded,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: NeumorphicButton(
+                  onTap: () => _navigateToDmeUsers(context),
+                  text: 'Users',
+                  color: const Color(0xFF8B4513),
+                  textColor: Colors.white,
+                  icon: Icons.person_add_rounded,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          NeumorphicButton(
+            onTap: () => _navigateToDmeDashboard(context),
+            text: 'Dashboard',
+            color: const Color(0xFF2F4F4F),
+            textColor: Colors.white,
+            icon: Icons.analytics_rounded,
+          ),
+        ],
       ],
     );
   }
@@ -640,6 +767,73 @@ class HomeButtonsContainer extends StatelessWidget {
           child: DashboardPage(),
         ),
       ),
+    );
+  }
+
+  // ── DME Navigation Methods ──────────────────────────────────
+  Future<void> _navigateToDmeSalesUpload(BuildContext context) async {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const DmeSalesUploadPage()),
+    );
+  }
+
+  Future<void> _navigateToDmeCustomerList(BuildContext context) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final dmeUser = await DmeSupabaseService.instance.getCurrentUser(uid);
+    if (dmeUser == null || !context.mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => DmeCustomerListPage(dmeUser: dmeUser)),
+    );
+  }
+
+  Future<void> _navigateToDmeReminders(BuildContext context) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final dmeUser = await DmeSupabaseService.instance.getCurrentUser(uid);
+    if (dmeUser == null || !context.mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => DmeRemindersPage(dmeUser: dmeUser)),
+    );
+  }
+
+  Future<void> _navigateToDmeCalls(BuildContext context) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final dmeUser = await DmeSupabaseService.instance.getCurrentUser(uid);
+    if (dmeUser == null || !context.mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => DmeCallCustomersPage(dmeUser: dmeUser)),
+    );
+  }
+
+  Future<void> _navigateToDmeProductUpload(BuildContext context) async {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const DmeProductUploadPage()),
+    );
+  }
+
+  Future<void> _navigateToDmeCustomerDbUpload(BuildContext context) async {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const DmeCustomerDbUploadPage()),
+    );
+  }
+
+  Future<void> _navigateToDmeBranches(BuildContext context) async {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const DmeBranchManagementPage()),
+    );
+  }
+
+  Future<void> _navigateToDmeUsers(BuildContext context) async {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const DmeUserManagementPage()),
+    );
+  }
+
+  Future<void> _navigateToDmeDashboard(BuildContext context) async {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const DmeDashboardPage()),
     );
   }
 }

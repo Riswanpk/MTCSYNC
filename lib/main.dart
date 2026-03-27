@@ -8,7 +8,9 @@ import 'package:in_app_update/in_app_update.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'Misc/constant.dart';
+import 'DME/dme_config.dart';
 import 'Login/login.dart';
 import '../Homepage/home.dart';
 import 'Navigation/splash_screen.dart';
@@ -43,6 +45,12 @@ void main() async {
   // Enable Firestore offline persistence
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
+  );
+
+  // Initialize Supabase for DME module
+  await Supabase.initialize(
+    url: supabaseUrl,
+    anonKey: supabaseAnonKey,
   );
 
   // CRITICAL: Initialize AwesomeNotifications BEFORE runApp() 
