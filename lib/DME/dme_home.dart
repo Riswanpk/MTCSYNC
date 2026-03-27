@@ -8,7 +8,6 @@ import 'screens/dme_reminders.dart';
 import 'screens/dme_call_customers.dart';
 import 'screens/dme_product_upload.dart';
 import 'screens/dme_customer_db_upload.dart';
-import 'screens/dme_branch_management.dart';
 import 'screens/dme_user_management.dart';
 import 'screens/dme_dashboard.dart';
 
@@ -60,11 +59,65 @@ class _DmeHomePageState extends State<DmeHomePage> {
             ),
         ],
       ),
+      drawer: _user?.isAdmin == true ? _buildSidebar(isDark) : null,
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _user == null
               ? _buildNoAccess()
               : _buildTiles(isDark),
+    );
+  }
+
+  Widget _buildSidebar(bool isDark) {
+    return Drawer(
+      backgroundColor: isDark ? const Color(0xFF1A2332) : Colors.white,
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          DrawerHeader(
+            decoration: BoxDecoration(
+              color: _primaryBlue,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircleAvatar(
+                  radius: 30,
+                  backgroundColor: Colors.white,
+                  child: Text(
+                    (_user?.username.isNotEmpty ?? false)
+                        ? _user!.username[0].toUpperCase()
+                        : '?',
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: _primaryBlue,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  _user?.username ?? 'DME Admin',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.manage_accounts_rounded, color: _primaryBlue),
+            title: const Text('Users'),
+            onTap: () {
+              Navigator.pop(context);
+              _navigate(const DmeUserManagementPage());
+            },
+          ),
+          const Divider(),
+        ],
+      ),
     );
   }
 
@@ -145,26 +198,18 @@ class _DmeHomePageState extends State<DmeHomePage> {
                 onTap: () => _navigate(const DmeProductUploadPage()),
               ),
               right: _DmeTile(
-                icon: Icons.cloud_upload_rounded,
-                label: 'Customer DB',
+                icon: Icons.dashboard_rounded,
+                label: 'Dashboard',
                 color: const Color(0xFF607D8B),
-                onTap: () => _navigate(const DmeCustomerDbUploadPage()),
+                onTap: () => _navigate(const DmeDashboardPage()),
               ),
             ),
             const SizedBox(height: 14),
-            _tileRow(
-              left: _DmeTile(
-                icon: Icons.business_rounded,
-                label: 'Branches',
-                color: const Color(0xFF607D8B),
-                onTap: () => _navigate(const DmeBranchManagementPage()),
-              ),
-              right: _DmeTile(
-                icon: Icons.manage_accounts_rounded,
-                label: 'Users',
-                color: const Color(0xFF607D8B),
-                onTap: () => _navigate(const DmeUserManagementPage()),
-              ),
+            _DmeTile(
+              icon: Icons.cloud_upload_rounded,
+              label: 'Customer DB Upload',
+              color: const Color(0xFF607D8B),
+              onTap: () => _navigate(const DmeCustomerDbUploadPage()),
             ),
           ],
         ],

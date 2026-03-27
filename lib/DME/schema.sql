@@ -29,8 +29,7 @@ CREATE TABLE IF NOT EXISTS dme_user_branches (
 -- 4. Product master (one-time upload)
 CREATE TABLE IF NOT EXISTS dme_products (
   id SERIAL PRIMARY KEY,
-  code TEXT UNIQUE NOT NULL,        -- e.g. MTC12345
-  name TEXT NOT NULL,
+  name TEXT UNIQUE NOT NULL,
   unit TEXT NOT NULL,               -- PCS, MTR, SET, NOS, etc.
   created_at TIMESTAMPTZ DEFAULT now()
 );

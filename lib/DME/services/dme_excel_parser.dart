@@ -5,36 +5,34 @@ import '../models/dme_customer.dart';
 import '../models/dme_sale.dart';
 
 class DmeExcelParser {
-  /// Parse a product master Excel. Expected columns: Code, Name, Unit
+  /// Parse a product master Excel. Expected columns: Name, Unit
   static List<DmeProduct> parseProductExcel(Uint8List bytes) {
     final excel = Excel.decodeBytes(bytes);
     final sheet = excel.tables.values.first;
     if (sheet.maxRows < 2) return [];
 
     final header = sheet.row(0);
-    int? codeCol, nameCol, unitCol;
+    int? nameCol, unitCol;
 
     for (var i = 0; i < header.length; i++) {
       final h = header[i]?.value?.toString().toLowerCase().trim() ?? '';
-      if (h.contains('code') || h.contains('item code')) codeCol ??= i;
-      if (h.contains('name') || h.contains('product') || h.contains('description')) nameCol ??= i;
+      if (h.contains('name') || h.contains('product') || h.contains('description') || h.contains('item')) nameCol ??= i;
       if (h.contains('unit') || h.contains('uom')) unitCol ??= i;
     }
 
-    if (codeCol == null || nameCol == null || unitCol == null) {
+    if (nameCol == null || unitCol == null) {
       throw FormatException(
-          'Product Excel must have Code, Name and Unit columns. Found headers: '
+          'Product Excel must have Name and Unit columns. Found headers: '
           '${header.map((c) => c?.value?.toString()).join(', ')}');
     }
 
     final products = <DmeProduct>[];
     for (var r = 1; r < sheet.maxRows; r++) {
       final row = sheet.row(r);
-      final code = _cellStr(row, codeCol);
       final name = _cellStr(row, nameCol);
       final unit = _cellStr(row, unitCol);
-      if (code.isEmpty || name.isEmpty) continue;
-      products.add(DmeProduct(code: code, name: name, unit: unit.isNotEmpty ? unit : 'NOS'));
+      if (name.isEmpty) continue;
+      products.add(DmeProduct(name: name, unit: unit.isNotEmpty ? unit : 'NOS'));
     }
     return products;
   }

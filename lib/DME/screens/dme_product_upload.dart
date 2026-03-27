@@ -174,7 +174,7 @@ class _DmeProductUploadPageState extends State<DmeProductUploadPage> {
                                 color: Color(0xFF607D8B)),
                           ),
                           title: Text(p.name),
-                          subtitle: Text('${p.code} • ${p.unit}',
+                          subtitle: Text(p.unit,
                               style: const TextStyle(fontSize: 12)),
                         );
                       },
@@ -207,7 +207,7 @@ class _DmeProductUploadPageState extends State<DmeProductUploadPage> {
               return ListTile(
                 leading: CircleAvatar(child: Text('${i + 1}')),
                 title: Text(p.name),
-                subtitle: Text('${p.code} • ${p.unit}'),
+                subtitle: Text(p.unit),
               );
             },
           ),

@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../dme_config.dart';
 import '../models/dme_user.dart';
 import '../models/dme_product.dart';
 import '../models/dme_customer.dart';
@@ -13,6 +14,7 @@ class DmeSupabaseService {
 
   // ── Cached current user ──────────────────────────────────────
   DmeUser? _currentUser;
+  bool _branchesSynced = false;
 
   /// Verify Supabase connection and return detailed error info
   Future<Map<String, dynamic>> diagnoseConnection() async {
@@ -58,24 +60,22 @@ class DmeSupabaseService {
   }
 
   // ── Branches ─────────────────────────────────────────────────
+
+  /// Upserts the fixed app branch list into dme_branches (runs once per session).
+  Future<void> _syncAppBranches() async {
+    if (_branchesSynced) return;
+    await _client.from('dme_branches').upsert(
+      kAppBranches.map((name) => {'name': name}).toList(),
+      onConflict: 'name',
+    );
+    _branchesSynced = true;
+  }
+
   Future<List<Map<String, dynamic>>> getBranches() async {
+    await _syncAppBranches();
     final res =
         await _client.from('dme_branches').select().order('name', ascending: true);
     return List<Map<String, dynamic>>.from(res);
-  }
-
-  Future<Map<String, dynamic>> addBranch(String name) async {
-    final res =
-        await _client.from('dme_branches').insert({'name': name}).select().single();
-    return res;
-  }
-
-  Future<void> updateBranch(int id, String name) async {
-    await _client.from('dme_branches').update({'name': name}).eq('id', id);
-  }
-
-  Future<void> deleteBranch(int id) async {
-    await _client.from('dme_branches').delete().eq('id', id);
   }
 
   Future<List<String>> getUserBranchNames(String dmeUserId) async {
@@ -154,7 +154,7 @@ class DmeSupabaseService {
   Future<List<DmeProduct>> getProducts({String? search}) async {
     var query = _client.from('dme_products').select();
     if (search != null && search.isNotEmpty) {
-      query = query.or('name.ilike.%$search%,code.ilike.%$search%');
+      query = query.ilike('name', '%$search%');
     }
     final res = await query.order('name');
     return (res as List).map((e) => DmeProduct.fromMap(e)).toList();
@@ -168,7 +168,7 @@ class DmeSupabaseService {
 
   Future<void> upsertProducts(List<DmeProduct> products) async {
     final rows = products.map((p) => p.toInsertMap()).toList();
-    await _client.from('dme_products').upsert(rows, onConflict: 'code');
+    await _client.from('dme_products').upsert(rows, onConflict: 'name');
   }
 
   // ── Customers ────────────────────────────────────────────────
@@ -216,6 +216,19 @@ class DmeSupabaseService {
     final res = await _client
         .from('dme_customers')
         .upsert(map, onConflict: 'phone')
+        .select('*, dme_branches(name)')
+        .single();
+    return DmeCustomer.fromMap(res);
+  }
+
+  /// Plain INSERT — creates a new customer row even if the same phone already
+  /// exists (used when a user chooses "Add as separate company" for a conflict).
+  Future<DmeCustomer> insertCustomer(DmeCustomer customer) async {
+    final map = customer.toInsertMap();
+    map['updated_at'] = DateTime.now().toUtc().toIso8601String();
+    final res = await _client
+        .from('dme_customers')
+        .insert(map)
         .select('*, dme_branches(name)')
         .single();
     return DmeCustomer.fromMap(res);

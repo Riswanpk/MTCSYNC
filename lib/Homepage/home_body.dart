@@ -30,6 +30,7 @@ import '../DME/screens/dme_customer_db_upload.dart';
 import '../DME/screens/dme_branch_management.dart';
 import '../DME/screens/dme_user_management.dart';
 import '../DME/screens/dme_dashboard.dart';
+import '../DME/screens/dme_calendar_page.dart';
 
 /// App brand colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -443,6 +444,38 @@ class HomeButtonsContainer extends StatelessWidget {
 
   /// Builds the DME-specific home tiles.
   Widget _buildDmeTiles(BuildContext context) {
+    // dme_user sees only Upload + Calendar
+    if (role == 'dme_user') {
+      return Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: NeumorphicButton(
+                  onTap: () => _navigateToDmeSalesUpload(context),
+                  text: 'Upload Sales',
+                  color: const Color(0xFF8B6914),
+                  textColor: Colors.white,
+                  icon: Icons.upload_file,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: NeumorphicButton(
+                  onTap: () => _navigateToDmeCalendar(context),
+                  text: 'Calendar',
+                  color: Colors.teal,
+                  textColor: Colors.white,
+                  icon: Icons.calendar_month_rounded,
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    // dme_admin sees all buttons
     return Column(
       children: [
         Row(
@@ -774,6 +807,16 @@ class HomeButtonsContainer extends StatelessWidget {
   Future<void> _navigateToDmeSalesUpload(BuildContext context) async {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const DmeSalesUploadPage()),
+    );
+  }
+
+  Future<void> _navigateToDmeCalendar(BuildContext context) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final dmeUser = await DmeSupabaseService.instance.getCurrentUser(uid);
+    if (dmeUser == null || !context.mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => DmeCalendarPage(dmeUser: dmeUser)),
     );
   }
 

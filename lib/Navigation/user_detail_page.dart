@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../DME/services/dme_supabase_service.dart';
 
 class UserDetailPage extends StatefulWidget {
   final String userId;
@@ -91,6 +93,11 @@ class _UserDetailPageState extends State<UserDetailPage> {
           .doc(widget.userId)
           .update(updates);
 
+      // Handle DME role assignments
+      if (_selectedRole == 'dme_admin' || _selectedRole == 'dme_user') {
+        await _handleDmeRoleAssignment();
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -119,6 +126,145 @@ class _UserDetailPageState extends State<UserDetailPage> {
     if (_userData == null) return false;
     return _selectedRole != (_userData!['role'] ?? 'sales') ||
         _selectedBranch != _userData!['branch'];
+  }
+
+  Future<void> _handleDmeRoleAssignment() async {
+    try {
+      final dmeService = DmeSupabaseService.instance;
+      final firebaseUid = widget.userId;
+      final email = _userData?['email'] ?? '';
+      final username = _userData?['username'] ?? '';
+      final previousRole = _userData?['role'] ?? 'sales';
+
+      // Check if user already exists in Supabase
+      final existingUser = await dmeService.getCurrentUser(firebaseUid);
+
+      // If changing FROM a DME role to a non-DME role, delete from Supabase
+      if ((previousRole == 'dme_admin' || previousRole == 'dme_user') &&
+          _selectedRole != 'dme_admin' &&
+          _selectedRole != 'dme_user' &&
+          existingUser != null) {
+        await dmeService.deleteDmeUser(existingUser.id);
+        dmeService.clearCache();
+        return;
+      }
+
+      // If changing TO a DME role
+      if (_selectedRole == 'dme_admin' || _selectedRole == 'dme_user') {
+        if (_selectedRole == 'dme_admin') {
+          if (existingUser == null) {
+            // Create new DME admin (no branches needed for admin)
+            await dmeService.createDmeUser(
+              firebaseUid: firebaseUid,
+              email: email,
+              username: username,
+              role: 'dme_admin',
+              branchIds: [],
+            );
+          } else {
+            // Update role to dme_admin
+            await dmeService.updateDmeUserRole(existingUser.id, 'dme_admin');
+          }
+        } else if (_selectedRole == 'dme_user') {
+          // For dme_user, prompt for branch selection
+          if (!mounted) return;
+          
+          final branches = await dmeService.getBranches();
+          final previousBranchIds = existingUser != null 
+              ? await dmeService.getUserBranchIds(existingUser.id)
+              : <int>[];
+          final selectedBranchIds = await _showBranchSelectorDialog(branches, previousBranchIds);
+          
+          if (selectedBranchIds == null || selectedBranchIds.isEmpty) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('At least one branch must be assigned for DME User'),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            }
+            return;
+          }
+
+          if (existingUser == null) {
+            // Create new DME user with branches
+            await dmeService.createDmeUser(
+              firebaseUid: firebaseUid,
+              email: email,
+              username: username,
+              role: 'dme_user',
+              branchIds: selectedBranchIds,
+            );
+          } else {
+            // Update role to dme_user and set branches
+            await dmeService.updateDmeUserRole(existingUser.id, 'dme_user');
+            await dmeService.setUserBranches(existingUser.id, selectedBranchIds);
+          }
+        }
+      }
+      dmeService.clearCache();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error setting DME role: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<List<int>?> _showBranchSelectorDialog(
+    List<Map<String, dynamic>> branches,
+    List<int> currentSelections,
+  ) async {
+    final selected = Set<int>.from(currentSelections);
+
+    return showDialog<List<int>?>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateDialog) => AlertDialog(
+          title: const Text('Select Branches'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: branches.map((branch) {
+                  final id = branch['id'] as int;
+                  final name = branch['name'] as String;
+                  return CheckboxListTile(
+                    title: Text(name),
+                    value: selected.contains(id),
+                    onChanged: (value) {
+                      setStateDialog(() {
+                        if (value == true) {
+                          selected.add(id);
+                        } else {
+                          selected.remove(id);
+                        }
+                      });
+                    },
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, selected.toList()),
+              child: const Text('Select'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   String _formatTimestamp(Timestamp? ts) {
@@ -357,38 +503,51 @@ class _UserDetailPageState extends State<UserDetailPage> {
               },
             ),
             const SizedBox(height: 20),
-            // Branch dropdown
-            Text(
-              'Branch',
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                color: isDark ? Colors.white60 : Colors.grey[700],
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: 6),
-            DropdownButtonFormField<String>(
-              value: _branches.contains(_selectedBranch) ? _selectedBranch : null,
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: isDark ? const Color(0xFF181A20) : Colors.grey[100],
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+            // Branch dropdown - hidden for DME users (branches selected in dialog)
+            if (_selectedRole != 'dme_admin' && _selectedRole != 'dme_user') ...[
+              Text(
+                'Branch',
+                style: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  color: isDark ? Colors.white60 : Colors.grey[700],
+                  fontSize: 13,
                 ),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
-              borderRadius: BorderRadius.circular(12),
-              dropdownColor: isDark ? const Color(0xFF23272F) : Colors.white,
-              hint: const Text('Select branch'),
-              items: _branches
-                  .map((b) => DropdownMenuItem(value: b, child: Text(b)))
-                  .toList(),
-              onChanged: (value) {
-                setState(() => _selectedBranch = value);
-              },
-            ),
+              const SizedBox(height: 6),
+              DropdownButtonFormField<String>(
+                value: _branches.contains(_selectedBranch) ? _selectedBranch : null,
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: isDark ? const Color(0xFF181A20) : Colors.grey[100],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+                borderRadius: BorderRadius.circular(12),
+                dropdownColor: isDark ? const Color(0xFF23272F) : Colors.white,
+                hint: const Text('Select branch'),
+                items: _branches
+                    .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                    .toList(),
+                onChanged: (value) {
+                  setState(() => _selectedBranch = value);
+                },
+              ),
+            ] else if (_selectedRole == 'dme_user')
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Text(
+                  'Branches will be selected in the next step',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? Colors.white54 : Colors.grey[600],
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
           ],
         ),
       ),

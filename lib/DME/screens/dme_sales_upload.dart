@@ -2,11 +2,47 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../dme_config.dart';
 import '../services/dme_excel_parser.dart';
 import '../services/dme_supabase_service.dart';
 import '../models/dme_sale.dart';
 import '../models/dme_customer.dart';
 
+// ── Preview item status ───────────────────────────────────────────
+enum _RecordStatus { pending, checking, matchFound, newCustomer, conflict }
+
+// ── Conflict resolution choice ────────────────────────────────────
+enum _ConflictChoice { useExisting, addSeparate }
+
+/// Per-row preview model enriched with DB-check results.
+class _PreviewItem {
+  final DmeSaleRecord record;
+  _RecordStatus status;
+  DmeCustomer? existingCustomer; // null = not found
+  _ConflictChoice conflictChoice;
+  String? resolvedCustomerType;
+
+  _PreviewItem({
+    required this.record,
+    this.status = _RecordStatus.pending,
+    this.existingCustomer,
+    this.conflictChoice = _ConflictChoice.useExisting,
+    this.resolvedCustomerType,
+  });
+
+  bool get hasConflict =>
+      existingCustomer != null &&
+      existingCustomer!.name.trim().toLowerCase() !=
+          record.customerName.trim().toLowerCase();
+
+  bool get needsCustomerType =>
+      (status == _RecordStatus.newCustomer ||
+          (hasConflict && conflictChoice == _ConflictChoice.addSeparate)) &&
+      (resolvedCustomerType == null || resolvedCustomerType!.isEmpty) &&
+      (record.customerType == null || record.customerType!.isEmpty);
+}
+
+// ─────────────────────────────────────────────────────────────────
 class DmeSalesUploadPage extends StatefulWidget {
   const DmeSalesUploadPage({super.key});
 
@@ -15,15 +51,20 @@ class DmeSalesUploadPage extends StatefulWidget {
 }
 
 class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
-  List<DmeSaleRecord>? _parsed;
+  List<_PreviewItem>? _items;
   bool _picking = false;
+  bool _checking = false;
   bool _uploading = false;
   String? _error;
   String? _fileName;
   final _svc = DmeSupabaseService.instance;
 
+  static const _blue = Color(0xFF005BAC);
+
+  // ── Step 1: pick & parse ──────────────────────────────────────
+
   Future<void> _pickAndParse() async {
-    setState(() { _picking = true; _error = null; _parsed = null; });
+    setState(() { _picking = true; _error = null; _items = null; });
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -37,14 +78,64 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
       final bytes = await File(result.files.single.path!).readAsBytes();
       final records = DmeExcelParser.parseDailySalesExcel(bytes);
       if (records.isEmpty) throw Exception('No sales records found in the file');
-      setState(() { _parsed = records; _picking = false; });
+      setState(() {
+        _items = records.map((r) => _PreviewItem(record: r)).toList();
+        _picking = false;
+      });
+      // Automatically trigger DB check after parse
+      await _checkRecords();
     } catch (e) {
       setState(() { _error = e.toString(); _picking = false; });
     }
   }
 
+  // ── Step 2: DB check ──────────────────────────────────────────
+
+  Future<void> _checkRecords() async {
+    if (_items == null) return;
+    setState(() => _checking = true);
+
+    for (final item in _items!) {
+      setState(() => item.status = _RecordStatus.checking);
+      try {
+        final phone = item.record.phone;
+        if (phone == null || phone.trim().isEmpty) {
+          setState(() => item.status = _RecordStatus.newCustomer);
+          continue;
+        }
+        final existing = await _svc.findCustomerByPhone(phone);
+        if (existing != null) {
+          final nameMatch = existing.name.trim().toLowerCase() ==
+              item.record.customerName.trim().toLowerCase();
+          setState(() {
+            item.existingCustomer = existing;
+            item.status =
+                nameMatch ? _RecordStatus.matchFound : _RecordStatus.conflict;
+          });
+        } else {
+          setState(() => item.status = _RecordStatus.newCustomer);
+        }
+      } catch (_) {
+        setState(() => item.status = _RecordStatus.newCustomer);
+      }
+    }
+    setState(() => _checking = false);
+  }
+
+  // ── Step 3: upload ────────────────────────────────────────────
+
+  bool get _canUpload {
+    if (_items == null || _checking) return false;
+    for (final item in _items!) {
+      if (item.status == _RecordStatus.pending ||
+          item.status == _RecordStatus.checking) return false;
+      if (item.needsCustomerType) return false;
+    }
+    return true;
+  }
+
   Future<void> _upload() async {
-    if (_parsed == null) return;
+    if (_items == null) return;
     setState(() { _uploading = true; _error = null; });
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -54,21 +145,25 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
     int failed = 0;
     final errors = <String>[];
 
-    for (final record in _parsed!) {
+    for (final item in _items!) {
+      final record = item.record;
       try {
-        // 1. Find or create customer by phone
-        DmeCustomer? existing;
-        if (record.phone != null && record.phone!.isNotEmpty) {
-          existing = await _svc.findCustomerByPhone(record.phone!);
-        }
-
         int? customerId;
-        if (existing != null) {
-          customerId = existing.id;
-          // Update last purchase date
+        final effectiveType = (record.customerType?.isNotEmpty == true)
+            ? record.customerType
+            : item.resolvedCustomerType;
+
+        if (item.status == _RecordStatus.matchFound) {
+          // Existing customer with same name — just update purchase date
+          customerId = item.existingCustomer!.id;
+          await _svc.updateLastPurchaseDate(customerId!, record.date);
+        } else if (item.status == _RecordStatus.conflict &&
+            item.conflictChoice == _ConflictChoice.useExisting) {
+          // Conflict but user chose to keep existing name
+          customerId = item.existingCustomer!.id;
           await _svc.updateLastPurchaseDate(customerId!, record.date);
         } else {
-          // Insert new customer
+          // New customer OR conflict resolved as separate
           final phone = record.phone != null
               ? DmeCustomer.normalizePhone(record.phone!)
               : '';
@@ -77,32 +172,47 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
             failed++;
             continue;
           }
-          final newCust = await _svc.upsertCustomer(DmeCustomer(
-            name: record.customerName,
-            phone: phone,
-            address: record.address,
-            category: record.category,
-            customerType: record.customerType,
-            salesman: record.salesman,
-            lastPurchaseDate: record.date,
-          ));
-          customerId = newCust.id;
+          if (item.status == _RecordStatus.conflict &&
+              item.conflictChoice == _ConflictChoice.addSeparate) {
+            // insertCustomer allows duplicate phone
+            final newCust = await _svc.insertCustomer(DmeCustomer(
+              name: record.customerName,
+              phone: phone,
+              address: record.address,
+              category: record.category,
+              customerType: effectiveType,
+              salesman: record.salesman,
+              lastPurchaseDate: record.date,
+            ));
+            customerId = newCust.id;
+          } else {
+            final newCust = await _svc.upsertCustomer(DmeCustomer(
+              name: record.customerName,
+              phone: phone,
+              address: record.address,
+              category: record.category,
+              customerType: effectiveType,
+              salesman: record.salesman,
+              lastPurchaseDate: record.date,
+            ));
+            customerId = newCust.id;
+          }
         }
 
-        // 2. Insert sale + items
+        // Insert sale + items
         final sale = DmeSale(
           date: record.date,
           customerId: customerId,
           salesman: record.salesman,
           category: record.category,
-          customerType: record.customerType,
+          customerType: effectiveType,
           totalQuantity: record.headerQuantity,
           uploadedBy: dmeUser?.id,
           items: record.items,
         );
         await _svc.insertSale(sale);
 
-        // 3. Upsert reminder (purchase date + 1 month)
+        // Upsert reminder
         if (customerId != null) {
           await _svc.upsertReminder(
             customerId: customerId,
@@ -133,10 +243,11 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('✅ $success customers uploaded successfully'),
+            Text('✅ $success records uploaded successfully'),
             if (failed > 0) ...[
               const SizedBox(height: 8),
-              Text('❌ $failed failed', style: const TextStyle(color: Colors.red)),
+              Text('❌ $failed failed',
+                  style: const TextStyle(color: Colors.red)),
               const SizedBox(height: 4),
               ...errors.take(10).map((e) => Text('• $e',
                   style: const TextStyle(fontSize: 12, color: Colors.red))),
@@ -150,7 +261,7 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              setState(() => _parsed = null);
+              setState(() => _items = null);
             },
             child: const Text('OK'),
           ),
@@ -159,12 +270,14 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
     );
   }
 
+  // ── Build ─────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Upload Daily Sales'),
-        backgroundColor: const Color(0xFF005BAC),
+        backgroundColor: _blue,
         foregroundColor: Colors.white,
       ),
       body: _uploading
@@ -178,11 +291,13 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
                 ],
               ),
             )
-          : _parsed != null
+          : _items != null
               ? _buildPreview()
               : _buildPicker(),
     );
   }
+
+  // ── Picker screen ─────────────────────────────────────────────
 
   Widget _buildPicker() {
     return Center(
@@ -191,8 +306,7 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.upload_file, size: 80,
-                color: Colors.grey[400]),
+            Icon(Icons.upload_file, size: 80, color: Colors.grey[400]),
             const SizedBox(height: 16),
             const Text(
               'Select a daily sales Excel file (.xlsx)\nwith customer and product data',
@@ -204,14 +318,16 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
               onPressed: _picking ? null : _pickAndParse,
               icon: _picking
                   ? const SizedBox(
-                      width: 18, height: 18,
+                      width: 18,
+                      height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.file_open),
               label: Text(_picking ? 'Reading...' : 'Choose Excel File'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF005BAC),
+                backgroundColor: _blue,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 28, vertical: 14),
               ),
             ),
             if (_error != null) ...[
@@ -224,73 +340,83 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
     );
   }
 
+  // ── Preview screen ────────────────────────────────────────────
+
   Widget _buildPreview() {
+    final items = _items!;
+    final newCount = items
+        .where((i) =>
+            i.status == _RecordStatus.newCustomer ||
+            (i.status == _RecordStatus.conflict &&
+                i.conflictChoice == _ConflictChoice.addSeparate))
+        .length;
+    final matchCount =
+        items.where((i) => i.status == _RecordStatus.matchFound).length;
+    final conflictCount =
+        items.where((i) => i.status == _RecordStatus.conflict).length;
+
     return Column(
       children: [
+        // Summary header
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          color: Colors.green[50],
+          padding: const EdgeInsets.all(14),
+          color: Colors.blue[50],
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('File: $_fileName',
                   style: const TextStyle(fontWeight: FontWeight.bold)),
-              Text('${_parsed!.length} customers found',
-                  style: const TextStyle(color: Colors.green)),
-              Text(
-                '${_parsed!.fold<int>(0, (sum, r) => sum + r.items.length)} product items total',
-                style: const TextStyle(color: Colors.grey),
-              ),
+              if (_checking) ...[
+                const SizedBox(height: 6),
+                const Row(children: [
+                  SizedBox(
+                      width: 14,
+                      height: 14,
+                      child:
+                          CircularProgressIndicator(strokeWidth: 2)),
+                  SizedBox(width: 8),
+                  Text('Checking database…',
+                      style: TextStyle(fontSize: 13)),
+                ]),
+              ] else ...[
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    _chip('${items.length} total', Colors.grey),
+                    if (matchCount > 0)
+                      _chip('$matchCount match',
+                          Colors.green),
+                    if (newCount > 0)
+                      _chip('$newCount new', _blue),
+                    if (conflictCount > 0)
+                      _chip('$conflictCount conflict',
+                          Colors.orange),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
+
         Expanded(
           child: ListView.builder(
-            itemCount: _parsed!.length,
-            itemBuilder: (_, i) {
-              final r = _parsed![i];
-              return ExpansionTile(
-                leading: CircleAvatar(
-                  backgroundColor: const Color(0xFF005BAC),
-                  foregroundColor: Colors.white,
-                  child: Text('${i + 1}'),
-                ),
-                title: Text(r.customerName,
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(
-                  [
-                    if (r.phone != null) r.phone,
-                    if (r.salesman != null) r.salesman,
-                    r.date.toString().split(' ')[0],
-                  ].join(' • '),
-                  style: const TextStyle(fontSize: 12),
-                ),
-                children: r.items
-                    .map((item) => ListTile(
-                          dense: true,
-                          leading: const Icon(Icons.inventory_2,
-                              size: 18, color: Colors.grey),
-                          title: Text(item.productName,
-                              style: const TextStyle(fontStyle: FontStyle.italic)),
-                          trailing: Text(
-                            '${item.quantity} ${item.unit ?? ''}',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ))
-                    .toList(),
-              );
-            },
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            itemCount: items.length,
+            itemBuilder: (_, i) => _buildItemCard(items[i], i),
           ),
         ),
+
+        // Bottom action bar
         SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(12),
             child: Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => setState(() => _parsed = null),
+                    onPressed: () => setState(() => _items = null),
                     child: const Text('Cancel'),
                   ),
                 ),
@@ -298,13 +424,17 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
                 Expanded(
                   flex: 2,
                   child: ElevatedButton.icon(
-                    onPressed: _upload,
+                    onPressed: _canUpload ? _upload : null,
                     icon: const Icon(Icons.cloud_upload),
-                    label: Text('Upload ${_parsed!.length} Sales'),
+                    label: Text(
+                        _checking ? 'Checking…' : 'Upload ${items.length} Sales'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF005BAC),
+                      backgroundColor: _blue,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      disabledBackgroundColor: Colors.grey[400],
+                      disabledForegroundColor: Colors.white,
+                      padding:
+                          const EdgeInsets.symmetric(vertical: 14),
                     ),
                   ),
                 ),
@@ -313,6 +443,212 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _chip(String label, Color color) {
+    return Chip(
+      label: Text(label,
+          style: const TextStyle(fontSize: 11, color: Colors.white)),
+      backgroundColor: color,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+      visualDensity: VisualDensity.compact,
+    );
+  }
+
+  Widget _buildItemCard(_PreviewItem item, int index) {
+    final r = item.record;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    Color borderColor;
+    Color? bgColor;
+    IconData statusIcon;
+    String statusLabel;
+
+    switch (item.status) {
+      case _RecordStatus.matchFound:
+        borderColor = Colors.green;
+        bgColor = Colors.green.withOpacity(0.04);
+        statusIcon = Icons.check_circle_outline;
+        statusLabel = 'Existing customer';
+        break;
+      case _RecordStatus.conflict:
+        borderColor = Colors.orange;
+        bgColor = Colors.orange.withOpacity(0.04);
+        statusIcon = Icons.warning_amber_rounded;
+        statusLabel = 'Name conflict';
+        break;
+      case _RecordStatus.newCustomer:
+        borderColor = _blue;
+        bgColor = _blue.withOpacity(0.04);
+        statusIcon = Icons.person_add_alt_1;
+        statusLabel = 'New customer';
+        break;
+      case _RecordStatus.checking:
+        borderColor = Colors.grey;
+        bgColor = null;
+        statusIcon = Icons.hourglass_empty;
+        statusLabel = 'Checking…';
+        break;
+      default:
+        borderColor = Colors.grey[300]!;
+        bgColor = null;
+        statusIcon = Icons.pending_outlined;
+        statusLabel = 'Pending';
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: bgColor ?? (isDark ? Colors.grey[850] : Colors.white),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: borderColor, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 3,
+              offset: const Offset(0, 1)),
+        ],
+      ),
+      child: ExpansionTile(
+        leading: CircleAvatar(
+          backgroundColor: borderColor.withOpacity(0.15),
+          child: Icon(statusIcon, color: borderColor, size: 18),
+        ),
+        title: Text(r.customerName,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(statusLabel,
+                style: TextStyle(
+                    fontSize: 12,
+                    color: borderColor,
+                    fontWeight: FontWeight.w600)),
+            Text(
+              [
+                if (r.phone != null) r.phone,
+                if (r.salesman != null) r.salesman,
+                r.date.toString().split(' ')[0],
+              ].join(' • '),
+              style: const TextStyle(fontSize: 11),
+            ),
+          ],
+        ),
+        childrenPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        children: [
+          // ── Conflict resolution ──────────────────────────────
+          if (item.status == _RecordStatus.conflict) ...[
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(8),
+                border:
+                    Border.all(color: Colors.orange.shade300),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('⚠ Same phone number found with a different name:',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          color: Colors.orange)),
+                  const SizedBox(height: 6),
+                  Text(
+                    'DB name:    ${item.existingCustomer!.name}\n'
+                    'File name:  ${r.customerName}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text('Choose action:',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 13)),
+                  RadioListTile<_ConflictChoice>(
+                    dense: true,
+                    value: _ConflictChoice.useExisting,
+                    groupValue: item.conflictChoice,
+                    title: Text(
+                        'Use existing name  (${item.existingCustomer!.name})',
+                        style: const TextStyle(fontSize: 13)),
+                    onChanged: (v) =>
+                        setState(() => item.conflictChoice = v!),
+                  ),
+                  RadioListTile<_ConflictChoice>(
+                    dense: true,
+                    value: _ConflictChoice.addSeparate,
+                    groupValue: item.conflictChoice,
+                    title: Text('Create as new company  (${r.customerName})',
+                        style: const TextStyle(fontSize: 13)),
+                    onChanged: (v) =>
+                        setState(() => item.conflictChoice = v!),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+
+          // ── Customer type dropdown (when missing on new record) ──
+          if (item.needsCustomerType) ...[
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: _blue.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: _blue.withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Customer type not in file — select one:',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 13)),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    value: item.resolvedCustomerType,
+                    hint: const Text('Select customer type'),
+                    decoration: InputDecoration(
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                    items: dmeCustomerTypes
+                        .map((t) =>
+                            DropdownMenuItem(value: t, child: Text(t)))
+                        .toList(),
+                    onChanged: (v) =>
+                        setState(() => item.resolvedCustomerType = v),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+
+          // ── Product items ──────────────────────────────────────
+          if (r.items.isEmpty)
+            const Text('No product items',
+                style: TextStyle(fontSize: 12, color: Colors.grey))
+          else
+            ...r.items.map((item) => ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.inventory_2,
+                      size: 16, color: Colors.grey),
+                  title: Text(item.productName,
+                      style: const TextStyle(
+                          fontStyle: FontStyle.italic, fontSize: 13)),
+                  trailing: Text(
+                    '${item.quantity} ${item.unit ?? ''}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                )),
+        ],
+      ),
     );
   }
 }

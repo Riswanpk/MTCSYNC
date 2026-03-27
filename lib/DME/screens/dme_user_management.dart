@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/dme_supabase_service.dart';
 import '../models/dme_user.dart';
 
@@ -31,102 +30,13 @@ class _DmeUserManagementPageState extends State<DmeUserManagementPage> {
     ]);
     if (mounted) {
       setState(() {
-        _dmeUsers = results[0] as List<DmeUser>;
+        // Filter to show only dme_user entries
+        _dmeUsers = (results[0] as List<DmeUser>)
+            .where((u) => u.role == 'dme_user')
+            .toList();
         _branches = results[1] as List<Map<String, dynamic>>;
         _loading = false;
       });
-    }
-  }
-
-  Future<void> _addUser() async {
-    // Fetch Firebase users to pick from
-    final firebaseUsers = await FirebaseFirestore.instance
-        .collection('users')
-        .get();
-    final existing = _dmeUsers.map((u) => u.firebaseUid).toSet();
-    final available = firebaseUsers.docs
-        .where((d) => !existing.contains(d.id))
-        .toList();
-
-    if (available.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('All Firebase users already added')),
-        );
-      }
-      return;
-    }
-
-    if (!mounted) return;
-    final selected = await showDialog<QueryDocumentSnapshot>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Select User'),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 400,
-          child: ListView.builder(
-            itemCount: available.length,
-            itemBuilder: (_, i) {
-              final d = available[i].data();
-              return ListTile(
-                title: Text(d['username']?.toString() ?? d['email']?.toString() ?? ''),
-                subtitle: Text(d['email']?.toString() ?? ''),
-                onTap: () => Navigator.pop(context, available[i]),
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
-        ],
-      ),
-    );
-    if (selected == null) return;
-
-    // Pick role
-    if (!mounted) return;
-    final role = await showDialog<String>(
-      context: context,
-      builder: (_) => SimpleDialog(
-        title: const Text('Select Role'),
-        children: [
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(context, 'dme_admin'),
-            child: const Text('DME Admin'),
-          ),
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(context, 'dme_user'),
-            child: const Text('DME User'),
-          ),
-        ],
-      ),
-    );
-    if (role == null) return;
-
-    // Pick branches
-    if (!mounted) return;
-    final selectedBranches = await _showBranchSelector([]);
-    if (selectedBranches == null) return;
-
-    try {
-      final data = selected.data() as Map<String, dynamic>;
-      await _svc.createDmeUser(
-        firebaseUid: selected.id,
-        email: data['email']?.toString() ?? '',
-        username: data['username']?.toString() ?? '',
-        role: role,
-        branchIds: selectedBranches,
-      );
-      _load();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
     }
   }
 
@@ -136,66 +46,6 @@ class _DmeUserManagementPageState extends State<DmeUserManagementPage> {
     if (selected == null) return;
     try {
       await _svc.setUserBranches(user.id, selected);
-      _load();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  Future<void> _changeRole(DmeUser user) async {
-    final newRole = user.role == 'dme_admin' ? 'dme_user' : 'dme_admin';
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Change Role'),
-        content: Text('Change ${user.username} to $newRole?'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Confirm')),
-        ],
-      ),
-    );
-    if (confirm != true) return;
-    try {
-      await _svc.updateDmeUserRole(user.id, newRole);
-      _load();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  Future<void> _deleteUser(DmeUser user) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Remove User'),
-        content: Text('Remove ${user.username} from DME?'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child:
-                  const Text('Remove', style: TextStyle(color: Colors.red))),
-        ],
-      ),
-    );
-    if (confirm != true) return;
-    try {
-      await _svc.deleteDmeUser(user.id);
       _load();
     } catch (e) {
       if (mounted) {
@@ -251,75 +101,74 @@ class _DmeUserManagementPageState extends State<DmeUserManagementPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('User Management'),
+        title: const Text('DME Users - Assign Branches'),
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addUser,
-        backgroundColor: const Color(0xFF005BAC),
-        child: const Icon(Icons.person_add, color: Colors.white),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _dmeUsers.isEmpty
-              ? const Center(child: Text('No DME users. Tap + to add one.'))
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.people_outline, size: 64, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No DME users yet.',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: isDark ? Colors.white54 : Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Assign users from Manage Users',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isDark ? Colors.white38 : Colors.grey[500],
+                        ),
+                      ),
+                    ],
+                  ),
+                )
               : ListView.builder(
+                  padding: const EdgeInsets.all(8),
                   itemCount: _dmeUsers.length,
                   itemBuilder: (_, i) {
                     final u = _dmeUsers[i];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: u.isAdmin
-                            ? const Color(0xFF005BAC).withOpacity(0.1)
-                            : Colors.grey.withOpacity(0.1),
-                        child: Icon(
-                          u.isAdmin
-                              ? Icons.admin_panel_settings
-                              : Icons.person,
-                          color: u.isAdmin
-                              ? const Color(0xFF005BAC)
-                              : Colors.grey,
+                    return Card(
+                      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                      color: isDark ? const Color(0xFF23272F) : Colors.white,
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: const Color(0xFF005BAC).withOpacity(0.2),
+                          child: Text(
+                            u.username.isNotEmpty ? u.username[0].toUpperCase() : '?',
+                            style: const TextStyle(
+                              color: Color(0xFF005BAC),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
-                      ),
-                      title: Text(u.username,
-                          style:
-                              const TextStyle(fontWeight: FontWeight.w600)),
-                      subtitle: Text(
-                        [
-                          u.role.toUpperCase(),
-                          if (u.branchNames.isNotEmpty)
-                            u.branchNames.join(', '),
-                        ].join(' • '),
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      trailing: PopupMenuButton<String>(
-                        onSelected: (action) {
-                          switch (action) {
-                            case 'branches':
-                              _editBranches(u);
-                              break;
-                            case 'role':
-                              _changeRole(u);
-                              break;
-                            case 'delete':
-                              _deleteUser(u);
-                              break;
-                          }
-                        },
-                        itemBuilder: (_) => [
-                          const PopupMenuItem(
-                              value: 'branches',
-                              child: Text('Edit Branches')),
-                          const PopupMenuItem(
-                              value: 'role', child: Text('Change Role')),
-                          const PopupMenuItem(
-                              value: 'delete',
-                              child: Text('Remove',
-                                  style: TextStyle(color: Colors.red))),
-                        ],
+                        title: Text(
+                          u.username,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(
+                          u.branchNames.isNotEmpty
+                              ? u.branchNames.join(', ')
+                              : 'No branches assigned',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.edit, color: Color(0xFF005BAC)),
+                          onPressed: () => _editBranches(u),
+                          tooltip: 'Assign Branches',
+                        ),
                       ),
                     );
                   },

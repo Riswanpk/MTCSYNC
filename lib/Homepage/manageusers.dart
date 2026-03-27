@@ -16,7 +16,7 @@ class ManageUsersPage extends StatefulWidget {
 
 class _ManageUsersPageState extends State<ManageUsersPage> {
     bool _filterByVersion = false;
-  final List<String> _roles = ['sales', 'manager', 'asst_manager', 'admin', 'sync_head', 'sme'];
+  final List<String> _roles = ['sales', 'manager', 'asst_manager', 'admin', 'sync_head', 'sme', 'dme_admin', 'dme_user'];
   String? _currentUserId;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
@@ -238,7 +238,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                   ..sort((a, b) => a.key.compareTo(b.key));
 
                 // Get latest version from app_constants.dart
-                const String latestVersion = '1.2.127';
+                const String latestVersion = '1.2.128';
 
                 return AlertDialog(
                   title: Row(
@@ -501,7 +501,11 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                                       ? Icons.manage_accounts
                                                       : r == 'sync_head'
                                                         ? Icons.hub
-                                                        : Icons.person,
+                                                        : r == 'dme_admin'
+                                                          ? Icons.admin_panel_settings
+                                                          : r == 'dme_user'
+                                                            ? Icons.person_outline
+                                                            : Icons.person,
                                                 color: r == 'admin'
                                                   ? Colors.deepPurple
                                                   : r == 'manager'
@@ -510,7 +514,11 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                                       ? Colors.deepOrange
                                                       : r == 'sync_head'
                                                         ? Colors.blue
-                                                        : Colors.green,
+                                                        : r == 'dme_admin'
+                                                          ? Colors.indigo
+                                                          : r == 'dme_user'
+                                                            ? Colors.teal
+                                                            : Colors.green,
                                                 size: 20,
                                               ),
                                               const SizedBox(width: 8),
