@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'services/dme_supabase_service.dart';
 import 'models/dme_user.dart';
-import 'screens/dme_sales_upload.dart';
-import 'screens/dme_customer_list.dart';
 import 'screens/dme_reminders.dart';
 import 'screens/dme_call_customers.dart';
 import 'screens/dme_product_upload.dart';
@@ -146,22 +144,7 @@ class _DmeHomePageState extends State<DmeHomePage> {
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
-          // ── Common tiles for all DME users ──
-          _tileRow(
-            left: _DmeTile(
-              icon: Icons.upload_file_rounded,
-              label: 'Upload Sales',
-              color: _primaryBlue,
-              onTap: () => _navigate(const DmeSalesUploadPage()),
-            ),
-            right: _DmeTile(
-              icon: Icons.people_alt_rounded,
-              label: 'Customers',
-              color: _primaryGreen,
-              onTap: () => _navigate(DmeCustomerListPage(dmeUser: _user!)),
-            ),
-          ),
-          const SizedBox(height: 14),
+          // ── Core DME user tiles ──
           _tileRow(
             left: _DmeTile(
               icon: Icons.notifications_active_rounded,

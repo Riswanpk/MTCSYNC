@@ -68,27 +68,19 @@ class _DmeCustomerDbUploadPageState extends State<DmeCustomerDbUploadPage> {
     setState(() { _uploading = true; _progress = 0; });
 
     try {
-      final rows = _parsed!.map((c) {
-        final map = c.toInsertMap();
-        map['branch_id'] = _selectedBranchId;
-        map['updated_at'] = DateTime.now().toUtc().toIso8601String();
-        return map;
-      }).toList();
-
-      await _svc.upsertCustomersBatch(
-        rows,
+      final branchName = _branches
+          .firstWhere((b) => b['id'] == _selectedBranchId)?['name'] as String? ?? 'Unknown';
+      
+      final summary = await _svc.uploadCustomerDatabase(
+        customers: _parsed!,
+        branchName: branchName,
         onProgress: (done, total) {
           if (mounted) setState(() => _progress = done / total);
         },
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ ${_parsed!.length} customers uploaded'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        _showUploadSummaryDialog(summary);
         setState(() { _parsed = null; _uploading = false; });
       }
     } catch (e) {
@@ -99,6 +91,35 @@ class _DmeCustomerDbUploadPageState extends State<DmeCustomerDbUploadPage> {
         setState(() => _uploading = false);
       }
     }
+  }
+
+  void _showUploadSummaryDialog(Map<String, int> summary) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('✅ Upload Complete'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('New customers created: ${summary['created']}'),
+            Text('Companies linked to existing numbers: ${summary['linked_to_existing']}'),
+            Text('Reminders created: ${summary['reminders_created']}'),
+            const SizedBox(height: 12),
+            const Text(
+              'All customers and reminders have been synced.',
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -200,10 +221,36 @@ class _DmeCustomerDbUploadPageState extends State<DmeCustomerDbUploadPage> {
               final c = _parsed![i];
               return ListTile(
                 leading: CircleAvatar(child: Text('${i + 1}')),
-                title: Text(c.name),
-                subtitle: Text(
-                  [c.phone, if (c.category != null) c.category].join(' • '),
-                  style: const TextStyle(fontSize: 12),
+                title: Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (c.company != null && c.company!.isNotEmpty)
+                      Text(
+                        c.company!,
+                        style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                      ),
+                    Text(
+                      'Contact 1: ${c.phone}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    if (c.contact2?.isNotEmpty ?? false)
+                      Text(
+                        'Contact 2: ${c.contact2}',
+                        style: const TextStyle(fontSize: 12, color: Colors.blue),
+                      ),
+                    if (c.customerType?.isNotEmpty ?? false)
+                      Text('Type: ${c.customerType}',
+                          style: const TextStyle(fontSize: 12, color: Colors.purple)),
+                    if (c.category?.isNotEmpty ?? false)
+                      Text('Category: ${c.category}',
+                          style: const TextStyle(fontSize: 12, color: Colors.teal)),
+                    if (c.lastPurchaseDate != null)
+                      Text(
+                        'Last Purchase: ${c.lastPurchaseDate!.toString().split(' ')[0]}',
+                        style: const TextStyle(fontSize: 12, color: Colors.amber),
+                      ),
+                  ],
                 ),
               );
             },
@@ -249,6 +296,7 @@ class _DmeCustomerDbUploadPageState extends State<DmeCustomerDbUploadPage> {
       ],
     );
   }
+
 
   Widget _buildProgress() {
     return Center(

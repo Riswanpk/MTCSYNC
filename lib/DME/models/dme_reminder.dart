@@ -52,4 +52,37 @@ class DmeReminder {
         'assigned_to': assignedTo,
         'notes': notes,
       };
+
+  /// Copy with updated fields
+  DmeReminder copyWith({
+    int? id,
+    int? customerId,
+    String? customerName,
+    String? customerPhone,
+    String? customerAddress,
+    DateTime? reminderDate,
+    DateTime? lastPurchaseDate,
+    String? status,
+    String? assignedTo,
+    String? notes,
+  }) {
+    return DmeReminder(
+      id: id ?? this.id,
+      customerId: customerId ?? this.customerId,
+      customerName: customerName ?? this.customerName,
+      customerPhone: customerPhone ?? this.customerPhone,
+      customerAddress: customerAddress ?? this.customerAddress,
+      reminderDate: reminderDate ?? this.reminderDate,
+      lastPurchaseDate: lastPurchaseDate ?? this.lastPurchaseDate,
+      status: status ?? this.status,
+      assignedTo: assignedTo ?? this.assignedTo,
+      notes: notes ?? this.notes,
+    );
+  }
+
+  /// Check if this reminder should be rescheduled based on new purchase date
+  bool shouldReschedule(DateTime newPurchaseDate) {
+    // Reschedule if new purchase is after current reminder date
+    return newPurchaseDate.isAfter(reminderDate);
+  }
 }

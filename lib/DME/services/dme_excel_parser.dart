@@ -37,58 +37,119 @@ class DmeExcelParser {
     return products;
   }
 
-  /// Parse a customer database Excel. Columns: Customer, Address, Phone,
-  /// Category, Customer Type, Salesman, Quantity (no Date)
+  /// Parse a customer database Excel with extended fields.
+  ///
+  /// Expected columns (in any order):
+  ///   Customer Name, Company, Address, Contact 1, Contact 2,
+  ///   Customer Type, Category, Salesman, Branch, Last Purchased Date
+  ///
+  /// Contact 1 is the unique key per person.
+  /// The same Contact 1 can appear on multiple rows with different Company
+  /// values — each becomes a separate customer record.
   static List<DmeCustomer> parseCustomerDatabaseExcel(Uint8List bytes) {
     final excel = Excel.decodeBytes(bytes);
     final sheet = excel.tables.values.first;
     if (sheet.maxRows < 2) return [];
 
     final header = sheet.row(0);
-    int? nameCol, addressCol, phoneCol, categoryCol, typeCol, salesmanCol;
+    int? nameCol, companyCol, addressCol, contact1Col, contact2Col;
+    int? branchCol, dateCol, salesmanCol, customerTypeCol, categoryCol;
 
     for (var i = 0; i < header.length; i++) {
       final h = header[i]?.value?.toString().toLowerCase().trim() ?? '';
-      if (h.contains('customer') || h.contains('name') || h.contains('client')) nameCol ??= i;
+      // Customer Name column (person / contact name)
+      if (companyCol == null && nameCol == null && (h.contains('customer name') || h == 'name')) nameCol = i;
+      if (nameCol == null && (h.contains('customer') || h.contains('name'))) nameCol ??= i;
+      // Company column (firm/company)
+      if (h.contains('company') || h.contains('firm')) companyCol ??= i;
+      // Address
       if (h.contains('address')) addressCol ??= i;
-      if (h.contains('phone') || h.contains('mobile') || h.contains('contact')) phoneCol ??= i;
+      // Contact 1 — explicit match first, then fallback
+      if (h == 'contact 1' || h == 'contact1') { contact1Col = i; }
+      else if (contact1Col == null && (h.contains('contact 1') || h.contains('contact1'))) contact1Col = i;
+      else if (contact1Col == null && (h.contains('phone') || h.contains('mobile'))) contact1Col = i;
+      // Contact 2
+      if (h == 'contact 2' || h == 'contact2') { contact2Col = i; }
+      else if (contact2Col == null && (h.contains('contact 2') || h.contains('contact2'))) contact2Col = i;
+      // Branch
+      if (h.contains('branch')) branchCol ??= i;
+      // Last Purchased Date
+      if (h.contains('last purchased') || h.contains('last purchase') || h.contains('purchase date') || h.contains('date')) dateCol ??= i;
+      // Salesman
+      if (h.contains('salesman') || h.contains('sales rep')) salesmanCol ??= i;
+      // Customer Type
+      if (h.contains('customer type') || h.contains('type')) customerTypeCol ??= i;
+      // Category
       if (h.contains('category')) categoryCol ??= i;
-      if (h.contains('type') || h.contains('customer type')) typeCol ??= i;
-      if (h.contains('salesman') || h.contains('sales')) salesmanCol ??= i;
     }
 
-    if (nameCol == null || phoneCol == null) {
+    if (contact1Col == null) {
       throw FormatException(
-          'Customer Excel must have Customer/Name and Phone columns. Found: '
+          'Customer Excel must have a Contact 1 column. Found headers: '
           '${header.map((c) => c?.value?.toString()).join(', ')}');
     }
 
     final customers = <DmeCustomer>[];
+
     for (var r = 1; r < sheet.maxRows; r++) {
       final row = sheet.row(r);
-      final name = _cellStr(row, nameCol);
-      final phone = DmeCustomer.normalizePhone(_cellStr(row, phoneCol));
-      if (name.isEmpty || phone.isEmpty) continue;
+      final rawPhone = _cellStr(row, contact1Col);
+      if (rawPhone.isEmpty) continue;
+      final contact1 = DmeCustomer.normalizePhone(rawPhone);
+      if (contact1.isEmpty) continue;
+
+      final name = nameCol != null ? _cellStr(row, nameCol) : '';
+      final company = companyCol != null ? _cellStr(row, companyCol) : null;
+
+      // At least one of name or company must be present
+      if (name.isEmpty && (company == null || company.isEmpty)) continue;
+
+      // Parse purchase date if present
+      DateTime? purchaseDate;
+      if (dateCol != null) {
+        final dateStr = _cellStr(row, dateCol);
+        if (dateStr.isNotEmpty) {
+          purchaseDate = _parseDate(dateStr);
+          if (purchaseDate == null) {
+            // Skip rows with unparseable dates rather than aborting the whole file
+            continue;
+          }
+        }
+      }
+
       customers.add(DmeCustomer(
-        name: name,
-        phone: phone,
+        name: name.isNotEmpty ? name : (company ?? ''),
+        company: (company != null && company.isNotEmpty) ? company : null,
+        phone: contact1,
+        contact2: contact2Col != null
+            ? DmeCustomer.normalizePhone(_cellStr(row, contact2Col))
+            : null,
         address: addressCol != null ? _cellStr(row, addressCol) : null,
-        category: categoryCol != null ? _cellStr(row, categoryCol) : null,
-        customerType: typeCol != null ? _cellStr(row, typeCol) : null,
+        branchName: branchCol != null ? _cellStr(row, branchCol) : null,
         salesman: salesmanCol != null ? _cellStr(row, salesmanCol) : null,
+        customerType: customerTypeCol != null ? _cellStr(row, customerTypeCol) : null,
+        category: categoryCol != null ? _cellStr(row, categoryCol) : null,
+        lastPurchaseDate: purchaseDate,
       ));
     }
+
     return customers;
   }
 
   /// Parse a daily sales Excel.
   ///
-  /// Format (from image): Customer rows have Date filled; product rows have
-  /// Date empty and appear directly below their customer.
+  /// Column layout (from the sales report):
+  ///   0: Date
+  ///   1: Particulars  — Company Name (BOLD) = customer row; item name below = item row
+  ///   2: Consignee / Party Address
+  ///   3: Contact
+  ///   4: Voucher Type  — IGNORED
+  ///   5: Salesman
+  ///   6: GSTIN / UIN  — IGNORED
+  ///   7: Quantity      — BOLD value = header total; non-bold = item qty
+  ///   8+: IGNORED
   ///
-  /// Columns: Date, Customer, Address, Phone(?), Category, Customer Type,
-  ///          Salesman, Quantity
-  ///
+  /// Customer row detection: Particulars cell is bold OR Date column has a value.
   /// Returns a list of [DmeSaleRecord] each containing the customer header
   /// plus its child product items.
   static List<DmeSaleRecord> parseDailySalesExcel(Uint8List bytes) {
@@ -98,24 +159,37 @@ class DmeExcelParser {
 
     // ── Detect columns ───────────────────────────────────────────
     final header = sheet.row(0);
-    int? dateCol, customerCol, addressCol, phoneCol, categoryCol;
-    int? typeCol, salesmanCol, qtyCol;
+    int? dateCol, particularsCol, addressCol, contactCol, salesmanCol, qtyCol;
 
     for (var i = 0; i < header.length; i++) {
       final h = header[i]?.value?.toString().toLowerCase().trim() ?? '';
       if (h.contains('date')) dateCol ??= i;
-      if (h.contains('customer') || h.contains('name')) customerCol ??= i;
-      if (h.contains('address')) addressCol ??= i;
-      if (h.contains('phone') || h.contains('mobile') || h.contains('contact')) phoneCol ??= i;
-      if (h.contains('category')) categoryCol ??= i;
-      if (h.contains('type') || h.contains('customer type')) typeCol ??= i;
-      if (h.contains('salesman') || h.contains('sales')) salesmanCol ??= i;
+      // Particulars column (holds company name bold + item names non-bold)
+      if (h.contains('particular') || h.contains('customer') || h.contains('name'))
+        particularsCol ??= i;
+      // Address column — Consignee / Party Address
+      if (h.contains('consignee') || h.contains('party') || h.contains('address'))
+        addressCol ??= i;
+      // Contact / Phone
+      if (h.contains('contact') || h.contains('phone') || h.contains('mobile'))
+        contactCol ??= i;
+      // Skip Voucher Type (column 4) and GSTIN/UIN (column 6) — not mapped
+      // Salesman
+      if (h.contains('salesman') || h.contains('sales rep')) salesmanCol ??= i;
+      // Quantity
       if (h.contains('quantity') || h.contains('qty')) qtyCol ??= i;
     }
 
-    if (customerCol == null) {
+    // Fallback to positional mapping if header detection missed columns
+    particularsCol ??= 1;
+    addressCol     ??= 2;
+    contactCol     ??= 3;
+    salesmanCol    ??= 5;
+    qtyCol         ??= 7;
+
+    if (particularsCol == null) {
       throw FormatException(
-          'Sales Excel must have a Customer column. Found: '
+          'Sales Excel must have a Particulars column. Found: '
           '${header.map((c) => c?.value?.toString()).join(', ')}');
     }
 
@@ -128,19 +202,15 @@ class DmeExcelParser {
     for (var r = 1; r < sheet.maxRows; r++) {
       final row = sheet.row(r);
       final dateValue = dateCol != null ? _cellStr(row, dateCol) : '';
-      final customerValue = _cellStr(row, customerCol);
+      final particularsValue = _cellStr(row, particularsCol!);
       final qtyValue = qtyCol != null ? _cellStr(row, qtyCol) : '';
       final salesmanValue = salesmanCol != null ? _cellStr(row, salesmanCol) : '';
 
-      if (customerValue.isEmpty) continue;
+      if (particularsValue.isEmpty) continue;
 
-      // Detect if this is a customer header row:
-      // 1. Date column is filled, OR
-      // 2. The row has bold formatting on the customer cell, OR
-      // 3. The salesman column is filled AND date is filled
+      // Customer row: Date is filled OR the Particulars cell is bold
       final bool isCustomerRow = dateValue.isNotEmpty ||
-          _isBold(sheet, r, customerCol) ||
-          (salesmanValue.isNotEmpty && _hasAddressOrPhone(row, addressCol, phoneCol));
+          _isBold(sheet, r, particularsCol!);
 
       if (isCustomerRow) {
         // Save previous record
@@ -165,21 +235,23 @@ class DmeExcelParser {
 
         current = DmeSaleRecord(
           date: lastDate,
-          customerName: customerValue,
+          customerName: particularsValue,
           address: addressCol != null ? _cellStr(row, addressCol) : null,
-          phone: phoneCol != null ? _cellStr(row, phoneCol) : null,
-          category: categoryCol != null ? _cellStr(row, categoryCol) : null,
-          customerType: typeCol != null ? _cellStr(row, typeCol) : null,
+          phone: contactCol != null ? _cellStr(row, contactCol) : null,
           salesman: salesmanValue.isNotEmpty ? salesmanValue : null,
+          // Category and Customer Type are not present in the daily sales file;
+          // they will be collected from the user for new customers after upload.
+          category: null,
+          customerType: null,
           headerQuantity: _parseDouble(qtyValue),
         );
         currentItems = [];
       } else if (current != null) {
-        // Product row — customer column holds the product name
+        // Item row — Particulars holds the item/product name
         final qty = _parseDouble(qtyValue) ?? 0;
         final unit = _extractUnit(qtyValue);
         currentItems.add(DmeSaleItem(
-          productName: customerValue,
+          productName: particularsValue,
           quantity: qty,
           unit: unit,
         ));
@@ -218,12 +290,6 @@ class DmeExcelParser {
     } catch (_) {
       return false;
     }
-  }
-
-  static bool _hasAddressOrPhone(List<Data?> row, int? addressCol, int? phoneCol) {
-    if (addressCol != null && _cellStr(row, addressCol).isNotEmpty) return true;
-    if (phoneCol != null && _cellStr(row, phoneCol).isNotEmpty) return true;
-    return false;
   }
 
   static DateTime? _parseDate(String value) {

@@ -21,6 +21,7 @@ class _PreviewItem {
   DmeCustomer? existingCustomer; // null = not found
   _ConflictChoice conflictChoice;
   String? resolvedCustomerType;
+  String? resolvedCategory;
 
   _PreviewItem({
     required this.record,
@@ -28,6 +29,7 @@ class _PreviewItem {
     this.existingCustomer,
     this.conflictChoice = _ConflictChoice.useExisting,
     this.resolvedCustomerType,
+    this.resolvedCategory,
   });
 
   bool get hasConflict =>
@@ -35,11 +37,21 @@ class _PreviewItem {
       existingCustomer!.name.trim().toLowerCase() !=
           record.customerName.trim().toLowerCase();
 
+  bool get _isNewEntry =>
+      status == _RecordStatus.newCustomer ||
+      (hasConflict && conflictChoice == _ConflictChoice.addSeparate);
+
   bool get needsCustomerType =>
-      (status == _RecordStatus.newCustomer ||
-          (hasConflict && conflictChoice == _ConflictChoice.addSeparate)) &&
+      _isNewEntry &&
       (resolvedCustomerType == null || resolvedCustomerType!.isEmpty) &&
       (record.customerType == null || record.customerType!.isEmpty);
+
+  bool get needsCategory =>
+      _isNewEntry &&
+      (resolvedCategory == null || resolvedCategory!.isEmpty) &&
+      (record.category == null || record.category!.isEmpty);
+
+  bool get needsDetails => needsCustomerType || needsCategory;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -103,7 +115,10 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
           setState(() => item.status = _RecordStatus.newCustomer);
           continue;
         }
-        final existing = await _svc.findCustomerByPhone(phone);
+        // In daily sales the "customerName" column holds the company / party name.
+        // Pass it so the service can try an exact (phone + company) match first.
+        final existing = await _svc.findCustomerByPhone(
+            phone, company: item.record.customerName);
         if (existing != null) {
           final nameMatch = existing.name.trim().toLowerCase() ==
               item.record.customerName.trim().toLowerCase();
@@ -129,7 +144,7 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
     for (final item in _items!) {
       if (item.status == _RecordStatus.pending ||
           item.status == _RecordStatus.checking) return false;
-      if (item.needsCustomerType) return false;
+      if (item.needsDetails) return false;
     }
     return true;
   }
@@ -152,6 +167,9 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
         final effectiveType = (record.customerType?.isNotEmpty == true)
             ? record.customerType
             : item.resolvedCustomerType;
+        final effectiveCategory = (record.category?.isNotEmpty == true)
+            ? record.category
+            : item.resolvedCategory;
 
         if (item.status == _RecordStatus.matchFound) {
           // Existing customer with same name — just update purchase date
@@ -179,7 +197,7 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
               name: record.customerName,
               phone: phone,
               address: record.address,
-              category: record.category,
+              category: effectiveCategory,
               customerType: effectiveType,
               salesman: record.salesman,
               lastPurchaseDate: record.date,
@@ -190,7 +208,7 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
               name: record.customerName,
               phone: phone,
               address: record.address,
-              category: record.category,
+              category: effectiveCategory,
               customerType: effectiveType,
               salesman: record.salesman,
               lastPurchaseDate: record.date,
@@ -204,7 +222,7 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
           date: record.date,
           customerId: customerId,
           salesman: record.salesman,
-          category: record.category,
+          category: effectiveCategory,
           customerType: effectiveType,
           totalQuantity: record.headerQuantity,
           uploadedBy: dmeUser?.id,
@@ -592,8 +610,8 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
             const SizedBox(height: 8),
           ],
 
-          // ── Customer type dropdown (when missing on new record) ──
-          if (item.needsCustomerType) ...[
+          // ── Customer details (type + category) when missing for new record ──
+          if (item.needsCustomerType || item.needsCategory) ...[
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
@@ -604,26 +622,51 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Customer type not in file — select one:',
+                  const Text('New customer — fill in missing details:',
                       style: TextStyle(
                           fontWeight: FontWeight.w600, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  DropdownButtonFormField<String>(
-                    value: item.resolvedCustomerType,
-                    hint: const Text('Select customer type'),
-                    decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                  const SizedBox(height: 8),
+                  if (item.needsCustomerType) ...[
+                    const Text('Customer Type', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    const SizedBox(height: 4),
+                    DropdownButtonFormField<String>(
+                      value: item.resolvedCustomerType,
+                      hint: const Text('Select customer type'),
+                      decoration: InputDecoration(
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                      ),
+                      items: dmeCustomerTypes
+                          .map((t) =>
+                              DropdownMenuItem(value: t, child: Text(t)))
+                          .toList(),
+                      onChanged: (v) =>
+                          setState(() => item.resolvedCustomerType = v),
                     ),
-                    items: dmeCustomerTypes
-                        .map((t) =>
-                            DropdownMenuItem(value: t, child: Text(t)))
-                        .toList(),
-                    onChanged: (v) =>
-                        setState(() => item.resolvedCustomerType = v),
-                  ),
+                    const SizedBox(height: 8),
+                  ],
+                  if (item.needsCategory) ...[
+                    const Text('Category', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    const SizedBox(height: 4),
+                    DropdownButtonFormField<String>(
+                      value: item.resolvedCategory,
+                      hint: const Text('Select category'),
+                      decoration: InputDecoration(
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                      ),
+                      items: dmeCategories
+                          .map((c) =>
+                              DropdownMenuItem(value: c, child: Text(c)))
+                          .toList(),
+                      onChanged: (v) =>
+                          setState(() => item.resolvedCategory = v),
+                    ),
+                  ],
                 ],
               ),
             ),

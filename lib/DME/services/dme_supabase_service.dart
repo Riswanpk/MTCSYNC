@@ -199,9 +199,25 @@ class DmeSupabaseService {
     return (res as List).map((e) => DmeCustomer.fromMap(e)).toList();
   }
 
-  Future<DmeCustomer?> findCustomerByPhone(String phone) async {
+  /// Find customer by phone. If [company] is also provided, first tries an
+  /// exact (phone + company) match; falls back to phone-only for backward
+  /// compatibility with records that have no company set.
+  Future<DmeCustomer?> findCustomerByPhone(String phone, {String? company}) async {
     final normalized = DmeCustomer.normalizePhone(phone);
     if (normalized.isEmpty) return null;
+
+    // Try exact match on (phone, company) when company is available
+    if (company != null && company.isNotEmpty) {
+      final exact = await _client
+          .from('dme_customers')
+          .select('*, dme_branches(name)')
+          .eq('phone', normalized)
+          .eq('company', company)
+          .maybeSingle();
+      if (exact != null) return DmeCustomer.fromMap(exact);
+    }
+
+    // Fallback: any record with this phone
     final res = await _client
         .from('dme_customers')
         .select('*, dme_branches(name)')
@@ -213,9 +229,11 @@ class DmeSupabaseService {
   Future<DmeCustomer> upsertCustomer(DmeCustomer customer) async {
     final map = customer.toInsertMap();
     map['updated_at'] = DateTime.now().toUtc().toIso8601String();
+    // Upsert on (phone, company) composite key — allows one person to have
+    // multiple company entries while deduplicating exact (phone+company) pairs.
     final res = await _client
         .from('dme_customers')
-        .upsert(map, onConflict: 'phone')
+        .upsert(map, onConflict: 'phone,company')
         .select('*, dme_branches(name)')
         .single();
     return DmeCustomer.fromMap(res);
@@ -240,7 +258,7 @@ class DmeSupabaseService {
     for (var i = 0; i < rows.length; i += batchSize) {
       final batch = rows.sublist(
           i, i + batchSize > rows.length ? rows.length : i + batchSize);
-      await _client.from('dme_customers').upsert(batch, onConflict: 'phone');
+      await _client.from('dme_customers').upsert(batch, onConflict: 'phone,company');
       onProgress?.call(i + batch.length, rows.length);
     }
   }
@@ -471,5 +489,212 @@ class DmeSupabaseService {
         .take(limit)
         .map((e) => {'salesman': e.key, 'total_quantity': e.value})
         .toList();
+  }
+
+  // ── Customer Database Upload (with junction table) ─────────────
+  /// Upload customer database from Excel with support for multiple companies per phone.
+  /// Returns upload summary: {created: count, linked_to_existing: count, reminders_created: count}
+  Future<Map<String, int>> uploadCustomerDatabase({
+    required List<DmeCustomer> customers,
+    required String branchName,
+    void Function(int done, int total)? onProgress,
+  }) async {
+    int created = 0;
+    int linkedToExisting = 0;
+    int remindersCreated = 0;
+    
+    // Get branch ID
+    final branchRes = await _client
+        .from('dme_branches')
+        .select('id')
+        .eq('name', branchName)
+        .maybeSingle();
+    final branchId = branchRes?['id'] as int?;
+    
+    if (branchId == null) {
+      throw Exception('Branch not found: $branchName. Please sync branches first.');
+    }
+
+    // Process each customer
+    for (int i = 0; i < customers.length; i++) {
+      final customer = customers[i];
+      
+      try {
+        // Check if this (phone, company) pair already exists
+        final existingRes = await _client
+            .from('dme_customers')
+            .select('id')
+            .eq('phone', customer.phone)
+            .eq('company', customer.company ?? '')
+            .maybeSingle();
+        
+        int customerId;
+        if (existingRes != null) {
+          // Phone exists, add to junction table if not already linked
+          customerId = existingRes['id'] as int;
+          
+          // Check if this customer-phone pair already mapped in junction
+          final junctionRes = await _client
+              .from('dme_customer_phone')
+              .select('id')
+              .eq('customer_id', customerId)
+              .eq('phone_number', customer.phone)
+              .maybeSingle();
+          
+          if (junctionRes == null) {
+            // Add to junction table
+            await _client.from('dme_customer_phone').insert({
+              'customer_id': customerId,
+              'phone_number': customer.phone,
+              'created_at': DateTime.now().toIso8601String(),
+            });
+            linkedToExisting++;
+          }
+        } else {
+          // New customer: insert and create junction
+          final custMap = customer.toInsertMap();
+          custMap['branch_id'] = branchId;
+          custMap['updated_at'] = DateTime.now().toUtc().toIso8601String();
+          
+          final insertRes = await _client
+              .from('dme_customers')
+              .insert(custMap)
+              .select('id')
+              .single();
+          
+          customerId = insertRes['id'] as int;
+          
+          // Add to junction table
+          await _client.from('dme_customer_phone').insert({
+            'customer_id': customerId,
+            'phone_number': customer.phone,
+            'created_at': DateTime.now().toIso8601String(),
+          });
+          
+          created++;
+        }
+        
+        // Create reminder if last_purchase_date provided
+        if (customer.lastPurchaseDate != null) {
+          final reminderDate = customer.lastPurchaseDate!.add(Duration(days: 30));
+          await _client.from('dme_reminders').upsert({
+            'customer_id': customerId,
+            'reminder_date': reminderDate.toIso8601String().split('T')[0],
+            'last_purchase_date': customer.lastPurchaseDate!.toIso8601String().split('T')[0],
+            'status': 'pending',
+          }, onConflict: 'customer_id');
+          remindersCreated++;
+        }
+        
+      } catch (e) {
+        print('Error uploading customer ${customer.name}: $e');
+        rethrow;
+      }
+      
+      onProgress?.call(i + 1, customers.length);
+    }
+
+    return {
+      'created': created,
+      'linked_to_existing': linkedToExisting,
+      'reminders_created': remindersCreated,
+    };
+  }
+
+  // ── New Reminder Query Methods ───────────────────────────────
+  /// Get reminders due today for given branches
+  Future<List<DmeReminder>> getRemindersForToday(List<int> branchIds) async {
+    final today = DateTime.now();
+    final todayStr = today.toIso8601String().split('T')[0];
+    
+    var query = _client
+        .from('dme_reminders')
+        .select('*, dme_customers(name, phone, address, branch_id)')
+        .eq('reminder_date', todayStr)
+        .eq('status', 'pending');
+    
+    final res = await query.order('reminder_date', ascending: true);
+    var reminders = (res as List).map((e) => DmeReminder.fromMap(e)).toList();
+    
+    if (branchIds.isNotEmpty) {
+      reminders = reminders.where((r) {
+        final raw = res.firstWhere((row) => row['id'] == r.id);
+        final custBranch = (raw['dme_customers'] as Map?)?['branch_id'] as int?;
+        return custBranch != null && branchIds.contains(custBranch);
+      }).toList();
+    }
+    
+    return reminders;
+  }
+
+  /// Get pending reminders from previous days for given branches
+  Future<List<DmeReminder>> getPendingFromPreviousDays(List<int> branchIds) async {
+    final today = DateTime.now();
+    final todayStr = today.toIso8601String().split('T')[0];
+    
+    var query = _client
+        .from('dme_reminders')
+        .select('*, dme_customers(name, phone, address, branch_id)')
+        .lt('reminder_date', todayStr)
+        .eq('status', 'pending');
+    
+    final res = await query.order('reminder_date', ascending: true);
+    var reminders = (res as List).map((e) => DmeReminder.fromMap(e)).toList();
+    
+    if (branchIds.isNotEmpty) {
+      reminders = reminders.where((r) {
+        final raw = res.firstWhere((row) => row['id'] == r.id);
+        final custBranch = (raw['dme_customers'] as Map?)?['branch_id'] as int?;
+        return custBranch != null && branchIds.contains(custBranch);
+      }).toList();
+    }
+    
+    return reminders;
+  }
+
+  /// Get reminder detail with customer info
+  Future<DmeReminder?> getReminderDetail(int reminderId) async {
+    final res = await _client
+        .from('dme_reminders')
+        .select('*, dme_customers(name, phone, address, branch_id)')
+        .eq('id', reminderId)
+        .maybeSingle();
+    
+    return res != null ? DmeReminder.fromMap(res) : null;
+  }
+
+  /// Mark reminder as complete
+  Future<void> completeReminder(int reminderId) async {
+    await _client.from('dme_reminders').update({
+      'status': 'completed',
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', reminderId);
+  }
+
+  /// Reschedule reminder if new purchase date is after current reminder date
+  Future<bool> rescheduleReminderIfNeeded(int customerId, DateTime newPurchaseDate) async {
+    final existing = await _client
+        .from('dme_reminders')
+        .select('reminder_date, status')
+        .eq('customer_id', customerId)
+        .maybeSingle();
+    
+    if (existing == null) {
+      return false;
+    }
+
+    final currentReminderDate = DateTime.parse(existing['reminder_date'] as String);
+    if (newPurchaseDate.isAfter(currentReminderDate)) {
+      final newReminderDate = newPurchaseDate.add(Duration(days: 30));
+      await _client.from('dme_reminders').update({
+        'reminder_date': newReminderDate.toIso8601String().split('T')[0],
+        'last_purchase_date': newPurchaseDate.toIso8601String().split('T')[0],
+        'status': 'pending',
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('customer_id', customerId);
+      return true;
+    }
+    
+    return false;
   }
 }

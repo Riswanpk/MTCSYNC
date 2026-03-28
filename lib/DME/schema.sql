@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS dme_products (
 CREATE TABLE IF NOT EXISTS dme_customers (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
-  phone TEXT UNIQUE NOT NULL,       -- unique key for matching
+  company TEXT,                       -- optional company / firm name
+  phone TEXT NOT NULL,                -- unique per (phone, company) pair
   address TEXT,
   branch_id INT REFERENCES dme_branches(id),
   category TEXT,
@@ -46,12 +47,14 @@ CREATE TABLE IF NOT EXISTS dme_customers (
   salesman TEXT,
   last_purchase_date DATE,
   created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(phone, company)              -- same person can have multiple companies
 );
 
 -- Index for fast phone lookups
 CREATE INDEX IF NOT EXISTS idx_dme_customers_phone ON dme_customers(phone);
 CREATE INDEX IF NOT EXISTS idx_dme_customers_branch ON dme_customers(branch_id);
+CREATE INDEX IF NOT EXISTS idx_dme_customers_company ON dme_customers(company);
 
 -- 6. Daily sales (header per customer per date)
 CREATE TABLE IF NOT EXISTS dme_sales (
@@ -127,3 +130,11 @@ CREATE POLICY "Allow all for authenticated" ON dme_sales FOR ALL USING (true) WI
 CREATE POLICY "Allow all for authenticated" ON dme_sale_items FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for authenticated" ON dme_reminders FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for authenticated" ON dme_call_logs FOR ALL USING (true) WITH CHECK (true);
+
+-- ============================================================
+-- Migration (run only on existing deployments)
+-- ============================================================
+-- ALTER TABLE dme_customers ADD COLUMN IF NOT EXISTS company TEXT;
+-- ALTER TABLE dme_customers DROP CONSTRAINT IF EXISTS dme_customers_phone_key;
+-- ALTER TABLE dme_customers ADD CONSTRAINT dme_customers_phone_company_key UNIQUE (phone, company);
+-- CREATE INDEX IF NOT EXISTS idx_dme_customers_company ON dme_customers(company);
