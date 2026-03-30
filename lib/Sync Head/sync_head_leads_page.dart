@@ -21,9 +21,11 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
   bool _loading = false;
   bool _branchesLoading = true;
   List<Map<String, dynamic>> _userStats = [];
+  String _statusFilter = 'All'; // Filter: 'All', 'In Progress', 'Sold or Cancelled'
 
   // Totals
-  int get _totalCreated  => _userStats.fold(0, (s, u) => s + (u['created']  as int));
+  int get _totalCreated  => _userStats.fold(0, (s, u) => s + (u['totalCreated']  as int));
+  int get _totalInProgress => _userStats.fold(0, (s, u) => s + (u['inProgress'] as int));
   int get _totalSale     => _userStats.fold(0, (s, u) => s + (u['sale']     as int));
   int get _totalCancelled => _userStats.fold(0, (s, u) => s + (u['cancelled'] as int));
 
@@ -82,58 +84,102 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
             (u) => u['role'] != 'admin' && u['role'] != 'sync_head')
         .toList();
 
-    // For each user, run parallel queries
+    // For each user, run parallel queries based on status filter
     final List<Map<String, dynamic>> stats = [];
     await Future.wait(users.map((user) async {
       final uid = user['uid'] as String;
 
-      final results = await Future.wait([
-        // Created in range
-        FirebaseFirestore.instance
-            .collection('follow_ups')
-            .where('created_by', isEqualTo: uid)
-            .where('branch', isEqualTo: _selectedBranch)
-            .where('created_at',
-                isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
-            .where('created_at',
-                isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
-            .get(),
-        // Sale in range
-        FirebaseFirestore.instance
-            .collection('follow_ups')
-            .where('created_by', isEqualTo: uid)
-            .where('branch', isEqualTo: _selectedBranch)
-            .where('status', isEqualTo: 'Sale')
-            .where('completed_at',
-                isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
-            .where('completed_at',
-                isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
-            .get(),
-        // Closed in range
-        FirebaseFirestore.instance
-            .collection('follow_ups')
-            .where('created_by', isEqualTo: uid)
-            .where('branch', isEqualTo: _selectedBranch)
-            .where('status', isEqualTo: 'Cancelled')
-            .where('completed_at',
-                isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
-            .where('completed_at',
-                isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
-            .get(),
-      ]);
+      int inProgressCount = 0;
+      int saleCount = 0;
+      int cancelledCount = 0;
+
+      if (_statusFilter == 'All') {
+        // Fetch all current leads (any status, any date) broken by status
+        final results = await Future.wait([
+          // In Progress leads
+          FirebaseFirestore.instance
+              .collection('follow_ups')
+              .where('created_by', isEqualTo: uid)
+              .where('branch', isEqualTo: _selectedBranch)
+              .where('status', isEqualTo: 'In Progress')
+              .get(),
+          // Sale leads
+          FirebaseFirestore.instance
+              .collection('follow_ups')
+              .where('created_by', isEqualTo: uid)
+              .where('branch', isEqualTo: _selectedBranch)
+              .where('status', isEqualTo: 'Sale')
+              .get(),
+          // Cancelled leads
+          FirebaseFirestore.instance
+              .collection('follow_ups')
+              .where('created_by', isEqualTo: uid)
+              .where('branch', isEqualTo: _selectedBranch)
+              .where('status', isEqualTo: 'Cancelled')
+              .get(),
+        ]);
+
+        inProgressCount = (results[0] as QuerySnapshot).size;
+        saleCount = (results[1] as QuerySnapshot).size;
+        cancelledCount = (results[2] as QuerySnapshot).size;
+      } else if (_statusFilter == 'Created in this Interval') {
+        // Get leads created in the interval broken by their status
+        final results = await Future.wait([
+          // In Progress leads created in range
+          FirebaseFirestore.instance
+              .collection('follow_ups')
+              .where('created_by', isEqualTo: uid)
+              .where('branch', isEqualTo: _selectedBranch)
+              .where('status', isEqualTo: 'In Progress')
+              .where('created_at',
+                  isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
+              .where('created_at',
+                  isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
+              .get(),
+          // Sale leads created in range
+          FirebaseFirestore.instance
+              .collection('follow_ups')
+              .where('created_by', isEqualTo: uid)
+              .where('branch', isEqualTo: _selectedBranch)
+              .where('status', isEqualTo: 'Sale')
+              .where('created_at',
+                  isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
+              .where('created_at',
+                  isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
+              .get(),
+          // Cancelled leads created in range
+          FirebaseFirestore.instance
+              .collection('follow_ups')
+              .where('created_by', isEqualTo: uid)
+              .where('branch', isEqualTo: _selectedBranch)
+              .where('status', isEqualTo: 'Cancelled')
+              .where('created_at',
+                  isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
+              .where('created_at',
+                  isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
+              .get(),
+        ]);
+
+        inProgressCount = (results[0] as QuerySnapshot).size;
+        saleCount = (results[1] as QuerySnapshot).size;
+        cancelledCount = (results[2] as QuerySnapshot).size;
+      }
+
+      final totalCreated = inProgressCount + saleCount + cancelledCount;
 
       stats.add({
         'username': user['username'],
         'role': user['role'],
-        'created': (results[0] as QuerySnapshot).size,
-        'sale':    (results[1] as QuerySnapshot).size,
-        'cancelled': (results[2] as QuerySnapshot).size,
+        'totalCreated': totalCreated,
+        'inProgress': inProgressCount,
+        'sale': saleCount,
+        'cancelled': cancelledCount,
       });
     }));
 
-    // Sort by created count descending
+    // Sort by total created count descending
     stats.sort(
-        (a, b) => (b['created'] as int).compareTo(a['created'] as int));
+        (a, b) => (b['totalCreated'] as int).compareTo(a['totalCreated'] as int));
 
     setState(() {
       _userStats = stats;
@@ -295,6 +341,64 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
                           _fetchStats();
                         },
                       ),
+                const SizedBox(height: 10),
+                // Status filter dropdown
+                DropdownButtonFormField<String>(
+                  value: _statusFilter,
+                  decoration: InputDecoration(
+                    labelText: 'Filter by Status',
+                    labelStyle: const TextStyle(color: _primaryBlue),
+                    prefixIcon: const Icon(
+                        Icons.filter_list_rounded,
+                        color: _primaryBlue,
+                        size: 20),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(
+                          color: _primaryBlue.withOpacity(0.4)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(
+                          color: _primaryBlue.withOpacity(0.4)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(
+                          color: _primaryBlue, width: 1.5),
+                    ),
+                    filled: true,
+                    fillColor: isDark
+                        ? const Color(0xFF162236)
+                        : const Color(0xFFF0F5FF),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                  ),
+                  dropdownColor: isDark
+                      ? const Color(0xFF162236)
+                      : Colors.white,
+                  style: TextStyle(
+                      color: isDark
+                          ? Colors.white
+                          : Colors.black87,
+                      fontSize: 14),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'All',
+                      child: Text('All leads'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Created in this Interval',
+                      child: Text('Created in this Interval'),
+                    ),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() => _statusFilter = val);
+                      _fetchStats();
+                    }
+                  },
+                ),
               ],
             ),
           ),
@@ -314,13 +418,19 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
                     value: _totalCreated,
                     color: _primaryBlue,
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
+                  _SummaryChip(
+                    label: 'In Progress',
+                    value: _totalInProgress,
+                    color: Colors.blue.shade400,
+                  ),
+                  const SizedBox(width: 6),
                   _SummaryChip(
                     label: 'Sale',
                     value: _totalSale,
                     color: _primaryGreen,
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   _SummaryChip(
                     label: 'Cancelled',
                     value: _totalCancelled,
@@ -369,9 +479,10 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
                           return _UserLeadCard(
                             username: stat['username'] as String,
                             role: stat['role'] as String,
-                            created: stat['created'] as int,
+                            totalCreated: stat['totalCreated'] as int,
+                            inProgress: stat['inProgress'] as int,
                             sale: stat['sale'] as int,
-                            closed: stat['cancelled'] as int,
+                            cancelled: stat['cancelled'] as int,
                             isDark: isDark,
                           );
                         },
@@ -430,24 +541,26 @@ class _SummaryChip extends StatelessWidget {
 class _UserLeadCard extends StatelessWidget {
   final String username;
   final String role;
-  final int created;
+  final int totalCreated;
+  final int inProgress;
   final int sale;
-  final int closed;
+  final int cancelled;
   final bool isDark;
 
   const _UserLeadCard({
     required this.username,
     required this.role,
-    required this.created,
+    required this.totalCreated,
+    required this.inProgress,
     required this.sale,
-    required this.closed,
+    required this.cancelled,
     required this.isDark,
   });
 
   @override
   Widget build(BuildContext context) {
     final conversionRate =
-        created > 0 ? ((sale + closed) / created * 100).round() : 0;
+        totalCreated > 0 ? ((sale + cancelled) / totalCreated * 100).round() : 0;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -511,7 +624,7 @@ class _UserLeadCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (created > 0)
+              if (totalCreated > 0)
                 Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 8, vertical: 4),
@@ -531,37 +644,55 @@ class _UserLeadCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          // Stats row: Created | Sale | Closed
-          Row(
+          // Stats grid: 2x2 layout for 4 stats
+          Column(
             children: [
-              Expanded(
-                child: _StatPill(
-                  icon: Icons.add_circle_outline_rounded,
-                  label: 'Created',
-                  value: created,
-                  color: _primaryBlue,
-                  isDark: isDark,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: _StatPill(
+                      icon: Icons.add_rounded,
+                      label: 'Created',
+                      value: totalCreated,
+                      color: _primaryBlue,
+                      isDark: isDark,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: _StatPill(
+                      icon: Icons.schedule_rounded,
+                      label: 'In Progress',
+                      value: inProgress,
+                      color: Colors.blue.shade400,
+                      isDark: isDark,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _StatPill(
-                  icon: Icons.handshake_rounded,
-                  label: 'Sale',
-                  value: sale,
-                  color: _primaryGreen,
-                  isDark: isDark,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _StatPill(
-                  icon: Icons.cancel_rounded,
-                  label: 'Cancelled',
-                  value: closed,
-                  color: Colors.red,
-                  isDark: isDark,
-                ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: _StatPill(
+                      icon: Icons.handshake_rounded,
+                      label: 'Sale',
+                      value: sale,
+                      color: _primaryGreen,
+                      isDark: isDark,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: _StatPill(
+                      icon: Icons.cancel_rounded,
+                      label: 'Cancelled',
+                      value: cancelled,
+                      color: Colors.red,
+                      isDark: isDark,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -590,33 +721,32 @@ class _StatPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding:
-          const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+          const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
       decoration: BoxDecoration(
         color: color.withOpacity(isDark ? 0.12 : 0.07),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: color.withOpacity(0.2)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: color,
-                      fontWeight: FontWeight.w500)),
-              Text(
-                '$value',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-              ),
-            ],
+          Icon(icon, size: 16, color: color),
+          const SizedBox(height: 4),
+          Text(label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 10,
+                  color: color,
+                  fontWeight: FontWeight.w500)),
+          const SizedBox(height: 2),
+          Text(
+            '$value',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : Colors.black87,
+            ),
           ),
         ],
       ),

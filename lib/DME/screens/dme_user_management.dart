@@ -15,6 +15,8 @@ class _DmeUserManagementPageState extends State<DmeUserManagementPage> {
   List<DmeUser> _dmeUsers = [];
   List<Map<String, dynamic>> _branches = [];
   bool _loading = true;
+  bool _isSyncing = false;
+  String? _syncMessage;
 
   @override
   void initState() {
@@ -36,7 +38,48 @@ class _DmeUserManagementPageState extends State<DmeUserManagementPage> {
             .toList();
         _branches = results[1] as List<Map<String, dynamic>>;
         _loading = false;
+        _syncMessage = null;
       });
+    }
+  }
+
+  Future<void> _syncFirebaseUsers() async {
+    if (_isSyncing) return;
+    setState(() => _isSyncing = true);
+    try {
+      final result = await _svc.syncFirebaseUsersToSupabase();
+      if (mounted) {
+        setState(() {
+          _isSyncing = false;
+          _syncMessage = result['message'] as String;
+        });
+        // Reload the list to show newly synced users
+        await _load();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_syncMessage ?? 'Sync completed'),
+              backgroundColor:
+                  result['success'] == true ? Colors.green : Colors.orange,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSyncing = false;
+          _syncMessage = 'Error: $e';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sync failed: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -107,6 +150,28 @@ class _DmeUserManagementPageState extends State<DmeUserManagementPage> {
         title: const Text('DME Users - Assign Branches'),
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
+        actions: [
+          if (_isSyncing)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16.0),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ),
+              ),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _syncFirebaseUsers,
+              tooltip: 'Sync Firebase users with dme_user role',
+            ),
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -126,10 +191,20 @@ class _DmeUserManagementPageState extends State<DmeUserManagementPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Assign users from Manage Users',
+                        'Tap the refresh button to sync Firebase users',
                         style: TextStyle(
                           fontSize: 13,
                           color: isDark ? Colors.white38 : Colors.grey[500],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: _syncFirebaseUsers,
+                        icon: const Icon(Icons.sync),
+                        label: const Text('Sync from Firebase'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF005BAC),
+                          foregroundColor: Colors.white,
                         ),
                       ),
                     ],

@@ -86,6 +86,24 @@ class _FollowUpFormState extends State<FollowUpForm> {
       final branch = userDoc.data()?['branch'] ?? 'Unknown';
 
       // Save follow up and get document reference
+      // Parse reminder date if provided for tracking original reminder date
+      DateTime? parsedReminderDate;
+      if (_reminderController.text.isNotEmpty && _selectedReminderTime != null) {
+        final reminderParts = _reminderController.text.split(' ');
+        final datePart = reminderParts[0].split('-');
+        try {
+          parsedReminderDate = DateTime(
+            int.parse(datePart[2]),
+            int.parse(datePart[1]),
+            int.parse(datePart[0]),
+            _selectedReminderTime!.hour,
+            _selectedReminderTime!.minute,
+          );
+        } catch (e) {
+          debugPrint('Error parsing reminder date: $e');
+        }
+      }
+
       final followUpRef = await FirebaseFirestore.instance.collection('follow_ups').add({
         'date': DateTime.now(),
         'name': _nameController.text.trim(),
@@ -98,6 +116,9 @@ class _FollowUpFormState extends State<FollowUpForm> {
         'branch': branch,
         'created_by': user.uid,
         'created_at': FieldValue.serverTimestamp(),
+        // Track original reminder date for auto-reschedule logic
+        if (parsedReminderDate != null) 'original_reminder_date': Timestamp.fromDate(parsedReminderDate),
+        'reminder_date_changed': false, // Flag for manual reschedule
       });
 
       await _clearDraft(); // Clear draft on successful save

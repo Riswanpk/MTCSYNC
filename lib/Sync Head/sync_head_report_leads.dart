@@ -26,6 +26,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
   bool _branchesLoading = true;
   bool _isGenerating = false;
   bool _detailedReport = false;
+  String _statusFilter = 'All'; // Filter: 'All', 'In Progress', 'Sold or Cancelled'
 
   @override
   void initState() {
@@ -135,50 +136,100 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         final userBranch = user['branch'] as String? ?? '';
         final branchForQuery = _selectedBranch == 'All Branches' ? userBranch : _selectedBranch;
 
-        final results = await Future.wait([
-          // Created in range
-          FirebaseFirestore.instance
-            .collection('follow_ups')
-            .where('created_by', isEqualTo: uid)
-            .where('branch', isEqualTo: branchForQuery)
-            .where('created_at',
-              isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
-            .where('created_at',
-              isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
-            .get(),
-          // Sale in range
-          FirebaseFirestore.instance
-            .collection('follow_ups')
-            .where('created_by', isEqualTo: uid)
-            .where('branch', isEqualTo: branchForQuery)
-            .where('status', isEqualTo: 'Sale')
-            .where('completed_at',
-              isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
-            .where('completed_at',
-              isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
-            .get(),
-          // Cancelled in range
-          FirebaseFirestore.instance
-            .collection('follow_ups')
-            .where('created_by', isEqualTo: uid)
-            .where('branch', isEqualTo: branchForQuery)
-            .where('status', isEqualTo: 'Cancelled')
-            .where('completed_at',
-              isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
-            .where('completed_at',
-              isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
-            .get(),
-        ]);
+        int inProgressCount = 0;
+        int saleCount = 0;
+        int cancelledCount = 0;
+        List<DocumentSnapshot> saleLeads = [];
+        List<DocumentSnapshot> cancelledLeads = [];
+
+        if (_statusFilter == 'All') {
+          // Fetch all current leads (any status, any date) broken by status
+          final results = await Future.wait([
+            // In Progress leads
+            FirebaseFirestore.instance
+              .collection('follow_ups')
+              .where('created_by', isEqualTo: uid)
+              .where('branch', isEqualTo: branchForQuery)
+              .where('status', isEqualTo: 'In Progress')
+              .get(),
+            // Sale leads
+            FirebaseFirestore.instance
+              .collection('follow_ups')
+              .where('created_by', isEqualTo: uid)
+              .where('branch', isEqualTo: branchForQuery)
+              .where('status', isEqualTo: 'Sale')
+              .get(),
+            // Cancelled leads
+            FirebaseFirestore.instance
+              .collection('follow_ups')
+              .where('created_by', isEqualTo: uid)
+              .where('branch', isEqualTo: branchForQuery)
+              .where('status', isEqualTo: 'Cancelled')
+              .get(),
+          ]);
+
+          inProgressCount = (results[0] as QuerySnapshot).size;
+          saleCount = (results[1] as QuerySnapshot).size;
+          cancelledCount = (results[2] as QuerySnapshot).size;
+          saleLeads = (results[1] as QuerySnapshot).docs;
+          cancelledLeads = (results[2] as QuerySnapshot).docs;
+        } else if (_statusFilter == 'Created in this Interval') {
+          // Get leads created in the interval broken by their status
+          final results = await Future.wait([
+            // In Progress leads created in range
+            FirebaseFirestore.instance
+              .collection('follow_ups')
+              .where('created_by', isEqualTo: uid)
+              .where('branch', isEqualTo: branchForQuery)
+              .where('status', isEqualTo: 'In Progress')
+              .where('created_at',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
+              .where('created_at',
+                isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
+              .get(),
+            // Sale leads created in range
+            FirebaseFirestore.instance
+              .collection('follow_ups')
+              .where('created_by', isEqualTo: uid)
+              .where('branch', isEqualTo: branchForQuery)
+              .where('status', isEqualTo: 'Sale')
+              .where('created_at',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
+              .where('created_at',
+                isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
+              .get(),
+            // Cancelled leads created in range
+            FirebaseFirestore.instance
+              .collection('follow_ups')
+              .where('created_by', isEqualTo: uid)
+              .where('branch', isEqualTo: branchForQuery)
+              .where('status', isEqualTo: 'Cancelled')
+              .where('created_at',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
+              .where('created_at',
+                isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
+              .get(),
+          ]);
+
+          inProgressCount = (results[0] as QuerySnapshot).size;
+          saleCount = (results[1] as QuerySnapshot).size;
+          cancelledCount = (results[2] as QuerySnapshot).size;
+          saleLeads = (results[1] as QuerySnapshot).docs;
+          cancelledLeads = (results[2] as QuerySnapshot).docs;
+        }
+
+        final totalCreated = inProgressCount + saleCount + cancelledCount;
 
         stats.add({
           'username': user['username'],
           'role': user['role'],
           'branch': userBranch,
-          'created': (results[0] as QuerySnapshot).size,
-          'sale': (results[1] as QuerySnapshot).size,
-          'cancelled': (results[2] as QuerySnapshot).size,
-          'saleLeads': (results[1] as QuerySnapshot).docs,
-          'cancelledLeads': (results[2] as QuerySnapshot).docs,
+          'totalCreated': totalCreated,
+          'inProgress': inProgressCount,
+          'sale': saleCount,
+          'cancelled': cancelledCount,
+          'saleLeads': saleLeads,
+          'cancelledLeads': cancelledLeads,
         });
         }));
 
@@ -200,7 +251,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
             final bIsManager = (b['role'] as String).toLowerCase() == 'manager' || (b['role'] as String).toLowerCase() == 'asst_manager';
             if (aIsManager && !bIsManager) return 1;
             if (!aIsManager && bIsManager) return -1;
-            return (a['created'] as int).compareTo(b['created'] as int);
+            return (a['totalCreated'] as int).compareTo(b['totalCreated'] as int);
           });
           // First sheet already exists; add new sheets for subsequent branches
           final xlsio.Worksheet sheet = sheetIdx == 0
@@ -210,10 +261,11 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           sheetIdx++;
 
           // Title row
-          final titleRange = sheet.getRangeByName('A1:E1');
+          final allBranchesStatusText = _statusFilter == 'All' ? '' : ' [$_statusFilter]';
+          final titleRange = sheet.getRangeByName('A1:F1');
           titleRange.merge();
           titleRange.setText(
-              'Leads Report — $branch  (${_formatDate(rangeStart)} → ${_formatDate(rangeEnd)})');
+              'Leads Report — $branch$allBranchesStatusText  (${_formatDate(rangeStart)} → ${_formatDate(rangeEnd)})');
           titleRange.cellStyle.bold = true;
           titleRange.cellStyle.fontSize = 14;
           titleRange.cellStyle.hAlign = xlsio.HAlignType.center;
@@ -223,7 +275,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
 
           if (!_detailedReport) {
             // Header row — unique style name per sheet to avoid collision
-            const headers = ['User', 'Role', 'Created', 'Sale', 'Cancelled'];
+            const headers = ['User', 'Role', 'Created', 'In Progress', 'Sale', 'Cancelled'];
             final headerStyle = workbook.styles.add('header_$sheetIdx');
             headerStyle.bold = true;
             headerStyle.fontSize = 11;
@@ -239,7 +291,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
             }
 
             // Data rows
-            int totalCreated = 0, totalSale = 0, totalCancelled = 0;
+            int totalCreated = 0, totalInProgress = 0, totalSale = 0, totalCancelled = 0;
 
             final dataStyle = workbook.styles.add('data_$sheetIdx');
             dataStyle.fontSize = 11;
@@ -262,12 +314,14 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
             for (int i = 0; i < usersForBranch.length; i++) {
               final row = i + 3;
               final s = usersForBranch[i];
-              final created = s['created'] as int;
-              final sale = s['sale'] as int;
-              final cancelled = s['cancelled'] as int;
-              totalCreated += created;
-              totalSale += sale;
-              totalCancelled += cancelled;
+              final totalCreatedCount = s['totalCreated'] as int;
+              final inProgressCount = s['inProgress'] as int;
+              final saleCount = s['sale'] as int;
+              final cancelledCount = s['cancelled'] as int;
+              totalCreated += totalCreatedCount;
+              totalInProgress += inProgressCount;
+              totalSale += saleCount;
+              totalCancelled += cancelledCount;
 
               final isAlt = i % 2 == 1;
               final currentNameStyle = isAlt ? altNameStyle : nameStyle;
@@ -284,16 +338,20 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
               cellB.cellStyle = currentDataStyle;
 
               final cellC = sheet.getRangeByIndex(row, 3);
-              cellC.setNumber(created.toDouble());
+              cellC.setNumber(totalCreatedCount.toDouble());
               cellC.cellStyle = currentDataStyle;
 
               final cellD = sheet.getRangeByIndex(row, 4);
-              cellD.setNumber(sale.toDouble());
+              cellD.setNumber(inProgressCount.toDouble());
               cellD.cellStyle = currentDataStyle;
 
               final cellE = sheet.getRangeByIndex(row, 5);
-              cellE.setNumber(cancelled.toDouble());
+              cellE.setNumber(saleCount.toDouble());
               cellE.cellStyle = currentDataStyle;
+
+              final cellF = sheet.getRangeByIndex(row, 6);
+              cellF.setNumber(cancelledCount.toDouble());
+              cellF.cellStyle = currentDataStyle;
             }
 
             // Totals row
@@ -327,19 +385,24 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
             tC.cellStyle = totalsStyle;
 
             final tD = sheet.getRangeByIndex(totalsRow, 4);
-            tD.setNumber(totalSale.toDouble());
+            tD.setNumber(totalInProgress.toDouble());
             tD.cellStyle = totalsStyle;
 
             final tE = sheet.getRangeByIndex(totalsRow, 5);
-            tE.setNumber(totalCancelled.toDouble());
+            tE.setNumber(totalSale.toDouble());
             tE.cellStyle = totalsStyle;
 
+            final tF = sheet.getRangeByIndex(totalsRow, 6);
+            tF.setNumber(totalCancelled.toDouble());
+            tF.cellStyle = totalsStyle;
+
             // Column widths
-            sheet.getRangeByIndex(1, 1).columnWidth = 25;
+            sheet.getRangeByIndex(1, 1).columnWidth = 20;
             sheet.getRangeByIndex(1, 2).columnWidth = 15;
-            sheet.getRangeByIndex(1, 3).columnWidth = 14;
+            sheet.getRangeByIndex(1, 3).columnWidth = 12;
             sheet.getRangeByIndex(1, 4).columnWidth = 14;
-            sheet.getRangeByIndex(1, 5).columnWidth = 14;
+            sheet.getRangeByIndex(1, 5).columnWidth = 12;
+            sheet.getRangeByIndex(1, 6).columnWidth = 12;
           } else {
             // Column widths for detail view
             sheet.getRangeByIndex(1, 1).columnWidth = 25;
@@ -419,17 +482,19 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         workbook.dispose();
 
         final directory = await getTemporaryDirectory();
+        final statusFilterFileName = _statusFilter == 'All' ? 'All' : _statusFilter.replaceAll(' ', '_');
         final String fileName =
-            '${directory.path}/Leads_Report_AllBranches_${DateFormat('yyyyMMdd').format(rangeStart)}_${DateFormat('yyyyMMdd').format(rangeEnd)}.xlsx';
+            '${directory.path}/Leads_Report_AllBranches_${statusFilterFileName}_${DateFormat('yyyyMMdd').format(rangeStart)}_${DateFormat('yyyyMMdd').format(rangeEnd)}.xlsx';
         final File file = File(fileName);
         await file.writeAsBytes(bytes, flush: true);
 
         // --- Send email with attachment ---
         final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
+        final allBranchesEmailText = _statusFilter == 'All' ? '' : ' — $_statusFilter';
         final message = Message()
           ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
           ..recipients.addAll(['crmmalabar@gmail.com','performancemtc@gmail.com'])
-          ..subject = 'Leads Report — All Branches'
+          ..subject = 'Leads Report — All Branches$allBranchesEmailText'
           ..text = 'Please find attached the leads report for all branches.'
           ..attachments = [FileAttachment(file)];
 
@@ -452,10 +517,11 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
       sheet.name = _selectedBranch ?? 'Report';
 
       // Title row
-      final titleRange = sheet.getRangeByName('A1:E1');
+      final singleBranchStatusText = _statusFilter == 'All' ? '' : ' [$_statusFilter]';
+      final titleRange = sheet.getRangeByName('A1:F1');
       titleRange.merge();
       titleRange.setText(
-          'Leads Report — $_selectedBranch  (${_formatDate(rangeStart)} → ${_formatDate(rangeEnd)})');
+          'Leads Report — $_selectedBranch$singleBranchStatusText  (${_formatDate(rangeStart)} → ${_formatDate(rangeEnd)})');
       titleRange.cellStyle.bold = true;
       titleRange.cellStyle.fontSize = 14;
       titleRange.cellStyle.hAlign = xlsio.HAlignType.center;
@@ -465,7 +531,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
 
       if (!_detailedReport) {
         // Header row
-        const headers = ['User', 'Role', 'Created', 'Sale', 'Cancelled'];
+        const headers = ['User', 'Role', 'Created', 'In Progress', 'Sale', 'Cancelled'];
         final headerStyle = workbook.styles.add('header');
         headerStyle.bold = true;
         headerStyle.fontSize = 11;
@@ -481,7 +547,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         }
 
         // Data rows
-        int totalCreated = 0, totalSale = 0, totalCancelled = 0;
+        int totalCreated = 0, totalInProgress = 0, totalSale = 0, totalCancelled = 0;
 
         final dataStyle = workbook.styles.add('data');
         dataStyle.fontSize = 11;
@@ -504,12 +570,14 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         for (int i = 0; i < stats.length; i++) {
           final row = i + 3;
           final s = stats[i];
-          final created = s['created'] as int;
-          final sale = s['sale'] as int;
-          final cancelled = s['cancelled'] as int;
-          totalCreated += created;
-          totalSale += sale;
-          totalCancelled += cancelled;
+          final totalCreatedCount = s['totalCreated'] as int;
+          final inProgressCount = s['inProgress'] as int;
+          final saleCount = s['sale'] as int;
+          final cancelledCount = s['cancelled'] as int;
+          totalCreated += totalCreatedCount;
+          totalInProgress += inProgressCount;
+          totalSale += saleCount;
+          totalCancelled += cancelledCount;
 
           final isAlt = i % 2 == 1;
           final currentNameStyle = isAlt ? altNameStyle : nameStyle;
@@ -526,16 +594,20 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           cellB.cellStyle = currentDataStyle;
 
           final cellC = sheet.getRangeByIndex(row, 3);
-          cellC.setNumber(created.toDouble());
+          cellC.setNumber(totalCreatedCount.toDouble());
           cellC.cellStyle = currentDataStyle;
 
           final cellD = sheet.getRangeByIndex(row, 4);
-          cellD.setNumber(sale.toDouble());
+          cellD.setNumber(inProgressCount.toDouble());
           cellD.cellStyle = currentDataStyle;
 
           final cellE = sheet.getRangeByIndex(row, 5);
-          cellE.setNumber(cancelled.toDouble());
+          cellE.setNumber(saleCount.toDouble());
           cellE.cellStyle = currentDataStyle;
+
+          final cellF = sheet.getRangeByIndex(row, 6);
+          cellF.setNumber(cancelledCount.toDouble());
+          cellF.cellStyle = currentDataStyle;
         }
 
         // Totals row
@@ -569,19 +641,24 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         tC.cellStyle = totalsStyle;
 
         final tD = sheet.getRangeByIndex(totalsRow, 4);
-        tD.setNumber(totalSale.toDouble());
+        tD.setNumber(totalInProgress.toDouble());
         tD.cellStyle = totalsStyle;
 
         final tE = sheet.getRangeByIndex(totalsRow, 5);
-        tE.setNumber(totalCancelled.toDouble());
+        tE.setNumber(totalSale.toDouble());
         tE.cellStyle = totalsStyle;
 
+        final tF = sheet.getRangeByIndex(totalsRow, 6);
+        tF.setNumber(totalCancelled.toDouble());
+        tF.cellStyle = totalsStyle;
+
         // Column widths
-        sheet.getRangeByIndex(1, 1).columnWidth = 25;
+        sheet.getRangeByIndex(1, 1).columnWidth = 20;
         sheet.getRangeByIndex(1, 2).columnWidth = 15;
-        sheet.getRangeByIndex(1, 3).columnWidth = 14;
+        sheet.getRangeByIndex(1, 3).columnWidth = 12;
         sheet.getRangeByIndex(1, 4).columnWidth = 14;
-        sheet.getRangeByIndex(1, 5).columnWidth = 14;
+        sheet.getRangeByIndex(1, 5).columnWidth = 12;
+        sheet.getRangeByIndex(1, 6).columnWidth = 12;
       } else {
         // Column widths for detail view
         sheet.getRangeByIndex(1, 1).columnWidth = 25;
@@ -661,17 +738,19 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
       workbook.dispose();
 
       final directory = await getTemporaryDirectory();
+      final statusFilterFileName = _statusFilter == 'All' ? 'All' : _statusFilter.replaceAll(' ', '_');
       final String fileName =
-          '${directory.path}/Leads_Report_${_selectedBranch}_${DateFormat('yyyyMMdd').format(rangeStart)}_${DateFormat('yyyyMMdd').format(rangeEnd)}.xlsx';
+          '${directory.path}/Leads_Report_${_selectedBranch}_${statusFilterFileName}_${DateFormat('yyyyMMdd').format(rangeStart)}_${DateFormat('yyyyMMdd').format(rangeEnd)}.xlsx';
       final File file = File(fileName);
       await file.writeAsBytes(bytes, flush: true);
 
       // --- Send email with attachment ---
+      final singleBranchEmailText = _statusFilter == 'All' ? '' : ' — $_statusFilter';
       final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
       final message = Message()
         ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
         ..recipients.addAll(['crmmalabar@gmail.com','performancemtc@gmail.com'])
-        ..subject = 'Leads Report — $_selectedBranch'
+        ..subject = 'Leads Report — $_selectedBranch$singleBranchEmailText'
         ..text = 'Please find attached the leads report for $_selectedBranch.'
         ..attachments = [FileAttachment(file)];
 
@@ -802,6 +881,57 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
                     onChanged: (val) =>
                         setState(() => _selectedBranch = val),
                   ),
+
+            const SizedBox(height: 16),
+            // ── Status filter dropdown ────────────────────────────────
+            DropdownButtonFormField<String>(
+              value: _statusFilter,
+              decoration: InputDecoration(
+                labelText: 'Filter by Status',
+                labelStyle: const TextStyle(color: _primaryBlue),
+                prefixIcon: const Icon(Icons.filter_list_rounded,
+                    color: _primaryBlue, size: 20),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                      color: _primaryBlue.withOpacity(0.4)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                      color: _primaryBlue.withOpacity(0.4)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide:
+                      const BorderSide(color: _primaryBlue, width: 1.5),
+                ),
+                filled: true,
+                fillColor: isDark
+                    ? const Color(0xFF162236)
+                    : const Color(0xFFF0F5FF),
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 12),
+              ),
+              dropdownColor: isDark
+                  ? const Color(0xFF162236)
+                  : Colors.white,
+              style: TextStyle(
+                  color: isDark ? Colors.white : Colors.black87,
+                  fontSize: 14),
+              items: const [
+                DropdownMenuItem(
+                  value: 'All',
+                  child: Text('All leads'),
+                ),
+                DropdownMenuItem(
+                  value: 'Created in this Interval',
+                  child: Text('Created in this Interval'),
+                ),
+              ],
+              onChanged: (val) =>
+                  setState(() => _statusFilter = val ?? 'All'),
+            ),
 
             const SizedBox(height: 16),
             // ── Detailed Report checkbox ──────────────────────────────

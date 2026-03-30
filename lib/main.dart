@@ -8,7 +8,6 @@ import 'package:in_app_update/in_app_update.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'Misc/constant.dart';
 import 'DME/dme_config.dart';
 import 'Login/login.dart';
@@ -20,6 +19,9 @@ import 'Leads/presentfollowup.dart';
 import 'Todo/todo.dart'; // <-- Already present
 import 'package:showcaseview/showcaseview.dart';
 import 'Version/user_version_helper.dart'; // <-- Add this import
+import 'DME/screens/dme_reminder_detail.dart';
+import 'DME/models/dme_reminder.dart';
+import 'DME/services/dme_supabase_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,11 +49,8 @@ void main() async {
     persistenceEnabled: true,
   );
 
-  // Initialize Supabase for DME module
-  await Supabase.initialize(
-    url: supabaseUrl,
-    anonKey: supabaseAnonKey,
-  );
+  // Supabase is initialized lazily via DmeSupabaseService.ensureInitialized()
+  // — only when a dme_admin or dme_user makes the first DME service call.
 
   // CRITICAL: Initialize AwesomeNotifications BEFORE runApp() 
   // This ensures scheduled notifications work even when app is killed
@@ -251,6 +250,47 @@ class NotificationController {
       return;
     }
 
+    // Handle DME reminder notification
+    if (receivedAction.payload?['type'] == 'dme_reminder') {
+      final reminderId = receivedAction.payload!['reminderId'];
+      final customerId = int.tryParse(receivedAction.payload!['customerId'] ?? '');
+      
+      if (customerId != null && reminderId != null && reminderId.isNotEmpty) {
+        try {
+          WidgetsFlutterBinding.ensureInitialized();
+          await Firebase.initializeApp(
+            options: FirebaseOptions(
+              apiKey: firebaseApiKey,
+              appId: firebaseAppId,
+              messagingSenderId: firebaseMessagingSenderId,
+              projectId: firebaseProjectId,
+              authDomain: firebaseAuthDomain,
+              storageBucket: firebaseStorageBucket,
+              measurementId: firebaseMeasurementId,
+            ),
+          );
+          
+          // Fetch reminder details from Supabase
+          final svc = DmeSupabaseService.instance;
+          final reminder = await svc.getReminderDetail(int.parse(reminderId as String));
+          
+          if (reminder != null) {
+            final navigator = navigatorKey.currentState;
+            if (navigator != null) {
+              navigator.push(
+                MaterialPageRoute(
+                  builder: (_) => DmeReminderDetailPage(reminder: reminder),
+                ),
+              );
+            }
+          }
+        } catch (e) {
+          debugPrint('Error handling DME reminder notification: $e');
+        }
+      }
+      return;
+    }
+
     // Ensure plugins are initialized in this background isolate
     WidgetsFlutterBinding.ensureInitialized();
     await Firebase.initializeApp(
@@ -324,7 +364,7 @@ class NotificationController {
 
     debugPrint("Notification dismissed: ${receivedAction.id}");
     
-    // 🔄 Reschedule in 30 mins if user swipes it away
+    // 🔄 Reschedule notification logic for dismissed notifications
     if (receivedAction.payload?['docId'] != null) {
       final docId = receivedAction.payload!['docId']!;
       final type = receivedAction.payload!['type'] ?? 'lead'; // Default to lead
@@ -333,19 +373,47 @@ class NotificationController {
       if (!await isNotificationOpened(docId)) {
         String title = 'Reminder';
         String body = 'You have a pending item. Please check your app.';
+        Duration rescheduleDelay = const Duration(minutes: 30); // Default to 30 mins
 
-        // Fetch details from Firestore to make the notification more informative
+        // Fetch details from Firestore
         try {
             final collection = type == 'todo' ? 'todo' : 'follow_ups';
             final doc = await FirebaseFirestore.instance.collection(collection).doc(docId).get();
             if (doc.exists) {
                 title = type == 'todo' ? 'Task Reminder' : 'Follow-up Reminder';
                 body = 'Reminder for: ${doc.data()?['title'] ?? doc.data()?['name'] ?? '...'}';
+                
+                // For leads: check if we need to reschedule for 7 days instead of 30 mins
+                if (type == 'lead') {
+                  final docData = doc.data();
+                  final status = docData?['status'] as String? ?? 'In Progress';
+                  final originalReminderDate = docData?['original_reminder_date']; // When reminder was first set
+                  final reminderDateChanged = docData?['reminder_date_changed'] ?? false; // Manual reschedule flag
+                  
+                  // If status is still "In Progress" and reminder hasn't been manually changed
+                  if (status == 'In Progress' && originalReminderDate != null && reminderDateChanged != true) {
+                    final originalDateTime = originalReminderDate is Timestamp 
+                        ? originalReminderDate.toDate() 
+                        : originalReminderDate is String 
+                            ? DateTime.tryParse(originalReminderDate) 
+                            : null;
+                    
+                    if (originalDateTime != null) {
+                      final now = DateTime.now();
+                      final daysDifference = now.difference(originalDateTime).inDays;
+                      
+                      // If 2 or more days have passed, reschedule for 7 days from original reminder date
+                      if (daysDifference >= 2) {
+                        rescheduleDelay = Duration(days: 7);
+                        debugPrint('Lead unchanged for 2+ days. Rescheduling for 7 days.');
+                      }
+                    }
+                  }
+                }
             }
         } catch (e) {
             debugPrint('Error fetching details for dismissed notification: $e');
-            // If fetching fails (e.g., no network), we still want to reschedule a generic reminder.
-            // The title and body will use the default values set above.
+            // If fetching fails (e.g., no network), reschedule with default 30 mins
         }
 
         final channelKey = type == 'todo' ? 'reminder_channel' : 'basic_channel';
@@ -365,7 +433,7 @@ class NotificationController {
             ),
           ],
           schedule: NotificationCalendar.fromDate(
-            date: DateTime.now().add(const Duration(minutes: 1)),
+            date: DateTime.now().add(rescheduleDelay),
           ),
         );
       }

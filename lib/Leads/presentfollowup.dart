@@ -149,6 +149,37 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
 
+    // Fetch current data to check for changes
+    DocumentSnapshot<Map<String, dynamic>>? currentDoc;
+    try {
+      currentDoc = await FirebaseFirestore.instance
+          .collection('follow_ups')
+          .doc(widget.docId)
+          .get();
+    } catch (e) {
+      debugPrint('Error fetching current document: $e');
+    }
+
+    // Determine if reminder date has been changed
+    bool reminderDateChanged = false;
+    bool statusChanged = false;
+    if (currentDoc != null && currentDoc.exists) {
+      final currentData = currentDoc.data() ?? {};
+      final currentReminder = currentData['reminder'] as String? ?? '';
+      final currentStatus = currentData['status'] as String? ?? '';
+      
+      final newReminder = _reminderController.text.trim();
+      reminderDateChanged = currentReminder != newReminder;
+      
+      final newStatus = _status ?? '';
+      statusChanged = currentStatus != newStatus;
+      
+      // If status changed to Sale or Cancelled, mark reminder as changed to prevent auto-reschedule
+      if (statusChanged && (newStatus == 'Sale' || newStatus == 'Cancelled')) {
+        reminderDateChanged = true;
+      }
+    }
+
     final updatedData = <String, dynamic>{
       'name': _nameController.text.trim(),
       'company': _companyController.text.trim(),
@@ -160,6 +191,8 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
       'branch': _branch,
       'date': _selectedDate != null ? Timestamp.fromDate(_selectedDate!) : FieldValue.serverTimestamp(),
       if (_status == 'Sale' || _status == 'Cancelled') 'completed_at': FieldValue.serverTimestamp(),
+      // Mark if reminder date has been manually changed or status changed to terminal state
+      if (reminderDateChanged) 'reminder_date_changed': true,
     };
 
     try {

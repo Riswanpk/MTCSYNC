@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../dme_config.dart';
 import '../models/dme_user.dart';
 import '../models/dme_product.dart';
@@ -10,6 +11,19 @@ class DmeSupabaseService {
   DmeSupabaseService._();
   static final DmeSupabaseService instance = DmeSupabaseService._();
 
+  bool _supabaseReady = false;
+
+  /// Initializes Supabase exactly once. Safe to call multiple times.
+  /// Must be awaited before any Supabase operation is performed.
+  Future<void> ensureInitialized() async {
+    if (_supabaseReady) return;
+    await Supabase.initialize(
+      url: supabaseUrl,
+      anonKey: supabaseAnonKey,
+    );
+    _supabaseReady = true;
+  }
+
   SupabaseClient get _client => Supabase.instance.client;
 
   // ── Cached current user ──────────────────────────────────────
@@ -18,6 +32,7 @@ class DmeSupabaseService {
 
   /// Verify Supabase connection and return detailed error info
   Future<Map<String, dynamic>> diagnoseConnection() async {
+    await ensureInitialized();
     try {
       final result = await _client.from('dme_users').select('id').limit(1);
       return {'status': 'connected', 'message': 'Supabase connection OK'};
@@ -37,6 +52,7 @@ class DmeSupabaseService {
   }
 
   Future<DmeUser?> getCurrentUser(String firebaseUid) async {
+    await ensureInitialized();
     if (_currentUser != null && _currentUser!.firebaseUid == firebaseUid) {
       return _currentUser;
     }
@@ -72,6 +88,7 @@ class DmeSupabaseService {
   }
 
   Future<List<Map<String, dynamic>>> getBranches() async {
+    await ensureInitialized();
     await _syncAppBranches();
     final res =
         await _client.from('dme_branches').select().order('name', ascending: true);
@@ -148,6 +165,68 @@ class DmeSupabaseService {
 
   Future<void> deleteDmeUser(String userId) async {
     await _client.from('dme_users').delete().eq('id', userId);
+  }
+
+  /// Syncs Firebase users with role='dme_user' to Supabase dme_users table.
+  /// Only creates new entries in Supabase for users not already present.
+  /// Returns a map with sync results.
+  Future<Map<String, dynamic>> syncFirebaseUsersToSupabase() async {
+    await ensureInitialized();
+    
+    try {
+      // Fetch all Firebase users with role='dme_user'
+      final firebaseSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('role', isEqualTo: 'dme_user')
+          .get();
+
+      int addedCount = 0;
+      int skippedCount = 0;
+
+      for (final doc in firebaseSnapshot.docs) {
+        final firebaseUid = doc.id;
+        final email = doc['email'] as String? ?? '';
+        final username = doc['username'] as String? ?? '';
+
+        // Check if this user already exists in Supabase dme_users
+        final existing = await _client
+            .from('dme_users')
+            .select('id')
+            .eq('firebase_uid', firebaseUid)
+            .maybeSingle();
+
+        if (existing == null) {
+          // User doesn't exist in Supabase, add them
+          try {
+            await _client.from('dme_users').insert({
+              'firebase_uid': firebaseUid,
+              'email': email,
+              'username': username,
+              'role': 'dme_user',
+            });
+            addedCount++;
+          } catch (e) {
+            print('Error adding user $username: $e');
+          }
+        } else {
+          skippedCount++;
+        }
+      }
+
+      return {
+        'success': true,
+        'addedCount': addedCount,
+        'skippedCount': skippedCount,
+        'totalProcessed': firebaseSnapshot.docs.length,
+        'message': 'Synced $addedCount new DME users from Firebase',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'error': e.toString(),
+        'message': 'Error syncing Firebase users: $e',
+      };
+    }
   }
 
   // ── Products ─────────────────────────────────────────────────
