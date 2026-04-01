@@ -82,13 +82,11 @@ class _LeadsPageState extends State<LeadsPage> {
         }
       }
     }
-    // Auto delete completed leads at end of month and auto-reschedule current user's leads
+    // Auto-reschedule current user's leads
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final userData = await _currentUserData;
       if (userData != null) {
         final branch = userData['branch'] ?? '';
-        await autoDeleteCompletedLeads(branch);
-        // Auto-reschedule current user's leads
         await autoRescheduleLeads(uid, branch);
       }
     });
@@ -247,27 +245,6 @@ class _LeadsPageState extends State<LeadsPage> {
       _leads = snapshot.docs;
       _isLoading = false;
     });
-  }
-
-  Future<void> autoDeleteCompletedLeads(String branch) async {
-    final now = DateTime.now();
-    // Check if today is the last day of the current month (for 2-month deletion cycle)
-    final lastDay = DateTime(now.year, now.month + 1, 0).day;
-    if (now.day == lastDay) {
-      // Delete leads that were completed 2 months ago
-      final twoMonthsAgo = DateTime(now.year, now.month - 1, 1);
-      for (final closedStatus in ['Sale', 'Cancelled']) {
-        final query = await FirebaseFirestore.instance
-            .collection('follow_ups')
-            .where('branch', isEqualTo: branch)
-            .where('status', isEqualTo: closedStatus)
-            .where('completed_at', isLessThan: Timestamp.fromDate(twoMonthsAgo))
-            .get();
-        for (final doc in query.docs) {
-          await doc.reference.delete();
-        }
-      }
-    }
   }
 
   Future<void> autoRescheduleLeads(String? currentUserId, String? branch) async {
