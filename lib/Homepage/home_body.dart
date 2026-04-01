@@ -23,8 +23,7 @@ import '../SME/sme_dashboard.dart';
 import '../DME/services/dme_supabase_service.dart';
 import '../DME/screens/dme_sales_upload.dart';
 import '../DME/screens/dme_customer_list.dart';
-import '../DME/screens/dme_reminders.dart';
-import '../DME/screens/dme_call_customers.dart';
+import '../DME/screens/dme_reminders_and_calls.dart';
 import '../DME/screens/dme_product_upload.dart';
 import '../DME/screens/dme_customer_db_upload.dart';
 import '../DME/screens/dme_user_management.dart';
@@ -508,28 +507,12 @@ class HomeButtonsContainer extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(
-              child: NeumorphicButton(
-                onTap: () => _navigateToDmeReminders(context),
-                text: 'Reminders',
-                color: Colors.orange,
-                textColor: Colors.white,
-                icon: Icons.notifications_active_rounded,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: NeumorphicButton(
-                onTap: () => _navigateToDmeCalls(context),
-                text: 'Call Customers',
-                color: Colors.teal,
-                textColor: Colors.white,
-                icon: Icons.phone_rounded,
-              ),
-            ),
-          ],
+        NeumorphicButton(
+          onTap: () => _navigateToDmeRemindersAndCalls(context),
+          text: 'Reminders & Calls',
+          color: const Color(0xFF8CC63F),
+          textColor: Colors.white,
+          icon: Icons.phone_in_talk_rounded,
         ),
       ],
     );
@@ -768,23 +751,13 @@ class HomeButtonsContainer extends StatelessWidget {
     );
   }
 
-  Future<void> _navigateToDmeReminders(BuildContext context) async {
+  Future<void> _navigateToDmeRemindersAndCalls(BuildContext context) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
     final dmeUser = await DmeSupabaseService.instance.getCurrentUser(uid);
     if (dmeUser == null || !context.mounted) return;
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => DmeRemindersPage(dmeUser: dmeUser)),
-    );
-  }
-
-  Future<void> _navigateToDmeCalls(BuildContext context) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    final dmeUser = await DmeSupabaseService.instance.getCurrentUser(uid);
-    if (dmeUser == null || !context.mounted) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => DmeCallCustomersPage(dmeUser: dmeUser)),
+      MaterialPageRoute(builder: (_) => DmeRemindersAndCallsPage(dmeUser: dmeUser)),
     );
   }
 

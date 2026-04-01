@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'services/dme_supabase_service.dart';
 import 'models/dme_user.dart';
-import 'screens/dme_reminders.dart';
-import 'screens/dme_call_customers.dart';
+import 'screens/dme_reminders_and_calls.dart';
 import 'screens/dme_product_upload.dart';
 import 'screens/dme_customer_db_upload.dart';
 import 'screens/dme_user_management.dart';
@@ -145,19 +144,11 @@ class _DmeHomePageState extends State<DmeHomePage> {
       child: Column(
         children: [
           // ── Core DME user tiles ──
-          _tileRow(
-            left: _DmeTile(
-              icon: Icons.notifications_active_rounded,
-              label: 'Reminders',
-              color: _primaryGreen,
-              onTap: () => _navigate(DmeRemindersPage(dmeUser: _user!)),
-            ),
-            right: _DmeTile(
-              icon: Icons.phone_in_talk_rounded,
-              label: 'Call Customers',
-              color: _primaryBlue,
-              onTap: () => _navigate(DmeCallCustomersPage(dmeUser: _user!)),
-            ),
+          _DmeTile(
+            icon: Icons.phone_in_talk_rounded,
+            label: 'Reminders & Calls',
+            color: _primaryGreen,
+            onTap: () => _navigate(DmeRemindersAndCallsPage(dmeUser: _user!)),
           ),
           // ── Admin-only tiles ──
           if (_user!.isAdmin) ...[
