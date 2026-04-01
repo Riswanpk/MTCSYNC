@@ -30,7 +30,9 @@ class SalesMarketingDailyViewer extends StatelessWidget {
         .collection('marketing')
         .where('userid', isEqualTo: userId)
         .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
-        .where('timestamp', isLessThan: Timestamp.fromDate(endOfDay));
+        .where('timestamp', isLessThan: Timestamp.fromDate(endOfDay))
+        .orderBy('timestamp', descending: true)
+        .limit(50);
 
     return Scaffold(
       appBar: AppBar(

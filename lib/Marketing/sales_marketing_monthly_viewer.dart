@@ -30,7 +30,8 @@ class SalesMarketingMonthlyViewer extends StatelessWidget {
         .where('userid', isEqualTo: userId)
         .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfMonth))
         .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(endOfMonth))
-        .orderBy('timestamp', descending: true);
+        .orderBy('timestamp', descending: true)
+        .limit(50);
 
     return Scaffold(
       appBar: AppBar(

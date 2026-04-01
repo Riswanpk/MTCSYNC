@@ -54,6 +54,7 @@ Future<List<Map<String, dynamic>>> fetchCustomerSuggestions(String query, String
   final snap = await FirebaseFirestore.instance
       .collection('customer')
       .where('branch', isEqualTo: branch)
+      .limit(100)
       .get();
   return snap.docs
       .map((doc) => doc.data())

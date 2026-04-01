@@ -110,6 +110,7 @@ class DmeComplaintService {
         .collection(_collection)
         .where('branch', isEqualTo: branch)
         .orderBy('created_at', descending: true)
+        .limit(50)
         .snapshots()
         .map(
           (snapshot) =>

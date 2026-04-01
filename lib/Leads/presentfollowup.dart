@@ -208,6 +208,7 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
         final customerQuery = await FirebaseFirestore.instance
             .collection('customer')
             .where('phone', isEqualTo: phone)
+            .limit(1)
             .get();
         for (final doc in customerQuery.docs) {
           await doc.reference.update({
