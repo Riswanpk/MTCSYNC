@@ -139,6 +139,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         int inProgressCount = 0;
         int saleCount = 0;
         int cancelledCount = 0;
+        List<DocumentSnapshot> inProgressLeads = [];
         List<DocumentSnapshot> saleLeads = [];
         List<DocumentSnapshot> cancelledLeads = [];
 
@@ -171,6 +172,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           inProgressCount = (results[0] as QuerySnapshot).size;
           saleCount = (results[1] as QuerySnapshot).size;
           cancelledCount = (results[2] as QuerySnapshot).size;
+          inProgressLeads = (results[0] as QuerySnapshot).docs;
           saleLeads = (results[1] as QuerySnapshot).docs;
           cancelledLeads = (results[2] as QuerySnapshot).docs;
         } else if (_statusFilter == 'Created in this Interval') {
@@ -214,6 +216,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           inProgressCount = (results[0] as QuerySnapshot).size;
           saleCount = (results[1] as QuerySnapshot).size;
           cancelledCount = (results[2] as QuerySnapshot).size;
+          inProgressLeads = (results[0] as QuerySnapshot).docs;
           saleLeads = (results[1] as QuerySnapshot).docs;
           cancelledLeads = (results[2] as QuerySnapshot).docs;
         }
@@ -228,6 +231,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           'inProgress': inProgressCount,
           'sale': saleCount,
           'cancelled': cancelledCount,
+          'inProgressLeads': inProgressLeads,
           'saleLeads': saleLeads,
           'cancelledLeads': cancelledLeads,
         });
@@ -405,10 +409,12 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
             sheet.getRangeByIndex(1, 6).columnWidth = 12;
           } else {
             // Column widths for detail view
-            sheet.getRangeByIndex(1, 1).columnWidth = 25;
-            sheet.getRangeByIndex(1, 2).columnWidth = 20;
-            sheet.getRangeByIndex(1, 3).columnWidth = 40;
-            sheet.getRangeByIndex(1, 4).columnWidth = 35;
+            sheet.getRangeByIndex(1, 1).columnWidth = 22;
+            sheet.getRangeByIndex(1, 2).columnWidth = 14;
+            sheet.getRangeByIndex(1, 3).columnWidth = 14;
+            sheet.getRangeByIndex(1, 4).columnWidth = 14;
+            sheet.getRangeByIndex(1, 5).columnWidth = 36;
+            sheet.getRangeByIndex(1, 6).columnWidth = 28;
 
             // ── Detailed Lead Breakdown ────────────────────────────────────
             int detailRow = 2;
@@ -436,18 +442,24 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
             detailAltSt.hAlign = xlsio.HAlignType.left;
             detailAltSt.backColor = '#F0F5FF';
 
+            final detailRedSt = workbook.styles.add('detailRed_$sheetIdx');
+            detailRedSt.fontSize = 10;
+            detailRedSt.hAlign = xlsio.HAlignType.left;
+            detailRedSt.backColor = '#FFD0D0';
+
             for (final userStat in usersForBranch) {
+              final inProgressLeadsDocs = userStat['inProgressLeads'] as List<dynamic>;
               final saleLeadsDocs = userStat['saleLeads'] as List<dynamic>;
               final cancelledLeadsDocs = userStat['cancelledLeads'] as List<dynamic>;
-              if (saleLeadsDocs.isEmpty && cancelledLeadsDocs.isEmpty) continue;
+              if (inProgressLeadsDocs.isEmpty && saleLeadsDocs.isEmpty && cancelledLeadsDocs.isEmpty) continue;
 
-              final userHdrRange = sheet.getRangeByIndex(detailRow, 1, detailRow, 4);
+              final userHdrRange = sheet.getRangeByIndex(detailRow, 1, detailRow, 6);
               userHdrRange.merge();
               userHdrRange.setText(userStat['username'] as String);
               userHdrRange.cellStyle = detailUserHdrSt;
               detailRow++;
 
-              const detailHeaders = ['Customer Name', 'Sold/Cancelled', 'Comments', 'Cancellation Reason'];
+              const detailHeaders = ['Customer Name', 'Status', 'Created Date', 'Completed Date', 'Comments', 'Cancellation Reason'];
               for (int c = 0; c < detailHeaders.length; c++) {
                 final cell = sheet.getRangeByIndex(detailRow, c + 1);
                 cell.setText(detailHeaders[c]);
@@ -456,20 +468,40 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
               detailRow++;
 
               int leadIdx = 0;
-              for (final doc in [...saleLeadsDocs, ...cancelledLeadsDocs]) {
+              for (final doc in [...inProgressLeadsDocs, ...saleLeadsDocs, ...cancelledLeadsDocs]) {
                 final d = (doc as QueryDocumentSnapshot).data() as Map<String, dynamic>;
+                final createdAt = d['created_at'];
+                final completedAt = d['completed_at'];
+                final createdDateStr = createdAt is Timestamp
+                    ? DateFormat('dd MMM yyyy').format(createdAt.toDate())
+                    : '';
+                final completedDateStr = completedAt is Timestamp
+                    ? DateFormat('dd MMM yyyy').format(completedAt.toDate())
+                    : '';
+                final isQuickClose = createdAt is Timestamp &&
+                    completedAt is Timestamp &&
+                    completedAt.toDate().difference(createdAt.toDate()).inDays.abs() <= 2;
                 final isAlt = leadIdx % 2 == 1;
-                final st = isAlt ? detailAltSt : detailDataSt;
-                final statusLabel = (d['status'] == 'Sale') ? 'Sold' : 'Cancelled';
+                final st = isQuickClose ? detailRedSt : (isAlt ? detailAltSt : detailDataSt);
+                final statusVal = d['status'] ?? '';
+                final statusLabel = statusVal == 'Sale'
+                    ? 'Sold'
+                    : statusVal == 'Cancelled'
+                        ? 'Cancelled'
+                        : 'In Progress';
                 sheet.getRangeByIndex(detailRow, 1).setText(d['name'] ?? '');
                 sheet.getRangeByIndex(detailRow, 1).cellStyle = st;
                 sheet.getRangeByIndex(detailRow, 2).setText(statusLabel);
                 sheet.getRangeByIndex(detailRow, 2).cellStyle = st;
-                sheet.getRangeByIndex(detailRow, 3).setText(d['comments'] ?? '');
+                sheet.getRangeByIndex(detailRow, 3).setText(createdDateStr);
                 sheet.getRangeByIndex(detailRow, 3).cellStyle = st;
-                sheet.getRangeByIndex(detailRow, 4).setText(
-                    d['status'] == 'Cancelled' ? (d['cancellation_reason'] ?? '') : '');
+                sheet.getRangeByIndex(detailRow, 4).setText(completedDateStr);
                 sheet.getRangeByIndex(detailRow, 4).cellStyle = st;
+                sheet.getRangeByIndex(detailRow, 5).setText(d['comments'] ?? '');
+                sheet.getRangeByIndex(detailRow, 5).cellStyle = st;
+                sheet.getRangeByIndex(detailRow, 6).setText(
+                    statusVal == 'Cancelled' ? (d['cancellation_reason'] ?? '') : '');
+                sheet.getRangeByIndex(detailRow, 6).cellStyle = st;
                 detailRow++;
                 leadIdx++;
               }
@@ -661,10 +693,12 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         sheet.getRangeByIndex(1, 6).columnWidth = 12;
       } else {
         // Column widths for detail view
-        sheet.getRangeByIndex(1, 1).columnWidth = 25;
-        sheet.getRangeByIndex(1, 2).columnWidth = 20;
-        sheet.getRangeByIndex(1, 3).columnWidth = 40;
-        sheet.getRangeByIndex(1, 4).columnWidth = 35;
+        sheet.getRangeByIndex(1, 1).columnWidth = 22;
+        sheet.getRangeByIndex(1, 2).columnWidth = 14;
+        sheet.getRangeByIndex(1, 3).columnWidth = 14;
+        sheet.getRangeByIndex(1, 4).columnWidth = 14;
+        sheet.getRangeByIndex(1, 5).columnWidth = 36;
+        sheet.getRangeByIndex(1, 6).columnWidth = 28;
 
         // ── Detailed Lead Breakdown ──────────────────────────────────────
         int detailRow = 2;
@@ -692,18 +726,24 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         detailAltSt.hAlign = xlsio.HAlignType.left;
         detailAltSt.backColor = '#F0F5FF';
 
+        final detailRedSt = workbook.styles.add('detailRed');
+        detailRedSt.fontSize = 10;
+        detailRedSt.hAlign = xlsio.HAlignType.left;
+        detailRedSt.backColor = '#FFD0D0';
+
         for (final userStat in stats) {
+          final inProgressLeadsDocs = userStat['inProgressLeads'] as List<dynamic>;
           final saleLeadsDocs = userStat['saleLeads'] as List<dynamic>;
           final cancelledLeadsDocs = userStat['cancelledLeads'] as List<dynamic>;
-          if (saleLeadsDocs.isEmpty && cancelledLeadsDocs.isEmpty) continue;
+          if (inProgressLeadsDocs.isEmpty && saleLeadsDocs.isEmpty && cancelledLeadsDocs.isEmpty) continue;
 
-          final userHdrRange = sheet.getRangeByIndex(detailRow, 1, detailRow, 4);
+          final userHdrRange = sheet.getRangeByIndex(detailRow, 1, detailRow, 6);
           userHdrRange.merge();
           userHdrRange.setText(userStat['username'] as String);
           userHdrRange.cellStyle = detailUserHdrSt;
           detailRow++;
 
-          const detailHeaders = ['Customer Name', 'Sold/Cancelled', 'Comments', 'Cancellation Reason'];
+          const detailHeaders = ['Customer Name', 'Status', 'Created Date', 'Completed Date', 'Comments', 'Cancellation Reason'];
           for (int c = 0; c < detailHeaders.length; c++) {
             final cell = sheet.getRangeByIndex(detailRow, c + 1);
             cell.setText(detailHeaders[c]);
@@ -712,20 +752,40 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           detailRow++;
 
           int leadIdx = 0;
-          for (final doc in [...saleLeadsDocs, ...cancelledLeadsDocs]) {
+          for (final doc in [...inProgressLeadsDocs, ...saleLeadsDocs, ...cancelledLeadsDocs]) {
             final d = (doc as QueryDocumentSnapshot).data() as Map<String, dynamic>;
+            final createdAt = d['created_at'];
+            final completedAt = d['completed_at'];
+            final createdDateStr = createdAt is Timestamp
+                ? DateFormat('dd MMM yyyy').format(createdAt.toDate())
+                : '';
+            final completedDateStr = completedAt is Timestamp
+                ? DateFormat('dd MMM yyyy').format(completedAt.toDate())
+                : '';
+            final isQuickClose = createdAt is Timestamp &&
+                completedAt is Timestamp &&
+                completedAt.toDate().difference(createdAt.toDate()).inDays.abs() <= 2;
             final isAlt = leadIdx % 2 == 1;
-            final st = isAlt ? detailAltSt : detailDataSt;
-            final statusLabel = (d['status'] == 'Sale') ? 'Sold' : 'Cancelled';
+            final st = isQuickClose ? detailRedSt : (isAlt ? detailAltSt : detailDataSt);
+            final statusVal = d['status'] ?? '';
+            final statusLabel = statusVal == 'Sale'
+                ? 'Sold'
+                : statusVal == 'Cancelled'
+                    ? 'Cancelled'
+                    : 'In Progress';
             sheet.getRangeByIndex(detailRow, 1).setText(d['name'] ?? '');
             sheet.getRangeByIndex(detailRow, 1).cellStyle = st;
             sheet.getRangeByIndex(detailRow, 2).setText(statusLabel);
             sheet.getRangeByIndex(detailRow, 2).cellStyle = st;
-            sheet.getRangeByIndex(detailRow, 3).setText(d['comments'] ?? '');
+            sheet.getRangeByIndex(detailRow, 3).setText(createdDateStr);
             sheet.getRangeByIndex(detailRow, 3).cellStyle = st;
-            sheet.getRangeByIndex(detailRow, 4).setText(
-                d['status'] == 'Cancelled' ? (d['cancellation_reason'] ?? '') : '');
+            sheet.getRangeByIndex(detailRow, 4).setText(completedDateStr);
             sheet.getRangeByIndex(detailRow, 4).cellStyle = st;
+            sheet.getRangeByIndex(detailRow, 5).setText(d['comments'] ?? '');
+            sheet.getRangeByIndex(detailRow, 5).cellStyle = st;
+            sheet.getRangeByIndex(detailRow, 6).setText(
+                statusVal == 'Cancelled' ? (d['cancellation_reason'] ?? '') : '');
+            sheet.getRangeByIndex(detailRow, 6).cellStyle = st;
             detailRow++;
             leadIdx++;
           }
