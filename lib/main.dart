@@ -383,7 +383,8 @@ class NotificationController {
                 title = type == 'todo' ? 'Task Reminder' : 'Follow-up Reminder';
                 body = 'Reminder for: ${doc.data()?['title'] ?? doc.data()?['name'] ?? '...'}';
                 
-                // For leads: check if we need to reschedule for 7 days instead of 30 mins
+                // For leads: implement 7-day cycle rescheduling
+                // Logic: 30 mins same-day rescheduling, then 7-day cycles
                 if (type == 'lead') {
                   final docData = doc.data();
                   final status = docData?['status'] as String? ?? 'In Progress';
@@ -400,12 +401,18 @@ class NotificationController {
                     
                     if (originalDateTime != null) {
                       final now = DateTime.now();
-                      final daysDifference = now.difference(originalDateTime).inDays;
+                      // Calculate the 7-day cycle point (original reminder + 7 days)
+                      final nextCycleDateTime = originalDateTime.add(const Duration(days: 7));
                       
-                      // If 2 or more days have passed, reschedule for 7 days from original reminder date
-                      if (daysDifference >= 2) {
-                        rescheduleDelay = Duration(days: 7);
-                        debugPrint('Lead unchanged for 2+ days. Rescheduling for 7 days.');
+                      // If we've reached or passed the 7-day cycle threshold
+                      if (now.isAfter(nextCycleDateTime) || now.isAtSameMomentAs(nextCycleDateTime)) {
+                        // Schedule for the next 7-day cycle
+                        rescheduleDelay = nextCycleDateTime.difference(now);
+                        debugPrint('Lead at/past 7-day threshold. Rescheduling to ${nextCycleDateTime}. Delay: $rescheduleDelay');
+                      } else {
+                        // Still within the cycle: use 30-min same-day rescheduling
+                        rescheduleDelay = const Duration(minutes: 30);
+                        debugPrint('Lead within current cycle. Rescheduling for 30 minutes.');
                       }
                     }
                   }

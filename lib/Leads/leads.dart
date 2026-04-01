@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
+import 'dart:math';
 import 'leadsform.dart';
 import 'leads_widgets.dart';
 import 'customer_list.dart'; 
@@ -80,11 +82,14 @@ class _LeadsPageState extends State<LeadsPage> {
         }
       }
     }
-    // Auto delete completed leads at end of month
+    // Auto delete completed leads at end of month and auto-reschedule current user's leads
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final userData = await _currentUserData;
       if (userData != null) {
-        await autoDeleteCompletedLeads(userData['branch'] ?? '');
+        final branch = userData['branch'] ?? '';
+        await autoDeleteCompletedLeads(branch);
+        // Auto-reschedule current user's leads
+        await autoRescheduleLeads(uid, branch);
       }
     });
   }
@@ -246,18 +251,80 @@ class _LeadsPageState extends State<LeadsPage> {
 
   Future<void> autoDeleteCompletedLeads(String branch) async {
     final now = DateTime.now();
+    // Check if today is the last day of the current month (for 2-month deletion cycle)
     final lastDay = DateTime(now.year, now.month + 1, 0).day;
     if (now.day == lastDay) {
+      // Delete leads that were completed 2 months ago
+      final twoMonthsAgo = DateTime(now.year, now.month - 1, 1);
       for (final closedStatus in ['Sale', 'Cancelled']) {
         final query = await FirebaseFirestore.instance
             .collection('follow_ups')
             .where('branch', isEqualTo: branch)
             .where('status', isEqualTo: closedStatus)
+            .where('completed_at', isLessThan: Timestamp.fromDate(twoMonthsAgo))
             .get();
         for (final doc in query.docs) {
           await doc.reference.delete();
         }
       }
+    }
+  }
+
+  Future<void> autoRescheduleLeads(String? currentUserId, String? branch) async {
+    if (currentUserId == null || branch == null || branch.isEmpty) return;
+
+    final now = DateTime.now();
+
+    try {
+      // Fetch all "In Progress" leads for the current user (created_by or assigned_to)
+      final query = await FirebaseFirestore.instance
+          .collection('follow_ups')
+          .where('branch', isEqualTo: branch)
+          .where('status', isEqualTo: 'In Progress')
+          .get();
+
+      for (final doc in query.docs) {
+        final data = doc.data();
+        final createdBy = data['created_by'] as String?;
+        final assignedTo = data['assigned_to'] as String?;
+        final isCurrentUsersLead = createdBy == currentUserId || assignedTo == currentUserId;
+
+        if (!isCurrentUsersLead) continue;
+
+        // Check if reminder should be rescheduled
+        final reminderDateChanged = data['reminder_date_changed'] as bool? ?? false;
+        if (reminderDateChanged) continue; // Skip if manually changed
+
+        final originalReminderDate = data['original_reminder_date'];
+        if (originalReminderDate == null) continue; // Skip if no original date
+
+        final originalDate = (originalReminderDate is Timestamp)
+            ? originalReminderDate.toDate()
+            : DateTime.tryParse(originalReminderDate.toString());
+
+        if (originalDate == null) continue;
+
+        // Check if the reminder is from the past
+        if (originalDate.isBefore(now)) {
+          // Reschedule 7 days ahead of the original reminder date
+          final rescheduledDate = originalDate.add(const Duration(days: 7));
+
+          final newReminderText =
+              DateFormat('dd-MM-yyyy hh:mm a').format(rescheduledDate);
+
+          // Update the follow-up document
+          await doc.reference.update({
+            'reminder': newReminderText,
+            'original_reminder_date': Timestamp.fromDate(rescheduledDate),
+            // Don't set reminder_date_changed to true since this is auto-reschedule
+          });
+
+          debugPrint(
+              'Auto-rescheduled lead ${doc.id} from ${DateFormat('dd-MM-yyyy').format(originalDate)} to ${DateFormat('dd-MM-yyyy').format(rescheduledDate)}');
+        }
+      }
+    } catch (e) {
+      debugPrint('Error in autoRescheduleLeads: $e');
     }
   }
 
