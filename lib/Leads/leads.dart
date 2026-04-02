@@ -281,8 +281,8 @@ class _LeadsPageState extends State<LeadsPage> {
 
         if (originalDate == null) continue;
 
-        // Check if the reminder is from the past
-        if (originalDate.isBefore(now)) {
+        // Check if the reminder has been past for more than 2 days without a status change
+        if (originalDate.isBefore(now.subtract(const Duration(days: 2)))) {
           // Reschedule 7 days ahead of the original reminder date
           final rescheduledDate = originalDate.add(const Duration(days: 7));
 
