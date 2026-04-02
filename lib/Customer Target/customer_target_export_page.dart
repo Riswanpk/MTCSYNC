@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mtcsync/Customer%20Target/customer_individual_export.dart';
 import '../Navigation/user_cache_service.dart';
 import 'package:share_plus/share_plus.dart';
 import 'dart:io';
@@ -309,6 +310,19 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
         backgroundColor: _primaryBlue,
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.person_search_rounded),
+            tooltip: 'Export Individual Customer List',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const CustomerIndividualExportPage(),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
