@@ -92,25 +92,19 @@ class _SplashScreenState extends State<SplashScreen> {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Request permissions that show dialogs first
-    // Some permissions auto-grant or require Settings - don't await those blocking
+    // Request all permissions that show dialogs
     try {
-      // These show actual permission dialogs
+      // Request permissions sequentially so dialogs appear one at a time
       await Permission.camera.request();
       await Permission.contacts.request();
       await Permission.phone.request();
       await Permission.location.request();
       await Permission.notification.request();
-      
-      // These may auto-grant or not show dialogs - request without blocking
-      Permission.storage.request();
-      Permission.manageExternalStorage.request();
-      Permission.scheduleExactAlarm.request();
-      Permission.reminders.request();
-      
-      // Request to ignore battery optimizations for reliable notifications
-      // This helps notifications show even when app is in background
-      Permission.ignoreBatteryOptimizations.request();
+      await Permission.storage.request();
+      await Permission.manageExternalStorage.request();
+      await Permission.scheduleExactAlarm.request();
+      await Permission.reminders.request();
+      await Permission.ignoreBatteryOptimizations.request();
     } catch (e) {
       debugPrint('Permission error: $e');
     }

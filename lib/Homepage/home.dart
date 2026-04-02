@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:awesome_notifications/awesome_notifications.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -19,6 +20,11 @@ import '../Homepage/home_body.dart';
 import '../Misc/battery_optimization_helper.dart';
 import '../Navigation/user_cache_service.dart';
 import '../SME/sme_notification_service.dart';
+
+// Top-level function for compute to decode contacts JSON
+List<dynamic> decodeContactsJson(String json) {
+  return jsonDecode(json) as List<dynamic>;
+}
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -43,11 +49,24 @@ class _HomePageState extends State<HomePage>
   DateTime? _lastTodoWarningCheck;
 
   final _userCache = UserCacheService.instance;
+  bool _perfCheckDone = false;
+  String? _role;
+  String? _username;
+  String? _branch;
 
   @override
   void initState() {
     super.initState();
     _initSwingAnimation();
+    _userCache.ensureLoaded().then((_) {
+      if (mounted) {
+        setState(() {
+          _role = _userCache.role;
+          _username = _userCache.username;
+          _branch = _userCache.branch;
+        });
+      }
+    });
     _checkForUpdate();
     _loadProfileImage();
     _checkTodoWarning();
@@ -56,7 +75,6 @@ class _HomePageState extends State<HomePage>
     _setupFcmTokenSync();
     _startSmeNotificationService();
     _fetchAndCacheContacts();
-    _printCustomClaims();
     _checkBatteryOptimization();
   }
 
@@ -84,8 +102,10 @@ class _HomePageState extends State<HomePage>
   }
 
   void _setupPerformanceNotifications() {
-    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) async {
-      if (user != null) {
+    _authSubscription =
+        FirebaseAuth.instance.authStateChanges().listen((user) async {
+      if (user != null && !_perfCheckDone) {
+        _perfCheckDone = true;
         await _userCache.ensureLoaded();
         if (_userCache.role == 'sales') {
           _checkAndShowPerformanceDeductionNotification();
@@ -105,7 +125,8 @@ class _HomePageState extends State<HomePage>
     if (route is PageRoute) {
       routeObserver.subscribe(this, route);
     }
-    _checkTodoWarning();
+    // Note: _checkTodoWarning removed here — it runs via initState, didPopNext, didPush.
+    // didChangeDependencies fires on InheritedWidget changes (e.g. theme), so it was over-triggering.
   }
 
   @override
@@ -265,7 +286,8 @@ class _HomePageState extends State<HomePage>
   Future<void> _checkTodoWarning() async {
     // Debounce: skip if checked less than 2 minutes ago
     if (_lastTodoWarningCheck != null &&
-        DateTime.now().difference(_lastTodoWarningCheck!) < const Duration(minutes: 2)) {
+        DateTime.now().difference(_lastTodoWarningCheck!) <
+            const Duration(minutes: 2)) {
       return;
     }
     final user = FirebaseAuth.instance.currentUser;
@@ -352,32 +374,36 @@ class _HomePageState extends State<HomePage>
     final prefs = await SharedPreferences.getInstance();
     final cached = prefs.getString('contacts_cache');
     if (cached != null) {
-      final List<dynamic> decoded = jsonDecode(cached);
+      final List<dynamic> decoded = await compute(decodeContactsJson, cached);
       _cachedContacts = decoded.map((c) => Contact.fromJson(c)).toList();
       setState(() => _contactsLoaded = true);
     }
 
     final contacts = await FlutterContacts.getContacts(
         withProperties: true, withThumbnail: false);
-    final encoded = jsonEncode(contacts.map((c) => c.toJson()).toList());
+    final encoded = await compute(
+        (List<Map<String, dynamic>> list) => jsonEncode(list),
+        contacts.map((c) => c.toJson()).toList());
     await prefs.setString('contacts_cache', encoded);
 
-    setState(() {
-      _cachedContacts = contacts;
-      _contactsLoaded = true;
-    });
-  }
-
-  Future<void> _printCustomClaims() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      print("No user signed in.");
-    } else {
-      final idTokenResult = await user.getIdTokenResult();
-      print("Custom claims: ${idTokenResult.claims}");
+    if (mounted) {
+      setState(() {
+        _cachedContacts = contacts;
+        _contactsLoaded = true;
+      });
     }
   }
 
+  Future<void> _printCustomClaims() async {
+    if (!kDebugMode) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      debugPrint("No user signed in.");
+    } else {
+      final idTokenResult = await user.getIdTokenResult();
+      debugPrint("Custom claims: ${idTokenResult.claims}");
+    }
+  }
 
   void _handleLogoTap() {
     _swingController.forward(from: 0.0);
@@ -413,52 +439,46 @@ class _HomePageState extends State<HomePage>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final role = _role;
+    final username = _username;
+    final branch = _branch;
 
-    return FutureBuilder<void>(
-      future: _userCache.ensureLoaded(),
-      builder: (context, snapshot) {
-        final role = _userCache.role;
-        final username = _userCache.username;
-        final branch = _userCache.branch;
-
-        return WillPopScope(
-          onWillPop: () async => false,
-          child: Scaffold(
-            endDrawer: HomeDrawer(
-              role: role,
-              username: username,
-              branch: branch,
-              profileImage: _profileImage,
-              onPickProfileImage: _pickProfileImage,
-            ),
-            body: Stack(
-              children: [
-                HomeBackground(isDark: isDark),
-                HomeMenuButton(isDark: isDark),
-                if (_showTodoWarning)
-                  TodoWarningBanner(onTap: _handleTodoWarningTap),
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SwingingLogo(
-                          swingAnimation: _swingAnimation,
-                          onTap: _handleLogoTap,
-                          isDark: isDark,
-                        ),
-                        const SizedBox(height: 8),
-                        HomeButtonsContainer(role: role, isDark: isDark),
-                      ],
+    return WillPopScope(
+      onWillPop: () async => false,
+      child: Scaffold(
+        endDrawer: HomeDrawer(
+          role: role,
+          username: username,
+          branch: branch,
+          profileImage: _profileImage,
+          onPickProfileImage: _pickProfileImage,
+        ),
+        body: Stack(
+          children: [
+            HomeBackground(isDark: isDark),
+            HomeMenuButton(isDark: isDark),
+            if (_showTodoWarning)
+              TodoWarningBanner(onTap: _handleTodoWarningTap),
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SwingingLogo(
+                      swingAnimation: _swingAnimation,
+                      onTap: _handleLogoTap,
+                      isDark: isDark,
                     ),
-                  ),
+                    const SizedBox(height: 8),
+                    HomeButtonsContainer(role: role, isDark: isDark),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-        );
-      },
+          ],
+        ),
+      ),
     );
   }
 }

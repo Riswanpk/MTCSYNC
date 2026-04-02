@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -45,6 +46,9 @@ class _LeadsPageState extends State<LeadsPage> {
   // Add this for sort order
   bool sortAscending = false;
   String selectedPriority = 'All';
+
+  Timer? _searchDebounce;
+  Map<String, String> _creatorUsernameCache = {};
 
   // --- NEW: State for Pagination ---
   List<DocumentSnapshot> _leads = [];
@@ -170,12 +174,7 @@ class _LeadsPageState extends State<LeadsPage> {
 
     Query query = FirebaseFirestore.instance.collection('follow_ups').where('branch', isEqualTo: branch);
 
-    // If searching, we will do a client-side filter after fetching all data for the branch.
-    if (isSearch && searchQuery.isNotEmpty) {
-      // No server-side filters when searching, except for branch
-    } else {
-
-    // Apply filters
+    // Apply filters — always applied, including during search
     if (selectedUser != null) {
       // Include leads created by OR assigned to the selected user
       query = query.where(
@@ -199,7 +198,6 @@ class _LeadsPageState extends State<LeadsPage> {
     } else if (selectedPriority != 'All') {
       query = query.where('priority', isEqualTo: selectedPriority);
     }
-    }
 
     // Apply sorting
     query = query.orderBy('created_at', descending: !sortAscending);
@@ -207,7 +205,7 @@ class _LeadsPageState extends State<LeadsPage> {
     QuerySnapshot snapshot;
 
     if (isSearch && searchQuery.isNotEmpty) {
-      // For search, fetch all documents for the branch and filter locally
+      // For search, fetch all matching documents and filter locally by name
       snapshot = await query.get();
     } else {
       // For normal browsing, use pagination
@@ -245,6 +243,37 @@ class _LeadsPageState extends State<LeadsPage> {
       _leads = snapshot.docs;
       _isLoading = false;
     });
+
+    // Batch-fetch creator usernames to avoid N+1 reads in itemBuilder
+    await _prefetchCreatorUsernames(snapshot.docs);
+  }
+
+  Future<void> _prefetchCreatorUsernames(List<DocumentSnapshot> docs) async {
+    final ids = docs
+        .map((d) => (d.data() as Map<String, dynamic>)['created_by'] as String?)
+        .whereType<String>()
+        .where((id) => id.isNotEmpty && !_creatorUsernameCache.containsKey(id))
+        .toSet()
+        .toList();
+    if (ids.isEmpty) return;
+
+    // Fetch in batches of 30 (Firestore whereIn limit)
+    for (var i = 0; i < ids.length; i += 30) {
+      final batch = ids.sublist(i, i + 30 > ids.length ? ids.length : i + 30);
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .where(FieldPath.documentId, whereIn: batch)
+          .get();
+      final map = <String, String>{};
+      for (final doc in snap.docs) {
+        final username =
+            (doc.data() as Map<String, dynamic>)['username'] as String? ?? 'Unknown';
+        map[doc.id] = username;
+      }
+      if (mounted) {
+        setState(() => _creatorUsernameCache.addAll(map));
+      }
+    }
   }
 
   Future<void> autoRescheduleLeads(String? currentUserId, String? branch) async {
@@ -253,20 +282,30 @@ class _LeadsPageState extends State<LeadsPage> {
     final now = DateTime.now();
 
     try {
-      // Fetch all "In Progress" leads for the current user (created_by or assigned_to)
-      final query = await FirebaseFirestore.instance
+      // Fetch only this user's "In Progress" leads server-side to avoid downloading the entire branch
+      final createdByQuery = await FirebaseFirestore.instance
           .collection('follow_ups')
           .where('branch', isEqualTo: branch)
           .where('status', isEqualTo: 'In Progress')
+          .where('created_by', isEqualTo: currentUserId)
           .get();
 
-      for (final doc in query.docs) {
-        final data = doc.data();
-        final createdBy = data['created_by'] as String?;
-        final assignedTo = data['assigned_to'] as String?;
-        final isCurrentUsersLead = createdBy == currentUserId || assignedTo == currentUserId;
+      final assignedToQuery = await FirebaseFirestore.instance
+          .collection('follow_ups')
+          .where('branch', isEqualTo: branch)
+          .where('status', isEqualTo: 'In Progress')
+          .where('assigned_to', isEqualTo: currentUserId)
+          .get();
 
-        if (!isCurrentUsersLead) continue;
+      // Merge and deduplicate by document ID
+      final seenIds = <String>{};
+      final allDocs = [
+        ...createdByQuery.docs,
+        ...assignedToQuery.docs,
+      ].where((doc) => seenIds.add(doc.id)).toList();
+
+      for (final doc in allDocs) {
+        final data = doc.data();
 
         // Check if reminder should be rescheduled
         final reminderDateChanged = data['reminder_date_changed'] as bool? ?? false;
@@ -336,7 +375,10 @@ class _LeadsPageState extends State<LeadsPage> {
                       setState(() {
                         searchQuery = trimmedVal;
                       });
-                      _fetchLeadsPage(isSearch: true);
+                      _searchDebounce?.cancel();
+                      _searchDebounce = Timer(const Duration(milliseconds: 400), () {
+                        _fetchLeadsPage(isSearch: true);
+                      });
                     },
                   )
                 : const Text('Leads Follow Up'),
@@ -990,28 +1032,19 @@ class _LeadsPageState extends State<LeadsPage> {
                                     return const SizedBox.shrink();
                                   }
 
-                                  return FutureBuilder<DocumentSnapshot>(
-                                    future: FirebaseFirestore.instance.collection('users').doc(createdById).get(),
-                                    builder: (context, userSnapshot) {
-                                      String creatorUsername = 'Unknown';
-                                      if (userSnapshot.connectionState == ConnectionState.done && userSnapshot.hasData) {
-                                        final userData = userSnapshot.data!.data() as Map<String, dynamic>?;
-                                        if (userData != null && userData['username'] != null) {
-                                          creatorUsername = userData['username'];
-                                        }
-                                      }
-                                      return LeadCard(
-                                        name: name,
-                                        status: status,
-                                        date: date,
-                                        docId: docId,
-                                        createdBy: creatorUsername,
-                                        reminder: reminder,
-                                        priority: priority,
-                                        source: source,
-                                        onStatusChanged: () => _fetchLeadsPage(),
-                                      );
-                                    },
+                                  final creatorUsername =
+                                      _creatorUsernameCache[createdById] ?? '';
+
+                                  return LeadCard(
+                                    name: name,
+                                    status: status,
+                                    date: date,
+                                    docId: docId,
+                                    createdBy: creatorUsername,
+                                    reminder: reminder,
+                                    priority: priority,
+                                    source: source,
+                                    onStatusChanged: () => _fetchLeadsPage(),
                                   );
                                 },
                               ),

@@ -52,8 +52,8 @@ class SalesMarketingMonthlyViewer extends StatelessWidget {
       backgroundColor: Theme.of(context).brightness == Brightness.dark
           ? const Color(0xFF0F0F1E)
           : const Color(0xFFF0F2F5),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: query.snapshots(),
+      body: FutureBuilder<QuerySnapshot>(
+        future: query.get(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());

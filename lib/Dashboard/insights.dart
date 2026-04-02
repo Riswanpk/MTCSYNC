@@ -78,7 +78,7 @@ class _InsightsPageState extends State<InsightsPage> {
     } else if ((_role == 'admin' || _role == 'Sync Head' || _role == 'sync_head') && _selectedBranch != null) {
       leadsQuery = leadsQuery.where('branch', isEqualTo: _selectedBranch);
     }
-    final leadsSnapshot = await leadsQuery.get();
+    final leadsSnapshot = await leadsQuery.limit(500).get();
 
     final Map<String, int> leadsCount = {for (var uid in users.keys) uid: 0};
     for (var doc in leadsSnapshot.docs) {
@@ -110,18 +110,25 @@ class _InsightsPageState extends State<InsightsPage> {
     Query todosQuery = FirebaseFirestore.instance
         .collection('todo')
         .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart));
+
+    // Helper to batch-fetch todo docs using whereIn in chunks of ≤30
+    Future<List<QueryDocumentSnapshot>> fetchTodoDocs(List<String> ids) async {
+      final List<QueryDocumentSnapshot> all = [];
+      for (var i = 0; i < ids.length; i += 30) {
+        final chunk = ids.sublist(i, i + 30 > ids.length ? ids.length : i + 30);
+        final snap = await todosQuery.where('created_by', whereIn: chunk).get();
+        all.addAll(snap.docs);
+      }
+      return all;
+    }
+
+    List<QueryDocumentSnapshot> todoDocs;
     if (_role == 'manager' || _role == 'asst_manager') {
-      // Only include todos created by users in the manager's branch
-      final branchUserIds = users.entries
+      final ids = users.entries
           .where((e) => e.value['branch'] == _userBranch)
           .map((e) => e.key)
           .toList();
-      if (branchUserIds.isNotEmpty) {
-        todosQuery = todosQuery.where('created_by', whereIn: branchUserIds.length > 10
-            ? branchUserIds.sublist(0, 10) // Firestore whereIn max 10
-            : branchUserIds);
-      } else {
-        // No users in branch, so no todos
+      if (ids.isEmpty) {
         return {
           'topLead': {'username': 'N/A', 'count': 0},
           'worstLead': {'username': 'N/A', 'count': 0},
@@ -129,16 +136,14 @@ class _InsightsPageState extends State<InsightsPage> {
           'worstTodo': {'username': 'N/A', 'count': 0},
         };
       }
-    } else if ((_role == 'admin' || _role == 'Sync Head' || _role == 'sync_head') && _selectedBranch != null) {
-      final branchUserIds = users.entries
+      todoDocs = await fetchTodoDocs(ids);
+    } else if ((_role == 'admin' || _role == 'Sync Head' || _role == 'sync_head') &&
+        _selectedBranch != null) {
+      final ids = users.entries
           .where((e) => e.value['branch'] == _selectedBranch)
           .map((e) => e.key)
           .toList();
-      if (branchUserIds.isNotEmpty) {
-        todosQuery = todosQuery.where('created_by', whereIn: branchUserIds.length > 10
-            ? branchUserIds.sublist(0, 10)
-            : branchUserIds);
-      } else {
+      if (ids.isEmpty) {
         return {
           'topLead': {'username': 'N/A', 'count': 0},
           'worstLead': {'username': 'N/A', 'count': 0},
@@ -146,11 +151,13 @@ class _InsightsPageState extends State<InsightsPage> {
           'worstTodo': {'username': 'N/A', 'count': 0},
         };
       }
+      todoDocs = await fetchTodoDocs(ids);
+    } else {
+      todoDocs = (await todosQuery.get()).docs;
     }
-    final todosSnapshot = await todosQuery.get();
 
     final Map<String, int> todosCount = {for (var uid in users.keys) uid: 0};
-    for (var doc in todosSnapshot.docs) {
+    for (var doc in todoDocs) {
       final data = doc.data() as Map<String, dynamic>;
       final createdBy = data['created_by'] ?? '';
       if (createdBy != '' && todosCount.containsKey(createdBy)) {

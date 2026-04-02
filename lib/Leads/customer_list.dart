@@ -84,10 +84,11 @@ class CustomerListPage extends StatefulWidget {
 }
 
 class _CustomerListPageState extends State<CustomerListPage> {
-  String searchQuery = '';
+  String searchQuery = '';  
   String? userBranch;
   String? userRole;
   String? userId;
+  Future<QuerySnapshot>? _customersFuture;
 
   @override
   void initState() {
@@ -104,7 +105,18 @@ class _CustomerListPageState extends State<CustomerListPage> {
         userRole = userDoc.data()?['role'];
         userId = user.uid;
       });
+      _loadCustomers();
     }
+  }
+
+  void _loadCustomers() {
+    Query customerQuery = FirebaseFirestore.instance.collection('customer');
+    if (userRole != 'admin' && userRole != 'Sync Head' && userRole != 'sync_head') {
+      customerQuery = customerQuery.where('branch', isEqualTo: userBranch);
+    }
+    setState(() {
+      _customersFuture = customerQuery.limit(100).get();
+    });
   }
 
   @override
@@ -118,19 +130,20 @@ class _CustomerListPageState extends State<CustomerListPage> {
       );
     }
 
-    // Filter by branch on Firestore side for non-admin users
-    Query customerQuery = FirebaseFirestore.instance.collection('customer');
-    if (userRole != 'admin' && userRole != 'Sync Head' && userRole != 'sync_head') {
-      customerQuery = customerQuery.where('branch', isEqualTo: userBranch);
-    }
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Customer List'),
         backgroundColor: const Color(0xFF005BAC),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+            onPressed: _loadCustomers,
+          ),
+        ],
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: customerQuery.limit(100).snapshots(),
+      body: FutureBuilder<QuerySnapshot>(
+        future: _customersFuture,
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());

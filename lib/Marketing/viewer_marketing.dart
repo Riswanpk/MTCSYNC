@@ -4,6 +4,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'viewer_marketing_detail.dart';
 import 'report_marketing.dart';
 import 'package:intl/intl.dart'; // Add for date formatting
+import '../Navigation/user_cache_service.dart';
 
 class ViewerMarketingPage extends StatefulWidget {
   const ViewerMarketingPage({super.key});
@@ -34,15 +35,7 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
   }
 
   Future<void> fetchBranches() async {
-    final snapshot = await FirebaseFirestore.instance.collection('marketing').get();
-    final allBranches = <String>{};
-    for (var doc in snapshot.docs) {
-      final branch = doc['branch'] as String?;
-      if (branch != null && branch.isNotEmpty) {
-        allBranches.add(branch);
-      }
-    }
-    final sortedBranches = allBranches.toList()..sort();
+    final sortedBranches = await UserCacheService.instance.getBranches();
     setState(() {
       branches = sortedBranches;
       if (branches.isNotEmpty && (selectedBranch == null || !branches.contains(selectedBranch))) {

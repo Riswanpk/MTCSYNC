@@ -140,9 +140,11 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
   }
 
   Future<void> _playClickSound() async {
-    final player = AudioPlayer();
-    await player.play(AssetSource('sounds/click.mp3'), volume: 0.5);
+    await _clickPlayer.stop();
+    await _clickPlayer.play(AssetSource('sounds/click.mp3'), volume: 0.5);
   }
+
+  static final _clickPlayer = AudioPlayer();
 
   @override
   Widget build(BuildContext context) {

@@ -14,6 +14,7 @@ class TodoListBody extends StatelessWidget {
   final Future<void> Function(DocumentSnapshot doc) onToggleStatus;
   final Future<void> Function(String docId) onDelete;
   final Future<String> Function(String email) getUsernameByEmail;
+  final String? role;
 
   const TodoListBody({
     Key? key,
@@ -25,6 +26,7 @@ class TodoListBody extends StatelessWidget {
     required this.onToggleStatus,
     required this.onDelete,
     required this.getUsernameByEmail,
+    this.role,
   }) : super(key: key);
 
   @override
@@ -38,14 +40,9 @@ class TodoListBody extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return FutureBuilder<void>(
-      future: UserCacheService.instance.ensureLoaded(),
-      builder: (context, userSnapshot) {
-        if (userSnapshot.connectionState == ConnectionState.waiting)
-          return const Center(child: CircularProgressIndicator());
-        final role = UserCacheService.instance.role;
+    final resolvedRole = role ?? UserCacheService.instance.role;
 
-        return StreamBuilder<QuerySnapshot>(
+    return StreamBuilder<QuerySnapshot>(
           stream: firestore
               .collection('todo')
               .where('email', isEqualTo: userEmail)
@@ -123,7 +120,5 @@ class TodoListBody extends StatelessWidget {
             );
           },
         );
-      },
-    );
   }
 }

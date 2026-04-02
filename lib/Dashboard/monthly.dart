@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
+import '../Navigation/user_cache_service.dart';
 
 class MonthlyReportPage extends StatefulWidget {
   final String? branch;
@@ -62,17 +63,8 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
       return;
     }
 
-    final usersSnapshot = await FirebaseFirestore.instance
-        .collection('users')
-        .get();
-    
-    final branches = usersSnapshot.docs
-        .map((doc) => doc['branch'] ?? '')
-        .where((b) => b != null && b.toString().isNotEmpty)
-        .toSet()
-        .cast<String>()
-        .toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase())); // Sort branches alphabetically
+    final allBranches = await UserCacheService.instance.getBranches();
+    final branches = List<String>.from(allBranches)..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
     if ((userRole == 'manager' || userRole == 'asst_manager') && userBranch != null) {
       await _fetchUsersForBranch(userBranch);

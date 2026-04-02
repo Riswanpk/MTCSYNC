@@ -222,6 +222,7 @@ class _TodoPageState extends State<TodoPage>
                             onToggleStatus: _toggleStatus,
                             onDelete: _deleteTodo,
                             getUsernameByEmail: _getUsernameByEmail,
+                            role: _userRole,
                           ),
                           TodoListBody(
                             status: 'done',
@@ -231,6 +232,7 @@ class _TodoPageState extends State<TodoPage>
                             onToggleStatus: _toggleStatus,
                             onDelete: _deleteTodo,
                             getUsernameByEmail: _getUsernameByEmail,
+                            role: _userRole,
                           ),
                           SalesTodosForManagerTab(
                             userEmail: _userEmail,
@@ -248,6 +250,7 @@ class _TodoPageState extends State<TodoPage>
                             onToggleStatus: _toggleStatus,
                             onDelete: _deleteTodo,
                             getUsernameByEmail: _getUsernameByEmail,
+                            role: _userRole,
                           ),
                           TodoListBody(
                             status: 'done',
@@ -257,6 +260,7 @@ class _TodoPageState extends State<TodoPage>
                             onToggleStatus: _toggleStatus,
                             onDelete: _deleteTodo,
                             getUsernameByEmail: _getUsernameByEmail,
+                            role: _userRole,
                           ),
                         ],
                 ),
