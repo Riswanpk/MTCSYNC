@@ -264,7 +264,7 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
                                 color: theme.cardColor,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                                 elevation: 3,
-                                shadowColor: accentColor.withOpacity(0.15),
+                                shadowColor: accentColor.withValues(alpha: 0.15),
                                 child: Container(
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(18),
@@ -273,7 +273,7 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
                                   child: ListTile(
                                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                                     leading: CircleAvatar(
-                                      backgroundColor: accentColor.withOpacity(0.12),
+                                      backgroundColor: accentColor.withValues(alpha: 0.12),
                                       child: Icon(
                                         isPremium ? Icons.workspace_premium_rounded : isHotelResort ? Icons.hotel_rounded : Icons.storefront_rounded,
                                         color: accentColor,
@@ -290,7 +290,7 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
                                       data['formType'] ?? '',
                                       style: TextStyle(fontFamily: 'Electorize', fontSize: 12, color: accentColor),
                                     ),
-                                    trailing: Icon(Icons.arrow_forward_ios_rounded, size: 16, color: accentColor.withOpacity(0.6)),
+                                    trailing: Icon(Icons.arrow_forward_ios_rounded, size: 16, color: accentColor.withValues(alpha: 0.6)),
                                     onTap: () {
                                       Navigator.push(
                                         context,

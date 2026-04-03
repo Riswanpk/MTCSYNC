@@ -48,7 +48,7 @@ class _SplashScreenState extends State<SplashScreen> {
     try {
       final String? deepLink = await _platform.invokeMethod<String>('getInitialDeepLink');
       if (deepLink != null && deepLink.isNotEmpty) {
-        print('Initial deep link from intent: $deepLink');
+        debugPrint('Initial deep link from intent: $deepLink');
         _handleWidgetClick(Uri.parse(deepLink));
       }
     } on PlatformException catch (e) {
@@ -59,7 +59,7 @@ class _SplashScreenState extends State<SplashScreen> {
   void _handleWidgetClick(Uri? uri) {
     if (!mounted || _openedFromWidget) return;
     if (uri != null) {
-      print('Widget clicked! URI: $uri');
+      debugPrint('Widget clicked! URI: $uri');
       _openedFromWidget = true;
 
       // Extract the path: "mtcsync://todo/<docId>" or "mtcsync://todo" etc.

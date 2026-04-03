@@ -356,7 +356,7 @@ class _DashboardPageState extends State<DashboardPage>
                         BoxShadow(
                           color: isDark
                               ? Colors.black26
-                              : Colors.black.withOpacity(0.06),
+                              : Colors.black.withValues(alpha: 0.06),
                           blurRadius: 20,
                           offset: const Offset(0, 8),
                         ),
@@ -371,7 +371,7 @@ class _DashboardPageState extends State<DashboardPage>
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
                                 color:
-                                    primaryBlue.withOpacity(isDark ? 0.2 : 0.1),
+                                    primaryBlue.withValues(alpha: isDark ? 0.2 : 0.1),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Icon(
@@ -470,7 +470,7 @@ class _DashboardPageState extends State<DashboardPage>
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: primaryBlue.withOpacity(0.3),
+                              color: primaryBlue.withValues(alpha: 0.3),
                               blurRadius: 12,
                               offset: const Offset(0, 6),
                             ),
@@ -603,7 +603,7 @@ class _AnimatedStatCardState extends State<_AnimatedStatCard>
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: gradient[1].withOpacity(0.35),
+                color: gradient[1].withValues(alpha: 0.35),
                 blurRadius: 16,
                 offset: const Offset(0, 8),
               ),
@@ -620,7 +620,7 @@ class _AnimatedStatCardState extends State<_AnimatedStatCard>
                   height: 70,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.12),
+                    color: Colors.white.withValues(alpha: 0.12),
                   ),
                 ),
               ),
@@ -632,7 +632,7 @@ class _AnimatedStatCardState extends State<_AnimatedStatCard>
                   height: 50,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.08),
+                    color: Colors.white.withValues(alpha: 0.08),
                   ),
                 ),
               ),
@@ -647,7 +647,7 @@ class _AnimatedStatCardState extends State<_AnimatedStatCard>
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(
@@ -674,7 +674,7 @@ class _AnimatedStatCardState extends State<_AnimatedStatCard>
                           widget.data.title,
                           style: TextStyle(
                             fontSize: 13,
-                            color: Colors.white.withOpacity(0.85),
+                            color: Colors.white.withValues(alpha: 0.85),
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -713,10 +713,10 @@ class _BranchChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: (isDark ? Colors.white : primaryBlue).withOpacity(0.1),
+          color: (isDark ? Colors.white : primaryBlue).withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: (isDark ? Colors.white : primaryBlue).withOpacity(0.15),
+            color: (isDark ? Colors.white : primaryBlue).withValues(alpha: 0.15),
           ),
         ),
         child: Row(
@@ -782,7 +782,7 @@ class LeadsPerMonthChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final lineColor = isDark ? const Color(0xFF64B5F6) : primaryBlue;
-    final areaColor = lineColor.withOpacity(isDark ? 0.15 : 0.12);
+    final areaColor = lineColor.withValues(alpha: isDark ? 0.15 : 0.12);
     final labelColor = isDark ? Colors.white54 : Colors.black45;
 
     return FutureBuilder<List<int>>(
@@ -893,7 +893,7 @@ class LeadsPerMonthChart extends StatelessWidget {
               drawVerticalLine: false,
               horizontalInterval: math.max((maxVal / 4).roundToDouble(), 1),
               getDrawingHorizontalLine: (value) => FlLine(
-                color: (isDark ? Colors.white : Colors.black).withOpacity(0.05),
+                color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.05),
                 strokeWidth: 1,
               ),
             ),
@@ -918,7 +918,7 @@ class LeadsPerMonthChart extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [areaColor, areaColor.withOpacity(0)],
+                    colors: [areaColor, areaColor.withValues(alpha: 0)],
                   ),
                 ),
                 spots: List.generate(
@@ -1039,7 +1039,7 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.15),
+                color: Colors.black.withValues(alpha: 0.15),
                 blurRadius: 20,
                 offset: const Offset(0, -4),
               ),
@@ -1071,7 +1071,7 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(isDark ? 0.2 : 0.1),
+                            color: Colors.red.withValues(alpha: isDark ? 0.2 : 0.1),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Icon(
@@ -1098,7 +1098,7 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
                                 "by sales team",
                                 style: TextStyle(
                                   fontSize: 13,
-                                  color: textColor.withOpacity(0.5),
+                                  color: textColor.withValues(alpha: 0.5),
                                 ),
                               ),
                             ],
@@ -1120,7 +1120,7 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
                             border: Border.all(
                               color: isDark
                                   ? Colors.white10
-                                  : Colors.black.withOpacity(0.06),
+                                  : Colors.black.withValues(alpha: 0.06),
                             ),
                           ),
                           child: DropdownButtonHideUnderline(
@@ -1143,7 +1143,7 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
                               hint: Text(
                                 "Select Branch",
                                 style: TextStyle(
-                                    color: textColor.withOpacity(0.5)),
+                                    color: textColor.withValues(alpha: 0.5)),
                               ),
                               isExpanded: true,
                               dropdownColor: bgColor,
@@ -1153,7 +1153,7 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
                               ),
                               icon: Icon(
                                 Icons.keyboard_arrow_down_rounded,
-                                color: textColor.withOpacity(0.5),
+                                color: textColor.withValues(alpha: 0.5),
                               ),
                             ),
                           ),
@@ -1171,13 +1171,13 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
                               Icon(
                                 Icons.person_off_rounded,
                                 size: 48,
-                                color: textColor.withOpacity(0.15),
+                                color: textColor.withValues(alpha: 0.15),
                               ),
                               const SizedBox(height: 12),
                               Text(
                                 'No sales users found',
                                 style: TextStyle(
-                                  color: textColor.withOpacity(0.4),
+                                  color: textColor.withValues(alpha: 0.4),
                                   fontSize: 14,
                                 ),
                               ),
@@ -1212,8 +1212,8 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
                                 color: hasPending
-                                    ? Colors.red.withOpacity(0.15)
-                                    : Colors.green.withOpacity(0.1),
+                                    ? Colors.red.withValues(alpha: 0.15)
+                                    : Colors.green.withValues(alpha: 0.1),
                                 width: 1,
                               ),
                             ),
@@ -1227,12 +1227,12 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
                                   gradient: LinearGradient(
                                     colors: hasPending
                                         ? [
-                                            Colors.red.withOpacity(0.15),
-                                            Colors.red.withOpacity(0.05),
+                                            Colors.red.withValues(alpha: 0.15),
+                                            Colors.red.withValues(alpha: 0.05),
                                           ]
                                         : [
-                                            Colors.green.withOpacity(0.15),
-                                            Colors.green.withOpacity(0.05),
+                                            Colors.green.withValues(alpha: 0.15),
+                                            Colors.green.withValues(alpha: 0.05),
                                           ],
                                   ),
                                   borderRadius: BorderRadius.circular(12),
@@ -1264,7 +1264,7 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
                               subtitle: Text(
                                 user['branch'],
                                 style: TextStyle(
-                                  color: textColor.withOpacity(0.45),
+                                  color: textColor.withValues(alpha: 0.45),
                                   fontSize: 12,
                                 ),
                               ),
@@ -1274,9 +1274,9 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
                                 decoration: BoxDecoration(
                                   color: hasPending
                                       ? Colors.red
-                                          .withOpacity(isDark ? 0.2 : 0.08)
+                                          .withValues(alpha: isDark ? 0.2 : 0.08)
                                       : Colors.green
-                                          .withOpacity(isDark ? 0.2 : 0.08),
+                                          .withValues(alpha: isDark ? 0.2 : 0.08),
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: Text(

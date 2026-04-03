@@ -250,7 +250,7 @@ class LeadCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: theme.shadowColor.withOpacity(isDark ? 0.2 : 0.05),
+                color: theme.shadowColor.withValues(alpha: isDark ? 0.2 : 0.05),
                 blurRadius: 12,
                 offset: const Offset(0, 6),
               ),

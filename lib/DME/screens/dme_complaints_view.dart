@@ -37,7 +37,7 @@ class _DmeComplaintsViewPageState extends State<DmeComplaintsViewPage> {
       
       await _loadComplaints();
     } catch (e) {
-      print('Error loading user info: $e');
+      debugPrint('Error loading user info: $e');
       setState(() => _loading = false);
     }
   }
@@ -70,7 +70,7 @@ class _DmeComplaintsViewPageState extends State<DmeComplaintsViewPage> {
         });
       }
     } catch (e) {
-      print('Error loading complaints: $e');
+      debugPrint('Error loading complaints: $e');
       if (mounted) {
         setState(() => _loading = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -230,7 +230,7 @@ class _DmeComplaintsViewPageState extends State<DmeComplaintsViewPage> {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: (statusColor['color'] as Color?)?.withOpacity(0.2),
+                    color: (statusColor['color'] as Color?)?.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(

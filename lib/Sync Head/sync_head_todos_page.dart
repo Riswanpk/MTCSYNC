@@ -208,7 +208,7 @@ class _SyncHeadTodosPageState extends State<SyncHeadTodosPage> {
                         horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
                       border: Border.all(
-                          color: _primaryGreen.withOpacity(0.5)),
+                          color: _primaryGreen.withValues(alpha: 0.5)),
                       borderRadius: BorderRadius.circular(10),
                       color: isDark
                           ? const Color(0xFF162236)
@@ -273,14 +273,14 @@ class _SyncHeadTodosPageState extends State<SyncHeadTodosPage> {
                                 BorderRadius.circular(10),
                             borderSide: BorderSide(
                                 color: _primaryGreen
-                                    .withOpacity(0.4)),
+                                    .withValues(alpha: 0.4)),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius:
                                 BorderRadius.circular(10),
                             borderSide: BorderSide(
                                 color: _primaryGreen
-                                    .withOpacity(0.4)),
+                                    .withValues(alpha: 0.4)),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius:
@@ -398,7 +398,7 @@ class _UserTodoSection extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color:
-                Colors.black.withOpacity(isDark ? 0.3 : 0.06),
+                Colors.black.withValues(alpha: isDark ? 0.3 : 0.06),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -413,7 +413,7 @@ class _UserTodoSection extends StatelessWidget {
                 horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: _primaryGreen
-                  .withOpacity(isDark ? 0.15 : 0.08),
+                  .withValues(alpha: isDark ? 0.15 : 0.08),
               borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(14)),
             ),
@@ -421,7 +421,7 @@ class _UserTodoSection extends StatelessWidget {
               children: [
                 CircleAvatar(
                   backgroundColor:
-                      _primaryGreen.withOpacity(0.2),
+                      _primaryGreen.withValues(alpha: 0.2),
                   radius: 18,
                   child: Text(
                     username.isNotEmpty
@@ -470,8 +470,8 @@ class _UserTodoSection extends StatelessWidget {
                       horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: todos.isEmpty
-                        ? Colors.red.withOpacity(0.15)
-                        : _primaryGreen.withOpacity(0.15),
+                        ? Colors.red.withValues(alpha: 0.15)
+                        : _primaryGreen.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -523,7 +523,7 @@ class _UserTodoSection extends StatelessWidget {
                             color: isDark
                                 ? Colors.white12
                                 : Colors.black
-                                    .withOpacity(0.06),
+                                    .withValues(alpha: 0.06),
                           ),
                         ),
                 ),
@@ -627,9 +627,9 @@ class _PriorityBadge extends StatelessWidget {
       padding:
           const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: _color.withOpacity(0.12),
+        color: _color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _color.withOpacity(0.3)),
+        border: Border.all(color: _color.withValues(alpha: 0.3)),
       ),
       child: Text(
         priority,

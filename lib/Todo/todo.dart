@@ -115,7 +115,7 @@ class _TodoPageState extends State<TodoPage>
               unselectedLabelColor: Colors.white70,
               indicator: BoxDecoration(
                 borderRadius: BorderRadius.circular(50),
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
               ),
               labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
               unselectedLabelStyle: const TextStyle(fontSize: 12),
@@ -135,12 +135,12 @@ class _TodoPageState extends State<TodoPage>
                         end: Alignment.bottomRight,
                         colors: [
                           todowidgets.primaryBlue,
-                          todowidgets.primaryBlue.withOpacity(0.9),
+                          todowidgets.primaryBlue.withValues(alpha: 0.9),
                         ],
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: todowidgets.primaryBlue.withOpacity(0.3),
+                          color: todowidgets.primaryBlue.withValues(alpha: 0.3),
                           blurRadius: 15,
                           offset: const Offset(0, 5),
                         ),
@@ -182,7 +182,7 @@ class _TodoPageState extends State<TodoPage>
                           height: 48,
                           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
+                            color: Colors.white.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(25),
                           ),
                           child: TabBar(
@@ -192,7 +192,7 @@ class _TodoPageState extends State<TodoPage>
                             indicatorPadding: const EdgeInsets.all(4),
                             indicator: BoxDecoration(
                               borderRadius: BorderRadius.circular(22),
-                              color: Colors.white.withOpacity(0.25),
+                              color: Colors.white.withValues(alpha: 0.25),
                             ),
                             tabs: isManager
                                 ? [
@@ -341,8 +341,8 @@ class _TodoPageState extends State<TodoPage>
 
       _todoController.clear();
     } catch (e, stack) {
-      print('Error creating todo: $e');
-      print(stack);
+      debugPrint('Error creating todo: $e');
+      debugPrint('$stack');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e')),

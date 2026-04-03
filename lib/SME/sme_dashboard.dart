@@ -197,8 +197,8 @@ class _SmeDashboardState extends State<SmeDashboard>
                               color: Colors.transparent,
                               child: InkWell(
                                 onTap: onTap,
-                                splashColor: Colors.white.withOpacity(0.15),
-                                highlightColor: Colors.white.withOpacity(0.08),
+                                splashColor: Colors.white.withValues(alpha: 0.15),
+                                highlightColor: Colors.white.withValues(alpha: 0.08),
                                 child: Ink(
                                   decoration: BoxDecoration(
                                     gradient: LinearGradient(
@@ -208,7 +208,7 @@ class _SmeDashboardState extends State<SmeDashboard>
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: gradient[1].withOpacity(0.3),
+                                        color: gradient[1].withValues(alpha: 0.3),
                                         blurRadius: 12,
                                         offset: const Offset(0, 6),
                                       ),
@@ -225,7 +225,7 @@ class _SmeDashboardState extends State<SmeDashboard>
                                             Container(
                                               padding: const EdgeInsets.all(8),
                                               decoration: BoxDecoration(
-                                                color: Colors.white.withOpacity(0.2),
+                                                color: Colors.white.withValues(alpha: 0.2),
                                                 borderRadius: BorderRadius.circular(10),
                                               ),
                                               child: Icon(card.icon, color: Colors.white, size: 20),
@@ -233,7 +233,7 @@ class _SmeDashboardState extends State<SmeDashboard>
                                             const Spacer(),
                                             if (onTap != null)
                                               Icon(Icons.arrow_forward_ios_rounded,
-                                                  color: Colors.white.withOpacity(0.5), size: 14),
+                                                  color: Colors.white.withValues(alpha: 0.5), size: 14),
                                           ],
                                         ),
                                         Column(
@@ -251,7 +251,7 @@ class _SmeDashboardState extends State<SmeDashboard>
                                             Text(
                                               card.title,
                                               style: TextStyle(
-                                                color: Colors.white.withOpacity(0.85),
+                                                color: Colors.white.withValues(alpha: 0.85),
                                                 fontSize: 13,
                                                 fontWeight: FontWeight.w500,
                                               ),
@@ -302,7 +302,7 @@ class _SmeDashboardState extends State<SmeDashboard>
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: isDark ? Colors.black26 : Colors.black.withOpacity(0.06),
+                color: isDark ? Colors.black26 : Colors.black.withValues(alpha: 0.06),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -315,7 +315,7 @@ class _SmeDashboardState extends State<SmeDashboard>
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: _primaryBlue.withOpacity(isDark ? 0.2 : 0.1),
+                    color: _primaryBlue.withValues(alpha: isDark ? 0.2 : 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(icon, color: _primaryBlue, size: 22),

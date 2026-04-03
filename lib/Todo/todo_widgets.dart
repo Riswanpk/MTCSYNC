@@ -93,20 +93,20 @@ class TodoListItem extends StatelessWidget {
         color: priorityBgColor,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: priorityColor.withOpacity(0.2),
+          color: priorityColor.withValues(alpha: 0.2),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: priorityColor.withOpacity(0.1),
+            color: priorityColor.withValues(alpha: 0.1),
             blurRadius: 12,
             offset: const Offset(0, 4),
             spreadRadius: 0,
           ),
           BoxShadow(
             color: isDark 
-                ? Colors.black.withOpacity(0.3)
-                : Colors.white.withOpacity(0.8),
+                ? Colors.black.withValues(alpha: 0.3)
+                : Colors.white.withValues(alpha: 0.8),
             blurRadius: 6,
             offset: const Offset(0, -2),
             spreadRadius: 0,
@@ -145,7 +145,7 @@ class TodoListItem extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                     boxShadow: [
                       BoxShadow(
-                        color: priorityColor.withOpacity(0.4),
+                        color: priorityColor.withValues(alpha: 0.4),
                         blurRadius: 4,
                         spreadRadius: 0,
                       ),
@@ -317,7 +317,7 @@ class TodoListItemReadOnly extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: primaryBlue.withOpacity(0.12),
+                    color: primaryBlue.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(

@@ -199,7 +199,7 @@ class _CustomerTile extends StatelessWidget {
     final dateFmt = DateFormat('dd-MMM-yy');
     return ListTile(
       leading: CircleAvatar(
-        backgroundColor: const Color(0xFF005BAC).withOpacity(0.1),
+        backgroundColor: const Color(0xFF005BAC).withValues(alpha: 0.1),
         child: Text(
           customer.name.isNotEmpty ? customer.name[0].toUpperCase() : '?',
           style: const TextStyle(

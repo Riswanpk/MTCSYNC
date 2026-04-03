@@ -400,7 +400,7 @@ class _HomePageState extends State<HomePage>
         await InAppUpdate.performImmediateUpdate();
       }
     } catch (e) {
-      print('Update check failed: $e');
+      debugPrint('Update check failed: $e');
     }
   }
 
@@ -480,8 +480,9 @@ class _HomePageState extends State<HomePage>
     final username = _username;
     final branch = _branch;
 
-    return WillPopScope(
-      onWillPop: () async => false,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {},
       child: Scaffold(
         endDrawer: HomeDrawer(
           role: role,

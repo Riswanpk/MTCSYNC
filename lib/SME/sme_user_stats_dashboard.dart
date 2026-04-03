@@ -330,13 +330,13 @@ class _SmeUserStatsDashboardState extends State<SmeUserStatsDashboard> {
         margin: const EdgeInsets.symmetric(horizontal: 4),
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Column(
           children: [
             Text('$count', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: color)),
-            Text(label, style: TextStyle(fontSize: 10, color: color.withOpacity(0.8))),
+            Text(label, style: TextStyle(fontSize: 10, color: color.withValues(alpha: 0.8))),
           ],
         ),
       ),
@@ -465,7 +465,7 @@ class _UserLeadsDetailPageState extends State<_UserLeadsDetailPage> {
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: isDark ? Colors.black26 : Colors.black.withOpacity(0.06),
+                              color: isDark ? Colors.black26 : Colors.black.withValues(alpha: 0.06),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             ),
@@ -500,7 +500,7 @@ class _UserLeadsDetailPageState extends State<_UserLeadsDetailPage> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: statusColor.withOpacity(0.15),
+                                    color: statusColor.withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(status, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: statusColor)),

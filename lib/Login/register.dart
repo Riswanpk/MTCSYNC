@@ -130,7 +130,7 @@ class _RegisterPageState extends State<RegisterPage>
       {Widget? suffixIcon}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return InputDecoration(
-      prefixIcon: Icon(icon, color: _primaryBlue.withOpacity(0.7), size: 22),
+      prefixIcon: Icon(icon, color: _primaryBlue.withValues(alpha: 0.7), size: 22),
       suffixIcon: suffixIcon,
       labelText: label,
       labelStyle: TextStyle(
@@ -140,8 +140,8 @@ class _RegisterPageState extends State<RegisterPage>
       ),
       filled: true,
       fillColor: isDark
-          ? Colors.white.withOpacity(0.08)
-          : _primaryBlue.withOpacity(0.04),
+          ? Colors.white.withValues(alpha: 0.08)
+          : _primaryBlue.withValues(alpha: 0.04),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide.none,
@@ -149,7 +149,7 @@ class _RegisterPageState extends State<RegisterPage>
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide(
-          color: (isDark ? Colors.white : _primaryBlue).withOpacity(0.12),
+          color: (isDark ? Colors.white : _primaryBlue).withValues(alpha: 0.12),
           width: 1.5,
         ),
       ),
@@ -189,9 +189,9 @@ class _RegisterPageState extends State<RegisterPage>
                         const Color(0xFF0A1628),
                       ]
                     : [
-                        _primaryBlue.withOpacity(0.08),
+                        _primaryBlue.withValues(alpha: 0.08),
                         Colors.white,
-                        _primaryGreen.withOpacity(0.10),
+                        _primaryGreen.withValues(alpha: 0.10),
                       ],
                 stops: const [0.0, 0.5, 1.0],
               ),
@@ -209,8 +209,8 @@ class _RegisterPageState extends State<RegisterPage>
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    _primaryGreen.withOpacity(isDark ? 0.15 : 0.25),
-                    _primaryGreen.withOpacity(0.0),
+                    _primaryGreen.withValues(alpha: isDark ? 0.15 : 0.25),
+                    _primaryGreen.withValues(alpha: 0.0),
                   ],
                 ),
               ),
@@ -228,8 +228,8 @@ class _RegisterPageState extends State<RegisterPage>
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    _primaryBlue.withOpacity(isDark ? 0.2 : 0.2),
-                    _primaryBlue.withOpacity(0.0),
+                    _primaryBlue.withValues(alpha: isDark ? 0.2 : 0.2),
+                    _primaryBlue.withValues(alpha: 0.0),
                   ],
                 ),
               ),
@@ -253,25 +253,25 @@ class _RegisterPageState extends State<RegisterPage>
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
                             color:
-                                Colors.white.withOpacity(isDark ? 0.05 : 0.7),
+                                Colors.white.withValues(alpha: isDark ? 0.05 : 0.7),
                             borderRadius: BorderRadius.circular(32),
                             boxShadow: [
                               BoxShadow(
                                 color: _primaryBlue
-                                    .withOpacity(isDark ? 0.2 : 0.08),
+                                    .withValues(alpha: isDark ? 0.2 : 0.08),
                                 blurRadius: 40,
                                 offset: const Offset(0, 16),
                               ),
                               BoxShadow(
                                 color: _primaryGreen
-                                    .withOpacity(isDark ? 0.1 : 0.05),
+                                    .withValues(alpha: isDark ? 0.1 : 0.05),
                                 blurRadius: 30,
                                 offset: const Offset(-10, -10),
                               ),
                             ],
                             border: Border.all(
                               color: (isDark ? Colors.white : _primaryBlue)
-                                  .withOpacity(0.1),
+                                  .withValues(alpha: 0.1),
                               width: 1,
                             ),
                           ),
@@ -289,25 +289,25 @@ class _RegisterPageState extends State<RegisterPage>
                           padding: const EdgeInsets.all(28),
                           decoration: BoxDecoration(
                             color:
-                                Colors.white.withOpacity(isDark ? 0.06 : 0.85),
+                                Colors.white.withValues(alpha: isDark ? 0.06 : 0.85),
                             borderRadius: BorderRadius.circular(28),
                             boxShadow: [
                               BoxShadow(
                                 color: _primaryBlue
-                                    .withOpacity(isDark ? 0.15 : 0.06),
+                                    .withValues(alpha: isDark ? 0.15 : 0.06),
                                 blurRadius: 30,
                                 offset: const Offset(0, 12),
                               ),
                               BoxShadow(
                                 color: Colors.black
-                                    .withOpacity(isDark ? 0.3 : 0.04),
+                                    .withValues(alpha: isDark ? 0.3 : 0.04),
                                 blurRadius: 20,
                                 offset: const Offset(0, 8),
                               ),
                             ],
                             border: Border.all(
                               color: (isDark ? Colors.white : _primaryBlue)
-                                  .withOpacity(0.1),
+                                  .withValues(alpha: 0.1),
                               width: 1,
                             ),
                           ),
@@ -436,7 +436,7 @@ class _RegisterPageState extends State<RegisterPage>
                                         _obscurePassword
                                             ? Icons.visibility_off_outlined
                                             : Icons.visibility_outlined,
-                                        color: _primaryBlue.withOpacity(0.5),
+                                        color: _primaryBlue.withValues(alpha: 0.5),
                                         size: 22,
                                       ),
                                       onPressed: () => setState(() =>
@@ -490,7 +490,7 @@ class _RegisterPageState extends State<RegisterPage>
                                           horizontal: 12, vertical: 8),
                                       decoration: BoxDecoration(
                                         color:
-                                            Colors.redAccent.withOpacity(0.1),
+                                            Colors.redAccent.withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Row(
@@ -534,19 +534,19 @@ class _RegisterPageState extends State<RegisterPage>
                                       borderRadius: BorderRadius.circular(22),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: _primaryGreen.withOpacity(0.4),
+                                          color: _primaryGreen.withValues(alpha: 0.4),
                                           offset: const Offset(0, 8),
                                           blurRadius: 20,
                                           spreadRadius: -2,
                                         ),
                                         BoxShadow(
-                                          color: Colors.black.withOpacity(0.2),
+                                          color: Colors.black.withValues(alpha: 0.2),
                                           offset: const Offset(0, 4),
                                           blurRadius: 12,
                                         ),
                                       ],
                                       border: Border.all(
-                                        color: Colors.white.withOpacity(0.25),
+                                        color: Colors.white.withValues(alpha: 0.25),
                                         width: 1.5,
                                       ),
                                     ),
@@ -581,7 +581,7 @@ class _RegisterPageState extends State<RegisterPage>
                                                         decoration:
                                                             BoxDecoration(
                                                           color: Colors.white
-                                                              .withOpacity(
+                                                              .withValues(alpha: 
                                                                   0.18),
                                                           borderRadius:
                                                               BorderRadius
@@ -590,7 +590,7 @@ class _RegisterPageState extends State<RegisterPage>
                                                             BoxShadow(
                                                               color: Colors
                                                                   .black
-                                                                  .withOpacity(
+                                                                  .withValues(alpha: 
                                                                       0.1),
                                                               blurRadius: 4,
                                                               offset:
@@ -621,7 +621,7 @@ class _RegisterPageState extends State<RegisterPage>
                                                             Shadow(
                                                               color: Colors
                                                                   .black
-                                                                  .withOpacity(
+                                                                  .withValues(alpha: 
                                                                       0.25),
                                                               offset:
                                                                   const Offset(

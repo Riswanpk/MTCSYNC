@@ -380,14 +380,14 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
             child: DataTable(
               headingRowColor: MaterialStateProperty.resolveWith<Color>(
                 (states) => isDark
-                    ? primaryGreen.withOpacity(0.12)
-                    : primaryBlue.withOpacity(0.18), // blue for light
+                    ? primaryGreen.withValues(alpha: 0.12)
+                    : primaryBlue.withValues(alpha: 0.18), // blue for light
               ),
               dataRowColor: MaterialStateProperty.resolveWith<Color>(
                 (states) => states.contains(MaterialState.selected)
                     ? (isDark
-                        ? primaryBlue.withOpacity(0.18)
-                        : primaryGreen.withOpacity(0.12)) // green for light
+                        ? primaryBlue.withValues(alpha: 0.18)
+                        : primaryGreen.withValues(alpha: 0.12)) // green for light
                     : (isDark ? const Color(0xFF181A20) : Colors.white),
               ),
               columns: [
@@ -430,8 +430,8 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                   return DataRow(
                     color: MaterialStateProperty.resolveWith<Color>(
                       (states) => isDark
-                          ? (isEven ? primaryGreen.withOpacity(0.06) : primaryBlue.withOpacity(0.06))
-                          : (isEven ? primaryBlue.withOpacity(0.06) : primaryGreen.withOpacity(0.06)),
+                          ? (isEven ? primaryGreen.withValues(alpha: 0.06) : primaryBlue.withValues(alpha: 0.06))
+                          : (isEven ? primaryBlue.withValues(alpha: 0.06) : primaryGreen.withValues(alpha: 0.06)),
                     ),
                     cells: [
                       DataCell(
@@ -482,7 +482,7 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                 },
               ),
               border: TableBorder(
-                horizontalInside: BorderSide(color: isDark ? primaryGreen.withOpacity(0.18) : primaryBlue.withOpacity(0.18), width: 0.5),
+                horizontalInside: BorderSide(color: isDark ? primaryGreen.withValues(alpha: 0.18) : primaryBlue.withValues(alpha: 0.18), width: 0.5),
               ),
             ),
           ),

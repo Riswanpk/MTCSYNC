@@ -976,14 +976,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.2.2"
-  image_watermark:
-    dependency: "direct main"
-    description:
-      name: image_watermark
-      sha256: "3c7d79d4915328ba3eb5d91bfec930cdcadc4797264b7f862c14f98ff89aa0da"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.1.0"
   in_app_update:
     dependency: "direct main"
     description:

@@ -328,7 +328,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
         labelStyle: TextStyle(
           fontSize: 13,
           fontFamily: 'Electorize',
-          color: const Color(0xFFD4AF37).withOpacity(0.7),
+          color: const Color(0xFFD4AF37).withValues(alpha: 0.7),
           letterSpacing: 0.5,
         ),
         filled: true,
@@ -351,7 +351,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
             bottomLeft: Radius.circular(22),
             bottomRight: Radius.circular(0),
           ),
-          borderSide: BorderSide(color: const Color(0xFFD4AF37).withOpacity(0.25), width: 1),
+          borderSide: BorderSide(color: const Color(0xFFD4AF37).withValues(alpha: 0.25), width: 1),
         ),
         focusedBorder: const OutlineInputBorder(
           borderRadius: BorderRadius.only(
@@ -427,7 +427,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.grey.withOpacity(0.3),
+                            color: Colors.grey.withValues(alpha: 0.3),
                             spreadRadius: 1,
                             blurRadius: 6,
                             offset: const Offset(2, 3),
@@ -463,7 +463,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.grey.withOpacity(0.3),
+                            color: Colors.grey.withValues(alpha: 0.3),
                             spreadRadius: 1,
                             blurRadius: 6,
                             offset: const Offset(2, 3),
@@ -563,7 +563,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.grey.withOpacity(0.3),
+                            color: Colors.grey.withValues(alpha: 0.3),
                             spreadRadius: 1,
                             blurRadius: 6,
                             offset: const Offset(2, 3),
@@ -598,7 +598,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.grey.withOpacity(0.3),
+                            color: Colors.grey.withValues(alpha: 0.3),
                             spreadRadius: 1,
                             blurRadius: 6,
                             offset: const Offset(2, 3),
@@ -690,7 +690,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 spreadRadius: 1,
                                 blurRadius: 8,
                                 offset: const Offset(2, 4),
@@ -748,7 +748,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.grey.withOpacity(0.3),
+                            color: Colors.grey.withValues(alpha: 0.3),
                             spreadRadius: 1,
                             blurRadius: 6,
                             offset: const Offset(2, 3),
@@ -782,7 +782,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.grey.withOpacity(0.3),
+                            color: Colors.grey.withValues(alpha: 0.3),
                             spreadRadius: 1,
                             blurRadius: 6,
                             offset: const Offset(2, 3),
@@ -826,10 +826,10 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                               Container(
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(color: const Color(0xFFD4AF37).withOpacity(0.3), width: 1.5),
+                                  border: Border.all(color: const Color(0xFFD4AF37).withValues(alpha: 0.3), width: 1.5),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFFD4AF37).withOpacity(0.15),
+                                      color: const Color(0xFFD4AF37).withValues(alpha: 0.15),
                                       blurRadius: 12,
                                       offset: const Offset(0, 4),
                                     ),
@@ -872,7 +872,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFFD4AF37).withOpacity(0.4),
+                            color: const Color(0xFFD4AF37).withValues(alpha: 0.4),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
@@ -967,7 +967,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                 ),
                 Icon(Icons.calendar_today_outlined,
                     size: 20,
-                    color: const Color(0xFFD4AF37).withOpacity(0.7)),
+                    color: const Color(0xFFD4AF37).withValues(alpha: 0.7)),
               ],
             ),
           ),

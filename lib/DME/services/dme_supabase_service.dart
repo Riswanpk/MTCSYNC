@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../dme_config.dart';
@@ -206,7 +207,7 @@ class DmeSupabaseService {
             });
             addedCount++;
           } catch (e) {
-            print('Error adding user $username: $e');
+            debugPrint('Error adding user $username: $e');
           }
         } else {
           skippedCount++;
@@ -666,7 +667,7 @@ class DmeSupabaseService {
         }
         
       } catch (e) {
-        print('Error uploading customer ${customer.name}: $e');
+        debugPrint('Error uploading customer ${customer.name}: $e');
         rethrow;
       }
       

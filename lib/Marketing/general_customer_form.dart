@@ -79,7 +79,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: const Color(0xFFFF6B35).withOpacity(0.15), width: 1),
+          borderSide: BorderSide(color: const Color(0xFFFF6B35).withValues(alpha: 0.15), width: 1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -98,12 +98,12 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFFF6B35).withOpacity(0.06),
+            color: const Color(0xFFFF6B35).withValues(alpha: 0.06),
             blurRadius: 12,
             offset: const Offset(0, 3),
           ),
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 6,
             offset: const Offset(0, 1),
           ),
@@ -382,12 +382,12 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
-                            const Color(0xFFFF6B35).withOpacity(0.12),
-                            const Color(0xFFFF8F65).withOpacity(0.06),
+                            const Color(0xFFFF6B35).withValues(alpha: 0.12),
+                            const Color(0xFFFF8F65).withValues(alpha: 0.06),
                           ],
                         ),
                         borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: const Color(0xFFFF6B35).withOpacity(0.15)),
+                        border: Border.all(color: const Color(0xFFFF6B35).withValues(alpha: 0.15)),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -395,7 +395,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFF6B35).withOpacity(0.15),
+                              color: const Color(0xFFFF6B35).withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Icon(Icons.storefront_outlined, color: Color(0xFFFF6B35), size: 24),
@@ -730,11 +730,11 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                color: const Color(0xFFFF6B35).withOpacity(0.3),
+                                color: const Color(0xFFFF6B35).withValues(alpha: 0.3),
                                 width: 1.5,
                                 strokeAlign: BorderSide.strokeAlignInside,
                               ),
-                              color: const Color(0xFFFF6B35).withOpacity(0.04),
+                              color: const Color(0xFFFF6B35).withValues(alpha: 0.04),
                             ),
                             child: InkWell(
                               onTap: _openCamera,
@@ -758,7 +758,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                                   borderRadius: BorderRadius.circular(14),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFFFF6B35).withOpacity(0.15),
+                                      color: const Color(0xFFFF6B35).withValues(alpha: 0.15),
                                       blurRadius: 12,
                                       offset: const Offset(0, 4),
                                     ),
@@ -796,7 +796,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFFFF6B35).withOpacity(0.35),
+                            color: const Color(0xFFFF6B35).withValues(alpha: 0.35),
                             blurRadius: 14,
                             offset: const Offset(0, 5),
                           ),
@@ -834,7 +834,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: const Color(0xFFFF6B35).withOpacity(0.1),
+                color: const Color(0xFFFF6B35).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(icon, size: 18, color: const Color(0xFFFF6B35)),

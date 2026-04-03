@@ -62,7 +62,7 @@ void main() async {
       create: (_) => ThemeProvider(prefs: prefs),
       child: ShowCaseWidget(
         builder: (context) => MediaQuery(
-          data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
+          data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
           child: const MyApp(),
         ),
       ),
@@ -207,7 +207,7 @@ class _UpdateGateState extends State<UpdateGate> {
         await InAppUpdate.performImmediateUpdate();
       }
     } catch (e) {
-      print('Update check failed: $e');
+      debugPrint('Update check failed: $e');
     }
   }
 

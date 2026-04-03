@@ -191,14 +191,14 @@ class _EntryPageState extends State<EntryPage> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
+                          color: Colors.white.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
                           monthLabel,
                           style: TextStyle(
                             fontSize: 13, fontWeight: FontWeight.w500,
-                            color: Colors.white.withOpacity(0.9),
+                            color: Colors.white.withValues(alpha: 0.9),
                           ),
                         ),
                       ),
@@ -221,7 +221,7 @@ class _EntryPageState extends State<EntryPage> {
                   boxShadow: [
                     if (!isDark)
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 10,
                         offset: const Offset(0, 2),
                       ),
@@ -252,7 +252,7 @@ class _EntryPageState extends State<EntryPage> {
                     ),
                     prefixIcon: Icon(
                       Icons.store_rounded,
-                      color: _primaryBlue.withOpacity(0.7),
+                      color: _primaryBlue.withValues(alpha: 0.7),
                     ),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
@@ -303,7 +303,7 @@ class _EntryPageState extends State<EntryPage> {
                         boxShadow: [
                           if (!isDark)
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.04),
+                              color: Colors.black.withValues(alpha: 0.04),
                               blurRadius: 10,
                               offset: const Offset(0, 2),
                             ),
@@ -320,7 +320,7 @@ class _EntryPageState extends State<EntryPage> {
                                 Container(
                                   width: 38, height: 38,
                                   decoration: BoxDecoration(
-                                    color: _primaryBlue.withOpacity(0.1),
+                                    color: _primaryBlue.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Center(
@@ -396,7 +396,7 @@ class _EntryPageState extends State<EntryPage> {
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: [
                       BoxShadow(
-                        color: _primaryBlue.withOpacity(0.35),
+                        color: _primaryBlue.withValues(alpha: 0.35),
                         blurRadius: 12,
                         offset: const Offset(0, 4),
                       ),
@@ -470,14 +470,14 @@ class _ScoreField extends StatelessWidget {
         hintStyle: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400], fontSize: 13),
         prefixIcon: Icon(icon, color: accentColor, size: 20),
         filled: true,
-        fillColor: accentColor.withOpacity(isDark ? 0.08 : 0.05),
+        fillColor: accentColor.withValues(alpha: isDark ? 0.08 : 0.05),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: accentColor.withOpacity(0.2)),
+          borderSide: BorderSide(color: accentColor.withValues(alpha: 0.2)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),

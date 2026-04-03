@@ -137,10 +137,10 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        Navigator.pop(context);
-        return false;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) Navigator.pop(context);
       },
       child: Scaffold(
         appBar: AppBar(
@@ -472,7 +472,7 @@ class _ComplaintFormDialogState extends State<_ComplaintFormDialog> {
       final branch = UserCacheService.instance.branch;
       setState(() => _userBranch = branch);
     } catch (e) {
-      print('Error loading user branch: $e');
+      debugPrint('Error loading user branch: $e');
     }
   }
 

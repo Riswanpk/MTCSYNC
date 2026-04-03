@@ -130,8 +130,7 @@ class HomeDrawer extends StatelessWidget {
       leading: const Icon(Icons.settings, color: Color(0xFF005BAC)),
       title: const Text('Settings'),
       onTap: () {
-        final themeProvider =
-            Provider.of<ThemeProvider>(context, listen: false);
+        final themeProvider = context.read<ThemeProvider>();
         Navigator.pop(context);
         Navigator.push(
           context,

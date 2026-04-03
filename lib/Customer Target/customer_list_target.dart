@@ -749,8 +749,8 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
                                   colors: isDark
-                                      ? [primaryBlue.withOpacity(0.3), primaryBlue.withOpacity(0.15)]
-                                      : [primaryGreen.withOpacity(0.25), primaryGreen.withOpacity(0.1)],
+                                      ? [primaryBlue.withValues(alpha: 0.3), primaryBlue.withValues(alpha: 0.15)]
+                                      : [primaryGreen.withValues(alpha: 0.25), primaryGreen.withValues(alpha: 0.1)],
                                   begin: Alignment.centerLeft,
                                   end: Alignment.centerRight,
                                 ),
@@ -919,8 +919,8 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                                   }
                                 }
                               },
-                              splashColor: (isDark ? primaryBlue : primaryGreen).withOpacity(0.15),
-                              highlightColor: (isDark ? primaryBlue : primaryGreen).withOpacity(0.08),
+                              splashColor: (isDark ? primaryBlue : primaryGreen).withValues(alpha: 0.15),
+                              highlightColor: (isDark ? primaryBlue : primaryGreen).withValues(alpha: 0.08),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                                 decoration: BoxDecoration(
@@ -973,7 +973,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                                         (customer['address'] ?? '-').toString().toUpperCase(),
                                         style: TextStyle(
                                           fontSize: 13,
-                                          color: Color(0xFF005BAC).withOpacity(0.9), // blue as in login.dart
+                                          color: Color(0xFF005BAC).withValues(alpha: 0.9), // blue as in login.dart
                                         ),
                                         textAlign: TextAlign.center,
                                         overflow: TextOverflow.ellipsis,
@@ -987,13 +987,13 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                           decoration: BoxDecoration(
                                             color: callMade
-                                                ? Colors.green.withOpacity(0.15)
-                                                : Colors.orange.withOpacity(0.15),
+                                                ? Colors.green.withValues(alpha: 0.15)
+                                                : Colors.orange.withValues(alpha: 0.15),
                                             borderRadius: BorderRadius.circular(20),
                                             border: Border.all(
                                               color: callMade
-                                                  ? Colors.green.withOpacity(0.4)
-                                                  : Colors.orange.withOpacity(0.4),
+                                                  ? Colors.green.withValues(alpha: 0.4)
+                                                  : Colors.orange.withValues(alpha: 0.4),
                                               width: 1,
                                             ),
                                           ),

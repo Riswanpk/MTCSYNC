@@ -169,7 +169,7 @@ class _DmeProductUploadPageState extends State<DmeProductUploadPage> {
                         return ListTile(
                           leading: CircleAvatar(
                             backgroundColor:
-                                const Color(0xFF607D8B).withOpacity(0.1),
+                                const Color(0xFF607D8B).withValues(alpha: 0.1),
                             child: const Icon(Icons.inventory_2,
                                 color: Color(0xFF607D8B)),
                           ),

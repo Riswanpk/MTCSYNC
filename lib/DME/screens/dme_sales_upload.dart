@@ -487,19 +487,19 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
     switch (item.status) {
       case _RecordStatus.matchFound:
         borderColor = Colors.green;
-        bgColor = Colors.green.withOpacity(0.04);
+        bgColor = Colors.green.withValues(alpha: 0.04);
         statusIcon = Icons.check_circle_outline;
         statusLabel = 'Existing customer';
         break;
       case _RecordStatus.conflict:
         borderColor = Colors.orange;
-        bgColor = Colors.orange.withOpacity(0.04);
+        bgColor = Colors.orange.withValues(alpha: 0.04);
         statusIcon = Icons.warning_amber_rounded;
         statusLabel = 'Name conflict';
         break;
       case _RecordStatus.newCustomer:
         borderColor = _blue;
-        bgColor = _blue.withOpacity(0.04);
+        bgColor = _blue.withValues(alpha: 0.04);
         statusIcon = Icons.person_add_alt_1;
         statusLabel = 'New customer';
         break;
@@ -524,14 +524,14 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
         border: Border.all(color: borderColor, width: 1.5),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 3,
               offset: const Offset(0, 1)),
         ],
       ),
       child: ExpansionTile(
         leading: CircleAvatar(
-          backgroundColor: borderColor.withOpacity(0.15),
+          backgroundColor: borderColor.withValues(alpha: 0.15),
           child: Icon(statusIcon, color: borderColor, size: 18),
         ),
         title: Text(r.customerName,
@@ -562,7 +562,7 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.08),
+                color: Colors.orange.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(8),
                 border:
                     Border.all(color: Colors.orange.shade300),
@@ -615,9 +615,9 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: _blue.withOpacity(0.05),
+                color: _blue.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: _blue.withOpacity(0.3)),
+                border: Border.all(color: _blue.withValues(alpha: 0.3)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

@@ -312,7 +312,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
           width: 34,
           height: 34,
           decoration: BoxDecoration(
-            color: _brandPrimary.withOpacity(0.1),
+            color: _brandPrimary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, size: 20, color: _brandPrimary),
@@ -690,7 +690,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
         ),
         if (_isSaving)
           Container(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withValues(alpha: 0.3),
             child: Center(
               child: GFLoader(
                 type: GFLoaderType.android,

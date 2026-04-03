@@ -212,7 +212,7 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
                         'Monthly employee performance overview',
                         style: TextStyle(
                           fontSize: 13,
-                          color: Colors.white.withOpacity(0.7),
+                          color: Colors.white.withValues(alpha: 0.7),
                         ),
                       ),
                     ],
@@ -239,7 +239,7 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
                         boxShadow: [
                           if (!isDark)
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
+                              color: Colors.black.withValues(alpha: 0.05),
                               blurRadius: 10,
                               offset: const Offset(0, 2),
                             ),
@@ -254,7 +254,7 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
                           ),
                           prefixIcon: Icon(
                             Icons.store_rounded,
-                            color: _primaryBlue.withOpacity(0.7),
+                            color: _primaryBlue.withValues(alpha: 0.7),
                           ),
                           border: InputBorder.none,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
@@ -376,7 +376,7 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
                           boxShadow: [
                             if (!isDark)
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.04),
+                                color: Colors.black.withValues(alpha: 0.04),
                                 blurRadius: 10,
                                 offset: const Offset(0, 2),
                               ),
@@ -392,7 +392,7 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
                                   SizedBox(
                                     width: 44, height: 44,
                                     child: rankBadge ?? CircleAvatar(
-                                      backgroundColor: _primaryBlue.withOpacity(0.1),
+                                      backgroundColor: _primaryBlue.withValues(alpha: 0.1),
                                       child: Text(
                                         '${idx + 1}',
                                         style: TextStyle(
@@ -434,7 +434,7 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                     decoration: BoxDecoration(
-                                      color: pctColor.withOpacity(0.12),
+                                      color: pctColor.withValues(alpha: 0.12),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Text(
@@ -457,7 +457,7 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
                                     Container(
                                       height: 5,
                                       decoration: BoxDecoration(
-                                        color: isDark ? Colors.white.withOpacity(0.06) : Colors.grey[200],
+                                        color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.grey[200],
                                       ),
                                     ),
                                     FractionallySizedBox(
@@ -466,7 +466,7 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
                                         height: 5,
                                         decoration: BoxDecoration(
                                           gradient: LinearGradient(
-                                            colors: [pctColor, pctColor.withOpacity(0.6)],
+                                            colors: [pctColor, pctColor.withValues(alpha: 0.6)],
                                           ),
                                           borderRadius: BorderRadius.circular(4),
                                         ),
@@ -502,7 +502,7 @@ class _RankBadge extends StatelessWidget {
     return Container(
       width: 44, height: 44,
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Icon(icon, color: color, size: 26),
@@ -521,7 +521,7 @@ class _MiniTag extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(isDark ? 0.15 : 0.08),
+        color: color.withValues(alpha: isDark ? 0.15 : 0.08),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(

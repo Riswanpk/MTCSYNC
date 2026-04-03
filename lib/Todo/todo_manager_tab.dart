@@ -119,7 +119,7 @@ class _SalesTodosForManagerTabState extends State<SalesTodosForManagerTab> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.person_search_rounded,
-                size: 64, color: primaryBlue.withOpacity(0.5)),
+                size: 64, color: primaryBlue.withValues(alpha: 0.5)),
             const SizedBox(height: 16),
             Text(
               'No team members found',
@@ -146,9 +146,9 @@ class _SalesTodosForManagerTabState extends State<SalesTodosForManagerTab> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: primaryBlue.withOpacity(0.05),
+              color: primaryBlue.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: primaryBlue.withOpacity(0.2)),
+              border: Border.all(color: primaryBlue.withValues(alpha: 0.2)),
             ),
             child: Row(
               children: [
@@ -196,7 +196,7 @@ class _SalesTodosForManagerTabState extends State<SalesTodosForManagerTab> {
                         children: [
                           Icon(Icons.people_outline_rounded,
                               size: 64,
-                              color: primaryGreen.withOpacity(0.5)),
+                              color: primaryGreen.withValues(alpha: 0.5)),
                           const SizedBox(height: 16),
                           Text(
                             'No tasks from others this period',

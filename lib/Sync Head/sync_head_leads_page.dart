@@ -255,7 +255,7 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
                         horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
                       border: Border.all(
-                          color: _primaryBlue.withOpacity(0.4)),
+                          color: _primaryBlue.withValues(alpha: 0.4)),
                       borderRadius: BorderRadius.circular(10),
                       color: isDark
                           ? const Color(0xFF162236)
@@ -305,12 +305,12 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                             borderSide: BorderSide(
-                                color: _primaryBlue.withOpacity(0.4)),
+                                color: _primaryBlue.withValues(alpha: 0.4)),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                             borderSide: BorderSide(
-                                color: _primaryBlue.withOpacity(0.4)),
+                                color: _primaryBlue.withValues(alpha: 0.4)),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
@@ -355,12 +355,12 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: BorderSide(
-                          color: _primaryBlue.withOpacity(0.4)),
+                          color: _primaryBlue.withValues(alpha: 0.4)),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: BorderSide(
-                          color: _primaryBlue.withOpacity(0.4)),
+                          color: _primaryBlue.withValues(alpha: 0.4)),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
@@ -511,9 +511,9 @@ class _SummaryChip extends StatelessWidget {
         padding:
             const EdgeInsets.symmetric(vertical: 8, horizontal: 14),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -570,7 +570,7 @@ class _UserLeadCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.06),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -583,7 +583,7 @@ class _UserLeadCard extends StatelessWidget {
           Row(
             children: [
               CircleAvatar(
-                backgroundColor: _primaryBlue.withOpacity(0.15),
+                backgroundColor: _primaryBlue.withValues(alpha: 0.15),
                 child: Text(
                   username.isNotEmpty
                       ? username[0].toUpperCase()
@@ -629,7 +629,7 @@ class _UserLeadCard extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _primaryBlue.withOpacity(0.12),
+                    color: _primaryBlue.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -723,9 +723,9 @@ class _StatPill extends StatelessWidget {
       padding:
           const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
       decoration: BoxDecoration(
-        color: color.withOpacity(isDark ? 0.12 : 0.07),
+        color: color.withValues(alpha: isDark ? 0.12 : 0.07),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,

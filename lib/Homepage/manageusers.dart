@@ -136,8 +136,8 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         }
       }
     } on FirebaseFunctionsException catch (e) {
-      print('Firebase Functions Error: ${e.code} - ${e.message}');
-      print('Details: ${e.details}');
+      debugPrint('Firebase Functions Error: ${e.code} - ${e.message}');
+      debugPrint('Details: ${e.details}');
       
       // Close loading dialog if open
       if (mounted && Navigator.of(context).canPop()) {
@@ -172,7 +172,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         );
       }
     } catch (e) {
-      print('General Error: $e');
+      debugPrint('General Error: $e');
       
       // Close loading dialog if open
       if (mounted && Navigator.of(context).canPop()) {

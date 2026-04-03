@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../Navigation/user_cache_service.dart';
-import 'package:excel/excel.dart' as ex;
+import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -51,120 +51,103 @@ Future<void> exportAndSendExcel(BuildContext context, {int? year, int? month}) a
       branchMap[branch]![data['userId']]!.add(data);
     }
 
-    final excel = ex.Excel.createExcel();
+    final workbook = xlsio.Workbook();
+    bool firstSheet = true;
     branchMap.forEach((branch, users) {
-      final sheet = excel[branch];
-      int rowIdx = 0;
+      final sheet = firstSheet
+          ? workbook.worksheets[0]
+          : workbook.worksheets.addWithName(branch);
+      if (firstSheet) {
+        sheet.name = branch;
+        firstSheet = false;
+      }
+      int rowIdx = 1;
+
+      // Build date strings for column headers
+      final dateStrings = <String>[];
+      for (int d = 0; d < daysInMonth; d++) {
+        final date = monthStart.add(Duration(days: d));
+        dateStrings.add('${date.day}-${date.month < 10 ? '0' : ''}${date.month}');
+      }
+      final totalCols = daysInMonth + 1; // label col + one col per day
+
       users.forEach((userId, forms) {
         final username = forms.first['userName'] ?? 'User';
-        sheet.cell(ex.CellIndex.indexByString("A${rowIdx + 1}")).value = ex.TextCellValue(username);
+        sheet.getRangeByIndex(rowIdx, 1).setText(username);
         rowIdx += 2;
 
-        // DETAILED DAILY TABLES
-        final dateRow = [ex.TextCellValue('Date')];
-        for (int d = 0; d < daysInMonth; d++) {
-          final date = monthStart.add(Duration(days: d));
-          dateRow.add(ex.TextCellValue('${date.day}-${date.month < 10 ? '0' : ''}${date.month}'));
-        }
-
-        Map<String, dynamic>? getFormForDate(List<Map<String, dynamic>> forms, DateTime date) {
-          return forms.firstWhere(
+        Map<String, dynamic>? getFormForDate(List<Map<String, dynamic>> fms, DateTime date) {
+          return fms.firstWhere(
             (form) {
               final ts = form['timestamp'];
-              final formDate = ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
-              return formDate.year == date.year && formDate.month == date.month && formDate.day == date.day;
+              final fd = ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
+              return fd.year == date.year && fd.month == date.month && fd.day == date.day;
             },
             orElse: () => {},
           );
         }
 
-        // ATTENDANCE TABLE
-        sheet.appendRow([ex.TextCellValue('Attendance'), ...dateRow.skip(1)]);
-        for (int i = 0; i < dateRow.length; i++) {
-          final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
-          cell.cellStyle = ex.CellStyle(
-            bold: true,
-            backgroundColorHex: ex.ExcelColor.fromHexString("#CFE2F3"),
-          );
-        }
-        final attendanceRow = [ex.TextCellValue('Status')];
-        for (int d = 0; d < daysInMonth; d++) {
-          final date = monthStart.add(Duration(days: d));
-          final form = getFormForDate(forms, date);
-          String status = '-';
-          if (form != null && form.isNotEmpty) {
-            status = form['attendanceStatus'] ?? form['attendance'] ?? '-';
-          }
-          attendanceRow.add(ex.TextCellValue(status));
-        }
-        sheet.appendRow(attendanceRow);
-
-        // DRESS CODE TABLE
-        sheet.appendRow([ex.TextCellValue('Dress Code'), ...dateRow.skip(1)]);
-        for (int i = 0; i < dateRow.length; i++) {
-          final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
-          cell.cellStyle = ex.CellStyle(
-            bold: true,
-            backgroundColorHex: ex.ExcelColor.fromHexString("#FCE5CD"),
-          );
-        }
-        final dressCats = ['Clean Uniform', 'Keep Inside', 'Neat Hair'];
-        for (final cat in dressCats) {
-          final row = [ex.TextCellValue(cat)];
+        void writeHeaderRow(String label, String hexColor) {
+          sheet.getRangeByIndex(rowIdx, 1).setText(label);
           for (int d = 0; d < daysInMonth; d++) {
-            final date = monthStart.add(Duration(days: d));
-            final form = getFormForDate(forms, date);
-            if (form == null || form.isEmpty) {
-              row.add(ex.TextCellValue('-')); // Not entered
-            } else {
-              bool value = false;
-              if (cat == 'Clean Uniform') value = form['dressCode']?['cleanUniform'] ?? false;
-              if (cat == 'Keep Inside') value = form['dressCode']?['keepInside'] ?? false;
-              if (cat == 'Neat Hair') value = form['dressCode']?['neatHair'] ?? false;
-              row.add(ex.TextCellValue(value ? '✔' : '✘'));
-            }
+            sheet.getRangeByIndex(rowIdx, d + 2).setText(dateStrings[d]);
           }
-          sheet.appendRow(row);
+          for (int i = 1; i <= totalCols; i++) {
+            sheet.getRangeByIndex(rowIdx, i).cellStyle.bold = true;
+            sheet.getRangeByIndex(rowIdx, i).cellStyle.backColor = hexColor;
+          }
+          rowIdx++;
         }
 
-        // ATTITUDE TABLE (updated for "Good")
-        sheet.appendRow([ex.TextCellValue('Attitude'), ...dateRow.skip(1)]);
-        for (int i = 0; i < dateRow.length; i++) {
-          final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
-          cell.cellStyle = ex.CellStyle(
-            bold: true,
-            backgroundColorHex: ex.ExcelColor.fromHexString("#D9EAD3"),
-          );
+        // ── ATTENDANCE ──────────────────────────────────────────────────────
+        writeHeaderRow('Attendance', '#CFE2F3');
+        sheet.getRangeByIndex(rowIdx, 1).setText('Status');
+        for (int d = 0; d < daysInMonth; d++) {
+          final form = getFormForDate(forms, monthStart.add(Duration(days: d)));
+          final status = (form != null && form.isNotEmpty)
+              ? (form['attendanceStatus'] ?? form['attendance'] ?? '-')
+              : '-';
+          sheet.getRangeByIndex(rowIdx, d + 2).setText(status.toString());
         }
+        rowIdx++;
+
+        // ── DRESS CODE ───────────────────────────────────────────────────────
+        writeHeaderRow('Dress Code', '#FCE5CD');
+        final dressCats = ['Clean Uniform', 'Keep Inside', 'Neat Hair'];
+        final dressKeys = ['cleanUniform', 'keepInside', 'neatHair'];
+        for (int ci = 0; ci < dressCats.length; ci++) {
+          sheet.getRangeByIndex(rowIdx, 1).setText(dressCats[ci]);
+          for (int d = 0; d < daysInMonth; d++) {
+            final form = getFormForDate(forms, monthStart.add(Duration(days: d)));
+            final val = (form != null && form.isNotEmpty)
+                ? ((form['dressCode']?[dressKeys[ci]] as bool?) == true ? '✔' : '✘')
+                : '-';
+            sheet.getRangeByIndex(rowIdx, d + 2).setText(val);
+          }
+          rowIdx++;
+        }
+
+        // ── ATTITUDE ─────────────────────────────────────────────────────────
+        writeHeaderRow('Attitude', '#D9EAD3');
         final attitudeCats = [
           'Greet with a warm smile',
           'Ask about their needs',
           'Help find the right product',
           'Confirm the purchase',
-          'Offer carry or delivery help'
+          'Offer carry or delivery help',
         ];
-        for (final cat in attitudeCats) {
-          final row = [ex.TextCellValue(cat)];
+        final attitudeKeys = ['greetSmile', 'askNeeds', 'helpFindProduct', 'confirmPurchase', 'offerHelp'];
+        for (int ci = 0; ci < attitudeCats.length; ci++) {
+          sheet.getRangeByIndex(rowIdx, 1).setText(attitudeCats[ci]);
           for (int d = 0; d < daysInMonth; d++) {
-            final date = monthStart.add(Duration(days: d));
-            final form = getFormForDate(forms, date);
-            String rating = '-';
-            String reason = '';
+            final form = getFormForDate(forms, monthStart.add(Duration(days: d)));
             if (form == null || form.isEmpty) {
-              row.add(ex.TextCellValue('-'));
+              sheet.getRangeByIndex(rowIdx, d + 2).setText('-');
               continue;
             }
-            String key;
-            if (cat.trim() == 'Greet with a warm smile') key = 'greetSmile';
-            else if (cat.trim() == 'Ask about their needs') key = 'askNeeds';
-            else if (cat.trim() == 'Help find the right product') key = 'helpFindProduct';
-            else if (cat.trim() == 'Confirm the purchase') key = 'confirmPurchase';
-            else if (cat.trim() == 'Offer carry or delivery help') key = 'offerHelp';
-            else key = '';
-
-            rating = form['attitude']?['${key}Level'] ?? '-';
-            reason = form['attitude']?['${key}Reason'] ?? '';
-
+            final key = attitudeKeys[ci];
+            final rating = form['attitude']?['${key}Level'] ?? '-';
+            final reason = form['attitude']?['${key}Reason'] ?? '';
             String cellText;
             if (rating == 'excellent') {
               cellText = '✔ (Excellent${reason.isNotEmpty ? ': $reason' : ''})';
@@ -175,39 +158,22 @@ Future<void> exportAndSendExcel(BuildContext context, {int? year, int? month}) a
             } else {
               cellText = '✘ (-)';
             }
-
-            row.add(ex.TextCellValue(cellText));
-          }
-          final rowIdxAtti = sheet.maxRows;
-          sheet.appendRow(row);
-          for (int col = 1; col < row.length; col++) {
-            final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: rowIdxAtti, columnIndex: col));
-            final val = (row[col] as ex.TextCellValue).value;
-            if (val is String && val.toString().startsWith('✔')) {
-              cell.cellStyle = ex.CellStyle(
-                fontColorHex: ex.ExcelColor.fromHexString('#38761D'),
-              );
-            } else if (val is String && val.toString().startsWith('✘')) {
-              cell.cellStyle = ex.CellStyle(
-                fontColorHex: ex.ExcelColor.fromHexString('#CC0000'),
-              );
+            final cell = sheet.getRangeByIndex(rowIdx, d + 2);
+            cell.setText(cellText);
+            if (cellText.startsWith('✔')) {
+              cell.cellStyle.fontColor = '#38761D';
+            } else if (cellText.startsWith('✘')) {
+              cell.cellStyle.fontColor = '#CC0000';
             }
           }
+          rowIdx++;
         }
 
-        // MEETING TABLE
-        sheet.appendRow([ex.TextCellValue('Meeting'), ...dateRow.skip(1)]);
-        for (int i = 0; i < dateRow.length; i++) {
-          final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
-          cell.cellStyle = ex.CellStyle(
-            bold: true,
-            backgroundColorHex: ex.ExcelColor.fromHexString("#EAD1DC"),
-          );
-        }
-        final meetingRow = [ex.TextCellValue('Attended')];
+        // ── MEETING ───────────────────────────────────────────────────────────
+        writeHeaderRow('Meeting', '#EAD1DC');
+        sheet.getRangeByIndex(rowIdx, 1).setText('Attended');
         for (int d = 0; d < daysInMonth; d++) {
-          final date = monthStart.add(Duration(days: d));
-          final form = getFormForDate(forms, date);
+          final form = getFormForDate(forms, monthStart.add(Duration(days: d)));
           String meetingCell = '-';
           if (form != null && form.isNotEmpty) {
             final meeting = form['meeting'];
@@ -219,126 +185,34 @@ Future<void> exportAndSendExcel(BuildContext context, {int? year, int? month}) a
               meetingCell = '✘';
             }
           }
-          meetingRow.add(ex.TextCellValue(meetingCell));
+          sheet.getRangeByIndex(rowIdx, d + 2).setText(meetingCell);
         }
-        sheet.appendRow(meetingRow);
+        rowIdx += 3; // meeting row + 2 blank rows
 
-        rowIdx = sheet.maxRows + 2;
-        // --- NEW QUESTIONS TABLES ---
-        // 5) Completed other tasks?
-        sheet.appendRow([ex.TextCellValue('Completed Other Tasks?'), ...dateRow.skip(1)]);
-        for (int i = 0; i < dateRow.length; i++) {
-          final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
-          cell.cellStyle = ex.CellStyle(bold: true, backgroundColorHex: ex.ExcelColor.fromHexString("#D0E0E3"));
-        }
-        final otherTasksRow = [ex.TextCellValue('Yes/No')];
-        final otherTasksDescRow = [ex.TextCellValue('Description')];
-        for (int d = 0; d < daysInMonth; d++) {
-          final date = monthStart.add(Duration(days: d));
-          final form = getFormForDate(forms, date);
-          String value = '-';
-          String desc = '-';
-          if (form != null && form.isNotEmpty) {
-            value = form['timeTakenOtherTasks'] == true ? 'Yes' : (form['timeTakenOtherTasks'] == false ? 'No' : '-');
-            desc = form['timeTakenOtherTasksDescription'] ?? '-';
+        // Helper: writes a Yes/No + Description pair for a boolean question
+        void writeYesNoTable(String label, String hexColor, String yesNoKey, String descKey) {
+          writeHeaderRow(label, hexColor);
+          sheet.getRangeByIndex(rowIdx, 1).setText('Yes/No');
+          sheet.getRangeByIndex(rowIdx + 1, 1).setText('Description');
+          for (int d = 0; d < daysInMonth; d++) {
+            final form = getFormForDate(forms, monthStart.add(Duration(days: d)));
+            String value = '-';
+            String desc = '-';
+            if (form != null && form.isNotEmpty) {
+              value = form[yesNoKey] == true ? 'Yes' : (form[yesNoKey] == false ? 'No' : '-');
+              desc = form[descKey]?.toString() ?? '-';
+            }
+            sheet.getRangeByIndex(rowIdx, d + 2).setText(value);
+            sheet.getRangeByIndex(rowIdx + 1, d + 2).setText(desc);
           }
-          otherTasksRow.add(ex.TextCellValue(value));
-          otherTasksDescRow.add(ex.TextCellValue(desc));
+          rowIdx += 2;
         }
-        sheet.appendRow(otherTasksRow);
-        sheet.appendRow(otherTasksDescRow);
 
-        // 6) Old stock offer given to customers?
-        sheet.appendRow([ex.TextCellValue('Old Stock Offer Given?'), ...dateRow.skip(1)]);
-        for (int i = 0; i < dateRow.length; i++) {
-          final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
-          cell.cellStyle = ex.CellStyle(bold: true, backgroundColorHex: ex.ExcelColor.fromHexString("#FFF2CC"));
-        }
-        final oldStockRow = [ex.TextCellValue('Yes/No')];
-        final oldStockDescRow = [ex.TextCellValue('Description')];
-        for (int d = 0; d < daysInMonth; d++) {
-          final date = monthStart.add(Duration(days: d));
-          final form = getFormForDate(forms, date);
-          String value = '-';
-          String desc = '-';
-          if (form != null && form.isNotEmpty) {
-            value = form['oldStockOfferGiven'] == true ? 'Yes' : (form['oldStockOfferGiven'] == false ? 'No' : '-');
-            desc = form['oldStockOfferDescription'] ?? '-';
-          }
-          oldStockRow.add(ex.TextCellValue(value));
-          oldStockDescRow.add(ex.TextCellValue(desc));
-        }
-        sheet.appendRow(oldStockRow);
-        sheet.appendRow(oldStockDescRow);
-
-        // 7) Cross-selling and upselling?
-        sheet.appendRow([ex.TextCellValue('Cross-selling & Upselling?'), ...dateRow.skip(1)]);
-        for (int i = 0; i < dateRow.length; i++) {
-          final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
-          cell.cellStyle = ex.CellStyle(bold: true, backgroundColorHex: ex.ExcelColor.fromHexString("#EAD1DC"));
-        }
-        final crossSellRow = [ex.TextCellValue('Yes/No')];
-        final crossSellDescRow = [ex.TextCellValue('Description')];
-        for (int d = 0; d < daysInMonth; d++) {
-          final date = monthStart.add(Duration(days: d));
-          final form = getFormForDate(forms, date);
-          String value = '-';
-          String desc = '-';
-          if (form != null && form.isNotEmpty) {
-            value = form['crossSellingUpselling'] == true ? 'Yes' : (form['crossSellingUpselling'] == false ? 'No' : '-');
-            desc = form['crossSellingUpsellingDescription'] ?? '-';
-          }
-          crossSellRow.add(ex.TextCellValue(value));
-          crossSellDescRow.add(ex.TextCellValue(desc));
-        }
-        sheet.appendRow(crossSellRow);
-        sheet.appendRow(crossSellDescRow);
-
-        // 8) Product complaints?
-        sheet.appendRow([ex.TextCellValue('Product Complaints?'), ...dateRow.skip(1)]);
-        for (int i = 0; i < dateRow.length; i++) {
-          final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
-          cell.cellStyle = ex.CellStyle(bold: true, backgroundColorHex: ex.ExcelColor.fromHexString("#F4CCCC"));
-        }
-        final complaintsRow = [ex.TextCellValue('Yes/No')];
-        final complaintsDescRow = [ex.TextCellValue('Description')];
-        for (int d = 0; d < daysInMonth; d++) {
-          final date = monthStart.add(Duration(days: d));
-          final form = getFormForDate(forms, date);
-          String value = '-';
-          String desc = '-';
-          if (form != null && form.isNotEmpty) {
-            value = form['productComplaints'] == true ? 'Yes' : (form['productComplaints'] == false ? 'No' : '-');
-            desc = form['productComplaintsDescription'] ?? '-';
-          }
-          complaintsRow.add(ex.TextCellValue(value));
-          complaintsDescRow.add(ex.TextCellValue(desc));
-        }
-        sheet.appendRow(complaintsRow);
-        sheet.appendRow(complaintsDescRow);
-
-        // 9) Achieved daily target?
-        sheet.appendRow([ex.TextCellValue('Achieved Daily Target?'), ...dateRow.skip(1)]);
-        for (int i = 0; i < dateRow.length; i++) {
-          final cell = sheet.cell(ex.CellIndex.indexByColumnRow(rowIndex: sheet.maxRows - 1, columnIndex: i));
-          cell.cellStyle = ex.CellStyle(bold: true, backgroundColorHex: ex.ExcelColor.fromHexString("#D9EAD3"));
-        }
-        final targetRow = [ex.TextCellValue('Yes/No')];
-        final targetDescRow = [ex.TextCellValue('Description')];
-        for (int d = 0; d < daysInMonth; d++) {
-          final date = monthStart.add(Duration(days: d));
-          final form = getFormForDate(forms, date);
-          String value = '-';
-          String desc = '-';
-          if (form != null && form.isNotEmpty) {
-            value = form['achievedDailyTarget'] == true ? 'Yes' : (form['achievedDailyTarget'] == false ? 'No' : '-');
-            desc = form['achievedDailyTargetDescription'] ?? '-';
-          }
-          targetRow.add(ex.TextCellValue(value));
-          targetDescRow.add(ex.TextCellValue(desc));
-        }
-        sheet.appendRow(targetRow);
-        sheet.appendRow(targetDescRow);
+        writeYesNoTable('Completed Other Tasks?', '#D0E0E3', 'timeTakenOtherTasks', 'timeTakenOtherTasksDescription');
+        writeYesNoTable('Old Stock Offer Given?', '#FFF2CC', 'oldStockOfferGiven', 'oldStockOfferDescription');
+        writeYesNoTable('Cross-selling & Upselling?', '#EAD1DC', 'crossSellingUpselling', 'crossSellingUpsellingDescription');
+        writeYesNoTable('Product Complaints?', '#F4CCCC', 'productComplaints', 'productComplaintsDescription');
+        writeYesNoTable('Achieved Daily Target?', '#D9EAD3', 'achievedDailyTarget', 'achievedDailyTargetDescription');
       });
     });
 
@@ -347,8 +221,9 @@ Future<void> exportAndSendExcel(BuildContext context, {int? year, int? month}) a
       await dir.create(recursive: true);
     }
     final filePath = '${dir.path}/performance_${reportYear}_${reportMonth}.xlsx';
-    final fileBytes = await excel.encode();
-    final file = File(filePath)..writeAsBytesSync(fileBytes!);
+    final List<int> fileBytes = workbook.saveAsStream();
+    workbook.dispose();
+    final file = File(filePath)..writeAsBytesSync(fileBytes);
 
     final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
     final message = Message()
@@ -364,7 +239,7 @@ Future<void> exportAndSendExcel(BuildContext context, {int? year, int? month}) a
       SnackBar(content: Text('Excel file sent to crmmalabar@gmail.com')),
     );
   } catch (e, stack) {
-    print('Excel send error: $e\n$stack');
+    debugPrint('Excel send error: $e\n$stack');
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Failed to send Excel: $e')),
     );

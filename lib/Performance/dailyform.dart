@@ -314,9 +314,9 @@ class _PerformanceFormState extends State<PerformanceForm> {
                     const Color(0xFF0A1628),
                   ]
                 : [
-                    primaryBlue.withOpacity(0.05),
+                    primaryBlue.withValues(alpha: 0.05),
                     Colors.white,
-                    primaryGreen.withOpacity(0.08),
+                    primaryGreen.withValues(alpha: 0.08),
                   ],
             stops: const [0.0, 0.5, 1.0],
           ),
@@ -334,12 +334,12 @@ class _PerformanceFormState extends State<PerformanceForm> {
                           child: Container(
                             decoration: BoxDecoration(
                               color: isDark
-                                  ? Colors.white.withOpacity(0.05)
+                                  ? Colors.white.withValues(alpha: 0.05)
                                   : Colors.white,
                               borderRadius: BorderRadius.circular(16),
                               boxShadow: [
                                 BoxShadow(
-                                  color: primaryBlue.withOpacity(0.1),
+                                  color: primaryBlue.withValues(alpha: 0.1),
                                   blurRadius: 12,
                                   offset: const Offset(0, 4),
                                 ),
@@ -370,7 +370,7 @@ class _PerformanceFormState extends State<PerformanceForm> {
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(16),
                                   borderSide: BorderSide(
-                                      color: primaryBlue.withOpacity(0.3)),
+                                      color: primaryBlue.withValues(alpha: 0.3)),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(16),
@@ -385,10 +385,10 @@ class _PerformanceFormState extends State<PerformanceForm> {
                           padding: const EdgeInsets.all(20),
                           margin: const EdgeInsets.symmetric(horizontal: 16),
                           decoration: BoxDecoration(
-                            color: primaryGreen.withOpacity(0.1),
+                            color: primaryGreen.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                                color: primaryGreen.withOpacity(0.3)),
+                                color: primaryGreen.withValues(alpha: 0.3)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -1039,7 +1039,7 @@ class _PerformanceFormState extends State<PerformanceForm> {
                                 ? []
                                 : [
                                     BoxShadow(
-                                      color: primaryGreen.withOpacity(0.4),
+                                      color: primaryGreen.withValues(alpha: 0.4),
                                       offset: const Offset(0, 8),
                                       blurRadius: 16,
                                     ),
@@ -1080,7 +1080,7 @@ class _PerformanceFormState extends State<PerformanceForm> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: primaryBlue.withOpacity(0.1),
+              color: primaryBlue.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: primaryBlue, size: 20),
@@ -1102,16 +1102,16 @@ class _PerformanceFormState extends State<PerformanceForm> {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+        color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: primaryBlue.withOpacity(0.08),
+            color: primaryBlue.withValues(alpha: 0.08),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
         ],
-        border: Border.all(color: primaryBlue.withOpacity(0.1)),
+        border: Border.all(color: primaryBlue.withValues(alpha: 0.1)),
       ),
       child: child,
     );
@@ -1121,11 +1121,11 @@ class _PerformanceFormState extends State<PerformanceForm> {
   InputDecoration _inputDecoration(String label) {
     return InputDecoration(
       labelText: label.isNotEmpty ? label : null,
-      labelStyle: TextStyle(color: primaryBlue.withOpacity(0.7)),
+      labelStyle: TextStyle(color: primaryBlue.withValues(alpha: 0.7)),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: primaryBlue.withOpacity(0.2)),
+        borderSide: BorderSide(color: primaryBlue.withValues(alpha: 0.2)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -1142,10 +1142,10 @@ class _PerformanceFormState extends State<PerformanceForm> {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
       decoration: BoxDecoration(
-        color: isSelected ? primaryBlue.withOpacity(0.1) : Colors.transparent,
+        color: isSelected ? primaryBlue.withValues(alpha: 0.1) : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         border:
-            isSelected ? Border.all(color: primaryBlue.withOpacity(0.3)) : null,
+            isSelected ? Border.all(color: primaryBlue.withValues(alpha: 0.3)) : null,
       ),
       child: RadioListTile<String>(
         title: Text(title,

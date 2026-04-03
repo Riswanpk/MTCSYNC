@@ -107,7 +107,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: const Color(0xFF009688).withOpacity(0.2), width: 1),
+          borderSide: BorderSide(color: const Color(0xFF009688).withValues(alpha: 0.2), width: 1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -138,10 +138,10 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
             ? Colors.grey[900]
             : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF009688).withOpacity(0.12)),
+        border: Border.all(color: const Color(0xFF009688).withValues(alpha: 0.12)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF009688).withOpacity(0.06),
+            color: const Color(0xFF009688).withValues(alpha: 0.06),
             spreadRadius: 0,
             blurRadius: 10,
             offset: const Offset(0, 3),
@@ -462,10 +462,10 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [const Color(0xFF009688).withOpacity(0.1), const Color(0xFF00695C).withOpacity(0.05)],
+                          colors: [const Color(0xFF009688).withValues(alpha: 0.1), const Color(0xFF00695C).withValues(alpha: 0.05)],
                         ),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFF009688).withOpacity(0.15)),
+                        border: Border.all(color: const Color(0xFF009688).withValues(alpha: 0.15)),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -522,10 +522,10 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                             ? Colors.grey[900]
                             : Colors.white,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF009688).withOpacity(0.12)),
+                        border: Border.all(color: const Color(0xFF009688).withValues(alpha: 0.12)),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF009688).withOpacity(0.06),
+                            color: const Color(0xFF009688).withValues(alpha: 0.06),
                             blurRadius: 10,
                             offset: const Offset(0, 3),
                           ),
@@ -761,7 +761,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 spreadRadius: 1,
                                 blurRadius: 8,
                                 offset: const Offset(2, 4),
@@ -872,7 +872,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.15),
+                                  color: Colors.black.withValues(alpha: 0.15),
                                   blurRadius: 8,
                                   offset: const Offset(2, 4),
                                 ),
@@ -914,7 +914,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF009688).withOpacity(0.3),
+                            color: const Color(0xFF009688).withValues(alpha: 0.3),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),

@@ -25,7 +25,7 @@ class LoadingProgressBar extends StatelessWidget {
               color: Colors.grey[300],
               boxShadow: [
                 BoxShadow(
-                  color: Colors.green.withOpacity(0.2),
+                  color: Colors.green.withValues(alpha: 0.2),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),

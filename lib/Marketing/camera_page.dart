@@ -278,12 +278,12 @@ class _CameraPageState extends State<CameraPage> {
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
                                   ),
-                            border: Border.all(color: const Color.fromARGB(255, 0, 0, 0).withOpacity(0.5), width: 2.5),
+                            border: Border.all(color: const Color.fromARGB(255, 0, 0, 0).withValues(alpha: 0.5), width: 2.5),
                             boxShadow: [
                               BoxShadow(
                                 color: isDark
-                                    ? Colors.white.withOpacity(0.15)
-                                    : const Color.fromARGB(255, 4, 4, 4).withOpacity(0.15),
+                                    ? Colors.white.withValues(alpha: 0.15)
+                                    : const Color.fromARGB(255, 4, 4, 4).withValues(alpha: 0.15),
                                 blurRadius: 30,
                                 spreadRadius: 5,
                               ),
@@ -307,9 +307,9 @@ class _CameraPageState extends State<CameraPage> {
                             Container(
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: const Color.fromARGB(255, 0, 0, 0).withOpacity(0.3), width: 1.5),
+                                border: Border.all(color: const Color.fromARGB(255, 0, 0, 0).withValues(alpha: 0.3), width: 1.5),
                                 boxShadow: [
-                                  BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 20, offset: const Offset(0, 8)),
+                                  BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 20, offset: const Offset(0, 8)),
                                 ],
                               ),
                               child: ClipRRect(
@@ -327,7 +327,7 @@ class _CameraPageState extends State<CameraPage> {
                                       ? const LinearGradient(colors: [Color(0xFF009688), Color(0xFF00796B)])
                                       : const LinearGradient(colors: [Color(0xFF80CBC4), Color(0xFFB2DFDB)]),
                                   boxShadow: [
-                                    BoxShadow(color: const Color(0xFF009688).withOpacity(0.35), blurRadius: 12, offset: const Offset(0, 4)),
+                                    BoxShadow(color: const Color(0xFF009688).withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4)),
                                   ],
                                 ),
                                 child: ElevatedButton.icon(
@@ -394,7 +394,7 @@ class _CameraPageState extends State<CameraPage> {
                                 icon: Icon(Icons.camera_alt_rounded, color: cameraIconColor),
                                 label: Text('Retake', style: TextStyle(fontFamily: 'Electorize', fontSize: 15, color: cameraTextColor)),
                                 style: OutlinedButton.styleFrom(
-                                  side: BorderSide(color: cameraIconColor.withOpacity(0.5), width: 1.5),
+                                  side: BorderSide(color: cameraIconColor.withValues(alpha: 0.5), width: 1.5),
                                   padding: const EdgeInsets.symmetric(vertical: 14),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                                 ),
@@ -407,7 +407,7 @@ class _CameraPageState extends State<CameraPage> {
           ),
           if (_isUploading)
             Container(
-              color: isDark ? const Color(0xCC0F0F1A) : Colors.white.withOpacity(0.85),
+              color: isDark ? const Color(0xCC0F0F1A) : Colors.white.withValues(alpha: 0.85),
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,

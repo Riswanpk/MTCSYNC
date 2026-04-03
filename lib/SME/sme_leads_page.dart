@@ -207,7 +207,7 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.07),
+                  color: Colors.black.withValues(alpha: 0.07),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -290,13 +290,13 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                               width: 88,
                               height: 88,
                               decoration: BoxDecoration(
-                                color: _brandPrimary.withOpacity(0.08),
+                                color: _brandPrimary.withValues(alpha: 0.08),
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(
                                 Icons.folder_open_rounded,
                                 size: 44,
-                                color: _brandPrimary.withOpacity(0.45),
+                                color: _brandPrimary.withValues(alpha: 0.45),
                               ),
                             ),
                             const SizedBox(height: 20),
@@ -376,7 +376,7 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                                 borderRadius: BorderRadius.circular(16),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(
+                                    color: Colors.black.withValues(alpha: 
                                         isDark ? 0.25 : 0.07),
                                     blurRadius: 10,
                                     offset: const Offset(0, 3),
@@ -432,7 +432,7 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                                                         vertical: 4),
                                                     decoration: BoxDecoration(
                                                       color: statusColor
-                                                          .withOpacity(0.14),
+                                                          .withValues(alpha: 0.14),
                                                       borderRadius:
                                                           BorderRadius.circular(
                                                               20),
@@ -501,7 +501,7 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                                                         vertical: 7),
                                                     decoration: BoxDecoration(
                                                       color: priorityColor
-                                                          .withOpacity(0.12),
+                                                          .withValues(alpha: 0.12),
                                                       borderRadius:
                                                           BorderRadius.circular(
                                                               10),
@@ -555,7 +555,7 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                 borderRadius: BorderRadius.circular(40),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.07),
+                    color: Colors.black.withValues(alpha: 0.07),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -705,14 +705,14 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
             const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: isActive
-              ? color.withOpacity(0.13)
+              ? color.withValues(alpha: 0.13)
               : (isDark
-                  ? Colors.white.withOpacity(0.06)
-                  : Colors.grey.withOpacity(0.08)),
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.grey.withValues(alpha: 0.08)),
           borderRadius: BorderRadius.circular(22),
           border: Border.all(
             color:
-                isActive ? color.withOpacity(0.6) : Colors.grey.withOpacity(0.25),
+                isActive ? color.withValues(alpha: 0.6) : Colors.grey.withValues(alpha: 0.25),
             width: 1.5,
           ),
         ),
@@ -855,9 +855,9 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.12),
+          color: color.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: color.withOpacity(0.5), width: 1.5),
+          border: Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -897,8 +897,8 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
         height: 38,
         decoration: BoxDecoration(
           color: enabled
-              ? _brandPrimary.withOpacity(0.1)
-              : Colors.grey.withOpacity(0.07),
+              ? _brandPrimary.withValues(alpha: 0.1)
+              : Colors.grey.withValues(alpha: 0.07),
           borderRadius: BorderRadius.circular(19),
         ),
         child: Icon(

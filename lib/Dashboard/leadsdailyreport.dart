@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:excel/excel.dart' as ex;
+import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
@@ -83,42 +83,46 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
     }
 
     // Generate Excel
-    final excel = ex.Excel.createExcel();
+    final workbook = xlsio.Workbook();
+    bool firstSheet = true;
     branchUserStatus.forEach((branch, users) {
-      final sheet = excel[branch];
-      // Summary table
-      sheet.appendRow([
-        ex.TextCellValue('Username'),
-        ex.TextCellValue('Leads'),
-        ex.TextCellValue('Todo'),
-      ]);
+      final sheet = firstSheet
+          ? workbook.worksheets[0]
+          : workbook.worksheets.addWithName(branch);
+      if (firstSheet) {
+        sheet.name = branch;
+        firstSheet = false;
+      }
+      int row = 1;
+
+      // Summary table headers
+      sheet.getRangeByName('A$row').setText('Username');
+      sheet.getRangeByName('B$row').setText('Leads');
+      sheet.getRangeByName('C$row').setText('Todo');
+      row++;
       users.forEach((userId, status) {
         final user = userMap[userId]!;
-        sheet.appendRow([
-          ex.TextCellValue(user['username'] ?? ''),
-          ex.TextCellValue(status['lead'] == true ? 'Yes' : 'No'),
-          ex.TextCellValue(status['todo'] == true ? 'Yes' : 'No'),
-        ]);
+        sheet.getRangeByName('A$row').setText(user['username'] ?? '');
+        sheet.getRangeByName('B$row').setText(status['lead'] == true ? 'Yes' : 'No');
+        sheet.getRangeByName('C$row').setText(status['todo'] == true ? 'Yes' : 'No');
+        row++;
       });
 
-      // Add a blank row for visual separation
-      sheet.appendRow([ex.TextCellValue(''), ex.TextCellValue(''), ex.TextCellValue('')]);
+      row++; // blank row for visual separation
 
-      // Todos Table: Username, Title, Description
-      sheet.appendRow([
-        ex.TextCellValue('Username'),
-        ex.TextCellValue('Title'),
-        ex.TextCellValue('Description'),
-      ]);
+      // Todos table headers
+      sheet.getRangeByName('A$row').setText('Username');
+      sheet.getRangeByName('B$row').setText('Title');
+      sheet.getRangeByName('C$row').setText('Description');
+      row++;
       users.forEach((userId, status) {
         final user = userMap[userId]!;
         final todos = todosByUser[userId] ?? [];
         for (var todo in todos) {
-          sheet.appendRow([
-            ex.TextCellValue(user['username'] ?? ''),
-            ex.TextCellValue(todo['title'] ?? ''),
-            ex.TextCellValue(todo['description'] ?? ''),
-          ]);
+          sheet.getRangeByName('A$row').setText(user['username'] ?? '');
+          sheet.getRangeByName('B$row').setText(todo['title'] ?? '');
+          sheet.getRangeByName('C$row').setText(todo['description'] ?? '');
+          row++;
         }
       });
     });
@@ -128,8 +132,9 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
       await dir.create(recursive: true);
     }
     final filePath = '${dir.path}/leads_todos_${now.year}_${now.month}_${now.day}.xlsx';
-    final fileBytes = await excel.encode();
-    final file = File(filePath)..writeAsBytesSync(fileBytes!);
+    final List<int> fileBytes = workbook.saveAsStream();
+    workbook.dispose();
+    final file = File(filePath)..writeAsBytesSync(fileBytes);
 
     final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
     final message = Message()
@@ -145,7 +150,7 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
       SnackBar(content: Text('Daily report sent to crmmalabar@gmail.com')),
     );
   } catch (e, stack) {
-    print('Daily report error: $e\n$stack');
+    debugPrint('Daily report error: $e\n$stack');
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Failed to send daily report: $e')),
     );

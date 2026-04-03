@@ -270,7 +270,7 @@ class _SmeDailyDashboardState extends State<SmeDailyDashboard> {
                                 borderRadius: BorderRadius.circular(16),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: isDark ? Colors.black26 : Colors.black.withOpacity(0.06),
+                                    color: isDark ? Colors.black26 : Colors.black.withValues(alpha: 0.06),
                                     blurRadius: 10,
                                     offset: const Offset(0, 4),
                                   ),
@@ -308,7 +308,7 @@ class _SmeDailyDashboardState extends State<SmeDailyDashboard> {
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                         decoration: BoxDecoration(
-                                          color: statusColor.withOpacity(0.15),
+                                          color: statusColor.withValues(alpha: 0.15),
                                           borderRadius: BorderRadius.circular(8),
                                         ),
                                         child: Text(status, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: statusColor)),
@@ -336,13 +336,13 @@ class _SmeDailyDashboardState extends State<SmeDailyDashboard> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: isDark
-              ? [color.withOpacity(0.3), color.withOpacity(0.15)]
-              : [color.withOpacity(0.15), color.withOpacity(0.05)],
+              ? [color.withValues(alpha: 0.3), color.withValues(alpha: 0.15)]
+              : [color.withValues(alpha: 0.15), color.withValues(alpha: 0.05)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

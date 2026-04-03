@@ -331,7 +331,7 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -339,7 +339,7 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
       ),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: _blue.withOpacity(0.7)),
+          Icon(icon, size: 18, color: _blue.withValues(alpha: 0.7)),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -403,7 +403,7 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [primaryColor, primaryColor.withOpacity(0.8)],
+                    colors: [primaryColor, primaryColor.withValues(alpha: 0.8)],
                   ),
                 ),
                 padding: const EdgeInsets.all(24),
@@ -412,7 +412,7 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
@@ -461,7 +461,7 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 28, vertical: 10),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.25),
+                                  color: Colors.white.withValues(alpha: 0.25),
                                   border: Border.all(
                                       color: Colors.white, width: 1.5),
                                   borderRadius: BorderRadius.circular(24),
@@ -490,8 +490,8 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: _called
-                      ? _green.withOpacity(0.08)
-                      : Colors.orange.withOpacity(0.08),
+                      ? _green.withValues(alpha: 0.08)
+                      : Colors.orange.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: _called ? _green : Colors.orange,
@@ -600,10 +600,10 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                         horizontal: 16, vertical: 5),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: _blue.withOpacity(0.05),
+                      color: _blue.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                          color: _blue.withOpacity(0.15)),
+                          color: _blue.withValues(alpha: 0.15)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -653,7 +653,7 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 4,
                       offset: const Offset(0, 2),
                     ),

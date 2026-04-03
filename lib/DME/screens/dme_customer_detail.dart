@@ -270,7 +270,7 @@ class _DmeCustomerDetailPageState extends State<DmeCustomerDetailPage>
                             CircleAvatar(
                               radius: 28,
                               backgroundColor:
-                                  const Color(0xFF005BAC).withOpacity(0.1),
+                                  const Color(0xFF005BAC).withValues(alpha: 0.1),
                               child: Text(
                                 c.name.isNotEmpty ? c.name[0].toUpperCase() : '?',
                                 style: const TextStyle(

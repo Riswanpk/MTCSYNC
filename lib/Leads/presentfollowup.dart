@@ -338,10 +338,10 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
   Future<void> _showPhoneShowcaseIfNeeded() async {
     final prefs = await SharedPreferences.getInstance();
     final seen = prefs.getBool('seen_phone_showcase') ?? false;
-    print('Showcase seen value: $seen');
+    debugPrint('Showcase seen value: $seen');
     if (!seen && mounted) {
       await Future.delayed(const Duration(seconds: 1));
-      print('Showing showcase for phone card');
+      debugPrint('Showing showcase for phone card');
       ShowCaseWidget.of(context).startShowCase([_phoneShowcaseKey]);
       await prefs.setBool('seen_phone_showcase', true);
     }
@@ -475,7 +475,7 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
           ),
           if (_isSaving)
             Container(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withValues(alpha: 0.3),
               child: const Center(child: CircularProgressIndicator()),
             ),
         ],
@@ -547,7 +547,7 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.teal.withOpacity(0.15),
+                  color: Colors.teal.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Text('SME Lead', style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold)),

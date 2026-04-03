@@ -258,7 +258,7 @@ class _DmeDashboardPageState extends State<DmeDashboardPage> {
                       return ListTile(
                         leading: CircleAvatar(
                           backgroundColor:
-                              const Color(0xFF005BAC).withOpacity(0.1),
+                              const Color(0xFF005BAC).withValues(alpha: 0.1),
                           child: Text('${e.key + 1}',
                               style: const TextStyle(
                                   fontWeight: FontWeight.bold,

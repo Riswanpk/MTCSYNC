@@ -108,7 +108,7 @@ class _NeumorphicButtonState extends State<NeumorphicButton>
                   // Main colored shadow
                   BoxShadow(
                     color: widget.color
-                        .withOpacity(0.5 * _elevationAnimation.value),
+                        .withValues(alpha: 0.5 * _elevationAnimation.value),
                     offset: Offset(0, 10 * _elevationAnimation.value),
                     blurRadius: 24 * _elevationAnimation.value,
                     spreadRadius: -2,
@@ -116,20 +116,20 @@ class _NeumorphicButtonState extends State<NeumorphicButton>
                   // Soft dark shadow
                   BoxShadow(
                     color: Colors.black
-                        .withOpacity(0.25 * _elevationAnimation.value),
+                        .withValues(alpha: 0.25 * _elevationAnimation.value),
                     offset: Offset(0, 6 * _elevationAnimation.value),
                     blurRadius: 16 * _elevationAnimation.value,
                   ),
                   // Inner glow when pressed
                   if (_isPressed)
                     BoxShadow(
-                      color: widget.color.withOpacity(0.3),
+                      color: widget.color.withValues(alpha: 0.3),
                       blurRadius: 4,
                       spreadRadius: -2,
                     ),
                 ],
                 border: Border.all(
-                  color: Colors.white.withOpacity(_isPressed ? 0.4 : 0.25),
+                  color: Colors.white.withValues(alpha: _isPressed ? 0.4 : 0.25),
                   width: 1.5,
                 ),
               ),
@@ -142,13 +142,13 @@ class _NeumorphicButtonState extends State<NeumorphicButton>
                       padding: EdgeInsets.all(_isPressed ? 8 : 7),
                       decoration: BoxDecoration(
                         color:
-                            Colors.white.withOpacity(_isPressed ? 0.25 : 0.18),
+                            Colors.white.withValues(alpha: _isPressed ? 0.25 : 0.18),
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: _isPressed
                             ? null
                             : [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
+                                  color: Colors.black.withValues(alpha: 0.1),
                                   blurRadius: 4,
                                   offset: const Offset(0, 2),
                                 ),
@@ -176,7 +176,7 @@ class _NeumorphicButtonState extends State<NeumorphicButton>
                             fontFamily: 'Montserrat',
                             shadows: [
                               Shadow(
-                                color: Colors.black.withOpacity(0.25),
+                                color: Colors.black.withValues(alpha: 0.25),
                                 offset: const Offset(0, 1),
                                 blurRadius: 3,
                               ),

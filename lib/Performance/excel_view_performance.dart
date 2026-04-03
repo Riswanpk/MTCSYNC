@@ -115,7 +115,7 @@ class _ExcelViewPerformancePageState extends State<ExcelViewPerformancePage>
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: (isDark ? Colors.white : _primaryBlue)
-                        .withOpacity(0.1),
+                        .withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
@@ -174,7 +174,7 @@ class _ExcelViewPerformancePageState extends State<ExcelViewPerformancePage>
                         BoxShadow(
                           color: isDark
                               ? Colors.black26
-                              : Colors.black.withOpacity(0.06),
+                              : Colors.black.withValues(alpha: 0.06),
                           blurRadius: 20,
                           offset: const Offset(0, 8),
                         ),
@@ -190,7 +190,7 @@ class _ExcelViewPerformancePageState extends State<ExcelViewPerformancePage>
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
                                 color: _primaryBlue
-                                    .withOpacity(isDark ? 0.2 : 0.1),
+                                    .withValues(alpha: isDark ? 0.2 : 0.1),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Icon(
@@ -235,14 +235,14 @@ class _ExcelViewPerformancePageState extends State<ExcelViewPerformancePage>
                             color: (isDark
                                     ? Colors.white
                                     : _primaryBlue)
-                                .withOpacity(0.06),
+                                .withValues(alpha: 0.06),
                             borderRadius:
                                 BorderRadius.circular(14),
                             border: Border.all(
                               color: (isDark
                                       ? Colors.white
                                       : _primaryBlue)
-                                  .withOpacity(0.12),
+                                  .withValues(alpha: 0.12),
                             ),
                           ),
                           child: DropdownButtonHideUnderline(
@@ -292,7 +292,7 @@ class _ExcelViewPerformancePageState extends State<ExcelViewPerformancePage>
                                               decoration:
                                                   BoxDecoration(
                                                 color: _primaryBlue
-                                                    .withOpacity(
+                                                    .withValues(alpha: 
                                                         0.12),
                                                 borderRadius:
                                                     BorderRadius
@@ -356,14 +356,14 @@ class _ExcelViewPerformancePageState extends State<ExcelViewPerformancePage>
                                 color: (isDark
                                         ? Colors.white
                                         : _primaryBlue)
-                                    .withOpacity(0.06),
+                                    .withValues(alpha: 0.06),
                                 borderRadius:
                                     BorderRadius.circular(14),
                                 border: Border.all(
                                   color: (isDark
                                           ? Colors.white
                                           : _primaryBlue)
-                                      .withOpacity(0.12),
+                                      .withValues(alpha: 0.12),
                                 ),
                               ),
                               child: DropdownButtonHideUnderline(
@@ -401,7 +401,7 @@ class _ExcelViewPerformancePageState extends State<ExcelViewPerformancePage>
                                                   radius: 14,
                                                   backgroundColor:
                                                       _primaryGreen
-                                                          .withOpacity(
+                                                          .withValues(alpha: 
                                                               0.15),
                                                   child: Text(
                                                     (userIdToName[uid] ??
@@ -586,7 +586,7 @@ class _PerformanceTableViewState extends State<_PerformanceTableView>
           BoxShadow(
             color: isDark
                 ? Colors.black26
-                : Colors.black.withOpacity(0.05),
+                : Colors.black.withValues(alpha: 0.05),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -602,8 +602,8 @@ class _PerformanceTableViewState extends State<_PerformanceTableView>
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: isDark
-                    ? [accentColor.withOpacity(0.15), cardColor]
-                    : [accentColor.withOpacity(0.08), cardColor],
+                    ? [accentColor.withValues(alpha: 0.15), cardColor]
+                    : [accentColor.withValues(alpha: 0.08), cardColor],
               ),
               borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(16)),
@@ -614,7 +614,7 @@ class _PerformanceTableViewState extends State<_PerformanceTableView>
                 Container(
                   padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
-                    color: accentColor.withOpacity(0.15),
+                    color: accentColor.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(sectionIcon,
@@ -794,7 +794,7 @@ class _PerformanceTableViewState extends State<_PerformanceTableView>
                                           color:
                                               const Color(
                                                       0xFF66BB6A)
-                                                  .withOpacity(
+                                                  .withValues(alpha: 
                                                       0.15),
                                           borderRadius:
                                               BorderRadius
@@ -814,7 +814,7 @@ class _PerformanceTableViewState extends State<_PerformanceTableView>
                                           color:
                                               const Color(
                                                       0xFFEF5350)
-                                                  .withOpacity(
+                                                  .withValues(alpha: 
                                                       0.15),
                                           borderRadius:
                                               BorderRadius
@@ -858,7 +858,7 @@ class _PerformanceTableViewState extends State<_PerformanceTableView>
           BoxShadow(
             color: isDark
                 ? Colors.black26
-                : Colors.black.withOpacity(0.05),
+                : Colors.black.withValues(alpha: 0.05),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -874,8 +874,8 @@ class _PerformanceTableViewState extends State<_PerformanceTableView>
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: isDark
-                    ? [accentColor.withOpacity(0.15), cardColor]
-                    : [accentColor.withOpacity(0.08), cardColor],
+                    ? [accentColor.withValues(alpha: 0.15), cardColor]
+                    : [accentColor.withValues(alpha: 0.08), cardColor],
               ),
               borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(16)),
@@ -886,7 +886,7 @@ class _PerformanceTableViewState extends State<_PerformanceTableView>
                 Container(
                   padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
-                    color: accentColor.withOpacity(0.15),
+                    color: accentColor.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
@@ -981,7 +981,7 @@ class _PerformanceTableViewState extends State<_PerformanceTableView>
                             padding: const EdgeInsets.all(2),
                             decoration: BoxDecoration(
                               color: const Color(0xFF66BB6A)
-                                  .withOpacity(0.15),
+                                  .withValues(alpha: 0.15),
                               borderRadius:
                                   BorderRadius.circular(6),
                             ),
@@ -995,7 +995,7 @@ class _PerformanceTableViewState extends State<_PerformanceTableView>
                             padding: const EdgeInsets.all(2),
                             decoration: BoxDecoration(
                               color: const Color(0xFFEF5350)
-                                  .withOpacity(0.15),
+                                  .withValues(alpha: 0.15),
                               borderRadius:
                                   BorderRadius.circular(6),
                             ),
@@ -1070,7 +1070,7 @@ class _PerformanceTableViewState extends State<_PerformanceTableView>
                 BoxShadow(
                   color: isDark
                       ? Colors.black26
-                      : Colors.black.withOpacity(0.05),
+                      : Colors.black.withValues(alpha: 0.05),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -1085,7 +1085,7 @@ class _PerformanceTableViewState extends State<_PerformanceTableView>
                       padding: const EdgeInsets.all(7),
                       decoration: BoxDecoration(
                         color: _primaryGreen
-                            .withOpacity(isDark ? 0.2 : 0.1),
+                            .withValues(alpha: isDark ? 0.2 : 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Icon(
@@ -1269,18 +1269,18 @@ class _PerformanceTableViewState extends State<_PerformanceTableView>
           color: isSelected
               ? null
               : (isDark ? Colors.white : _primaryGreen)
-                  .withOpacity(0.08),
+                  .withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isSelected
                 ? Colors.transparent
                 : (isDark ? Colors.white : _primaryGreen)
-                    .withOpacity(0.15),
+                    .withValues(alpha: 0.15),
           ),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: _primaryGreen.withOpacity(0.3),
+                    color: _primaryGreen.withValues(alpha: 0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 3),
                   ),

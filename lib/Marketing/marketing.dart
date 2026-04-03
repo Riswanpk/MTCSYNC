@@ -210,7 +210,7 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
+                      color: Colors.white.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(Icons.campaign_outlined, color: Colors.white, size: 28),
@@ -218,7 +218,7 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
                   const SizedBox(height: 14),
                   const Text('Marketing', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700, fontFamily: 'Electorize')),
                   const SizedBox(height: 4),
-                  Text('Quick Actions', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14, fontFamily: 'Electorize')),
+                  Text('Quick Actions', style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14, fontFamily: 'Electorize')),
                 ],
               ),
             ),
@@ -230,7 +230,7 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
                     leading: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF16213E).withOpacity(0.08),
+                        color: const Color(0xFF16213E).withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(Icons.today_rounded, color: Color(0xFF16213E), size: 22),
@@ -254,7 +254,7 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
                     leading: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF16213E).withOpacity(0.08),
+                        color: const Color(0xFF16213E).withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(Icons.calendar_month_rounded, color: Color(0xFF16213E), size: 22),
@@ -317,7 +317,7 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
             boxShadow: isSelected
                 ? [
                     BoxShadow(
-                      color: color.withOpacity(0.2),
+                      color: color.withValues(alpha: 0.2),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),

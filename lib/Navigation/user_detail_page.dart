@@ -395,7 +395,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
       {Color? valueColor}) {
     return Row(
       children: [
-        Icon(icon, size: 20, color: _primaryBlue.withOpacity(0.7)),
+        Icon(icon, size: 20, color: _primaryBlue.withValues(alpha: 0.7)),
         const SizedBox(width: 12),
         SizedBox(
           width: 100,

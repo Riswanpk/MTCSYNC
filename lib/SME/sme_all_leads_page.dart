@@ -228,7 +228,7 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
                       color: isDark ? const Color(0xFF1A1B22) : const Color(0xFFF0F4FF),
                       border: Border(
                         bottom: BorderSide(
-                          color: isDark ? Colors.white12 : Colors.black.withOpacity(0.07),
+                          color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.07),
                         ),
                       ),
                     ),
@@ -341,12 +341,12 @@ class _FilterChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: isActive
-              ? _primaryBlue.withOpacity(0.12)
+              ? _primaryBlue.withValues(alpha: 0.12)
               : (isDark ? const Color(0xFF2A2B33) : const Color(0xFFF0F4FF)),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
             color: isActive
-                ? _primaryBlue.withOpacity(0.5)
+                ? _primaryBlue.withValues(alpha: 0.5)
                 : (isDark ? Colors.white12 : Colors.black12),
           ),
         ),
@@ -495,7 +495,7 @@ class _SummaryChip extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 4),
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
@@ -509,7 +509,7 @@ class _SummaryChip extends StatelessWidget {
             Text(
               label,
               style:
-                  TextStyle(fontSize: 10, color: color.withOpacity(0.8)),
+                  TextStyle(fontSize: 10, color: color.withValues(alpha: 0.8)),
             ),
           ],
         ),
@@ -570,7 +570,7 @@ class _LeadCard extends StatelessWidget {
             BoxShadow(
               color: isDark
                   ? Colors.black26
-                  : Colors.black.withOpacity(0.06),
+                  : Colors.black.withValues(alpha: 0.06),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -644,7 +644,7 @@ class _LeadCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 9, vertical: 4),
                           decoration: BoxDecoration(
-                            color: statusColor.withOpacity(0.15),
+                            color: statusColor.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(

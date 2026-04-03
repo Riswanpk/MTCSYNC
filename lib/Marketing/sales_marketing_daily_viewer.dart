@@ -90,7 +90,7 @@ class SalesMarketingDailyViewer extends StatelessWidget {
                         : formType == 'General Customer'
                             ? const Color(0xFFFF6B35)
                             : const Color(0xFF009688))
-                    .withOpacity(0.15),
+                    .withValues(alpha: 0.15),
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
@@ -113,7 +113,7 @@ class SalesMarketingDailyViewer extends StatelessWidget {
                               : formType == 'General Customer'
                                   ? const Color(0xFFFF6B35)
                                   : const Color(0xFF009688))
-                          .withOpacity(0.12),
+                          .withValues(alpha: 0.12),
                       child: Icon(
                         formType == 'Premium Customer'
                             ? Icons.workspace_premium_rounded
@@ -155,7 +155,7 @@ class SalesMarketingDailyViewer extends StatelessWidget {
                               : formType == 'General Customer'
                                   ? const Color(0xFFFF6B35)
                                   : const Color(0xFF009688))
-                          .withOpacity(0.6),
+                          .withValues(alpha: 0.6),
                     ),
                     onTap: () {
                     Navigator.of(context).push(
@@ -345,7 +345,7 @@ class MarketingFormDetailsPage extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 elevation: 4,
-                shadowColor: const Color(0xFF1A1A2E).withOpacity(0.3),
+                shadowColor: const Color(0xFF1A1A2E).withValues(alpha: 0.3),
                 ),
                 onPressed: () {
                   Navigator.of(context).push(
@@ -534,7 +534,7 @@ class _EditMarketingFormPageState extends State<EditMarketingFormPage> {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 elevation: 4,
-                shadowColor: const Color(0xFF1A1A2E).withOpacity(0.3),
+                shadowColor: const Color(0xFF1A1A2E).withValues(alpha: 0.3),
               ),
               icon: const Icon(Icons.save_rounded, color: Colors.white),
               label: const Text(

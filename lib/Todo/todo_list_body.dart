@@ -72,7 +72,7 @@ class TodoListBody extends StatelessWidget {
                             ? Icons.check_circle_outline_rounded
                             : Icons.celebration_rounded,
                         size: 64,
-                        color: primaryGreen.withOpacity(0.5),
+                        color: primaryGreen.withValues(alpha: 0.5),
                       ),
                       const SizedBox(height: 16),
                       Text(
@@ -92,7 +92,7 @@ class TodoListBody extends StatelessWidget {
                             : 'Complete tasks to see them here',
                         style: TextStyle(
                           fontSize: 14,
-                          color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
+                          color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.7),
                         ),
                       ),
                     ],

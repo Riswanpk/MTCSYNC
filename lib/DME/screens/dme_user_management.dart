@@ -220,7 +220,7 @@ class _DmeUserManagementPageState extends State<DmeUserManagementPage> {
                       color: isDark ? const Color(0xFF23272F) : Colors.white,
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: const Color(0xFF005BAC).withOpacity(0.2),
+                          backgroundColor: const Color(0xFF005BAC).withValues(alpha: 0.2),
                           child: Text(
                             u.username.isNotEmpty ? u.username[0].toUpperCase() : '?',
                             style: const TextStyle(

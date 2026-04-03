@@ -53,9 +53,9 @@ class HomeBackground extends StatelessWidget {
                   const Color(0xFF0A1628), // Back to dark
                 ]
               : [
-                  primaryBlue.withOpacity(0.05),
+                  primaryBlue.withValues(alpha: 0.05),
                   Colors.white,
-                  primaryGreen.withOpacity(0.08),
+                  primaryGreen.withValues(alpha: 0.08),
                 ],
           stops: const [0.0, 0.5, 1.0],
         ),
@@ -78,15 +78,15 @@ class HomeMenuButton extends StatelessWidget {
       child: Builder(
         builder: (context) => Container(
           decoration: BoxDecoration(
-            color: (isDark ? Colors.white : primaryBlue).withOpacity(0.1),
+            color: (isDark ? Colors.white : primaryBlue).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: (isDark ? Colors.white : primaryBlue).withOpacity(0.2),
+              color: (isDark ? Colors.white : primaryBlue).withValues(alpha: 0.2),
               width: 1.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: primaryBlue.withOpacity(0.1),
+                color: primaryBlue.withValues(alpha: 0.1),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -172,24 +172,24 @@ class SwingingLogo extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       margin: const EdgeInsets.only(bottom: 32),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(isDark ? 0.05 : 0.7),
+        color: Colors.white.withValues(alpha: isDark ? 0.05 : 0.7),
         borderRadius: BorderRadius.circular(32),
         boxShadow: [
           BoxShadow(
-            color: primaryBlue.withOpacity(isDark ? 0.2 : 0.08),
+            color: primaryBlue.withValues(alpha: isDark ? 0.2 : 0.08),
             blurRadius: 40,
             offset: const Offset(0, 16),
             spreadRadius: 0,
           ),
           BoxShadow(
-            color: primaryGreen.withOpacity(isDark ? 0.1 : 0.05),
+            color: primaryGreen.withValues(alpha: isDark ? 0.1 : 0.05),
             blurRadius: 30,
             offset: const Offset(-10, -10),
             spreadRadius: 0,
           ),
         ],
         border: Border.all(
-          color: (isDark ? Colors.white : primaryBlue).withOpacity(0.1),
+          color: (isDark ? Colors.white : primaryBlue).withValues(alpha: 0.1),
           width: 1,
         ),
       ),
@@ -312,7 +312,7 @@ class HomeButtonsContainer extends StatelessWidget {
                     fontFamily: 'Montserrat',
                     shadows: [
                       Shadow(
-                        color: Colors.black.withOpacity(0.25),
+                        color: Colors.black.withValues(alpha: 0.25),
                         offset: const Offset(0, 1),
                         blurRadius: 3,
                       ),

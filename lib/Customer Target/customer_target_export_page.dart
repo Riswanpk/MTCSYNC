@@ -338,11 +338,11 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
                 prefixIcon: const Icon(Icons.calendar_today_rounded, color: _primaryBlue, size: 20),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: _primaryBlue.withOpacity(0.4)),
+                  borderSide: BorderSide(color: _primaryBlue.withValues(alpha: 0.4)),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: _primaryBlue.withOpacity(0.4)),
+                  borderSide: BorderSide(color: _primaryBlue.withValues(alpha: 0.4)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -370,11 +370,11 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
                 prefixIcon: const Icon(Icons.location_city_rounded, color: _primaryBlue, size: 20),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: _primaryBlue.withOpacity(0.4)),
+                  borderSide: BorderSide(color: _primaryBlue.withValues(alpha: 0.4)),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: _primaryBlue.withOpacity(0.4)),
+                  borderSide: BorderSide(color: _primaryBlue.withValues(alpha: 0.4)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -435,7 +435,7 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF0D2137) : Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _primaryBlue.withOpacity(0.15)),
+                border: Border.all(color: _primaryBlue.withValues(alpha: 0.15)),
               ),
             ),
           ],

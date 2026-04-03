@@ -190,10 +190,10 @@ class _AdminPerformancePageState extends State<AdminPerformancePage>
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: (isDark ? Colors.white : _primaryBlue).withOpacity(0.06),
+        color: (isDark ? Colors.white : _primaryBlue).withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: (isDark ? Colors.white : _primaryBlue).withOpacity(0.12),
+          color: (isDark ? Colors.white : _primaryBlue).withValues(alpha: 0.12),
         ),
       ),
       child: DropdownButtonHideUnderline(
@@ -278,7 +278,7 @@ class _AdminPerformancePageState extends State<AdminPerformancePage>
                 icon: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: (isDark ? Colors.white : _primaryBlue).withOpacity(0.1),
+                    color: (isDark ? Colors.white : _primaryBlue).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
@@ -329,7 +329,7 @@ class _AdminPerformancePageState extends State<AdminPerformancePage>
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: isDark ? Colors.black26 : Colors.black.withOpacity(0.06),
+                          color: isDark ? Colors.black26 : Colors.black.withValues(alpha: 0.06),
                           blurRadius: 20,
                           offset: const Offset(0, 8),
                         ),
@@ -344,7 +344,7 @@ class _AdminPerformancePageState extends State<AdminPerformancePage>
                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: _primaryBlue.withOpacity(isDark ? 0.2 : 0.1),
+                                color: _primaryBlue.withValues(alpha: isDark ? 0.2 : 0.1),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Icon(
@@ -438,7 +438,7 @@ class _AdminPerformancePageState extends State<AdminPerformancePage>
                                                   Container(
                                                     padding: const EdgeInsets.all(6),
                                                     decoration: BoxDecoration(
-                                                      color: _primaryBlue.withOpacity(0.12),
+                                                      color: _primaryBlue.withValues(alpha: 0.12),
                                                       borderRadius: BorderRadius.circular(8),
                                                     ),
                                                     child: Icon(Icons.store_rounded, size: 16, color: _primaryBlue),
@@ -489,7 +489,7 @@ class _AdminPerformancePageState extends State<AdminPerformancePage>
                                                   children: [
                                                     CircleAvatar(
                                                       radius: 14,
-                                                      backgroundColor: _primaryGreen.withOpacity(0.15),
+                                                      backgroundColor: _primaryGreen.withValues(alpha: 0.15),
                                                       child: Text(
                                                         (u['username'] ?? 'U').substring(0, 1).toUpperCase(),
                                                         style: TextStyle(
@@ -546,7 +546,7 @@ class _AdminPerformancePageState extends State<AdminPerformancePage>
                                                     Container(
                                                       padding: const EdgeInsets.all(6),
                                                       decoration: BoxDecoration(
-                                                        color: _primaryGreen.withOpacity(0.12),
+                                                        color: _primaryGreen.withValues(alpha: 0.12),
                                                         borderRadius: BorderRadius.circular(8),
                                                       ),
                                                       child: Icon(Icons.calendar_month_rounded, size: 16, color: _primaryGreen),
@@ -595,7 +595,7 @@ class _AdminPerformancePageState extends State<AdminPerformancePage>
                                                   Container(
                                                     padding: const EdgeInsets.all(6),
                                                     decoration: BoxDecoration(
-                                                      color: (hasForm ? _primaryGreen : _primaryBlue).withOpacity(0.12),
+                                                      color: (hasForm ? _primaryGreen : _primaryBlue).withValues(alpha: 0.12),
                                                       borderRadius: BorderRadius.circular(8),
                                                     ),
                                                     child: Icon(
@@ -650,7 +650,7 @@ class _AdminPerformancePageState extends State<AdminPerformancePage>
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: isDark ? Colors.black26 : Colors.black.withOpacity(0.06),
+                            color: isDark ? Colors.black26 : Colors.black.withValues(alpha: 0.06),
                             blurRadius: 20,
                             offset: const Offset(0, 8),
                           ),
@@ -911,8 +911,8 @@ class _AdminEditFormState extends State<_AdminEditForm> {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: isDark
-                ? [accentColor.withOpacity(0.15), Colors.transparent]
-                : [accentColor.withOpacity(0.08), Colors.transparent],
+                ? [accentColor.withValues(alpha: 0.15), Colors.transparent]
+                : [accentColor.withValues(alpha: 0.08), Colors.transparent],
           ),
           borderRadius: BorderRadius.circular(12),
         ),
@@ -921,7 +921,7 @@ class _AdminEditFormState extends State<_AdminEditForm> {
             Container(
               padding: const EdgeInsets.all(7),
               decoration: BoxDecoration(
-                color: accentColor.withOpacity(0.15),
+                color: accentColor.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(icon, color: accentColor, size: 18),
@@ -1185,7 +1185,7 @@ class _AdminEditFormState extends State<_AdminEditForm> {
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [
                     BoxShadow(
-                      color: _primaryGreen.withOpacity(0.3),
+                      color: _primaryGreen.withValues(alpha: 0.3),
                       blurRadius: 8,
                       offset: const Offset(0, 3),
                     ),

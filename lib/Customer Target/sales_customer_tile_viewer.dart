@@ -667,8 +667,9 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
 
     bool remarksEntered = remarksController.text.trim().isNotEmpty;
 
-    return WillPopScope(
-      onWillPop: _onWillPop,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async { await _onWillPop(); },
       child: Scaffold(
         appBar: AppBar(
           elevation: 0,
@@ -700,7 +701,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [primaryColor, primaryColor.withOpacity(0.8)],
+                    colors: [primaryColor, primaryColor.withValues(alpha: 0.8)],
                   ),
                 ),
                 child: Padding(
@@ -710,7 +711,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
@@ -774,7 +775,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                                       gradient: LinearGradient(
                                         colors: [
                                           primaryColor,
-                                          primaryColor.withOpacity(0.8),
+                                          primaryColor.withValues(alpha: 0.8),
                                         ],
                                         begin: Alignment.topLeft,
                                         end: Alignment.bottomRight,
@@ -818,8 +819,8 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: called
-                      ? swappedColor.withOpacity(0.1)
-                      : Colors.orange.withOpacity(0.1),
+                      ? swappedColor.withValues(alpha: 0.1)
+                      : Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: called ? swappedColor : Colors.orange,
@@ -883,7 +884,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 4,
                       offset: const Offset(0, 2),
                     ),
@@ -971,7 +972,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 4,
                       offset: const Offset(0, 2),
                     ),
@@ -1018,7 +1019,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                           ? LinearGradient(
                               colors: [
                                 primaryColor,
-                                primaryColor.withOpacity(0.8),
+                                primaryColor.withValues(alpha: 0.8),
                               ],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
@@ -1077,7 +1078,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                           ? LinearGradient(
                               colors: [
                                 primaryColor,
-                                primaryColor.withOpacity(0.8),
+                                primaryColor.withValues(alpha: 0.8),
                               ],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,

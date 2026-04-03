@@ -771,7 +771,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
         ),
         if (_isSaving)
           Container(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withValues(alpha: 0.3),
             child: const Center(
               child: CircularProgressIndicator(),
             ),

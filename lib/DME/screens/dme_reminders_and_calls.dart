@@ -444,8 +444,8 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
                             child: ListTile(
                               leading: CircleAvatar(
                                 backgroundColor: isOverdue
-                                    ? Colors.red.withOpacity(0.1)
-                                    : _primaryBlue.withOpacity(0.1),
+                                    ? Colors.red.withValues(alpha: 0.1)
+                                    : _primaryBlue.withValues(alpha: 0.1),
                                 child: Icon(
                                   isOverdue
                                       ? Icons.warning_amber
@@ -569,8 +569,8 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
                       return ListTile(
                         leading: CircleAvatar(
                           backgroundColor: called
-                              ? Colors.green.withOpacity(0.1)
-                              : Colors.orange.withOpacity(0.1),
+                              ? Colors.green.withValues(alpha: 0.1)
+                              : Colors.orange.withValues(alpha: 0.1),
                           child: Icon(
                             called ? Icons.check : Icons.phone,
                             color: called ? Colors.green : Colors.orange,

@@ -125,14 +125,14 @@ class _InsightsDetailViewerPageState extends State<InsightsDetailViewerPage>
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.15),
+                              color: Colors.white.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
                               monthLabel,
                               style: TextStyle(
                                 fontSize: 13, fontWeight: FontWeight.w500,
-                                color: Colors.white.withOpacity(0.9),
+                                color: Colors.white.withValues(alpha: 0.9),
                               ),
                             ),
                           ),
@@ -144,7 +144,7 @@ class _InsightsDetailViewerPageState extends State<InsightsDetailViewerPage>
                               painter: _CircleProgressPainter(
                                 progress: (_animation.value * widget.percentage / 100).clamp(0.0, 1.0),
                                 progressColor: pctColor,
-                                bgColor: Colors.white.withOpacity(0.15),
+                                bgColor: Colors.white.withValues(alpha: 0.15),
                                 strokeWidth: 10,
                               ),
                               child: Center(
@@ -162,7 +162,7 @@ class _InsightsDetailViewerPageState extends State<InsightsDetailViewerPage>
                                       '$total / 120',
                                       style: TextStyle(
                                         fontSize: 13,
-                                        color: Colors.white.withOpacity(0.7),
+                                        color: Colors.white.withValues(alpha: 0.7),
                                       ),
                                     ),
                                   ],
@@ -251,7 +251,7 @@ class _InsightsDetailViewerPageState extends State<InsightsDetailViewerPage>
                               boxShadow: [
                                 if (!isDark)
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.04),
+                                    color: Colors.black.withValues(alpha: 0.04),
                                     blurRadius: 10,
                                     offset: const Offset(0, 2),
                                   ),
@@ -262,7 +262,7 @@ class _InsightsDetailViewerPageState extends State<InsightsDetailViewerPage>
                                 Container(
                                   width: 40, height: 40,
                                   decoration: BoxDecoration(
-                                    color: bar.color.withOpacity(0.12),
+                                    color: bar.color.withValues(alpha: 0.12),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Icon(bar.icon, color: bar.color, size: 22),
@@ -285,7 +285,7 @@ class _InsightsDetailViewerPageState extends State<InsightsDetailViewerPage>
                                           Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                             decoration: BoxDecoration(
-                                              color: bar.color.withOpacity(0.1),
+                                              color: bar.color.withValues(alpha: 0.1),
                                               borderRadius: BorderRadius.circular(8),
                                             ),
                                             child: Text(
@@ -306,7 +306,7 @@ class _InsightsDetailViewerPageState extends State<InsightsDetailViewerPage>
                                             Container(
                                               height: 8,
                                               decoration: BoxDecoration(
-                                                color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey[200],
+                                                color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey[200],
                                                 borderRadius: BorderRadius.circular(6),
                                               ),
                                             ),
@@ -316,7 +316,7 @@ class _InsightsDetailViewerPageState extends State<InsightsDetailViewerPage>
                                                 height: 8,
                                                 decoration: BoxDecoration(
                                                   gradient: LinearGradient(
-                                                    colors: [bar.color, bar.color.withOpacity(0.7)],
+                                                    colors: [bar.color, bar.color.withValues(alpha: 0.7)],
                                                   ),
                                                   borderRadius: BorderRadius.circular(6),
                                                 ),
@@ -370,7 +370,7 @@ class _SummaryChip extends StatelessWidget {
           boxShadow: [
             if (!isDark)
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
+                color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),

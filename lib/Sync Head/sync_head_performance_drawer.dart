@@ -76,7 +76,7 @@ class SyncHeadPerformancePage extends StatelessWidget {
                       Container(
                         width: 56, height: 56,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
+                          color: Colors.white.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: const Icon(Icons.bar_chart_rounded, color: Colors.white, size: 32),
@@ -94,7 +94,7 @@ class SyncHeadPerformancePage extends StatelessWidget {
                         'Manage & review team performance',
                         style: TextStyle(
                           fontSize: 13,
-                          color: Colors.white.withOpacity(0.7),
+                          color: Colors.white.withValues(alpha: 0.7),
                         ),
                       ),
                     ],
@@ -154,7 +154,7 @@ class _PerformanceTile extends StatelessWidget {
       color: isDark ? _darkCard : Colors.white,
       borderRadius: BorderRadius.circular(16),
       elevation: isDark ? 0 : 2,
-      shadowColor: Colors.black.withOpacity(0.06),
+      shadowColor: Colors.black.withValues(alpha: 0.06),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: data.onTap,
@@ -170,7 +170,7 @@ class _PerformanceTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [
                     BoxShadow(
-                      color: data.gradient.colors.first.withOpacity(0.35),
+                      color: data.gradient.colors.first.withValues(alpha: 0.35),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -207,8 +207,8 @@ class _PerformanceTile extends StatelessWidget {
                 width: 30, height: 30,
                 decoration: BoxDecoration(
                   color: isDark
-                      ? Colors.white.withOpacity(0.06)
-                      : Colors.grey.withOpacity(0.08),
+                      ? Colors.white.withValues(alpha: 0.06)
+                      : Colors.grey.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(

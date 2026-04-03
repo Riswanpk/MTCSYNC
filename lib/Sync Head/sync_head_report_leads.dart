@@ -862,7 +862,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
                     horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
                   border:
-                      Border.all(color: _primaryBlue.withOpacity(0.4)),
+                      Border.all(color: _primaryBlue.withValues(alpha: 0.4)),
                   borderRadius: BorderRadius.circular(10),
                   color: isDark
                       ? const Color(0xFF162236)
@@ -909,12 +909,12 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide(
-                            color: _primaryBlue.withOpacity(0.4)),
+                            color: _primaryBlue.withValues(alpha: 0.4)),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide(
-                            color: _primaryBlue.withOpacity(0.4)),
+                            color: _primaryBlue.withValues(alpha: 0.4)),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
@@ -954,12 +954,12 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: BorderSide(
-                      color: _primaryBlue.withOpacity(0.4)),
+                      color: _primaryBlue.withValues(alpha: 0.4)),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: BorderSide(
-                      color: _primaryBlue.withOpacity(0.4)),
+                      color: _primaryBlue.withValues(alpha: 0.4)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -1047,7 +1047,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
                     : Colors.white,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                    color: _primaryBlue.withOpacity(0.15)),
+                    color: _primaryBlue.withValues(alpha: 0.15)),
               ),
             ),
           ],

@@ -74,7 +74,7 @@ class DmeNotificationService {
         schedule: NotificationCalendar.fromDate(date: dateTime),
       );
     } catch (e) {
-      print('Error scheduling reminder notification: $e');
+      debugPrint('Error scheduling reminder notification: $e');
     }
   }
 
@@ -97,7 +97,7 @@ class DmeNotificationService {
         ),
       );
     } catch (e) {
-      print('Error sending immediate notification: $e');
+      debugPrint('Error sending immediate notification: $e');
     }
   }
 
@@ -107,7 +107,7 @@ class DmeNotificationService {
       await AwesomeNotifications()
           .cancel(_generateNotificationId(customerId));
     } catch (e) {
-      print('Error canceling notification: $e');
+      debugPrint('Error canceling notification: $e');
     }
   }
 
@@ -116,7 +116,7 @@ class DmeNotificationService {
     try {
       await AwesomeNotifications().cancelAllSchedules();
     } catch (e) {
-      print('Error canceling all notifications: $e');
+      debugPrint('Error canceling all notifications: $e');
     }
   }
 

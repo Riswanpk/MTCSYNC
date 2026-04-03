@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:image_watermark/image_watermark.dart';
-import 'package:flutter/material.dart';
+import 'package:image/image.dart' as img;
 import 'package:flutter/foundation.dart';
 
 /// Data class for watermark parameters
@@ -15,16 +14,20 @@ class WatermarkParams {
 /// Top-level function for watermarking (can be used with compute)
 Future<Uint8List> _processWatermark(WatermarkParams params) async {
   final bytes = await File(params.imagePath).readAsBytes();
-  
-  final watermarkedBytes = await ImageWatermark.addTextWatermark(
-    imgBytes: bytes,
-    watermarkText: params.watermarkText,
-    color: Colors.white,
-    dstX: 16,
-    dstY: 30,
+
+  final image = img.decodeImage(bytes);
+  if (image == null) return bytes;
+
+  img.drawString(
+    image,
+    params.watermarkText,
+    font: img.arial24,
+    x: 16,
+    y: 30,
+    color: img.ColorRgba8(255, 255, 255, 255),
   );
 
-  return watermarkedBytes;
+  return Uint8List.fromList(img.encodeJpg(image));
 }
 
 /// Adds a watermark (location and time) to the image at [imageFile].

@@ -45,7 +45,7 @@ class ViewerMarketingDetailPage extends StatelessWidget {
                     : Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                 elevation: 4,
-                shadowColor: const Color(0xFF1A1A2E).withOpacity(0.12),
+                shadowColor: const Color(0xFF1A1A2E).withValues(alpha: 0.12),
                 child: Padding(
                   padding: const EdgeInsets.all(24),
                   child: Column(
@@ -94,16 +94,16 @@ class ViewerMarketingDetailPage extends StatelessWidget {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF16213E).withOpacity(0.06),
+                                color: const Color(0xFF16213E).withValues(alpha: 0.06),
                                 borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: const Color(0xFF16213E).withOpacity(0.12)),
+                                border: Border.all(color: const Color(0xFF16213E).withValues(alpha: 0.12)),
                               ),
                               child: Row(
                                 children: [
                                   Container(
                                     padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF1A1A2E).withOpacity(0.1),
+                                      color: const Color(0xFF1A1A2E).withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: const Icon(Icons.location_on_rounded, color: Color(0xFF1A1A2E), size: 22),
