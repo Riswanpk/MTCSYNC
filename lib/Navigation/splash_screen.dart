@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
@@ -25,6 +26,7 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  static const _platform = MethodChannel('com.mtc.mtcsync/deeplink');
   StreamSubscription<Uri?>? _widgetClickSub;
   bool _openedFromWidget = false; // Add this flag
 
@@ -33,12 +35,25 @@ class _SplashScreenState extends State<SplashScreen> {
     super.initState();
     // Listen for widget clicks when app is already running (warm start)
     _widgetClickSub = HomeWidget.widgetClicked.listen(_handleWidgetClick);
-    // Check if the app was cold-started from a widget click
-    HomeWidget.initiallyLaunchedFromHomeWidget().then(_handleWidgetClick);
+    // Check if app was cold-started from a widget/deep link via the platform channel
+    _checkInitialDeepLink();
     // Delay permission request and navigation until after first frame (UI visible)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _requestPermissionsAndNavigate();
     });
+  }
+
+  /// Get the initial deep link if the app was launched from a widget or deep link
+  Future<void> _checkInitialDeepLink() async {
+    try {
+      final String? deepLink = await _platform.invokeMethod<String>('getInitialDeepLink');
+      if (deepLink != null && deepLink.isNotEmpty) {
+        print('Initial deep link from intent: $deepLink');
+        _handleWidgetClick(Uri.parse(deepLink));
+      }
+    } on PlatformException catch (e) {
+      debugPrint('Failed to get deep link: ${e.message}');
+    }
   }
 
   void _handleWidgetClick(Uri? uri) {
@@ -47,25 +62,30 @@ class _SplashScreenState extends State<SplashScreen> {
       print('Widget clicked! URI: $uri');
       _openedFromWidget = true;
 
-      // Extract the path: "mtcsync://todo" or "mtcsync://todo/<docId>"
+      // Extract the path: "mtcsync://todo/<docId>" or "mtcsync://todo" etc.
+      final host = uri.host;
       final pathSegments = uri.pathSegments;
 
-      // Push HomePage first so back button leads there
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomePage()),
-      );
-
-      // Then push TodoPage on top
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const TodoPage()),
-      );
-
-      // If a specific todo docId was provided, push its detail page on top
-      if (pathSegments.isNotEmpty) {
-        final docId = pathSegments.first;
-        Navigator.of(context).push(
+      // Bypass HomePage — go directly to the detail/list page
+      if (host == 'todo') {
+        if (pathSegments.isNotEmpty) {
+          // Go directly to todo detail page
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => TaskDetailPageFromId(docId: pathSegments.first),
+            ),
+          );
+        } else {
+          // Go directly to todo list page
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const TodoPage()),
+          );
+        }
+      } else if (host == 'lead' && pathSegments.isNotEmpty) {
+        // Go directly to lead detail page
+        Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (_) => TaskDetailPageFromId(docId: docId),
+            builder: (_) => PresentFollowUp(docId: pathSegments.first),
           ),
         );
       }

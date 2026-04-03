@@ -12,8 +12,12 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'dart:convert';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:home_widget/home_widget.dart';
 import '../main.dart';
+import '../Todo/todo.dart';
 import '../Todo/todoform.dart';
+import '../Todo/todo_widget_updater.dart';
+import '../Leads/presentfollowup.dart';
 import '../Homepage/home_widgets.dart';
 import '../Homepage/home_drawer.dart';
 import '../Homepage/home_body.dart';
@@ -39,6 +43,7 @@ class _HomePageState extends State<HomePage>
   late Animation<double> _swingAnimation;
   StreamSubscription<User?>? _authSubscription;
   StreamSubscription<String>? _fcmTokenSubscription;
+  StreamSubscription<Uri?>? _widgetClickSub;
 
   File? _profileImage;
   String? _profileImagePath;
@@ -76,6 +81,10 @@ class _HomePageState extends State<HomePage>
     _startSmeNotificationService();
     _fetchAndCacheContacts();
     _checkBatteryOptimization();
+    // Listen for widget taps when app is warm (already running)
+    _widgetClickSub = HomeWidget.widgetClicked.listen(_handleWidgetDeepLink);
+    // Refresh widget data on every home screen visit
+    updateTodoWidgetFromFirestore().catchError((_) {});
   }
 
   /// Check and prompt for battery optimization after first frame
@@ -133,10 +142,38 @@ class _HomePageState extends State<HomePage>
   void dispose() {
     _authSubscription?.cancel();
     _fcmTokenSubscription?.cancel();
+    _widgetClickSub?.cancel();
     SmeNotificationService.instance.stopListening();
     routeObserver.unsubscribe(this);
     _swingController.dispose();
     super.dispose();
+  }
+
+  void _handleWidgetDeepLink(Uri? uri) {
+    if (!mounted || uri == null) return;
+    final host = uri.host;
+    final segments = uri.pathSegments;
+    if (host == 'todo') {
+      if (segments.isNotEmpty) {
+        // Navigate to the specific todo detail
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => TaskDetailPageFromId(docId: segments.first),
+          ),
+        );
+      } else {
+        // Navigate to the todo list
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const TodoPage()),
+        );
+      }
+    } else if (host == 'lead' && segments.isNotEmpty) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PresentFollowUp(docId: segments.first),
+        ),
+      );
+    }
   }
 
   Future<void> _setupFcmTokenSync() async {
