@@ -399,16 +399,6 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     }
   }
 
-  Future<bool> _onWillPop() async {
-    if (called && remarksController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter remarks before leaving.'), backgroundColor: Colors.red),
-      );
-      return false;
-    }
-    return true;
-  }
-
   String _formatFieldName(String key) {
     return key.split('_').map((word) => word[0].toUpperCase() + word.substring(1)).join(' ');
   }
@@ -668,8 +658,14 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     bool remarksEntered = remarksController.text.trim().isNotEmpty;
 
     return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) async { await _onWillPop(); },
+      canPop: !(called && remarksController.text.trim().isEmpty),
+      onPopInvokedWithResult: (didPop, result) async {
+        if (!didPop && called && remarksController.text.trim().isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please enter remarks before leaving.'), backgroundColor: Colors.red),
+          );
+        }
+      },
       child: Scaffold(
         appBar: AppBar(
           elevation: 0,

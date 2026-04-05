@@ -9,7 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 
 import '../Misc/theme_notifier.dart';
-import 'sales_customer_tile_viewer.dart';
+import 'customer_target_customer_tile_viewer.dart';
 import 'add_customer.dart';
 
 class CustomerListTarget extends StatefulWidget {
