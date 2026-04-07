@@ -401,15 +401,15 @@ class _RegisterPageState extends State<RegisterPage>
                                     'KSD',
                                     'KTM',
                                     'PKD',
-                                    'PKTR',
-                                    'PMNA',
+                                    'PKT',
+                                    'PMN',
                                     'TRR',
                                     'TSR',
                                     'TLY',
                                     'TVM',
                                     'UDP',
                                     'VDK',
-                                    'WYND',
+                                    'WND',
                                   ]
                                       .map((branch) => DropdownMenuItem(
                                           value: branch, child: Text(branch)))

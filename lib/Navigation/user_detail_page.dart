@@ -23,8 +23,8 @@ class _UserDetailPageState extends State<UserDetailPage> {
   final List<String> _roles = ['sales', 'manager', 'asst_manager', 'admin', 'sync_head', 'sme', 'dme_admin', 'dme_user'];
   final List<String> _branches = [
     'BGR', 'CBE', 'CHN', 'CLT', 'EKM', 'JBL', 'KKM', 'KSD',
-    'KTM', 'PKD', 'PKTR', 'PMNA', 'TRR', 'TSR', 'TLY', 'TVM',
-    'UDP', 'VDK', 'WYND',
+    'KTM', 'PKD', 'PKT', 'PMN', 'TRR', 'TSR', 'TLY', 'TVM',
+    'UDP', 'VDK', 'WND',
   ];
 
   Map<String, dynamic>? _userData;
