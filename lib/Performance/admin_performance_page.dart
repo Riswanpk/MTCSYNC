@@ -887,15 +887,29 @@ class _AdminEditFormState extends State<_AdminEditForm> {
       data['userId'] = widget.userId;
       data['userName'] = widget.userName;
       data['timestamp'] = Timestamp.fromDate(submissionTimestamp);
-      await FirebaseFirestore.instance.collection('dailyform').add(data);
+
+      // Check if a doc already exists for this userId/date before creating a new one
+      final dateStart = DateTime(
+          widget.selectedDate.year, widget.selectedDate.month, widget.selectedDate.day);
+      final dateEnd = dateStart.add(const Duration(days: 1));
+      final existing = await FirebaseFirestore.instance
+          .collection('dailyform')
+          .where('userId', isEqualTo: widget.userId)
+          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(dateStart))
+          .where('timestamp', isLessThan: Timestamp.fromDate(dateEnd))
+          .get();
+
+      if (existing.docs.isNotEmpty) {
+        await FirebaseFirestore.instance
+            .collection('dailyform')
+            .doc(existing.docs.first.id)
+            .update(data);
+      } else {
+        await FirebaseFirestore.instance.collection('dailyform').add(data);
+      }
     }
 
     widget.onSaved();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.docId != null ? 'Entry updated!' : 'Entry created!')),
-      );
-    }
   }
 
   @override

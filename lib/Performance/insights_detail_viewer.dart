@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'performance_scoring.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);
 const Color _primaryGreen = Color(0xFF8CC63F);
@@ -17,6 +18,10 @@ class InsightsDetailViewerPage extends StatefulWidget {
   final int avgDress;
   final int avgAttitude;
   final int avgMeeting;
+  final List<DeductionReason> attendanceDeductions;
+  final List<DeductionReason> dressDeductions;
+  final List<DeductionReason> attitudeDeductions;
+  final List<DeductionReason> meetingDeductions;
 
   const InsightsDetailViewerPage({
     required this.userId,
@@ -29,6 +34,10 @@ class InsightsDetailViewerPage extends StatefulWidget {
     required this.avgDress,
     required this.avgAttitude,
     required this.avgMeeting,
+    required this.attendanceDeductions,
+    required this.dressDeductions,
+    required this.attitudeDeductions,
+    required this.meetingDeductions,
   });
 
   @override
@@ -75,12 +84,12 @@ class _InsightsDetailViewerPageState extends State<InsightsDetailViewerPage>
     final monthLabel = '${monthNames[prevMonth - 1]} $prevMonthYear';
 
     final bars = [
-      _BarData('Attendance', widget.avgAttendance, 20, const Color(0xFF4A90D9), Icons.access_time_rounded),
-      _BarData('Dress Code', widget.avgDress, 20, const Color(0xFF66BB6A), Icons.checkroom_rounded),
-      _BarData('Attitude', widget.avgAttitude, 20, const Color(0xFFFF9800), Icons.sentiment_satisfied_alt_rounded),
-      _BarData('Meeting', widget.avgMeeting, 10, const Color(0xFF9C27B0), Icons.groups_rounded),
-      _BarData('Performance', widget.perfMark, 30, const Color(0xFFEF5350), Icons.trending_up_rounded),
-      _BarData('BDA', widget.bdaMark, 20, const Color(0xFF26A69A), Icons.business_center_rounded),
+      _BarData('Attendance', widget.avgAttendance, 20, const Color(0xFF4A90D9), Icons.access_time_rounded, widget.attendanceDeductions),
+      _BarData('Dress Code', widget.avgDress, 20, const Color(0xFF66BB6A), Icons.checkroom_rounded, widget.dressDeductions),
+      _BarData('Attitude', widget.avgAttitude, 20, const Color(0xFFFF9800), Icons.sentiment_satisfied_alt_rounded, widget.attitudeDeductions),
+      _BarData('Meeting', widget.avgMeeting, 10, const Color(0xFF9C27B0), Icons.groups_rounded, widget.meetingDeductions),
+      _BarData('Performance', widget.perfMark, 30, const Color(0xFFEF5350), Icons.trending_up_rounded, const []),
+      _BarData('BDA', widget.bdaMark, 20, const Color(0xFF26A69A), Icons.business_center_rounded, const []),
     ];
 
     final pctColor = _percentColor(widget.percentage);
@@ -325,6 +334,24 @@ class _InsightsDetailViewerPageState extends State<InsightsDetailViewerPage>
                                           ],
                                         ),
                                       ),
+                                      if (bar.deductions.isNotEmpty) ...[  
+                                        const SizedBox(height: 6),
+                                        ...bar.deductions.map((d) => Padding(
+                                          padding: const EdgeInsets.only(top: 2),
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.remove_circle_outline, size: 12, color: Colors.red[400]),
+                                              const SizedBox(width: 4),
+                                              Expanded(
+                                                child: Text(
+                                                  '${d.reason} \u2014 ${formatDeductionDate(d.date)}',
+                                                  style: TextStyle(fontSize: 11, color: Colors.red[400]),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        )),
+                                      ],
                                     ],
                                   ),
                                 ),
@@ -450,5 +477,6 @@ class _BarData {
   final int max;
   final Color color;
   final IconData icon;
-  _BarData(this.label, this.value, this.max, this.color, this.icon);
+  final List<DeductionReason> deductions;
+  _BarData(this.label, this.value, this.max, this.color, this.icon, this.deductions);
 }

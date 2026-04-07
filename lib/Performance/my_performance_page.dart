@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../Navigation/user_cache_service.dart';
+import 'performance_scoring.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);
 const Color _primaryGreen = Color(0xFF8CC63F);
@@ -31,6 +32,10 @@ class _MyPerformancePageState extends State<MyPerformancePage>
   int _avgDress = 0;
   int _avgAttitude = 0;
   int _avgMeeting = 0;
+  List<DeductionReason> _attendanceDeductions = [];
+  List<DeductionReason> _dressDeductions = [];
+  List<DeductionReason> _attitudeDeductions = [];
+  List<DeductionReason> _meetingDeductions = [];
 
   static const _monthNames = [
     'January','February','March','April','May','June',
@@ -82,49 +87,7 @@ class _MyPerformancePageState extends State<MyPerformancePage>
 
       final forms = formsSnap.docs.map((d) => d.data()).toList();
 
-      // Group by week
-      final weekMap = <int, List<Map<String, dynamic>>>{};
-      for (final form in forms) {
-        final ts = form['timestamp'];
-        final date = ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
-        final week = ((date.day - 1) ~/ 7) + 1;
-        weekMap.putIfAbsent(week, () => []);
-        weekMap[week]!.add(form);
-      }
-
-      double totalSum = 0, attendanceSum = 0, dressSum = 0, attitudeSum = 0, meetingSum = 0;
-      int weekCount = 0;
-      for (final weekForms in weekMap.values) {
-        int attendance = 20, dress = 20, attitude = 20, meeting = 10;
-        for (final form in weekForms) {
-          final att = form['attendance'];
-          if (att == 'late') attendance -= 5;
-          else if (att == 'notApproved') attendance -= 10;
-          if (att != 'approved' && att != 'notApproved') {
-            if (form['dressCode']?['cleanUniform'] == false) dress -= 5;
-            if (form['dressCode']?['keepInside'] == false) dress -= 5;
-            if (form['dressCode']?['neatHair'] == false) dress -= 5;
-            if (form['attitude']?['greetSmile'] == false) attitude -= 2;
-            if (form['attitude']?['askNeeds'] == false) attitude -= 2;
-            if (form['attitude']?['helpFindProduct'] == false) attitude -= 2;
-            if (form['attitude']?['confirmPurchase'] == false) attitude -= 2;
-            if (form['attitude']?['offerHelp'] == false) attitude -= 2;
-            if (form['meeting']?['attended'] == false) meeting -= 1;
-          }
-        }
-        if (attendance < 0) attendance = 0;
-        if (dress < 0) dress = 0;
-        if (attitude < 0) attitude = 0;
-        if (meeting < 0) meeting = 0;
-        totalSum += attendance + dress + attitude + meeting;
-        attendanceSum += attendance;
-        dressSum += dress;
-        attitudeSum += attitude;
-        meetingSum += meeting;
-        weekCount++;
-      }
-
-      final avgWeekly = weekCount > 0 ? totalSum / weekCount : 0.0;
+      final result = calculatePerformance(forms);
 
       // Fetch performance & BDA marks
       int perfMark = 0, bdaMark = 0;
@@ -143,18 +106,22 @@ class _MyPerformancePageState extends State<MyPerformancePage>
         }
       }
 
-      final total = avgWeekly.round() + perfMark + bdaMark;
+      final total = result.avgWeeklyMark + perfMark + bdaMark;
       final percentage = (total / 120) * 100;
 
       setState(() {
-        _avgWeeklyMark = avgWeekly.round();
+        _avgWeeklyMark = result.avgWeeklyMark;
         _perfMark = perfMark;
         _bdaMark = bdaMark;
         _percentage = percentage;
-        _avgAttendance = weekCount > 0 ? (attendanceSum / weekCount).round() : 0;
-        _avgDress = weekCount > 0 ? (dressSum / weekCount).round() : 0;
-        _avgAttitude = weekCount > 0 ? (attitudeSum / weekCount).round() : 0;
-        _avgMeeting = weekCount > 0 ? (meetingSum / weekCount).round() : 0;
+        _avgAttendance = result.avgAttendance;
+        _avgDress = result.avgDress;
+        _avgAttitude = result.avgAttitude;
+        _avgMeeting = result.avgMeeting;
+        _attendanceDeductions = result.attendanceDeductions;
+        _dressDeductions = result.dressDeductions;
+        _attitudeDeductions = result.attitudeDeductions;
+        _meetingDeductions = result.meetingDeductions;
         _isLoading = false;
       });
 
@@ -192,12 +159,12 @@ class _MyPerformancePageState extends State<MyPerformancePage>
     final pctColor = _percentColor(_percentage);
 
     final bars = [
-      _BarData('Attendance', _avgAttendance, 20, const Color(0xFF4A90D9), Icons.access_time_rounded),
-      _BarData('Dress Code', _avgDress, 20, const Color(0xFF66BB6A), Icons.checkroom_rounded),
-      _BarData('Attitude', _avgAttitude, 20, const Color(0xFFFF9800), Icons.sentiment_satisfied_alt_rounded),
-      _BarData('Meeting', _avgMeeting, 10, const Color(0xFF9C27B0), Icons.groups_rounded),
-      _BarData('Performance', _perfMark, 30, const Color(0xFFEF5350), Icons.trending_up_rounded),
-      _BarData('BDA', _bdaMark, 20, const Color(0xFF26A69A), Icons.business_center_rounded),
+      _BarData('Attendance', _avgAttendance, 20, const Color(0xFF4A90D9), Icons.access_time_rounded, _attendanceDeductions),
+      _BarData('Dress Code', _avgDress, 20, const Color(0xFF66BB6A), Icons.checkroom_rounded, _dressDeductions),
+      _BarData('Attitude', _avgAttitude, 20, const Color(0xFFFF9800), Icons.sentiment_satisfied_alt_rounded, _attitudeDeductions),
+      _BarData('Meeting', _avgMeeting, 10, const Color(0xFF9C27B0), Icons.groups_rounded, _meetingDeductions),
+      _BarData('Performance', _perfMark, 30, const Color(0xFFEF5350), Icons.trending_up_rounded, const []),
+      _BarData('BDA', _bdaMark, 20, const Color(0xFF26A69A), Icons.business_center_rounded, const []),
     ];
 
     return CustomScrollView(
@@ -421,6 +388,24 @@ class _MyPerformancePageState extends State<MyPerformancePage>
                                         ],
                                       ),
                                     ),
+                                    if (bar.deductions.isNotEmpty) ...[  
+                                      const SizedBox(height: 6),
+                                      ...bar.deductions.map((d) => Padding(
+                                        padding: const EdgeInsets.only(top: 2),
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.remove_circle_outline, size: 12, color: Colors.red[400]),
+                                            const SizedBox(width: 4),
+                                            Expanded(
+                                              child: Text(
+                                                '${d.reason} \u2014 ${formatDeductionDate(d.date)}',
+                                                style: TextStyle(fontSize: 11, color: Colors.red[400]),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      )),
+                                    ],
                                   ],
                                 ),
                               ),
@@ -545,5 +530,6 @@ class _BarData {
   final int max;
   final Color color;
   final IconData icon;
-  _BarData(this.label, this.value, this.max, this.color, this.icon);
+  final List<DeductionReason> deductions;
+  _BarData(this.label, this.value, this.max, this.color, this.icon, this.deductions);
 }

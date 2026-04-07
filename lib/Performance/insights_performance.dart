@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../Navigation/user_cache_service.dart';
 import 'insights_detail_viewer.dart';
+import 'performance_scoring.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);
 const Color _primaryGreen = Color(0xFF8CC63F);
@@ -96,72 +97,28 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
 
     for (final user in users) {
       final forms = formsByUser[user['id']] ?? [];
-
-      // Group forms by week
-      Map<int, List<Map<String, dynamic>>> weekMap = {};
-      for (var form in forms) {
-        final ts = form['timestamp'];
-        final date = ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
-        int weekOfMonth = ((date.day - 1) ~/ 7) + 1;
-        weekMap.putIfAbsent(weekOfMonth, () => []);
-        weekMap[weekOfMonth]!.add(form);
-      }
-
-      double totalSum = 0;
-      int weekCount = 0;
-      double attendanceSum = 0, dressSum = 0, attitudeSum = 0, meetingSum = 0;
-      for (final weekForms in weekMap.values) {
-        int attendance = 20, dress = 20, attitude = 20, meeting = 10;
-        for (var form in weekForms) {
-          final att = form['attendance'];
-          if (att == 'late') attendance -= 5;
-          else if (att == 'notApproved') attendance -= 10;
-          if (att != 'approved' && att != 'notApproved') {
-            if (form['dressCode']?['cleanUniform'] == false) dress -= 5;
-            if (form['dressCode']?['keepInside'] == false) dress -= 5;
-            if (form['dressCode']?['neatHair'] == false) dress -= 5;
-            if (form['attitude']?['greetSmile'] == false) attitude -= 2;
-            if (form['attitude']?['askNeeds'] == false) attitude -= 2;
-            if (form['attitude']?['helpFindProduct'] == false) attitude -= 2;
-            if (form['attitude']?['confirmPurchase'] == false) attitude -= 2;
-            if (form['attitude']?['offerHelp'] == false) attitude -= 2;
-            if (form['meeting']?['attended'] == false) meeting -= 1;
-          }
-        }
-        if (attendance < 0) attendance = 0;
-        if (dress < 0) dress = 0;
-        if (attitude < 0) attitude = 0;
-        if (meeting < 0) meeting = 0;
-        int weekTotal = attendance + dress + attitude + meeting;
-        totalSum += weekTotal;
-        attendanceSum += attendance;
-        dressSum += dress;
-        attitudeSum += attitude;
-        meetingSum += meeting;
-        weekCount++;
-      }
-      double avgWeeklyMark = weekCount > 0 ? totalSum / weekCount : 0;
-      double avgAttendance = weekCount > 0 ? attendanceSum / weekCount : 0;
-      double avgDress = weekCount > 0 ? dressSum / weekCount : 0;
-      double avgAttitude = weekCount > 0 ? attitudeSum / weekCount : 0;
-      double avgMeeting = weekCount > 0 ? meetingSum / weekCount : 0;
+      final result = calculatePerformance(forms);
 
       int perfMark = perfMarkByUser[user['id']] ?? 0;
       int bdaMark = bdaMarkByUser[user['id']] ?? 0;
 
-      int rawTotal = avgWeeklyMark.round() + perfMark + bdaMark;
+      int rawTotal = result.avgWeeklyMark + perfMark + bdaMark;
       double percentage = (rawTotal / 120) * 100;
       perfList.add(_UserPerf(
         userId: user['id'],
         username: user['username'],
-        avgWeeklyMark: avgWeeklyMark.round(),
+        avgWeeklyMark: result.avgWeeklyMark,
         perfMark: perfMark,
         bdaMark: bdaMark,
         percentage: percentage,
-        avgAttendance: avgAttendance.round(),
-        avgDress: avgDress.round(),
-        avgAttitude: avgAttitude.round(),
-        avgMeeting: avgMeeting.round(),
+        avgAttendance: result.avgAttendance,
+        avgDress: result.avgDress,
+        avgAttitude: result.avgAttitude,
+        avgMeeting: result.avgMeeting,
+        attendanceDeductions: result.attendanceDeductions,
+        dressDeductions: result.dressDeductions,
+        attitudeDeductions: result.attitudeDeductions,
+        meetingDeductions: result.meetingDeductions,
       ));
     }
     perfList.sort((a, b) => b.percentage.compareTo(a.percentage));
@@ -364,6 +321,10 @@ class _InsightsPerformancePageState extends State<InsightsPerformancePage> {
                               avgDress: user.avgDress,
                               avgAttitude: user.avgAttitude,
                               avgMeeting: user.avgMeeting,
+                              attendanceDeductions: user.attendanceDeductions,
+                              dressDeductions: user.dressDeductions,
+                              attitudeDeductions: user.attitudeDeductions,
+                              meetingDeductions: user.meetingDeductions,
                             ),
                           ),
                         );
@@ -543,6 +504,10 @@ class _UserPerf {
   final int avgDress;
   final int avgAttitude;
   final int avgMeeting;
+  final List<DeductionReason> attendanceDeductions;
+  final List<DeductionReason> dressDeductions;
+  final List<DeductionReason> attitudeDeductions;
+  final List<DeductionReason> meetingDeductions;
 
   _UserPerf({
     required this.userId,
@@ -555,5 +520,9 @@ class _UserPerf {
     required this.avgDress,
     required this.avgAttitude,
     required this.avgMeeting,
+    required this.attendanceDeductions,
+    required this.dressDeductions,
+    required this.attitudeDeductions,
+    required this.meetingDeductions,
   });
 }

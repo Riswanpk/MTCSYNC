@@ -31,6 +31,7 @@ class _PerformanceFormState extends State<PerformanceForm> {
   // Attendance
   String?
       attendanceStatus; // values: 'punching', 'late', 'approved', 'notApproved'
+  String? approvedLeaveReason;
 
   // Dress Code
   bool cleanUniform = false;
@@ -203,6 +204,7 @@ class _PerformanceFormState extends State<PerformanceForm> {
       'managerName': managerName,
       'timestamp': Timestamp.fromDate(submissionTimestamp),
       'attendance': attendanceStatus,
+      'approvedLeaveReason': attendanceStatus == 'approved' ? approvedLeaveReason : null,
       'dressCode': {
         'cleanUniform': isLeave ? true : cleanUniform,
         'keepInside': isLeave ? true : keepInside,
@@ -246,12 +248,10 @@ class _PerformanceFormState extends State<PerformanceForm> {
       'achievedDailyTargetDescription': achievedDailyTarget == true ? achievedDailyTargetDescription : null,
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Form submitted!')),
-    );
     setState(() {
       // Reset form
       attendanceStatus = null;
+      approvedLeaveReason = null;
       cleanUniform = false;
       keepInside = false;
       neatHair = false;
@@ -509,6 +509,16 @@ class _PerformanceFormState extends State<PerformanceForm> {
                                   attendanceStatus,
                                   (val) =>
                                       setState(() => attendanceStatus = val)),
+                              if (attendanceStatus == 'approved')
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8.0, left: 8.0, right: 8.0),
+                                  child: TextFormField(
+                                    maxLines: 2,
+                                    decoration: _inputDecoration('Leave reason'),
+                                    onChanged: (val) => setState(() => approvedLeaveReason = val),
+                                    initialValue: approvedLeaveReason,
+                                  ),
+                                ),
                             ],
                           ),
                         ),
