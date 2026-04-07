@@ -40,7 +40,6 @@ class DmeSale {
   final String? salesman;
   final String? category;
   final String? customerType;
-  final double? totalQuantity;
   final String? uploadedBy;
   final List<DmeSaleItem> items;
 
@@ -53,7 +52,6 @@ class DmeSale {
     this.salesman,
     this.category,
     this.customerType,
-    this.totalQuantity,
     this.uploadedBy,
     this.items = const [],
   });
@@ -76,7 +74,6 @@ class DmeSale {
       salesman: map['salesman'] as String?,
       category: map['category'] as String?,
       customerType: map['customer_type'] as String?,
-      totalQuantity: (map['total_quantity'] as num?)?.toDouble(),
       uploadedBy: map['uploaded_by'] as String?,
       items: itemsList,
     );
@@ -88,7 +85,6 @@ class DmeSale {
         'salesman': salesman,
         'category': category,
         'customer_type': customerType,
-        'total_quantity': totalQuantity,
         'uploaded_by': uploadedBy,
       };
 }
@@ -99,6 +95,7 @@ class DmeSaleRecord {
   final String customerName;
   final String? address;
   final String? phone;
+  final String? branch;
   final String? category;
   final String? customerType;
   final String? salesman;
@@ -110,6 +107,7 @@ class DmeSaleRecord {
     required this.customerName,
     this.address,
     this.phone,
+    this.branch,
     this.category,
     this.customerType,
     this.salesman,

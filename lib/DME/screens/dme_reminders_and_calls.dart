@@ -184,7 +184,7 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
           customerId: _pendingCallCustomerId!,
           calledBy: widget.dmeUser.id,
           callDate: DateTime.now(),
-          durationSeconds: entry.duration,
+          status: 'completed',
         );
         setState(() => _calledIds.add(_pendingCallCustomerId!));
         break;
@@ -207,7 +207,7 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
             customerId: _pendingCallCustomerId!,
             calledBy: widget.dmeUser.id,
             callDate: DateTime.now(),
-            durationSeconds: entry.duration,
+            status: 'completed',
           );
           setState(() => _calledIds.add(_pendingCallCustomerId!));
           break;
@@ -291,7 +291,7 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
             customerId: r.customerId,
             calledBy: widget.dmeUser.id,
             callDate: DateTime.now(),
-            durationSeconds: entry.duration,
+            status: 'completed',
           );
           break;
         }
@@ -464,6 +464,7 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
                                 [
                                   if (r.customerPhone != null)
                                     r.customerPhone,
+                                  if (r.salesman != null) r.salesman,
                                   'Due: ${dateFmt.format(r.reminderDate)}',
                                   'Purchased: ${dateFmt.format(r.lastPurchaseDate)}',
                                 ].join(' • '),
@@ -588,6 +589,7 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
                         subtitle: Text(
                           [
                             if (r.customerPhone != null) r.customerPhone,
+                            if (r.salesman != null) r.salesman,
                             'Due: ${dateFmt.format(r.reminderDate)}',
                           ].join(' • '),
                           style: const TextStyle(fontSize: 12),

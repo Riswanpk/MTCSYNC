@@ -4,6 +4,7 @@ class DmeReminder {
   final String? customerName;
   final String? customerPhone;
   final String? customerAddress;
+  final String? salesman;
   final DateTime reminderDate;
   final DateTime lastPurchaseDate;
   final String status;
@@ -16,6 +17,7 @@ class DmeReminder {
     this.customerName,
     this.customerPhone,
     this.customerAddress,
+    this.salesman,
     required this.reminderDate,
     required this.lastPurchaseDate,
     this.status = 'pending',
@@ -35,6 +37,9 @@ class DmeReminder {
           : null,
       customerAddress: (map['dme_customers'] is Map)
           ? map['dme_customers']['address'] as String?
+          : null,
+      salesman: (map['dme_customers'] is Map)
+          ? map['dme_customers']['salesman'] as String?
           : null,
       reminderDate: DateTime.parse(map['reminder_date'].toString()),
       lastPurchaseDate: DateTime.parse(map['last_purchase_date'].toString()),
@@ -60,6 +65,7 @@ class DmeReminder {
     String? customerName,
     String? customerPhone,
     String? customerAddress,
+    String? salesman,
     DateTime? reminderDate,
     DateTime? lastPurchaseDate,
     String? status,
@@ -72,6 +78,7 @@ class DmeReminder {
       customerName: customerName ?? this.customerName,
       customerPhone: customerPhone ?? this.customerPhone,
       customerAddress: customerAddress ?? this.customerAddress,
+      salesman: salesman ?? this.salesman,
       reminderDate: reminderDate ?? this.reminderDate,
       lastPurchaseDate: lastPurchaseDate ?? this.lastPurchaseDate,
       status: status ?? this.status,
@@ -82,7 +89,6 @@ class DmeReminder {
 
   /// Check if this reminder should be rescheduled based on new purchase date
   bool shouldReschedule(DateTime newPurchaseDate) {
-    // Reschedule if new purchase is after current reminder date
     return newPurchaseDate.isAfter(reminderDate);
   }
 }

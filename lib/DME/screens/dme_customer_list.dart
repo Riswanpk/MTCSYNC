@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../services/dme_supabase_service.dart';
 import '../models/dme_user.dart';
 import '../models/dme_customer.dart';
+import '../dme_config.dart';
 import 'dme_customer_detail.dart';
 
 class DmeCustomerListPage extends StatefulWidget {
@@ -129,9 +130,7 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
                     value: _selectedCategory,
                     items: [
                       const DropdownMenuItem(value: null, child: Text('All Categories')),
-                      ...['Event', 'Catering', 'Restaurant', 'Panthal',
-                        'Stage Decoration', 'Auditorium', 'Trust', 'Institution',
-                        'Rental', 'Hiring', 'Others']
+                      ...dmeCategories
                           .map((c) => DropdownMenuItem(value: c, child: Text(c))),
                     ],
                     onChanged: (v) {
@@ -148,7 +147,7 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
                     value: _selectedType,
                     items: [
                       const DropdownMenuItem(value: null, child: Text('All Types')),
-                      ...['Premium', 'Regular', 'Random', 'Bargain', 'Seasonal']
+                      ...dmeCustomerTypes
                           .map((t) => DropdownMenuItem(value: t, child: Text(t))),
                     ],
                     onChanged: (v) {

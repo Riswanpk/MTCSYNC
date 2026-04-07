@@ -145,7 +145,7 @@ class _DmeCustomerDetailPageState extends State<DmeCustomerDetailPage>
           customerId: widget.customer.id!,
           calledBy: widget.dmeUser.id,
           callDate: DateTime.now(),
-          durationSeconds: entry.duration,
+          status: 'completed',
         );
         break;
       }
@@ -178,7 +178,7 @@ class _DmeCustomerDetailPageState extends State<DmeCustomerDetailPage>
             customerId: widget.customer.id!,
             calledBy: widget.dmeUser.id,
             callDate: DateTime.now(),
-            durationSeconds: entry.duration,
+            status: 'completed',
           );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -306,6 +306,8 @@ class _DmeCustomerDetailPageState extends State<DmeCustomerDetailPage>
                         const Divider(height: 24),
                         if (c.address != null && c.address!.isNotEmpty)
                           _infoRow(Icons.location_on, c.address!),
+                        if (c.purchasedFor != null && c.purchasedFor!.isNotEmpty)
+                          _infoRow(Icons.people_alt, 'Also known as: ${c.purchasedFor}'),
                         if (c.category != null)
                           _infoRow(Icons.category, c.category!),
                         if (c.customerType != null)
@@ -347,11 +349,7 @@ class _DmeCustomerDetailPageState extends State<DmeCustomerDetailPage>
                               color: Color(0xFF005BAC)),
                           title: Text(dateFmt.format(s.date)),
                           subtitle: Text(
-                            [
-                              if (s.salesman != null) s.salesman,
-                              if (s.totalQuantity != null)
-                                'Qty: ${s.totalQuantity}',
-                            ].join(' • '),
+                            s.salesman ?? 'Sale',
                             style: const TextStyle(fontSize: 12),
                           ),
                           children: s.items
@@ -387,7 +385,7 @@ class _DmeCustomerDetailPageState extends State<DmeCustomerDetailPage>
                   ..._callLogs.map((log) {
                     final date = DateTime.tryParse(
                             log['call_date']?.toString() ?? '');
-                    final duration = log['duration_seconds'] as int? ?? 0;
+                    final status = log['status'] as String? ?? 'completed';
                     return ListTile(
                       dense: true,
                       leading: const Icon(Icons.phone_callback,
@@ -398,7 +396,7 @@ class _DmeCustomerDetailPageState extends State<DmeCustomerDetailPage>
                       subtitle: log['remarks'] != null
                           ? Text(log['remarks'].toString())
                           : null,
-                      trailing: Text('${duration}s'),
+                      trailing: Text(status, style: const TextStyle(fontSize: 12, color: Colors.green)),
                     );
                   }),
               ],

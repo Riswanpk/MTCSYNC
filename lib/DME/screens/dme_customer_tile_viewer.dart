@@ -275,7 +275,7 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
         customerId: widget.reminder.customerId,
         calledBy: widget.dmeUser.id,
         callDate: DateTime.now(),
-        durationSeconds: _detectedDuration,
+        status: 'completed',
         remarks: remarks,
       );
       if (widget.reminder.id != null) {

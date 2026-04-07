@@ -11,15 +11,11 @@ import '../models/dme_customer.dart';
 // ── Preview item status ───────────────────────────────────────────
 enum _RecordStatus { pending, checking, matchFound, newCustomer, conflict }
 
-// ── Conflict resolution choice ────────────────────────────────────
-enum _ConflictChoice { useExisting, addSeparate }
-
 /// Per-row preview model enriched with DB-check results.
 class _PreviewItem {
   final DmeSaleRecord record;
   _RecordStatus status;
   DmeCustomer? existingCustomer; // null = not found
-  _ConflictChoice conflictChoice;
   String? resolvedCustomerType;
   String? resolvedCategory;
 
@@ -27,27 +23,25 @@ class _PreviewItem {
     required this.record,
     this.status = _RecordStatus.pending,
     this.existingCustomer,
-    this.conflictChoice = _ConflictChoice.useExisting,
     this.resolvedCustomerType,
     this.resolvedCategory,
   });
 
+  // Conflict: phone matches but name differs → alternate name will be saved in purchased_for
   bool get hasConflict =>
       existingCustomer != null &&
       existingCustomer!.name.trim().toLowerCase() !=
           record.customerName.trim().toLowerCase();
 
-  bool get _isNewEntry =>
-      status == _RecordStatus.newCustomer ||
-      (hasConflict && conflictChoice == _ConflictChoice.addSeparate);
+  bool get _isNew => status == _RecordStatus.newCustomer;
 
   bool get needsCustomerType =>
-      _isNewEntry &&
+      _isNew &&
       (resolvedCustomerType == null || resolvedCustomerType!.isEmpty) &&
       (record.customerType == null || record.customerType!.isEmpty);
 
   bool get needsCategory =>
-      _isNewEntry &&
+      _isNew &&
       (resolvedCategory == null || resolvedCategory!.isEmpty) &&
       (record.category == null || record.category!.isEmpty);
 
@@ -115,10 +109,7 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
           setState(() => item.status = _RecordStatus.newCustomer);
           continue;
         }
-        // In daily sales the "customerName" column holds the company / party name.
-        // Pass it so the service can try an exact (phone + company) match first.
-        final existing = await _svc.findCustomerByPhone(
-            phone, company: item.record.customerName);
+        final existing = await _svc.findCustomerByPhone(phone);
         if (existing != null) {
           final nameMatch = existing.name.trim().toLowerCase() ==
               item.record.customerName.trim().toLowerCase();
@@ -156,8 +147,16 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     final dmeUser = uid != null ? await _svc.getCurrentUser(uid) : null;
 
+    // Pre-resolve branch IDs from branch names in records
+    final branchCache = <String, int?>{};
+    final allBranches = await _svc.getBranches();
+    for (final b in allBranches) {
+      branchCache[(b['name'] as String).toUpperCase()] = b['id'] as int;
+    }
+
     int success = 0;
     int failed = 0;
+    int alternateNamesRecorded = 0;
     final errors = <String>[];
 
     for (final item in _items!) {
@@ -171,17 +170,22 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
             ? record.category
             : item.resolvedCategory;
 
+        final branchId = record.branch != null
+            ? branchCache[record.branch!.toUpperCase()]
+            : null;
+
         if (item.status == _RecordStatus.matchFound) {
-          // Existing customer with same name — just update purchase date
+          // Exact match — update last_purchase_date only
           customerId = item.existingCustomer!.id;
           await _svc.updateLastPurchaseDate(customerId!, record.date);
-        } else if (item.status == _RecordStatus.conflict &&
-            item.conflictChoice == _ConflictChoice.useExisting) {
-          // Conflict but user chose to keep existing name
+        } else if (item.status == _RecordStatus.conflict) {
+          // Phone matches, name differs → keep existing, record alternate name
           customerId = item.existingCustomer!.id;
           await _svc.updateLastPurchaseDate(customerId!, record.date);
+          await _svc.appendPurchasedFor(customerId!, record.customerName);
+          alternateNamesRecorded++;
         } else {
-          // New customer OR conflict resolved as separate
+          // New customer
           final phone = record.phone != null
               ? DmeCustomer.normalizePhone(record.phone!)
               : '';
@@ -190,31 +194,17 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
             failed++;
             continue;
           }
-          if (item.status == _RecordStatus.conflict &&
-              item.conflictChoice == _ConflictChoice.addSeparate) {
-            // insertCustomer allows duplicate phone
-            final newCust = await _svc.insertCustomer(DmeCustomer(
-              name: record.customerName,
-              phone: phone,
-              address: record.address,
-              category: effectiveCategory,
-              customerType: effectiveType,
-              salesman: record.salesman,
-              lastPurchaseDate: record.date,
-            ));
-            customerId = newCust.id;
-          } else {
-            final newCust = await _svc.upsertCustomer(DmeCustomer(
-              name: record.customerName,
-              phone: phone,
-              address: record.address,
-              category: effectiveCategory,
-              customerType: effectiveType,
-              salesman: record.salesman,
-              lastPurchaseDate: record.date,
-            ));
-            customerId = newCust.id;
-          }
+          final newCust = await _svc.upsertCustomer(DmeCustomer(
+            name: record.customerName,
+            phone: phone,
+            address: record.address,
+            branchId: branchId,
+            category: effectiveCategory,
+            customerType: effectiveType,
+            salesman: record.salesman,
+            lastPurchaseDate: record.date,
+          ));
+          customerId = newCust.id;
         }
 
         // Insert sale + items
@@ -224,7 +214,6 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
           salesman: record.salesman,
           category: effectiveCategory,
           customerType: effectiveType,
-          totalQuantity: record.headerQuantity,
           uploadedBy: dmeUser?.id,
           items: record.items,
         );
@@ -248,11 +237,11 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
 
     if (mounted) {
       setState(() => _uploading = false);
-      _showResult(success, failed, errors);
+      _showResult(success, failed, alternateNamesRecorded, errors);
     }
   }
 
-  void _showResult(int success, int failed, List<String> errors) {
+  void _showResult(int success, int failed, int alternates, List<String> errors) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -262,6 +251,11 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('✅ $success records uploaded successfully'),
+            if (alternates > 0) ...[
+              const SizedBox(height: 6),
+              Text('📋 $alternates alternate name(s) recorded in Purchased For',
+                  style: const TextStyle(color: Colors.blue, fontSize: 13)),
+            ],
             if (failed > 0) ...[
               const SizedBox(height: 8),
               Text('❌ $failed failed',
@@ -363,10 +357,7 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
   Widget _buildPreview() {
     final items = _items!;
     final newCount = items
-        .where((i) =>
-            i.status == _RecordStatus.newCustomer ||
-            (i.status == _RecordStatus.conflict &&
-                i.conflictChoice == _ConflictChoice.addSeparate))
+        .where((i) => i.status == _RecordStatus.newCustomer)
         .length;
     final matchCount =
         items.where((i) => i.status == _RecordStatus.matchFound).length;
@@ -557,52 +548,34 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
         childrenPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         children: [
-          // ── Conflict resolution ──────────────────────────────
+          // ── Conflict info (auto-resolved) ────────────────────
           if (item.status == _RecordStatus.conflict) ...[
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: Colors.orange.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(8),
-                border:
-                    Border.all(color: Colors.orange.shade300),
+                border: Border.all(color: Colors.orange.shade300),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('⚠ Same phone number found with a different name:',
+                  const Text('⚠ Same phone — different name:',
                       style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
                           color: Colors.orange)),
                   const SizedBox(height: 6),
                   Text(
-                    'DB name:    ${item.existingCustomer!.name}\n'
-                    'File name:  ${r.customerName}',
+                    'Existing:  ${item.existingCustomer!.name}\n'
+                    'In file:   ${r.customerName}',
                     style: const TextStyle(fontSize: 12),
                   ),
-                  const SizedBox(height: 10),
-                  const Text('Choose action:',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 13)),
-                  RadioListTile<_ConflictChoice>(
-                    dense: true,
-                    value: _ConflictChoice.useExisting,
-                    groupValue: item.conflictChoice,
-                    title: Text(
-                        'Use existing name  (${item.existingCustomer!.name})',
-                        style: const TextStyle(fontSize: 13)),
-                    onChanged: (v) =>
-                        setState(() => item.conflictChoice = v!),
-                  ),
-                  RadioListTile<_ConflictChoice>(
-                    dense: true,
-                    value: _ConflictChoice.addSeparate,
-                    groupValue: item.conflictChoice,
-                    title: Text('Create as new company  (${r.customerName})',
-                        style: const TextStyle(fontSize: 13)),
-                    onChanged: (v) =>
-                        setState(() => item.conflictChoice = v!),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '📋 The name from the file will be saved in '
+                    '"Purchased For" of the existing customer.',
+                    style: TextStyle(fontSize: 12, color: Colors.blueGrey),
                   ),
                 ],
               ),

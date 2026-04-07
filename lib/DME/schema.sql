@@ -34,12 +34,36 @@ CREATE TABLE IF NOT EXISTS dme_products (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 5. Customer master (100k+ records)
+-- 5. Categories lookup table
+CREATE TABLE IF NOT EXISTS dme_categories (
+  id SERIAL PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL
+);
+
+INSERT INTO dme_categories (name) VALUES
+  ('Event'), ('Catering'), ('Restaurant'), ('Panthal'),
+  ('Stage decoration'), ('Auditorium'), ('Trust'), ('Institution'),
+  ('Rental'), ('Hiring'), ('Vehicle showroom'), ('Resort'), ('General&others')
+ON CONFLICT (name) DO NOTHING;
+
+-- 6. Customer types lookup table
+CREATE TABLE IF NOT EXISTS dme_customer_types (
+  id SERIAL PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL
+);
+
+INSERT INTO dme_customer_types (name) VALUES
+  ('LOYAL CUSTOMER'), ('RANDOM CUSTOMER'), ('BARGAIN CUSTOMER'),
+  ('IMPULSE CUSTOMER'), ('WANDERING CUSTOMER'), ('SEASONAL CUSTOMER')
+ON CONFLICT (name) DO NOTHING;
+
+-- 7. Customer master (100k+ records)
+--    phone is the unique key; purchased_for holds alternate names seen for the same phone
 CREATE TABLE IF NOT EXISTS dme_customers (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
-  company TEXT,                       -- optional company / firm name
-  phone TEXT NOT NULL,                -- unique per (phone, company) pair
+  purchased_for TEXT,                 -- comma-separated alternate names for same phone
+  phone TEXT NOT NULL UNIQUE,         -- sole unique key
   address TEXT,
   branch_id INT REFERENCES dme_branches(id),
   category TEXT,
@@ -47,16 +71,14 @@ CREATE TABLE IF NOT EXISTS dme_customers (
   salesman TEXT,
   last_purchase_date DATE,
   created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(phone, company)              -- same person can have multiple companies
+  updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Index for fast phone lookups
 CREATE INDEX IF NOT EXISTS idx_dme_customers_phone ON dme_customers(phone);
 CREATE INDEX IF NOT EXISTS idx_dme_customers_branch ON dme_customers(branch_id);
-CREATE INDEX IF NOT EXISTS idx_dme_customers_company ON dme_customers(company);
 
--- 6. Daily sales (header per customer per date)
+-- 8. Daily sales (header per customer per date)
 CREATE TABLE IF NOT EXISTS dme_sales (
   id SERIAL PRIMARY KEY,
   date DATE NOT NULL,
@@ -64,13 +86,12 @@ CREATE TABLE IF NOT EXISTS dme_sales (
   salesman TEXT,
   category TEXT,
   customer_type TEXT,
-  total_quantity NUMERIC,
   uploaded_by UUID REFERENCES dme_users(id),
   uploaded_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE(date, customer_id)
 );
 
--- 7. Sale line items
+-- 9. Sale line items (hard-deleted after call is logged with remarks)
 CREATE TABLE IF NOT EXISTS dme_sale_items (
   id SERIAL PRIMARY KEY,
   sale_id INT REFERENCES dme_sales(id) ON DELETE CASCADE,
@@ -79,7 +100,7 @@ CREATE TABLE IF NOT EXISTS dme_sale_items (
   unit TEXT
 );
 
--- 8. Reminders (one active per customer, upserted on each purchase)
+-- 10. Reminders (one active per customer, upserted on each purchase)
 CREATE TABLE IF NOT EXISTS dme_reminders (
   id SERIAL PRIMARY KEY,
   customer_id INT REFERENCES dme_customers(id) ON DELETE CASCADE,
@@ -95,13 +116,13 @@ CREATE TABLE IF NOT EXISTS dme_reminders (
 CREATE INDEX IF NOT EXISTS idx_dme_reminders_date ON dme_reminders(reminder_date);
 CREATE INDEX IF NOT EXISTS idx_dme_reminders_status ON dme_reminders(status);
 
--- 9. Call logs
+-- 11. Call logs
 CREATE TABLE IF NOT EXISTS dme_call_logs (
   id SERIAL PRIMARY KEY,
   customer_id INT REFERENCES dme_customers(id) ON DELETE CASCADE,
   called_by UUID REFERENCES dme_users(id),
   call_date DATE NOT NULL,
-  duration_seconds INT,
+  status TEXT DEFAULT 'completed' CHECK (status IN ('completed', 'missed', 'pending')),
   remarks TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
@@ -114,6 +135,8 @@ ALTER TABLE dme_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dme_branches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dme_user_branches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dme_products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dme_categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dme_customer_types ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dme_customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dme_sales ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dme_sale_items ENABLE ROW LEVEL SECURITY;
@@ -121,20 +144,49 @@ ALTER TABLE dme_reminders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dme_call_logs ENABLE ROW LEVEL SECURITY;
 
 -- Allow all operations for authenticated users (app handles role checks)
+DROP POLICY IF EXISTS "Allow all for authenticated" ON dme_users;
 CREATE POLICY "Allow all for authenticated" ON dme_users FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for authenticated" ON dme_branches;
 CREATE POLICY "Allow all for authenticated" ON dme_branches FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for authenticated" ON dme_user_branches;
 CREATE POLICY "Allow all for authenticated" ON dme_user_branches FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for authenticated" ON dme_products;
 CREATE POLICY "Allow all for authenticated" ON dme_products FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for authenticated" ON dme_categories;
+CREATE POLICY "Allow all for authenticated" ON dme_categories FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for authenticated" ON dme_customer_types;
+CREATE POLICY "Allow all for authenticated" ON dme_customer_types FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for authenticated" ON dme_customers;
 CREATE POLICY "Allow all for authenticated" ON dme_customers FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for authenticated" ON dme_sales;
 CREATE POLICY "Allow all for authenticated" ON dme_sales FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for authenticated" ON dme_sale_items;
 CREATE POLICY "Allow all for authenticated" ON dme_sale_items FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for authenticated" ON dme_reminders;
 CREATE POLICY "Allow all for authenticated" ON dme_reminders FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all for authenticated" ON dme_call_logs;
 CREATE POLICY "Allow all for authenticated" ON dme_call_logs FOR ALL USING (true) WITH CHECK (true);
 
 -- ============================================================
--- Migration (run only on existing deployments)
+-- Migration (run on existing deployments — safe to run in order)
 -- ============================================================
--- ALTER TABLE dme_customers ADD COLUMN IF NOT EXISTS company TEXT;
--- ALTER TABLE dme_customers DROP CONSTRAINT IF EXISTS dme_customers_phone_key;
--- ALTER TABLE dme_customers ADD CONSTRAINT dme_customers_phone_company_key UNIQUE (phone, company);
--- CREATE INDEX IF NOT EXISTS idx_dme_customers_company ON dme_customers(company);
+-- Step 1: Create new lookup tables (already above with IF NOT EXISTS + seed)
+
+-- Step 2: Alter dme_customers
+-- Drop old composite unique constraint and company column; add purchased_for; add phone-only UNIQUE
+ALTER TABLE dme_customers DROP CONSTRAINT IF EXISTS dme_customers_phone_company_key;
+ALTER TABLE dme_customers DROP COLUMN IF EXISTS company;
+ALTER TABLE dme_customers DROP COLUMN IF EXISTS contact_2;
+ALTER TABLE dme_customers ADD COLUMN IF NOT EXISTS purchased_for TEXT;
+ALTER TABLE dme_customers ADD CONSTRAINT dme_customers_phone_key UNIQUE (phone);
+DROP INDEX IF EXISTS idx_dme_customers_company;

@@ -279,25 +279,10 @@ class DmeSupabaseService {
     return (res as List).map((e) => DmeCustomer.fromMap(e)).toList();
   }
 
-  /// Find customer by phone. If [company] is also provided, first tries an
-  /// exact (phone + company) match; falls back to phone-only for backward
-  /// compatibility with records that have no company set.
-  Future<DmeCustomer?> findCustomerByPhone(String phone, {String? company}) async {
+  /// Find customer by phone (phone is now the sole unique key).
+  Future<DmeCustomer?> findCustomerByPhone(String phone) async {
     final normalized = DmeCustomer.normalizePhone(phone);
     if (normalized.isEmpty) return null;
-
-    // Try exact match on (phone, company) when company is available
-    if (company != null && company.isNotEmpty) {
-      final exact = await _client
-          .from('dme_customers')
-          .select('*, dme_branches(name)')
-          .eq('phone', normalized)
-          .eq('company', company)
-          .maybeSingle();
-      if (exact != null) return DmeCustomer.fromMap(exact);
-    }
-
-    // Fallback: any record with this phone
     final res = await _client
         .from('dme_customers')
         .select('*, dme_branches(name)')
@@ -309,27 +294,34 @@ class DmeSupabaseService {
   Future<DmeCustomer> upsertCustomer(DmeCustomer customer) async {
     final map = customer.toInsertMap();
     map['updated_at'] = DateTime.now().toUtc().toIso8601String();
-    // Upsert on (phone, company) composite key — allows one person to have
-    // multiple company entries while deduplicating exact (phone+company) pairs.
     final res = await _client
         .from('dme_customers')
-        .upsert(map, onConflict: 'phone,company')
+        .upsert(map, onConflict: 'phone')
         .select('*, dme_branches(name)')
         .single();
     return DmeCustomer.fromMap(res);
   }
 
-  /// Plain INSERT — creates a new customer row even if the same phone already
-  /// exists (used when a user chooses "Add as separate company" for a conflict).
-  Future<DmeCustomer> insertCustomer(DmeCustomer customer) async {
-    final map = customer.toInsertMap();
-    map['updated_at'] = DateTime.now().toUtc().toIso8601String();
+  /// Append an alternate name to a customer's purchased_for field.
+  /// Skips if the name is already present (case-insensitive).
+  Future<void> appendPurchasedFor(int customerId, String alternateName) async {
     final res = await _client
         .from('dme_customers')
-        .insert(map)
-        .select('*, dme_branches(name)')
+        .select('purchased_for')
+        .eq('id', customerId)
         .single();
-    return DmeCustomer.fromMap(res);
+    final existing = res['purchased_for'] as String? ?? '';
+    final parts = existing.isEmpty
+        ? <String>[]
+        : existing.split(',').map((s) => s.trim()).toList();
+    final lowerParts = parts.map((s) => s.toLowerCase()).toSet();
+    if (!lowerParts.contains(alternateName.toLowerCase().trim())) {
+      parts.add(alternateName.trim());
+      await _client.from('dme_customers').update({
+        'purchased_for': parts.join(', '),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', customerId);
+    }
   }
 
   Future<void> upsertCustomersBatch(
@@ -338,7 +330,7 @@ class DmeSupabaseService {
     for (var i = 0; i < rows.length; i += batchSize) {
       final batch = rows.sublist(
           i, i + batchSize > rows.length ? rows.length : i + batchSize);
-      await _client.from('dme_customers').upsert(batch, onConflict: 'phone,company');
+      await _client.from('dme_customers').upsert(batch, onConflict: 'phone');
       onProgress?.call(i + batch.length, rows.length);
     }
   }
@@ -425,7 +417,7 @@ class DmeSupabaseService {
   }) async {
     var query = _client
         .from('dme_reminders')
-        .select('*, dme_customers(name, phone, address, branch_id)');
+        .select('*, dme_customers(name, phone, address, branch_id, salesman)');
 
     if (status != null) query = query.eq('status', status);
     if (from != null) {
@@ -458,19 +450,51 @@ class DmeSupabaseService {
     await _client.from('dme_reminders').update(map).eq('id', id);
   }
 
+  /// Fetch sale items for a customer on a specific purchase date.
+  /// Returns empty list if no sale exists or items have been deleted.
+  Future<List<DmeSaleItem>> getSaleItemsByCustomerDate(
+      int customerId, DateTime date) async {
+    final dateStr = date.toIso8601String().split('T')[0];
+    final res = await _client
+        .from('dme_sales')
+        .select('id, dme_sale_items(*)')
+        .eq('customer_id', customerId)
+        .eq('date', dateStr)
+        .maybeSingle();
+    if (res == null) return [];
+    return ((res['dme_sale_items'] as List?) ?? [])
+        .map((e) => DmeSaleItem.fromMap(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Hard-delete sale items for a customer's purchase date after call+remarks.
+  Future<void> deleteSaleItemsByCustomerDate(
+      int customerId, DateTime date) async {
+    final dateStr = date.toIso8601String().split('T')[0];
+    final res = await _client
+        .from('dme_sales')
+        .select('id')
+        .eq('customer_id', customerId)
+        .eq('date', dateStr)
+        .maybeSingle();
+    if (res == null) return;
+    final saleId = res['id'] as int;
+    await _client.from('dme_sale_items').delete().eq('sale_id', saleId);
+  }
+
   // ── Call Logs ────────────────────────────────────────────────
   Future<void> logCall({
     required int customerId,
     required String calledBy,
     required DateTime callDate,
-    int? durationSeconds,
+    required String status,
     String? remarks,
   }) async {
     await _client.from('dme_call_logs').insert({
       'customer_id': customerId,
       'called_by': calledBy,
       'call_date': callDate.toIso8601String().split('T')[0],
-      'duration_seconds': durationSeconds,
+      'status': status,
       'remarks': remarks,
     });
   }
@@ -600,38 +624,30 @@ class DmeSupabaseService {
       final customer = customers[i];
       
       try {
-        // Check if this (phone, company) pair already exists
+        // Check if phone already exists
         final existingRes = await _client
             .from('dme_customers')
-            .select('id')
+            .select('id, name, purchased_for')
             .eq('phone', customer.phone)
-            .eq('company', customer.company ?? '')
             .maybeSingle();
         
         int customerId;
         if (existingRes != null) {
-          // Phone exists, add to junction table if not already linked
           customerId = existingRes['id'] as int;
-          
-          // Check if this customer-phone pair already mapped in junction
-          final junctionRes = await _client
-              .from('dme_customer_phone')
-              .select('id')
-              .eq('customer_id', customerId)
-              .eq('phone_number', customer.phone)
-              .maybeSingle();
-          
-          if (junctionRes == null) {
-            // Add to junction table
-            await _client.from('dme_customer_phone').insert({
-              'customer_id': customerId,
-              'phone_number': customer.phone,
-              'created_at': DateTime.now().toIso8601String(),
-            });
-            linkedToExisting++;
+          // Append alternate name to purchased_for if name differs
+          final existingName = (existingRes['name'] as String? ?? '').toLowerCase().trim();
+          if (existingName != customer.name.toLowerCase().trim() &&
+              customer.name.isNotEmpty) {
+            await appendPurchasedFor(customerId, customer.name);
           }
+          // Update last_purchase_date and salesman
+          await _client.from('dme_customers').update({
+            'last_purchase_date': customer.lastPurchaseDate?.toIso8601String().split('T')[0],
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          }).eq('id', customerId);
+          linkedToExisting++;
         } else {
-          // New customer: insert and create junction
+          // New customer
           final custMap = customer.toInsertMap();
           custMap['branch_id'] = branchId;
           custMap['updated_at'] = DateTime.now().toUtc().toIso8601String();
@@ -643,20 +659,12 @@ class DmeSupabaseService {
               .single();
           
           customerId = insertRes['id'] as int;
-          
-          // Add to junction table
-          await _client.from('dme_customer_phone').insert({
-            'customer_id': customerId,
-            'phone_number': customer.phone,
-            'created_at': DateTime.now().toIso8601String(),
-          });
-          
           created++;
         }
         
         // Create reminder if last_purchase_date provided
         if (customer.lastPurchaseDate != null) {
-          final reminderDate = customer.lastPurchaseDate!.add(Duration(days: 30));
+          final reminderDate = customer.lastPurchaseDate!.add(const Duration(days: 30));
           await _client.from('dme_reminders').upsert({
             'customer_id': customerId,
             'reminder_date': reminderDate.toIso8601String().split('T')[0],
@@ -689,7 +697,7 @@ class DmeSupabaseService {
     
     var query = _client
         .from('dme_reminders')
-        .select('*, dme_customers(name, phone, address, branch_id)')
+        .select('*, dme_customers(name, phone, address, branch_id, salesman)')
         .eq('reminder_date', todayStr)
         .eq('status', 'pending');
     
@@ -714,7 +722,7 @@ class DmeSupabaseService {
     
     var query = _client
         .from('dme_reminders')
-        .select('*, dme_customers(name, phone, address, branch_id)')
+        .select('*, dme_customers(name, phone, address, branch_id, salesman)')
         .lt('reminder_date', todayStr)
         .eq('status', 'pending');
     
@@ -736,19 +744,21 @@ class DmeSupabaseService {
   Future<DmeReminder?> getReminderDetail(int reminderId) async {
     final res = await _client
         .from('dme_reminders')
-        .select('*, dme_customers(name, phone, address, branch_id)')
+        .select('*, dme_customers(name, phone, address, branch_id, salesman)')
         .eq('id', reminderId)
         .maybeSingle();
     
     return res != null ? DmeReminder.fromMap(res) : null;
   }
 
-  /// Mark reminder as complete
-  Future<void> completeReminder(int reminderId) async {
-    await _client.from('dme_reminders').update({
+  /// Mark reminder as complete with optional notes.
+  Future<void> completeReminder(int reminderId, {String? notes}) async {
+    final map = <String, dynamic>{
       'status': 'completed',
       'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', reminderId);
+    };
+    if (notes != null && notes.isNotEmpty) map['notes'] = notes;
+    await _client.from('dme_reminders').update(map).eq('id', reminderId);
   }
 
   /// Reschedule reminder if new purchase date is after current reminder date

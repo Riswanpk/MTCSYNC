@@ -225,20 +225,15 @@ class _DmeCustomerDbUploadPageState extends State<DmeCustomerDbUploadPage> {
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (c.company != null && c.company!.isNotEmpty)
+                    if (c.purchasedFor != null && c.purchasedFor!.isNotEmpty)
                       Text(
-                        c.company!,
+                        'Also known as: ${c.purchasedFor}',
                         style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
                       ),
                     Text(
                       'Contact 1: ${c.phone}',
                       style: const TextStyle(fontSize: 12),
                     ),
-                    if (c.contact2?.isNotEmpty ?? false)
-                      Text(
-                        'Contact 2: ${c.contact2}',
-                        style: const TextStyle(fontSize: 12, color: Colors.blue),
-                      ),
                     if (c.customerType?.isNotEmpty ?? false)
                       Text('Type: ${c.customerType}',
                           style: const TextStyle(fontSize: 12, color: Colors.purple)),

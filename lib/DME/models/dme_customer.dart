@@ -1,9 +1,8 @@
 class DmeCustomer {
   final int? id;
   final String name;
-  final String? company;
+  final String? purchasedFor; // comma-separated alternate names for same phone
   final String phone;
-  final String? contact2;
   final String? address;
   final int? branchId;
   final String? branchName;
@@ -15,9 +14,8 @@ class DmeCustomer {
   DmeCustomer({
     this.id,
     required this.name,
-    this.company,
+    this.purchasedFor,
     required this.phone,
-    this.contact2,
     this.address,
     this.branchId,
     this.branchName,
@@ -31,9 +29,8 @@ class DmeCustomer {
     return DmeCustomer(
       id: map['id'] as int?,
       name: map['name'] as String? ?? '',
-      company: map['company'] as String?,
+      purchasedFor: map['purchased_for'] as String?,
       phone: map['phone'] as String? ?? '',
-      contact2: map['contact_2'] as String?,
       address: map['address'] as String?,
       branchId: map['branch_id'] as int?,
       branchName: (map['dme_branches'] is Map)
@@ -50,9 +47,8 @@ class DmeCustomer {
 
   Map<String, dynamic> toInsertMap() => {
         'name': name,
-        'company': company,
+        'purchased_for': purchasedFor,
         'phone': normalizePhone(phone),
-        'contact_2': contact2 != null ? normalizePhone(contact2!) : null,
         'address': address,
         'branch_id': branchId,
         'category': category,

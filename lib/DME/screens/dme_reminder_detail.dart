@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/dme_reminder.dart';
+import '../models/dme_sale.dart';
 import '../models/dme_complaint.dart';
 import '../services/dme_supabase_service.dart';
 import '../services/dme_complaint_service.dart';
@@ -26,19 +27,74 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> {
   bool _marking = false;
   bool _rescheduling = false;
   DateTime? _newReminderDate;
+  List<DmeSaleItem> _saleItems = [];
+  bool _loadingItems = false;
 
   @override
   void initState() {
     super.initState();
     _currentReminder = widget.reminder;
+    _loadSaleItems();
+  }
+
+  Future<void> _loadSaleItems() async {
+    setState(() => _loadingItems = true);
+    try {
+      final items = await _svc.getSaleItemsByCustomerDate(
+        _currentReminder.customerId,
+        _currentReminder.lastPurchaseDate,
+      );
+      if (mounted) setState(() { _saleItems = items; _loadingItems = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loadingItems = false);
+    }
   }
 
   Future<void> _markAsComplete() async {
+    final remarksController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Call Remarks'),
+        content: TextField(
+          controller: remarksController,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: 'Enter call remarks / outcome...',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Save & Complete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
     setState(() => _marking = true);
     try {
       if (_currentReminder.id != null) {
-        await _svc.completeReminder(_currentReminder.id!);
-        
+        await _svc.completeReminder(
+          _currentReminder.id!,
+          notes: remarksController.text.trim().isEmpty
+              ? null
+              : remarksController.text.trim(),
+        );
+        await _svc.deleteSaleItemsByCustomerDate(
+          _currentReminder.customerId,
+          _currentReminder.lastPurchaseDate,
+        );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -154,6 +210,9 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> {
               // Customer Info Card
               _buildCustomerCard(),
               
+              // Last Order Details (visible until call is completed)
+              _buildLastOrderSection(),
+              
               // Purchase History
               _buildPurchaseInfo(),
               
@@ -210,10 +269,19 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildInfoRow(
-                  'Contact 1:',
+                  'Contact:',
                   _currentReminder.customerPhone ?? 'N/A',
                   Icons.phone,
                 ),
+                if (_currentReminder.salesman != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: _buildInfoRow(
+                      'Salesman:',
+                      _currentReminder.salesman!,
+                      Icons.person,
+                    ),
+                  ),
                 if (_currentReminder.customerAddress != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 12),
@@ -226,6 +294,53 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLastOrderSection() {
+    if (_loadingItems) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: LinearProgressIndicator(),
+      );
+    }
+    if (_saleItems.isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.green[50],
+        border: Border.all(color: Colors.green[200]!),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(Icons.shopping_cart, size: 16, color: Colors.green[700]),
+            const SizedBox(width: 8),
+            const Text('Last Order',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                    fontWeight: FontWeight.w600)),
+          ]),
+          const SizedBox(height: 8),
+          ..._saleItems.map((item) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(children: [
+                  const Icon(Icons.circle, size: 8, color: Colors.grey),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: Text(item.productName,
+                          style: const TextStyle(fontSize: 13))),
+                  Text('${item.quantity} ${item.unit ?? ''}',
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600)),
+                ]),
+              )),
         ],
       ),
     );
