@@ -215,7 +215,7 @@ class _DmeComplaintsViewPageState extends State<DmeComplaintsViewPage> {
                         ),
                       ),
                       Text(
-                        complaint.category,
+                        complaint.branchName,
                         style: const TextStyle(
                           fontSize: 12,
                           color: Colors.grey,
@@ -344,7 +344,7 @@ class _ComplaintDetailSheetState extends State<_ComplaintDetailSheet> {
     setState(() => _updating = true);
     try {
       await _complaintService.updateComplaintStatus(
-        complaintId: widget.complaint.id ?? '',
+        complaintId: (widget.complaint.id ?? 0).toString(),
         newStatus: newStatus,
         userId: _auth.currentUser?.uid ?? '',
       );
@@ -397,8 +397,7 @@ class _ComplaintDetailSheetState extends State<_ComplaintDetailSheet> {
             // Customer Info
             _buildDetailRow('Customer:', widget.complaint.customerName),
             _buildDetailRow('Phone:', widget.complaint.customerPhone),
-            _buildDetailRow('Branch:', widget.complaint.branch),
-            _buildDetailRow('Category:', widget.complaint.category),
+            _buildDetailRow('Branch:', widget.complaint.branchName),
             
             const SizedBox(height: 16),
             const Text(
@@ -528,19 +527,11 @@ class _ComplaintDetailSheetState extends State<_ComplaintDetailSheet> {
             _buildStatusStep('Closed', false),
           ],
         ),
-        if (widget.complaint.resolvedAt != null)
+        if (widget.complaint.closedAt != null)
           Padding(
             padding: const EdgeInsets.only(top: 12),
             child: Text(
-              'Case resolved by: ${widget.complaint.resolvedBy}',
-              style: const TextStyle(fontSize: 11, color: Colors.grey),
-            ),
-          ),
-        if (widget.complaint.closedAt != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              'Closed by: ${widget.complaint.closedBy}',
+              'Closed by: ${widget.complaint.closedByUserName ?? '-'}',
               style: const TextStyle(fontSize: 11, color: Colors.grey),
             ),
           ),

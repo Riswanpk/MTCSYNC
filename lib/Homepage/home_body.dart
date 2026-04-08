@@ -28,6 +28,7 @@ import '../DME/screens/dme_product_upload.dart';
 import '../DME/screens/dme_customer_db_upload.dart';
 import '../DME/screens/dme_user_management.dart';
 import '../DME/screens/dme_dashboard.dart';
+import '../DME/screens/dme_complaints_management.dart';
 
 /// App brand colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -441,7 +442,7 @@ class HomeButtonsContainer extends StatelessWidget {
 
   /// Builds the DME-specific home tiles.
   Widget _buildDmeTiles(BuildContext context) {
-    // dme_admin sees only Products, Dashboard, and Customer DB Upload
+    // dme_admin sees Products, Dashboard, Customer DB Upload, and Complaints
     if (role == 'dme_admin') {
       return Column(
         children: [
@@ -469,12 +470,28 @@ class HomeButtonsContainer extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          NeumorphicButton(
-            onTap: () => _navigateToDmeCustomerDbUpload(context),
-            text: 'Customer DB Upload',
-            color: const Color(0xFF20B2AA),
-            textColor: Colors.white,
-            icon: Icons.storage_rounded,
+          Row(
+            children: [
+              Expanded(
+                child: NeumorphicButton(
+                  onTap: () => _navigateToDmeCustomerDbUpload(context),
+                  text: 'Customer DB Upload',
+                  color: const Color(0xFF20B2AA),
+                  textColor: Colors.white,
+                  icon: Icons.storage_rounded,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: NeumorphicButton(
+                  onTap: () => _navigateToDmeComplaints(context),
+                  text: 'Complaints',
+                  color: const Color(0xFFFF6B6B),
+                  textColor: Colors.white,
+                  icon: Icons.warning_rounded,
+                ),
+              ),
+            ],
           ),
         ],
       );
@@ -782,6 +799,12 @@ class HomeButtonsContainer extends StatelessWidget {
   Future<void> _navigateToDmeDashboard(BuildContext context) async {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const DmeDashboardPage()),
+    );
+  }
+
+  Future<void> _navigateToDmeComplaints(BuildContext context) async {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const DmeComplaintsManagementPage()),
     );
   }
 }

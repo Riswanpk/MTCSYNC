@@ -7,6 +7,7 @@ import '../models/dme_product.dart';
 import '../models/dme_customer.dart';
 import '../models/dme_sale.dart';
 import '../models/dme_reminder.dart';
+import '../models/dme_complaint.dart';
 
 class DmeSupabaseService {
   DmeSupabaseService._();
@@ -951,5 +952,151 @@ class DmeSupabaseService {
     }
     
     return false;
+  }
+
+  // ── Complaints Management ────────────────────────────────────
+  
+  /// Create a new complaint
+  Future<DmeComplaint> createComplaint({
+    required int customerId,
+    required String customerName,
+    required String customerPhone,
+    required int branchId,
+    required String branchName,
+    required String complaintText,
+    required String userId,
+    required String createdByUserName,
+  }) async {
+    final response = await _client
+        .from('dme_complaints')
+        .insert({
+          'customer_id': customerId,
+          'branch_id': branchId,
+          'complaint_text': complaintText,
+          'status': 'OPEN',
+          'created_by': userId,
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .select()
+        .single();
+
+    return DmeComplaint(
+      id: response['id'],
+      customerId: customerId,
+      customerName: customerName,
+      customerPhone: customerPhone,
+      branchId: branchId,
+      branchName: branchName,
+      complaintText: complaintText,
+      status: 'OPEN',
+      createdByUserName: createdByUserName,
+      createdAt: DateTime.now(),
+    );
+  }
+
+  /// Get all complaints with optional filters
+  Future<List<DmeComplaint>> getComplaints({
+    int? branchId,
+    String? status,
+    List<int>? userBranchIds,
+  }) async {
+    await ensureInitialized();
+    
+    dynamic query = _client.from('dme_complaints').select(
+      '*, dme_customers(name, phone), dme_branches(name), dme_users(username)',
+    );
+
+    // If user is not admin and has branch restrictions
+    if (userBranchIds != null && userBranchIds.isNotEmpty) {
+      query = query.inFilter('branch_id', userBranchIds);
+    } else if (branchId != null) {
+      query = query.eq('branch_id', branchId);
+    }
+
+    if (status != null) {
+      query = query.eq('status', status);
+    }
+
+    final res = await query.order('created_at', ascending: false);
+    
+    return List<Map<String, dynamic>>.from(res).map((data) {
+      return DmeComplaint(
+        id: data['id'],
+        customerId: data['customer_id'],
+        customerName: (data['dme_customers'] as Map?)?['name'] ?? '',
+        customerPhone: (data['dme_customers'] as Map?)?['phone'] ?? '',
+        branchId: data['branch_id'],
+        branchName: (data['dme_branches'] as Map?)?['name'] ?? '',
+        complaintText: data['complaint_text'],
+        status: data['status'],
+        createdByUserName: (data['dme_users'] as Map?)?['username'],
+        createdAt: DateTime.tryParse(data['created_at'].toString()) ?? DateTime.now(),
+        closedByUserName: data['closed_by_user_name'] as String?,
+        closedAt: data['closed_at'] != null
+            ? DateTime.tryParse(data['closed_at'].toString())
+            : null,
+      );
+    }).toList();
+  }
+
+  /// Get complaints for a specific customer
+  Future<List<DmeComplaint>> getComplaintsByCustomer(int customerId) async {
+    await ensureInitialized();
+    
+    final res = await _client
+        .from('dme_complaints')
+        .select('*, dme_customers(name, phone), dme_branches(name), dme_users(username)')
+        .eq('customer_id', customerId)
+        .order('created_at', ascending: false);
+
+    return List<Map<String, dynamic>>.from(res).map((data) {
+      return DmeComplaint(
+        id: data['id'],
+        customerId: data['customer_id'],
+        customerName: (data['dme_customers'] as Map?)?['name'] ?? '',
+        customerPhone: (data['dme_customers'] as Map?)?['phone'] ?? '',
+        branchId: data['branch_id'],
+        branchName: (data['dme_branches'] as Map?)?['name'] ?? '',
+        complaintText: data['complaint_text'],
+        status: data['status'],
+        createdByUserName: (data['dme_users'] as Map?)?['username'],
+        createdAt: DateTime.tryParse(data['created_at'].toString()) ?? DateTime.now(),
+        closedByUserName: data['closed_by_user_name'] as String?,
+        closedAt: data['closed_at'] != null
+            ? DateTime.tryParse(data['closed_at'].toString())
+            : null,
+      );
+    }).toList();
+  }
+
+  /// Update complaint status (only admin can close)
+  Future<bool> updateComplaintStatus(
+    int complaintId,
+    String newStatus,
+    String userId,
+    String closedByUserName,
+  ) async {
+    await ensureInitialized();
+    
+    final updateData = {
+      'status': newStatus,
+      if (newStatus == 'CLOSED') 'closed_by': userId,
+      if (newStatus == 'CLOSED') 'closed_at': DateTime.now().toUtc().toIso8601String(),
+    };
+
+    await _client
+        .from('dme_complaints')
+        .update(updateData)
+        .eq('id', complaintId);
+
+    return true;
+  }
+
+  /// Delete a complaint
+  Future<bool> deleteComplaint(int complaintId) async {
+    await ensureInitialized();
+    
+    await _client.from('dme_complaints').delete().eq('id', complaintId);
+    return true;
   }
 }

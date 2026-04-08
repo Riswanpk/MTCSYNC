@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../models/dme_reminder.dart';
 import '../models/dme_sale.dart';
 import '../models/dme_complaint.dart';
@@ -25,7 +24,9 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> {
 
   late DmeReminder _currentReminder;
   bool _marking = false;
+  // ignore: unused_field
   bool _rescheduling = false;
+  // ignore: unused_field
   DateTime? _newReminderDate;
   List<DmeSaleItem> _saleItems = [];
   bool _loadingItems = false;
@@ -564,7 +565,6 @@ class _ComplaintFormDialog extends StatefulWidget {
 
 class _ComplaintFormDialogState extends State<_ComplaintFormDialog> {
   final _complaintService = DmeComplaintService.instance;
-  final _auth = FirebaseAuth.instance;
   
   late TextEditingController _complaintController;
   String _selectedCategory = 'Other';
@@ -608,13 +608,13 @@ class _ComplaintFormDialogState extends State<_ComplaintFormDialog> {
 
     try {
       final complaint = DmeComplaint(
+        customerId: 0,
         customerName: widget.customerName,
         customerPhone: widget.customerPhone,
-        branch: _userBranch ?? 'Unknown',
+        branchId: 0,
+        branchName: _userBranch ?? 'Unknown',
         complaintText: _complaintController.text.trim(),
-        category: _selectedCategory,
-        status: 'raised',
-        createdBy: _auth.currentUser?.uid ?? '',
+        status: 'OPEN',
         createdAt: DateTime.now(),
       );
 

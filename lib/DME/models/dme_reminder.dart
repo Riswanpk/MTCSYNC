@@ -10,6 +10,8 @@ class DmeReminder {
   final String status;
   final String? assignedTo;
   final String? notes;
+  final int purchasedForBranchId;
+  final String purchasedForBranchName;
 
   DmeReminder({
     this.id,
@@ -23,6 +25,8 @@ class DmeReminder {
     this.status = 'pending',
     this.assignedTo,
     this.notes,
+    this.purchasedForBranchId = 0,
+    this.purchasedForBranchName = '',
   });
 
   factory DmeReminder.fromMap(Map<String, dynamic> map) {
@@ -46,6 +50,8 @@ class DmeReminder {
       status: map['status'] as String? ?? 'pending',
       assignedTo: map['assigned_to'] as String?,
       notes: map['notes'] as String?,
+      purchasedForBranchId: map['purchased_for_branch_id'] as int? ?? 0,
+      purchasedForBranchName: map['purchased_for_branch_name'] as String? ?? '',
     );
   }
 
@@ -71,6 +77,8 @@ class DmeReminder {
     String? status,
     String? assignedTo,
     String? notes,
+    int? purchasedForBranchId,
+    String? purchasedForBranchName,
   }) {
     return DmeReminder(
       id: id ?? this.id,
@@ -84,6 +92,8 @@ class DmeReminder {
       status: status ?? this.status,
       assignedTo: assignedTo ?? this.assignedTo,
       notes: notes ?? this.notes,
+      purchasedForBranchId: purchasedForBranchId ?? this.purchasedForBranchId,
+      purchasedForBranchName: purchasedForBranchName ?? this.purchasedForBranchName,
     );
   }
 

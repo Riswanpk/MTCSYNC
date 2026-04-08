@@ -11,6 +11,7 @@ import '../models/dme_reminder.dart';
 import '../models/dme_user.dart';
 import '../models/dme_sale.dart';
 import '../services/dme_supabase_service.dart';
+import '../widgets/complaint_popup_dialog.dart';
 
 class DmeCustomerTileViewer extends StatefulWidget {
   final DmeReminder reminder;
@@ -764,6 +765,22 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
           backgroundColor: primaryColor,
           iconTheme: const IconThemeData(color: Colors.white),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.warning_rounded),
+              tooltip: 'File Complaint',
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (_) => ComplaintPopupDialog(
+                    reminder: widget.reminder,
+                    dmeUser: widget.dmeUser,
+                    onComplaintSubmitted: () {
+                      // Complaint submitted callback
+                    },
+                  ),
+                );
+              },
+            ),
             IconButton(
               icon: const Icon(Icons.refresh),
               tooltip: 'Reload Call Status',
