@@ -8,6 +8,8 @@ class DmeCustomer {
   final String? branchName;
   final String? category;
   final String? customerType;
+  final int? categoryId;      // ← NEW: FK to dme_categories
+  final int? customerTypeId;  // ← NEW: FK to dme_customer_types
   final String? salesman;
   final DateTime? lastPurchaseDate;
 
@@ -21,6 +23,8 @@ class DmeCustomer {
     this.branchName,
     this.category,
     this.customerType,
+    this.categoryId,
+    this.customerTypeId,
     this.salesman,
     this.lastPurchaseDate,
   });
@@ -38,6 +42,8 @@ class DmeCustomer {
           : null,
       category: map['category'] as String?,
       customerType: map['customer_type'] as String?,
+      categoryId: map['category_id'] as int?,      // ← NEW
+      customerTypeId: map['customer_type_id'] as int?,  // ← NEW
       salesman: map['salesman'] as String?,
       lastPurchaseDate: map['last_purchase_date'] != null
           ? DateTime.tryParse(map['last_purchase_date'].toString())
@@ -53,6 +59,8 @@ class DmeCustomer {
         'branch_id': branchId,
         'category': category,
         'customer_type': customerType,
+        'category_id': categoryId,        // ← NEW
+        'customer_type_id': customerTypeId,  // ← NEW
         'salesman': salesman,
         'last_purchase_date': lastPurchaseDate?.toIso8601String().split('T')[0],
       };

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
+import 'package:mtcsync/Navigation/user_cache_service.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:in_app_update/in_app_update.dart';
@@ -19,7 +20,7 @@ import 'Leads/presentfollowup.dart';
 import 'Todo/todo.dart'; // <-- Already present
 import 'package:showcaseview/showcaseview.dart';
 import 'Version/user_version_helper.dart'; // <-- Add this import
-import 'DME/screens/dme_reminder_detail.dart';
+import 'DME/screens/dme_customer_tile_viewer.dart';
 import 'DME/models/dme_reminder.dart';
 import 'DME/services/dme_supabase_service.dart';
 
@@ -275,13 +276,26 @@ class NotificationController {
           final reminder = await svc.getReminderDetail(int.parse(reminderId as String));
           
           if (reminder != null) {
-            final navigator = navigatorKey.currentState;
-            if (navigator != null) {
-              navigator.push(
-                MaterialPageRoute(
-                  builder: (_) => DmeReminderDetailPage(reminder: reminder),
-                ),
-              );
+            // Get the current user's Firebase UID from cache
+            final userCache = UserCacheService.instance;
+            final firebaseUid = userCache.uid;
+            
+            // Only proceed if we have the Firebase UID
+            if (firebaseUid != null) {
+              final user = await svc.getCurrentUser(firebaseUid);
+              if (user != null) {
+                final navigator = navigatorKey.currentState;
+                if (navigator != null) {
+                  navigator.push(
+                    MaterialPageRoute(
+                      builder: (_) => DmeCustomerTileViewer(
+                        reminder: reminder,
+                        dmeUser: user,
+                      ),
+                    ),
+                  );
+                }
+              }
             }
           }
         } catch (e) {

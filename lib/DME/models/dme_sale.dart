@@ -3,14 +3,12 @@ class DmeSaleItem {
   final int? saleId;
   final String productName;
   final double quantity;
-  final String? unit;
 
   DmeSaleItem({
     this.id,
     this.saleId,
     required this.productName,
     required this.quantity,
-    this.unit,
   });
 
   factory DmeSaleItem.fromMap(Map<String, dynamic> map) {
@@ -19,7 +17,6 @@ class DmeSaleItem {
       saleId: map['sale_id'] as int?,
       productName: map['product_name'] as String? ?? '',
       quantity: (map['quantity'] as num?)?.toDouble() ?? 0,
-      unit: map['unit'] as String?,
     );
   }
 
@@ -27,7 +24,6 @@ class DmeSaleItem {
         'sale_id': saleId,
         'product_name': productName,
         'quantity': quantity,
-        'unit': unit,
       };
 }
 
@@ -40,6 +36,8 @@ class DmeSale {
   final String? salesman;
   final String? category;
   final String? customerType;
+  final int? categoryId;      // ← NEW: FK to dme_categories
+  final int? customerTypeId;  // ← NEW: FK to dme_customer_types
   final String? uploadedBy;
   final List<DmeSaleItem> items;
 
@@ -52,6 +50,8 @@ class DmeSale {
     this.salesman,
     this.category,
     this.customerType,
+    this.categoryId,
+    this.customerTypeId,
     this.uploadedBy,
     this.items = const [],
   });
@@ -74,6 +74,8 @@ class DmeSale {
       salesman: map['salesman'] as String?,
       category: map['category'] as String?,
       customerType: map['customer_type'] as String?,
+      categoryId: map['category_id'] as int?,      // ← NEW
+      customerTypeId: map['customer_type_id'] as int?,  // ← NEW
       uploadedBy: map['uploaded_by'] as String?,
       items: itemsList,
     );
@@ -85,6 +87,8 @@ class DmeSale {
         'salesman': salesman,
         'category': category,
         'customer_type': customerType,
+        'category_id': categoryId,        // ← NEW
+        'customer_type_id': customerTypeId,  // ← NEW
         'uploaded_by': uploadedBy,
       };
 }

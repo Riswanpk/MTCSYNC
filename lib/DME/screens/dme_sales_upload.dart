@@ -208,23 +208,50 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
         }
 
         // Insert sale + items
+        // Look up category and type IDs
+        int? categoryId;
+        int? typeId;
+        if (effectiveCategory != null) {
+          categoryId = await _svc.getCategoryIdByName(effectiveCategory);
+        }
+        if (effectiveType != null) {
+          typeId = await _svc.getTypeIdByName(effectiveType);
+        }
+        
         final sale = DmeSale(
           date: record.date,
           customerId: customerId,
           salesman: record.salesman,
           category: effectiveCategory,
           customerType: effectiveType,
+          categoryId: categoryId,      // ← NEW: Add FK ID
+          customerTypeId: typeId,      // ← NEW: Add FK ID
           uploadedBy: dmeUser?.id,
           items: record.items,
         );
         await _svc.insertSale(sale);
 
-        // Upsert reminder
-        if (customerId != null) {
+        // Upsert reminder with purchase branch tracking
+        if (customerId != null && branchId != null) {
+          final branches = await _svc.getBranches();
+          final branchName = branches
+              .firstWhere(
+                (b) => b['id'] == branchId,
+                orElse: () => {'name': 'Unknown'},
+              )['name'] as String?;
+
           await _svc.upsertReminder(
             customerId: customerId,
             purchaseDate: record.date,
+            purchaseForBranchId: branchId,
+            purchaseForBranchName: branchName,
             assignedTo: dmeUser?.id,
+            purchaseDetails: {
+              'salesman': record.salesman,
+              'category': effectiveCategory,
+              'customer_type': effectiveType,
+              'items_count': record.items.length,
+            },
           );
         }
 
@@ -659,7 +686,7 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
                       style: const TextStyle(
                           fontStyle: FontStyle.italic, fontSize: 13)),
                   trailing: Text(
-                    '${item.quantity} ${item.unit ?? ''}',
+                    '${item.quantity}',
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 )),

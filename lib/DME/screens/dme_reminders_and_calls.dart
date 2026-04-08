@@ -7,11 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/dme_supabase_service.dart';
 import '../models/dme_user.dart';
 import '../models/dme_reminder.dart';
-import '../models/dme_customer.dart';
-import 'dme_customer_detail.dart';
+import 'dme_customer_tile_viewer.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);
-const Color _primaryGreen = Color(0xFF8CC63F);
 
 class DmeRemindersAndCallsPage extends StatefulWidget {
   final DmeUser dmeUser;
@@ -33,11 +31,14 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
 
   // Reminders tab state
   String _filter = 'Today';
+  String? _selectedBranch;
+  List<Map<String, dynamic>> _availableBranches = [];
 
-  // Calls tab state
+  // Call detection state
   Set<int> _calledIds = {};
   String? _pendingCallPhone;
   int? _pendingCallCustomerId;
+  int? _pendingCallReminderId;
   DateTime? _callStartTime;
 
   @override
@@ -66,6 +67,22 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
 
   Future<void> _init() async {
     _branchIds = await _svc.getUserBranchIds(widget.dmeUser.id);
+    
+    // Load ONLY branches assigned to this user
+    final allBranches = await _svc.getBranches();
+    if (mounted) {
+      setState(() {
+        // Filter branches to only those assigned to user
+        _availableBranches = allBranches
+            .where((b) => _branchIds.contains(b['id'] as int?))
+            .toList();
+        
+        // Auto-select first branch if user has only one
+        if (_branchIds.length == 1 && _availableBranches.isNotEmpty) {
+          _selectedBranch = _availableBranches[0]['name'] as String?;
+        }
+      });
+    }
     await _loadReminders();
     _autoScanCallLog();
   }
@@ -76,6 +93,8 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
     DateTime? from;
     DateTime? to;
 
+    String? status = 'pending';
+    
     switch (_filter) {
       case 'Today':
         from = DateTime(now.year, now.month, now.day);
@@ -93,30 +112,41 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
       case 'Overdue':
         to = DateTime(now.year, now.month, now.day);
         break;
+      case 'Completed Today':
+        status = 'completed';
+        from = DateTime(now.year, now.month, now.day);
+        to = DateTime(now.year, now.month, now.day, 23, 59, 59);
+        break;
       case 'All':
         break;
     }
 
+    // Determine which branch IDs to fetch based on selection
+    List<int>? branchesToFetch;
+    if (widget.dmeUser.isAdmin) {
+      branchesToFetch = null; // Admin sees all branches
+    } else if (_selectedBranch != null) {
+      // Filter to selected branch
+      final selectedBranchId = _availableBranches
+          .firstWhere(
+            (b) => (b['name'] as String?) == _selectedBranch,
+            orElse: () => {'id': null},
+          )['id'] as int?;
+      branchesToFetch = selectedBranchId != null ? [selectedBranchId] : _branchIds;
+    } else {
+      branchesToFetch = _branchIds;
+    }
+
     final reminders = await _svc.getReminders(
-      branchIds: widget.dmeUser.isAdmin ? null : _branchIds,
-      status: 'pending',
+      branchIds: branchesToFetch,
+      status: status,
       from: from,
       to: to,
     );
     if (mounted) setState(() { _reminders = reminders; _loading = false; });
   }
 
-  Future<void> _loadRemindersForCalls() async {
-    setState(() => _loading = true);
-    final now = DateTime.now();
-    // Show today's reminders + overdue
-    final reminders = await _svc.getReminders(
-      branchIds: widget.dmeUser.isAdmin ? null : _branchIds,
-      status: 'pending',
-      to: DateTime(now.year, now.month, now.day, 23, 59, 59),
-    );
-    if (mounted) setState(() { _reminders = reminders; _loading = false; });
-  }
+
 
   Future<void> _markComplete(DmeReminder r) async {
     await _svc.updateReminderStatus(r.id!, 'completed');
@@ -130,26 +160,11 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
 
   // ── Call Detection Logic ──
 
-  Future<void> _makeCall(DmeReminder r) async {
-    final phone = r.customerPhone;
-    if (phone == null || phone.isEmpty) return;
-
-    final status = await Permission.phone.request();
-    if (!status.isGranted) return;
-
-    _pendingCallPhone = phone;
-    _pendingCallCustomerId = r.customerId;
-    _callStartTime = DateTime.now();
-    await _savePendingCallState();
-
-    final uri = Uri(scheme: 'tel', path: phone);
-    await launchUrl(uri);
-  }
-
   Future<void> _savePendingCallState() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('dme_call_pending_phone', _pendingCallPhone ?? '');
     await prefs.setInt('dme_call_pending_cust', _pendingCallCustomerId ?? 0);
+    await prefs.setInt('dme_call_pending_reminder', _pendingCallReminderId ?? 0);
     await prefs.setString(
         'dme_call_pending_time', _callStartTime?.toIso8601String() ?? '');
   }
@@ -158,9 +173,11 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('dme_call_pending_phone');
     await prefs.remove('dme_call_pending_cust');
+    await prefs.remove('dme_call_pending_reminder');
     await prefs.remove('dme_call_pending_time');
     _pendingCallPhone = null;
     _pendingCallCustomerId = null;
+    _pendingCallReminderId = null;
     _callStartTime = null;
   }
 
@@ -180,12 +197,6 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
           entry.duration! > 15 &&
           _numberMatches(entry.number ?? '', _pendingCallPhone ?? '')) {
         found = true;
-        await _svc.logCall(
-          customerId: _pendingCallCustomerId!,
-          calledBy: widget.dmeUser.id,
-          callDate: DateTime.now(),
-          status: 'completed',
-        );
         setState(() => _calledIds.add(_pendingCallCustomerId!));
         break;
       }
@@ -203,12 +214,6 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
             entry.duration! > 15 &&
             _numberMatches(entry.number ?? '', _pendingCallPhone ?? '')) {
           found = true;
-          await _svc.logCall(
-            customerId: _pendingCallCustomerId!,
-            calledBy: widget.dmeUser.id,
-            callDate: DateTime.now(),
-            status: 'completed',
-          );
           setState(() => _calledIds.add(_pendingCallCustomerId!));
           break;
         }
@@ -286,13 +291,6 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
             _numberMatches(entry.number ?? '', phone)) {
           matched.add(r);
           setState(() => _calledIds.add(r.customerId));
-
-          await _svc.logCall(
-            customerId: r.customerId,
-            calledBy: widget.dmeUser.id,
-            callDate: DateTime.now(),
-            status: 'completed',
-          );
           break;
         }
       }
@@ -320,30 +318,28 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Reminders & Calls'),
-          backgroundColor: _primaryBlue,
-          foregroundColor: Colors.white,
-          bottom: const TabBar(
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white70,
-            indicatorColor: _primaryGreen,
-            tabs: [
-              Tab(icon: Icon(Icons.notifications_active), text: 'Reminders'),
-              Tab(icon: Icon(Icons.phone_in_talk), text: 'Call Customers'),
-            ],
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Reminders & Calls'),
+        backgroundColor: _primaryBlue,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.phonelink_ring),
+            tooltip: 'Scan Call Log',
+            onPressed: _scanCallLogManual,
           ),
-        ),
-        body: TabBarView(
-          children: [
-            _buildRemindersTab(),
-            _buildCallsTab(),
-          ],
-        ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Reload & Rescan',
+            onPressed: () async {
+              await _loadReminders();
+              await _autoScanCallLog();
+            },
+          ),
+        ],
       ),
+      body: _buildRemindersTab(),
     );
   }
 
@@ -353,12 +349,78 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
 
     return Column(
       children: [
+        // ── Branch selector ─────────────────────────────────────
+        if (_availableBranches.isNotEmpty && !widget.dmeUser.isAdmin)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E1E1E) : Colors.grey[50],
+              border: Border(
+                bottom: BorderSide(
+                  color: isDark ? Colors.grey[700]! : Colors.grey[200]!,
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.business_rounded,
+                  size: 20,
+                  color: _primaryBlue,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<String?>(
+                    value: _selectedBranch,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: isDark
+                              ? Colors.grey[700]!
+                              : Colors.grey[300]!,
+                        ),
+                      ),
+                      filled: true,
+                      fillColor: isDark ? Colors.grey[900] : Colors.white,
+                    ),
+                    items: [
+                      if (_availableBranches.length > 1)
+                        const DropdownMenuItem(
+                          value: null,
+                          child: Text('All Branches'),
+                        ),
+                      ..._availableBranches.map(
+                        (branch) => DropdownMenuItem(
+                          value: branch['name'] as String,
+                          child: Text(
+                            branch['name'] as String,
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                      ),
+                    ],
+                    onChanged: (val) {
+                      setState(() => _selectedBranch = val);
+                      _loadReminders();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+
         // Filter chips
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.all(12),
           child: Row(
-            children: ['Today', 'This Week', 'This Month', 'Overdue', 'All']
+            children: ['Today', 'This Week', 'This Month', 'Overdue', 'Completed Today', 'All']
                 .map((f) => Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: ChoiceChip(
@@ -409,13 +471,19 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
                       ),
                     )
                   : RefreshIndicator(
-                      onRefresh: _loadReminders,
+                      onRefresh: () async {
+                        await _loadReminders();
+                        await _autoScanCallLog();
+                      },
                       child: ListView.builder(
                         itemCount: _reminders.length,
                         itemBuilder: (_, i) {
                           final r = _reminders[i];
                           final isOverdue =
                               r.reminderDate.isBefore(DateTime.now());
+                          final called = _calledIds.contains(r.customerId);
+                          final isCompleted = r.status == 'completed';
+                          
                           return Dismissible(
                             key: Key('reminder_${r.id}'),
                             background: Container(
@@ -443,23 +511,39 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
                             },
                             child: ListTile(
                               leading: CircleAvatar(
-                                backgroundColor: isOverdue
-                                    ? Colors.red.withValues(alpha: 0.1)
-                                    : _primaryBlue.withValues(alpha: 0.1),
+                                backgroundColor: called
+                                    ? Colors.green.withValues(alpha: 0.1)
+                                    : isCompleted
+                                        ? Colors.purple.withValues(alpha: 0.1)
+                                        : isOverdue
+                                            ? Colors.red.withValues(alpha: 0.1)
+                                            : _primaryBlue.withValues(alpha: 0.1),
                                 child: Icon(
-                                  isOverdue
-                                      ? Icons.warning_amber
-                                      : Icons.notifications_active,
-                                  color: isOverdue
-                                      ? Colors.red
-                                      : _primaryBlue,
+                                  called
+                                      ? Icons.check
+                                      : isCompleted
+                                          ? Icons.task_alt
+                                          : isOverdue
+                                              ? Icons.warning_amber
+                                              : Icons.notifications_active,
+                                  color: called
+                                      ? Colors.green
+                                      : isCompleted
+                                          ? Colors.purple
+                                          : isOverdue
+                                              ? Colors.red
+                                              : _primaryBlue,
                                 ),
                               ),
                               title: Text(
                                   r.customerName ??
                                       'Customer #${r.customerId}',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w600)),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    decoration: called
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                                  )),
                               subtitle: Text(
                                 [
                                   if (r.customerPhone != null)
@@ -473,31 +557,41 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.phone,
-                                        color: Colors.green, size: 20),
-                                    onPressed: () {
-                                      if (r.customerPhone != null) {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) =>
-                                                DmeCustomerDetailPage(
-                                              customer: DmeCustomer(
-                                                id: r.customerId,
-                                                name: r.customerName ?? '',
-                                                phone: r.customerPhone ?? '',
-                                                address:
-                                                    r.customerAddress,
-                                              ),
-                                              dmeUser: widget.dmeUser,
-                                            ),
-                                          ),
-                                        );
-                                      }
-                                    },
-                                    tooltip: 'Call',
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: called
+                                          ? Colors.green.withValues(alpha: 0.2)
+                                          : isCompleted
+                                              ? Colors.purple.withValues(alpha: 0.2)
+                                              : isOverdue
+                                                  ? Colors.red.withValues(alpha: 0.2)
+                                                  : Colors.blue.withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      called 
+                                          ? 'Called' 
+                                          : isCompleted
+                                              ? 'Completed'
+                                              : isOverdue 
+                                                  ? 'Overdue' 
+                                                  : 'Pending',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: called
+                                            ? Colors.green
+                                            : isCompleted
+                                                ? Colors.purple
+                                                : isOverdue
+                                                    ? Colors.red
+                                                    : Colors.blue,
+                                      ),
+                                    ),
                                   ),
+                                  const SizedBox(width: 8),
                                   const Icon(Icons.chevron_right),
                                 ],
                               ),
@@ -506,13 +600,8 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) =>
-                                        DmeCustomerDetailPage(
-                                      customer: DmeCustomer(
-                                        id: r.customerId,
-                                        name: r.customerName ?? '',
-                                        phone: r.customerPhone ?? '',
-                                        address: r.customerAddress,
-                                      ),
+                                        DmeCustomerTileViewer(
+                                      reminder: r,
                                       dmeUser: widget.dmeUser,
                                     ),
                                   ),
@@ -528,100 +617,5 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
     );
   }
 
-  Widget _buildCallsTab() {
-    final dateFmt = DateFormat('dd-MMM-yy');
 
-    return Scaffold(
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(48),
-        child: AppBar(
-          backgroundColor: _primaryBlue,
-          automaticallyImplyLeading: false,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.phonelink_ring),
-              tooltip: 'Scan Call Log',
-              onPressed: _scanCallLogManual,
-            ),
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: () async {
-                await _loadRemindersForCalls();
-                await _autoScanCallLog();
-              },
-            ),
-          ],
-        ),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _reminders.isEmpty
-              ? const Center(child: Text('No customers to call today'))
-              : RefreshIndicator(
-                  onRefresh: () async {
-                    await _loadRemindersForCalls();
-                    await _autoScanCallLog();
-                  },
-                  child: ListView.builder(
-                    itemCount: _reminders.length,
-                    itemBuilder: (_, i) {
-                      final r = _reminders[i];
-                      final called = _calledIds.contains(r.customerId);
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: called
-                              ? Colors.green.withValues(alpha: 0.1)
-                              : Colors.orange.withValues(alpha: 0.1),
-                          child: Icon(
-                            called ? Icons.check : Icons.phone,
-                            color: called ? Colors.green : Colors.orange,
-                          ),
-                        ),
-                        title: Text(
-                          r.customerName ?? 'Customer #${r.customerId}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            decoration: called
-                                ? TextDecoration.lineThrough
-                                : null,
-                          ),
-                        ),
-                        subtitle: Text(
-                          [
-                            if (r.customerPhone != null) r.customerPhone,
-                            if (r.salesman != null) r.salesman,
-                            'Due: ${dateFmt.format(r.reminderDate)}',
-                          ].join(' • '),
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        trailing: called
-                            ? const Icon(Icons.check_circle,
-                                color: Colors.green)
-                            : IconButton(
-                                icon: const Icon(Icons.phone_forwarded,
-                                    color: _primaryBlue),
-                                onPressed: () => _makeCall(r),
-                              ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => DmeCustomerDetailPage(
-                                customer: DmeCustomer(
-                                  id: r.customerId,
-                                  name: r.customerName ?? '',
-                                  phone: r.customerPhone ?? '',
-                                  address: r.customerAddress,
-                                ),
-                                dmeUser: widget.dmeUser,
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-    );
-  }
 }

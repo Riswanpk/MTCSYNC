@@ -212,7 +212,6 @@ class DmeExcelParser {
         _items[groupKey]!.add(DmeSaleItem(
           productName: itemName,
           quantity: _parseDouble(qtyStr) ?? 0,
-          unit: _extractUnit(qtyStr),
         ));
       }
     }
@@ -275,11 +274,5 @@ class DmeExcelParser {
     final match = RegExp(r'[\d,.]+').firstMatch(value);
     if (match == null) return null;
     return double.tryParse(match.group(0)!.replaceAll(',', ''));
-  }
-
-  static String? _extractUnit(String value) {
-    if (value.isEmpty) return null;
-    final match = RegExp(r'[A-Za-z]+$').firstMatch(value.trim());
-    return match?.group(0)?.toUpperCase();
   }
 }

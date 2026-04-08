@@ -23,8 +23,8 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
   List<int> _branchIds = [];
   bool _loading = true;
   bool _loadingMore = false;
-  String? _selectedCategory;
-  String? _selectedType;
+  int? _selectedCategoryId;    // ← NEW: Use ID instead of name
+  int? _selectedTypeId;        // ← NEW: Use ID instead of name
   int _offset = 0;
   static const _pageSize = 50;
 
@@ -47,8 +47,8 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
     final results = await _svc.getCustomers(
       branchIds: widget.dmeUser.isAdmin ? null : _branchIds,
       search: _searchCtrl.text.isEmpty ? null : _searchCtrl.text,
-      category: _selectedCategory,
-      customerType: _selectedType,
+      categoryId: _selectedCategoryId,    // ← NEW: Pass ID instead of name
+      customerTypeId: _selectedTypeId,    // ← NEW: Pass ID instead of name
       limit: _pageSize,
       offset: _offset,
     );
@@ -127,14 +127,19 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
                   child: DropdownButton<String?>(
                     isExpanded: true,
                     hint: const Text('Category'),
-                    value: _selectedCategory,
+                    value: null,  // Reset to hint when filter is applied
                     items: [
                       const DropdownMenuItem(value: null, child: Text('All Categories')),
                       ...dmeCategories
                           .map((c) => DropdownMenuItem(value: c, child: Text(c))),
                     ],
-                    onChanged: (v) {
-                      _selectedCategory = v;
+                    onChanged: (v) async {
+                      if (v == null) {
+                        _selectedCategoryId = null;
+                      } else {
+                        // Look up the category ID by name
+                        _selectedCategoryId = await _svc.getCategoryIdByName(v);
+                      }
                       _search();
                     },
                   ),
@@ -144,14 +149,19 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
                   child: DropdownButton<String?>(
                     isExpanded: true,
                     hint: const Text('Type'),
-                    value: _selectedType,
+                    value: null,  // Reset to hint when filter is applied
                     items: [
                       const DropdownMenuItem(value: null, child: Text('All Types')),
                       ...dmeCustomerTypes
                           .map((t) => DropdownMenuItem(value: t, child: Text(t))),
                     ],
-                    onChanged: (v) {
-                      _selectedType = v;
+                    onChanged: (v) async {
+                      if (v == null) {
+                        _selectedTypeId = null;
+                      } else {
+                        // Look up the type ID by name
+                        _selectedTypeId = await _svc.getTypeIdByName(v);
+                      }
                       _search();
                     },
                   ),

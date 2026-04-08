@@ -336,9 +336,6 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> {
                   Expanded(
                       child: Text(item.productName,
                           style: const TextStyle(fontSize: 13))),
-                  Text('${item.quantity} ${item.unit ?? ''}',
-                      style: const TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w600)),
                 ]),
               )),
         ],

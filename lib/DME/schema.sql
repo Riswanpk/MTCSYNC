@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS dme_customer_types (
 );
 
 INSERT INTO dme_customer_types (name) VALUES
-  ('LOYAL CUSTOMER'), ('RANDOM CUSTOMER'), ('BARGAIN CUSTOMER'),
+  ('PREMIUM CUSTOMER'), ('RANDOM CUSTOMER'), ('BARGAIN CUSTOMER'),
   ('IMPULSE CUSTOMER'), ('WANDERING CUSTOMER'), ('SEASONAL CUSTOMER')
 ON CONFLICT (name) DO NOTHING;
 
@@ -96,8 +96,7 @@ CREATE TABLE IF NOT EXISTS dme_sale_items (
   id SERIAL PRIMARY KEY,
   sale_id INT REFERENCES dme_sales(id) ON DELETE CASCADE,
   product_name TEXT NOT NULL,
-  quantity NUMERIC NOT NULL,
-  unit TEXT
+  quantity NUMERIC NOT NULL
 );
 
 -- 10. Reminders (one active per customer, upserted on each purchase)

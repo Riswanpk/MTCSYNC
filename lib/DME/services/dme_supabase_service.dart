@@ -251,18 +251,51 @@ class DmeSupabaseService {
     await _client.from('dme_products').upsert(rows, onConflict: 'name');
   }
 
+  // ── Categories & Types (Lookup) ──────────────────────────────
+  /// Looks up category ID by name. Returns null if not found.
+  Future<int?> getCategoryIdByName(String name) async {
+    try {
+      final res = await _client
+          .from('dme_categories')
+          .select('id')
+          .eq('name', name)
+          .maybeSingle();
+      return res != null ? res['id'] as int? : null;
+    } catch (e) {
+      debugPrint('Error looking up category ID for "$name": $e');
+      return null;
+    }
+  }
+
+  /// Looks up customer type ID by name. Returns null if not found.
+  Future<int?> getTypeIdByName(String name) async {
+    try {
+      final res = await _client
+          .from('dme_customer_types')
+          .select('id')
+          .eq('name', name)
+          .maybeSingle();
+      return res != null ? res['id'] as int? : null;
+    } catch (e) {
+      debugPrint('Error looking up type ID for "$name": $e');
+      return null;
+    }
+  }
+
   // ── Customers ────────────────────────────────────────────────
   Future<List<DmeCustomer>> getCustomers({
     List<int>? branchIds,
     String? search,
-    String? category,
-    String? customerType,
+    int? categoryId,
+    int? customerTypeId,
+    String? category,      // Deprecated: use categoryId instead
+    String? customerType,  // Deprecated: use customerTypeId instead
     int limit = 50,
     int offset = 0,
   }) async {
     var query = _client
         .from('dme_customers')
-        .select('*, dme_branches(name)');
+        .select('*, dme_branches(name), dme_categories(id, name), dme_customer_types(id, name)');
 
     if (branchIds != null && branchIds.isNotEmpty) {
       query = query.inFilter('branch_id', branchIds);
@@ -270,8 +303,19 @@ class DmeSupabaseService {
     if (search != null && search.isNotEmpty) {
       query = query.or('name.ilike.%$search%,phone.ilike.%$search%');
     }
-    if (category != null) query = query.eq('category', category);
-    if (customerType != null) query = query.eq('customer_type', customerType);
+    
+    // Support both new FK-based and old TEXT-based filtering for backward compatibility
+    if (categoryId != null) {
+      query = query.eq('category_id', categoryId);
+    } else if (category != null) {
+      query = query.eq('category', category);
+    }
+    
+    if (customerTypeId != null) {
+      query = query.eq('customer_type_id', customerTypeId);
+    } else if (customerType != null) {
+      query = query.eq('customer_type', customerType);
+    }
 
     final res = await query
         .order('name', ascending: true)
@@ -392,21 +436,136 @@ class DmeSupabaseService {
     return (res as List).map((e) => DmeSale.fromMap(e)).toList();
   }
 
+  // ── Purchase Tracking (Branch-based) ────────────────────────
+
+  /// Record a purchase with branch information in dme_customer_purchases table
+  Future<void> recordPurchaseWithBranch({
+    required int customerId,
+    required DateTime purchaseDate,
+    required int purchaseForBranchId,
+    required String? purchaseForBranchName,
+    Map<String, dynamic>? purchaseDetails, // items, salesman, etc.
+  }) async {
+    try {
+      await _client.from('dme_customer_purchases').insert({
+        'customer_id': customerId,
+        'purchase_date': purchaseDate.toIso8601String().split('T')[0],
+        'purchase_for_branch_id': purchaseForBranchId,
+        'purchase_for_branch_name': purchaseForBranchName,
+        'purchase_details': purchaseDetails,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('Error recording purchase with branch: $e');
+      rethrow;
+    }
+  }
+
+  /// Get assigned DME user for a specific branch
+  Future<DmeUser?> getDmeUserForBranch(int branchId) async {
+    try {
+      final res = await _client
+          .from('dme_users')
+          .select()
+          .contains('branch_ids', '[$branchId]')
+          .limit(1)
+          .maybeSingle();
+
+      if (res == null) return null;
+      return DmeUser.fromMap(res);
+    } catch (e) {
+      debugPrint('Error getting DME user for branch: $e');
+      return null;
+    }
+  }
+
   // ── Reminders ────────────────────────────────────────────────
   Future<void> upsertReminder({
     required int customerId,
     required DateTime purchaseDate,
+    required int purchaseForBranchId,
+    String? purchaseForBranchName,
     String? assignedTo,
+    Map<String, dynamic>? purchaseDetails,
   }) async {
+    // First, record the purchase with branch information
+    await recordPurchaseWithBranch(
+      customerId: customerId,
+      purchaseDate: purchaseDate,
+      purchaseForBranchId: purchaseForBranchId,
+      purchaseForBranchName: purchaseForBranchName,
+      purchaseDetails: purchaseDetails,
+    );
+
+    // Check if reminder already exists for this customer
+    final existing = await _client
+        .from('dme_reminders')
+        .select()
+        .eq('customer_id', customerId)
+        .maybeSingle();
+
     final reminderDate =
         DateTime(purchaseDate.year, purchaseDate.month + 1, purchaseDate.day);
-    await _client.from('dme_reminders').upsert({
-      'customer_id': customerId,
-      'reminder_date': reminderDate.toIso8601String().split('T')[0],
-      'last_purchase_date': purchaseDate.toIso8601String().split('T')[0],
-      'status': 'pending',
-      'assigned_to': assignedTo,
-    }, onConflict: 'customer_id');
+    final purchaseDateStr = purchaseDate.toIso8601String().split('T')[0];
+    final reminderDateStr = reminderDate.toIso8601String().split('T')[0];
+
+    // Determine assigned user based on branch
+    String? assignedUser = assignedTo;
+    if (assignedUser == null) {
+      final assignedDmeUser = await getDmeUserForBranch(purchaseForBranchId);
+      if (assignedDmeUser != null) {
+        assignedUser = assignedDmeUser.id;
+      }
+    }
+
+    if (existing == null) {
+      // New reminder: create with pending status
+      await _client.from('dme_reminders').insert({
+        'customer_id': customerId,
+        'reminder_date': reminderDateStr,
+        'last_purchase_date': purchaseDateStr,
+        'purchased_for_branch_id': purchaseForBranchId,
+        'purchased_for_branch_name': purchaseForBranchName,
+        'status': 'pending',
+        'assigned_to': assignedUser,
+      });
+    } else {
+      // Check current status of existing reminder
+      final currentStatus = existing['status'] as String? ?? 'pending';
+      final existingBranchId = existing['purchased_for_branch_id'] as int?;
+
+      if (currentStatus == 'completed' || currentStatus == 'dismissed') {
+        // Reminder was already handled (completed/dismissed): create NEW reminder for this new purchase
+        // This allows tracking new cycles after completion
+        await _client.from('dme_reminders').insert({
+          'customer_id': customerId,
+          'reminder_date': reminderDateStr,
+          'last_purchase_date': purchaseDateStr,
+          'purchased_for_branch_id': purchaseForBranchId,
+          'purchased_for_branch_name': purchaseForBranchName,
+          'status': 'pending',
+          'assigned_to': assignedUser,
+        });
+      } else {
+        // Existing pending reminder: only update if new purchase date is AFTER last purchase date
+        final lastPurchaseDateStr = existing['last_purchase_date'] as String?;
+        final lastPurchaseDate = lastPurchaseDateStr != null
+            ? DateTime.tryParse(lastPurchaseDateStr)
+            : null;
+
+        if (lastPurchaseDate == null || purchaseDate.isAfter(lastPurchaseDate)) {
+          // New purchase is after last purchase: reschedule the existing reminder
+          // If branch changed, also reassign to new branch's user
+          await _client.from('dme_reminders').update({
+            'reminder_date': reminderDateStr,
+            'last_purchase_date': purchaseDateStr,
+            'purchased_for_branch_id': purchaseForBranchId,
+            'purchased_for_branch_name': purchaseForBranchName,
+            'assigned_to': assignedUser,
+          }).eq('customer_id', customerId);
+        }
+      }
+    }
   }
 
   Future<List<DmeReminder>> getReminders({
@@ -483,28 +642,26 @@ class DmeSupabaseService {
   }
 
   // ── Call Logs ────────────────────────────────────────────────
+  /// Deprecated: Call logging is now handled via status updates in updateReminderStatus
+  /// This method is kept for backwards compatibility but doesn't perform any action
   Future<void> logCall({
-    required int customerId,
+    required int reminderId,
     required String calledBy,
     required DateTime callDate,
-    required String status,
     String? remarks,
   }) async {
-    await _client.from('dme_call_logs').insert({
-      'customer_id': customerId,
-      'called_by': calledBy,
-      'call_date': callDate.toIso8601String().split('T')[0],
-      'status': status,
-      'remarks': remarks,
-    });
+    // Call detection and logging is now handled through reminder status updates
+    // No separate action needed here
   }
 
+  /// Get call logs for a customer (returns reminders with 'called' status)
   Future<List<Map<String, dynamic>>> getCallLogs(int customerId) async {
     final res = await _client
-        .from('dme_call_logs')
+        .from('dme_reminders')
         .select()
         .eq('customer_id', customerId)
-        .order('created_at', ascending: false);
+        .eq('status', 'called')
+        .order('reminder_date', ascending: false);
     return List<Map<String, dynamic>>.from(res);
   }
 
