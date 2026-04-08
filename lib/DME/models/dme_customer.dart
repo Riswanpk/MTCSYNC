@@ -57,10 +57,8 @@ class DmeCustomer {
         'phone': normalizePhone(phone),
         'address': address,
         'branch_id': branchId,
-        'category': category,
-        'customer_type': customerType,
-        'category_id': categoryId,        // ← NEW
-        'customer_type_id': customerTypeId,  // ← NEW
+        'category_id': categoryId,        // FK only (TEXT column removed from DB)
+        'customer_type_id': customerTypeId,  // FK only (TEXT column removed from DB)
         'salesman': salesman,
         'last_purchase_date': lastPurchaseDate?.toIso8601String().split('T')[0],
       };

@@ -194,6 +194,27 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
             failed++;
             continue;
           }
+          
+          // Look up category and type IDs for new customer
+          int? categoryId;
+          int? typeId;
+          if (effectiveCategory != null && effectiveCategory.isNotEmpty) {
+            categoryId = await _svc.getCategoryIdByName(effectiveCategory);
+            if (categoryId == null) {
+              errors.add('${record.customerName}: Category "$effectiveCategory" not found in lookup table');
+              failed++;
+              continue;
+            }
+          }
+          if (effectiveType != null && effectiveType.isNotEmpty) {
+            typeId = await _svc.getTypeIdByName(effectiveType);
+            if (typeId == null) {
+              errors.add('${record.customerName}: Type "$effectiveType" not found in lookup table');
+              failed++;
+              continue;
+            }
+          }
+          
           final newCust = await _svc.upsertCustomer(DmeCustomer(
             name: record.customerName,
             phone: phone,
@@ -201,6 +222,8 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
             branchId: branchId,
             category: effectiveCategory,
             customerType: effectiveType,
+            categoryId: categoryId,
+            customerTypeId: typeId,
             salesman: record.salesman,
             lastPurchaseDate: record.date,
           ));
@@ -208,14 +231,24 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
         }
 
         // Insert sale + items
-        // Look up category and type IDs
+        // Look up category and type IDs - validate they exist in lookup tables
         int? categoryId;
         int? typeId;
-        if (effectiveCategory != null) {
+        if (effectiveCategory != null && effectiveCategory.isNotEmpty) {
           categoryId = await _svc.getCategoryIdByName(effectiveCategory);
+          if (categoryId == null) {
+            errors.add('Sale for ${record.customerName}: Category "$effectiveCategory" not found');
+            failed++;
+            continue;
+          }
         }
-        if (effectiveType != null) {
+        if (effectiveType != null && effectiveType.isNotEmpty) {
           typeId = await _svc.getTypeIdByName(effectiveType);
+          if (typeId == null) {
+            errors.add('Sale for ${record.customerName}: Type "$effectiveType" not found');
+            failed++;
+            continue;
+          }
         }
         
         final sale = DmeSale(
@@ -224,8 +257,8 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
           salesman: record.salesman,
           category: effectiveCategory,
           customerType: effectiveType,
-          categoryId: categoryId,      // ← NEW: Add FK ID
-          customerTypeId: typeId,      // ← NEW: Add FK ID
+          categoryId: categoryId,
+          customerTypeId: typeId,
           uploadedBy: dmeUser?.id,
           items: record.items,
         );

@@ -85,10 +85,8 @@ class DmeSale {
         'date': date.toIso8601String().split('T')[0],
         'customer_id': customerId,
         'salesman': salesman,
-        'category': category,
-        'customer_type': customerType,
-        'category_id': categoryId,        // ← NEW
-        'customer_type_id': customerTypeId,  // ← NEW
+        'category_id': categoryId,        // FK only (TEXT column removed from DB)
+        'customer_type_id': customerTypeId,  // FK only (TEXT column removed from DB)
         'uploaded_by': uploadedBy,
       };
 }

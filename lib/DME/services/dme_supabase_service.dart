@@ -288,8 +288,6 @@ class DmeSupabaseService {
     String? search,
     int? categoryId,
     int? customerTypeId,
-    String? category,      // Deprecated: use categoryId instead
-    String? customerType,  // Deprecated: use customerTypeId instead
     int limit = 50,
     int offset = 0,
   }) async {
@@ -304,17 +302,13 @@ class DmeSupabaseService {
       query = query.or('name.ilike.%$search%,phone.ilike.%$search%');
     }
     
-    // Support both new FK-based and old TEXT-based filtering for backward compatibility
+    // Filter by FK columns only (TEXT columns removed from DB)
     if (categoryId != null) {
       query = query.eq('category_id', categoryId);
-    } else if (category != null) {
-      query = query.eq('category', category);
     }
     
     if (customerTypeId != null) {
       query = query.eq('customer_type_id', customerTypeId);
-    } else if (customerType != null) {
-      query = query.eq('customer_type', customerType);
     }
 
     final res = await query
@@ -781,6 +775,16 @@ class DmeSupabaseService {
       final customer = customers[i];
       
       try {
+        // Look up category and type IDs
+        int? categoryId;
+        int? typeId;
+        if (customer.category != null && customer.category!.isNotEmpty) {
+          categoryId = await getCategoryIdByName(customer.category!);
+        }
+        if (customer.customerType != null && customer.customerType!.isNotEmpty) {
+          typeId = await getTypeIdByName(customer.customerType!);
+        }
+        
         // Check if phone already exists
         final existingRes = await _client
             .from('dme_customers')
@@ -797,9 +801,11 @@ class DmeSupabaseService {
               customer.name.isNotEmpty) {
             await appendPurchasedFor(customerId, customer.name);
           }
-          // Update last_purchase_date and salesman
+          // Update last_purchase_date, category_id, and customer_type_id
           await _client.from('dme_customers').update({
             'last_purchase_date': customer.lastPurchaseDate?.toIso8601String().split('T')[0],
+            'category_id': categoryId,
+            'customer_type_id': typeId,
             'updated_at': DateTime.now().toUtc().toIso8601String(),
           }).eq('id', customerId);
           linkedToExisting++;
@@ -807,6 +813,8 @@ class DmeSupabaseService {
           // New customer
           final custMap = customer.toInsertMap();
           custMap['branch_id'] = branchId;
+          custMap['category_id'] = categoryId;      // Add FK ID
+          custMap['customer_type_id'] = typeId;     // Add FK ID
           custMap['updated_at'] = DateTime.now().toUtc().toIso8601String();
           
           final insertRes = await _client
