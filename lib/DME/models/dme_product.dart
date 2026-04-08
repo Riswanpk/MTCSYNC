@@ -12,8 +12,8 @@ class DmeProduct {
   factory DmeProduct.fromMap(Map<String, dynamic> map) {
     return DmeProduct(
       id: map['id'] as int?,
-      name: map['name'] as String,
-      unit: map['unit'] as String,
+      name: map['name'] as String? ?? '',
+      unit: map['unit'] as String? ?? '',
     );
   }
 

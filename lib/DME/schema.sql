@@ -41,9 +41,9 @@ CREATE TABLE IF NOT EXISTS dme_categories (
 );
 
 INSERT INTO dme_categories (name) VALUES
-  ('Event'), ('Catering'), ('Restaurant'), ('Panthal'),
-  ('Stage decoration'), ('Auditorium'), ('Trust'), ('Institution'),
-  ('Rental'), ('Hiring'), ('Vehicle showroom'), ('Resort'), ('General&others')
+  ('EVENT'), ('CATERING'), ('RESTAURANT'), ('PANTHAL'),
+  ('STAGE DECORATION'), ('AUDITORIUM'), ('TRUST'), ('INSTITUTION'),
+  ('RENTAL'), ('HIRING'), ('VEHICLE SHOWROOM'), ('RESORT'), ('GENERAL&OTHERS')
 ON CONFLICT (name) DO NOTHING;
 
 -- 6. Customer types lookup table
@@ -53,8 +53,8 @@ CREATE TABLE IF NOT EXISTS dme_customer_types (
 );
 
 INSERT INTO dme_customer_types (name) VALUES
-  ('PREMIUM CUSTOMER'), ('RANDOM CUSTOMER'), ('BARGAIN CUSTOMER'),
-  ('IMPULSE CUSTOMER'), ('WANDERING CUSTOMER'), ('SEASONAL CUSTOMER')
+  ('PREMIUM'), ('RANDOM'), ('BARGAIN'),
+  ('IMPULSE'), ('WANDERING'), ('SEASONAL')
 ON CONFLICT (name) DO NOTHING;
 
 -- 7. Customer master (100k+ records)

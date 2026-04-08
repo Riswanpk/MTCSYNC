@@ -82,7 +82,11 @@ class _HomePageState extends State<HomePage>
     _fetchAndCacheContacts();
     _checkBatteryOptimization();
     // Listen for widget taps when app is warm (already running)
-    _widgetClickSub = HomeWidget.widgetClicked.listen(_handleWidgetDeepLink);
+    try {
+      _widgetClickSub = HomeWidget.widgetClicked.listen(_handleWidgetDeepLink);
+    } catch (_) {
+      // Platform may not have an active stream — safe to ignore
+    }
     // Refresh widget data on every home screen visit
     updateTodoWidgetFromFirestore().catchError((_) {});
   }
@@ -142,7 +146,11 @@ class _HomePageState extends State<HomePage>
   void dispose() {
     _authSubscription?.cancel();
     _fcmTokenSubscription?.cancel();
-    _widgetClickSub?.cancel();
+    try {
+      _widgetClickSub?.cancel();
+    } catch (_) {
+      // No active stream to cancel — safe to ignore
+    }
     SmeNotificationService.instance.stopListening();
     routeObserver.unsubscribe(this);
     _swingController.dispose();

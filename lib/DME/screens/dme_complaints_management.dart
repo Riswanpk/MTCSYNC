@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/dme_complaint.dart';
-import '../services/dme_supabase_service.dart';
+import '../services/dme_complaint_service.dart';
 
 const Color primaryColor = Color(0xFF005BAC);
 
@@ -16,7 +16,7 @@ class DmeComplaintsManagementPage extends StatefulWidget {
 
 class _DmeComplaintsManagementPageState
     extends State<DmeComplaintsManagementPage> {
-  final _svc = DmeSupabaseService.instance;
+  final _svc = DmeComplaintService.instance;
 
   List<DmeComplaint> _complaints = [];
   List<DmeComplaint> _filteredComplaints = [];
@@ -35,24 +35,17 @@ class _DmeComplaintsManagementPageState
   Future<void> _loadData() async {
     setState(() => _loading = true);
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      final user = uid != null ? await _svc.getCurrentUser(uid) : null;
-      List<int>? userBranchIds;
+      // Load all branches and complaints
+      final complaints = await _svc.getAllComplaints();
       
-      // Get branch IDs for non-admin users
-      if (user != null && !user.isAdmin) {
-        userBranchIds = await _svc.getUserBranchIds(user.id);
-      }
-
-      final results = await Future.wait([
-        _svc.getBranches(),
-        _svc.getComplaints(userBranchIds: userBranchIds),
-      ]);
+      // Extract unique branches from complaints (without 'All' - added in UI)
+      final branches = <String>{...complaints.map((c) => c.branchName)}.toList();
+      branches.sort(); // Sort for consistency
 
       if (mounted) {
         setState(() {
-          _branches = results[0] as List<Map<String, dynamic>>;
-          _complaints = results[1] as List<DmeComplaint>;
+          _branches = branches.map((b) => {'name': b}).toList();
+          _complaints = complaints;
           _applyFilters();
           _loading = false;
         });
@@ -71,7 +64,7 @@ class _DmeComplaintsManagementPageState
     _filteredComplaints = _complaints.where((complaint) {
       bool branchMatch = _selectedBranch == null ||
           _selectedBranch == 'All' ||
-          complaint.branchId.toString() == _selectedBranch;
+          complaint.branchName == _selectedBranch;
       bool statusMatch = _selectedStatus == null ||
           _selectedStatus == 'All' ||
           complaint.status == _selectedStatus;
@@ -103,16 +96,15 @@ class _DmeComplaintsManagementPageState
     if (confirmed == true) {
       try {
         final uid = FirebaseAuth.instance.currentUser?.uid;
-        final user = uid != null ? await _svc.getCurrentUser(uid) : null;
-        
-        if (user != null) {
-          await _svc.updateComplaintStatus(
-            complaint.id!,
-            'CLOSED',
-            user.id,
-            user.username,
+        if (uid != null && complaint.id != null) {
+          // Use the complaint service for status updates
+          final complaintSvc = DmeComplaintService.instance;
+          await complaintSvc.updateComplaintStatus(
+            complaintId: complaint.id!,
+            newStatus: 'verified_closed',
+            userId: uid,
           );
-          
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Complaint closed successfully')),
@@ -192,7 +184,7 @@ class _DmeComplaintsManagementPageState
                               child: _buildFilterDropdown(
                                 label: 'Status',
                                 value: _selectedStatus,
-                                items: ['All', 'OPEN', 'CLOSED'],
+                                items: ['All', 'raised', 'case_resolved', 'verified_closed'],
                                 onChanged: (value) {
                                   setState(() {
                                     _selectedStatus = value;

@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/dme_reminder.dart';
 import '../models/dme_user.dart';
-import '../services/dme_supabase_service.dart';
+import '../models/dme_complaint.dart';
+import '../services/dme_complaint_service.dart';
 
 class ComplaintPopupDialog extends StatefulWidget {
   final DmeReminder reminder;
@@ -21,7 +22,7 @@ class ComplaintPopupDialog extends StatefulWidget {
 }
 
 class _ComplaintPopupDialogState extends State<ComplaintPopupDialog> {
-  final _svc = DmeSupabaseService.instance;
+  final _svc = DmeComplaintService.instance;
   final _complaintCtrl = TextEditingController();
   bool _submitting = false;
 
@@ -42,16 +43,18 @@ class _ComplaintPopupDialogState extends State<ComplaintPopupDialog> {
     setState(() => _submitting = true);
 
     try {
-      await _svc.createComplaint(
-        customerId: widget.reminder.customerId,
+      final complaint = DmeComplaint(
         customerName: widget.reminder.customerName ?? 'Unknown',
         customerPhone: widget.reminder.customerPhone ?? '',
-        branchId: widget.reminder.purchasedForBranchId,
         branchName: widget.reminder.purchasedForBranchName,
         complaintText: _complaintCtrl.text.trim(),
-        userId: widget.dmeUser.id,
-        createdByUserName: widget.dmeUser.username,
+        status: 'raised',
+        createdById: widget.dmeUser.id,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
       );
+
+      await _svc.createComplaint(complaint);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

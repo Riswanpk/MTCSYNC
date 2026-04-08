@@ -607,15 +607,22 @@ class _ComplaintFormDialogState extends State<_ComplaintFormDialog> {
     setState(() => _submitting = true);
 
     try {
+      await UserCacheService.instance.ensureLoaded();
+      final userId = UserCacheService.instance.uid;
+      
+      if (userId == null) {
+        throw Exception('User not authenticated');
+      }
+
       final complaint = DmeComplaint(
-        customerId: 0,
         customerName: widget.customerName,
         customerPhone: widget.customerPhone,
-        branchId: 0,
         branchName: _userBranch ?? 'Unknown',
         complaintText: _complaintController.text.trim(),
-        status: 'OPEN',
+        status: 'raised',
+        createdById: userId,
         createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
       );
 
       await _complaintService.createComplaint(complaint);
