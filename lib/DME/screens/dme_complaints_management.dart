@@ -91,11 +91,17 @@ class _DmeComplaintsManagementPageState
   }
 
   void _applyFilter() {
+    final role = _cache.role;
+    final uid = _cache.uid;
+    List<DmeComplaint> complaints = _all;
+    // For sales and asst_manager, only show complaints assigned to them
+    if (role == 'sales' || role == 'asst_manager') {
+      complaints = complaints.where((c) => c.assignedToId == uid).toList();
+    }
     if (_selectedStatus == null || _selectedStatus == 'All') {
-      _filtered = _all;
+      _filtered = complaints;
     } else {
-      _filtered =
-          _all.where((c) => c.status == _selectedStatus).toList();
+      _filtered = complaints.where((c) => c.status == _selectedStatus).toList();
     }
   }
 
