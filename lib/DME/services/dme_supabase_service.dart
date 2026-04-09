@@ -97,6 +97,42 @@ class DmeSupabaseService {
     return List<Map<String, dynamic>>.from(res);
   }
 
+  /// Get branch name by ID
+  Future<String?> getBranchNameById(int branchId) async {
+    await ensureInitialized();
+    try {
+      final res = await _client
+          .from('dme_branches')
+          .select('name')
+          .eq('id', branchId)
+          .maybeSingle();
+      return res != null ? res['name'] as String? : null;
+    } catch (e) {
+      debugPrint('Error getting branch name for ID $branchId: $e');
+      return null;
+    }
+  }
+
+  /// Get customer's default branch name
+  Future<String?> getCustomerBranchName(int customerId) async {
+    await ensureInitialized();
+    try {
+      final res = await _client
+          .from('dme_customers')
+          .select('branch_id, dme_branches(name)')
+          .eq('id', customerId)
+          .maybeSingle();
+      
+      if (res != null && res['dme_branches'] is Map) {
+        return (res['dme_branches'] as Map)['name'] as String?;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error getting customer branch name for ID $customerId: $e');
+      return null;
+    }
+  }
+
   Future<List<String>> getUserBranchNames(String dmeUserId) async {
     final res = await _client
         .from('dme_user_branches')
@@ -618,8 +654,13 @@ class DmeSupabaseService {
     }
 
     final res = await query.order('reminder_date', ascending: true);
+    debugPrint('getReminders raw response: ${res.toString()}');
+    
     var reminders =
-        (res as List).map((e) => DmeReminder.fromMap(e)).toList();
+        (res as List).map((e) {
+          debugPrint('Mapping reminder: purchased_for_branch_id=${e['purchased_for_branch_id']}, purchased_for_branch_name=${e['purchased_for_branch_name']}');
+          return DmeReminder.fromMap(e);
+        }).toList();
 
     if (branchIds != null && branchIds.isNotEmpty) {
       reminders = reminders
@@ -950,6 +991,7 @@ class DmeSupabaseService {
         .eq('id', reminderId)
         .maybeSingle();
     
+    debugPrint('getReminderDetail result: $res');
     return res != null ? DmeReminder.fromMap(res) : null;
   }
 

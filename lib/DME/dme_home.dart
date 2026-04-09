@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import 'services/dme_supabase_service.dart';
 import 'models/dme_user.dart';
+import '../Misc/theme_notifier.dart';
 import 'screens/dme_reminders_and_calls.dart';
 import 'screens/dme_product_upload.dart';
 import 'screens/dme_customer_db_upload.dart';
@@ -10,6 +12,8 @@ import 'screens/dme_dashboard.dart';
 import 'screens/dme_user_complaints.dart';
 import 'screens/dme_assigned_complaints.dart';
 import 'screens/dme_complaints_management.dart';
+import 'screens/dme_role_based_complaints_view.dart';
+import '../Homepage/settings.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);
 const Color _primaryGreen = Color(0xFF8CC63F);
@@ -59,7 +63,7 @@ class _DmeHomePageState extends State<DmeHomePage> {
             ),
         ],
       ),
-      drawer: _user?.isAdmin == true ? _buildSidebar(isDark) : null,
+      drawer: _buildSidebar(isDark),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _user == null
@@ -97,7 +101,7 @@ class _DmeHomePageState extends State<DmeHomePage> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  _user?.username ?? 'DME Admin',
+                  _user?.username ?? 'User',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
@@ -107,23 +111,61 @@ class _DmeHomePageState extends State<DmeHomePage> {
               ],
             ),
           ),
+          // Settings button - for all users
           ListTile(
-            leading: const Icon(Icons.manage_accounts_rounded, color: _primaryBlue),
-            title: const Text('Users'),
+            leading: const Icon(Icons.settings, color: _primaryBlue),
+            title: const Text('Settings'),
             onTap: () {
               Navigator.pop(context);
-              _navigate(const DmeUserManagementPage());
+              final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+              _navigate(
+                SettingsPage(
+                  userRole: _user?.role ?? 'user',
+                  themeProvider: themeProvider,
+                ),
+              );
             },
           ),
-          ListTile(
-            leading: const Icon(Icons.warning_rounded, color: Color(0xFFFF6B6B)),
-            title: const Text('DME Complaints'),
-            onTap: () {
-              Navigator.pop(context);
-              _navigate(const DmeComplaintsManagementPage());
-            },
-          ),
-          const Divider(),
+          // Complaints button - for manager, asst_manager, sales, and admin (role-based view)
+          if (['manager', 'asst_manager', 'sales', 'admin'].contains(_user?.role))
+            ListTile(
+              leading: const Icon(Icons.assignment, color: Color(0xFFFF6B6B)),
+              title: const Text('Complaints'),
+              onTap: () {
+                Navigator.pop(context);
+                _navigate(DmeRoleBasedComplaintsView(user: _user!));
+              },
+            ),
+          // Complaints button - for regular dme_users (track their requests)
+          if (_user?.role == 'dme_user')
+            ListTile(
+              leading: const Icon(Icons.list_alt, color: Color(0xFFFF6B6B)),
+              title: const Text('My Complaints'),
+              onTap: () {
+                Navigator.pop(context);
+                _navigate(const DmeUserComplaintsPage());
+              },
+            ),
+          // Admin-only menu items
+          if (_user?.isAdmin == true) ...[
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.manage_accounts_rounded, color: _primaryBlue),
+              title: const Text('Users'),
+              onTap: () {
+                Navigator.pop(context);
+                _navigate(const DmeUserManagementPage());
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.warning_rounded, color: Color(0xFFFF6B6B)),
+              title: const Text('DME Complaints'),
+              onTap: () {
+                Navigator.pop(context);
+                _navigate(const DmeComplaintsManagementPage());
+              },
+            ),
+          ],
         ],
       ),
     );

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mtcsync/DME/screens/dme_user_complaints.dart';
 import 'package:provider/provider.dart';
 
 import '../Login/login.dart';
@@ -15,6 +16,7 @@ import '../Misc/theme_notifier.dart';
 import '../Sync Head/sync_head_performance_drawer.dart';
 import '../Performance/my_performance_page.dart';
 import '../DME/screens/dme_user_management.dart';
+import '../DME/screens/dme_complaints_management.dart';
 
 /// Builds the drawer widget for the home page.
 class HomeDrawer extends StatelessWidget {
@@ -41,6 +43,10 @@ class HomeDrawer extends StatelessWidget {
         children: [
           _buildDrawerHeader(context),
           _buildSettingsTile(context),
+          // Managers/sales/asst_manager: one 'Complaints' page showing all
+          if (role == 'manager' || role == 'asst_manager' || role == 'sales') _buildComplaintsTile(context),
+          // DME users: 'My Complaints' showing only their own raised complaints
+          if (role == 'dme_user') _buildDmeUserComplaintsTile(context),
           if (role == 'admin' || role == 'sync_head' || role == 'Sync Head') _buildManageUsersTile(context),
           if (role == 'dme_admin') _buildDmeUsersTile(context),
           if (role == 'manager') _buildDailyFormTile(context),
@@ -52,6 +58,23 @@ class HomeDrawer extends StatelessWidget {
           _buildLogoutTile(context),
         ],
       ),
+    );
+  }
+
+  Widget _buildDmeUserComplaintsTile(BuildContext context) {
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: const Icon(Icons.assignment_rounded, color: Colors.redAccent),
+      title: const Text('My Complaints'),
+      onTap: () {
+        Navigator.pop(context);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (context) => const DmeUserComplaintsPage()),
+        );
+      },
     );
   }
 
@@ -137,6 +160,24 @@ class HomeDrawer extends StatelessWidget {
           MaterialPageRoute(
             builder: (context) => SettingsPage(
                 userRole: role ?? '', themeProvider: themeProvider),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildComplaintsTile(BuildContext context) {
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: const Icon(Icons.assignment_rounded, color: Colors.redAccent),
+      title: const Text('Complaints'),
+      onTap: () {
+        Navigator.pop(context);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const DmeComplaintsManagementPage(),
           ),
         );
       },

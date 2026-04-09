@@ -613,16 +613,16 @@ class _ComplaintFormDialogState extends State<_ComplaintFormDialog> {
         throw Exception('User not authenticated');
       }
 
-      // For now, complaint creation requires assignment. Use a default assigned_to or ask user
-      // This is a fallback - the main complaint creation is in the popup dialog
-      await _complaintService.createComplaint(
-        customerName: widget.customerName,
-        customerPhone: widget.customerPhone,
-        branchName: _userBranch ?? 'Unknown',
-        complaintText: _complaintController.text.trim(),
-        createdById: userId,
-        assignedToId: userId, // Default to self if not specified
+      // For now, complaint creation requires a branchId which we don't have in this context
+      // This should be called from the popup dialog instead with proper branch assignment
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please use the complaint dialog during reminder calls'),
+          backgroundColor: Colors.orange,
+        ),
       );
+      if (mounted) Navigator.pop(context);
+      return;
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

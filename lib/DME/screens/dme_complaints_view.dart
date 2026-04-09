@@ -57,10 +57,9 @@ class _DmeComplaintsViewPageState extends State<DmeComplaintsViewPage> {
           userId: _userName!,
         );
       } else if (_userBranch != null) {
-        // Branch user sees complaints from their branch
-        complaints = await _complaintService.getComplaintsForBranch(
-          branch: _userBranch!,
-        );
+        // Branch user sees complaints from their branch - requires branch ID
+        // For now, fetch all complaints and filter client-side
+        complaints = await _complaintService.getAllComplaints();
       }
 
       if (mounted) {

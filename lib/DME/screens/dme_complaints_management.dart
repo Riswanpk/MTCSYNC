@@ -1,11 +1,17 @@
-import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
+import '../../Navigation/user_cache_service.dart';
 import '../models/dme_complaint.dart';
 import '../services/dme_complaint_service.dart';
+import '../services/dme_supabase_service.dart';
+import 'dme_complaint_detail_page.dart';
 
-const Color primaryColor = Color(0xFF005BAC);
+const Color _primary = Color(0xFF005BAC);
 
+/// Complaints page for manager / asst_manager / sales roles.
+/// Shows all complaints. Tapping a complaint opens the detail page.
+/// Only the assigned user can add remarks.
 class DmeComplaintsManagementPage extends StatefulWidget {
   const DmeComplaintsManagementPage({super.key});
 
@@ -17,217 +23,120 @@ class DmeComplaintsManagementPage extends StatefulWidget {
 class _DmeComplaintsManagementPageState
     extends State<DmeComplaintsManagementPage> {
   final _svc = DmeComplaintService.instance;
+  final _cache = UserCacheService.instance;
+  final Map<String, String?> _usernameCache = {}; // Cache for user ID -> username mappings
 
-  List<DmeComplaint> _complaints = [];
-  List<DmeComplaint> _filteredComplaints = [];
-  List<Map<String, dynamic>> _branches = [];
+  List<DmeComplaint> _all = [];
+  List<DmeComplaint> _filtered = [];
   bool _loading = true;
 
-  String? _selectedBranch;
   String? _selectedStatus;
+  String? _currentUserId;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _initSupabaseAndLoad();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _initSupabaseAndLoad() async {
+    try {
+      // Initialize Supabase before loading complaints
+      await DmeSupabaseService.instance.ensureInitialized();
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Init error: $e')));
+      }
+    }
+  }
+
+  Future<void> _load() async {
+    if (!mounted) return;
     setState(() => _loading = true);
     try {
-      // Load all branches and complaints
+      await _cache.ensureLoaded();
+      _currentUserId = FirebaseAuth.instance.currentUser?.uid;
+
+      // Load all complaints – Supabase init is handled inside the service.
       final complaints = await _svc.getAllComplaints();
-      
-      // Extract unique branches from complaints (without 'All' - added in UI)
-      final branches = <String>{...complaints.map((c) => c.branchName)}.toList();
-      branches.sort(); // Sort for consistency
 
       if (mounted) {
         setState(() {
-          _branches = branches.map((b) => {'name': b}).toList();
-          _complaints = complaints;
-          _applyFilters();
+          _all = complaints;
+          _applyFilter();
           _loading = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
 
-  void _applyFilters() {
-    _filteredComplaints = _complaints.where((complaint) {
-      bool branchMatch = _selectedBranch == null ||
-          _selectedBranch == 'All' ||
-          complaint.branchName == _selectedBranch;
-      bool statusMatch = _selectedStatus == null ||
-          _selectedStatus == 'All' ||
-          complaint.status == _selectedStatus;
-      return branchMatch && statusMatch;
-    }).toList();
+  void _applyFilter() {
+    if (_selectedStatus == null || _selectedStatus == 'All') {
+      _filtered = _all;
+    } else {
+      _filtered =
+          _all.where((c) => c.status == _selectedStatus).toList();
+    }
   }
 
-  Future<void> _closeComplaint(DmeComplaint complaint) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Close Complaint'),
-        content: Text(
-          'Are you sure you want to close this complaint for ${complaint.customerName}?',
+  void _openDetail(DmeComplaint complaint) {
+    final isAssigned = complaint.assignedToId == _currentUserId;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DmeComplaintDetailPage(
+          complaint: complaint,
+          isDmeUser: false,
+          isAssignedUser: isAssigned,
+          onUpdate: _load,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Close', style: TextStyle(color: Colors.red)),
-          ),
-        ],
       ),
     );
-
-    if (confirmed == true) {
-      try {
-        final uid = FirebaseAuth.instance.currentUser?.uid;
-        if (uid != null && complaint.id != null) {
-          // Use the complaint service for status updates
-          final complaintSvc = DmeComplaintService.instance;
-          await complaintSvc.updateComplaintStatus(
-            complaintId: complaint.id!,
-            newStatus: 'verified_closed',
-            userId: uid,
-          );
-
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Complaint closed successfully')),
-            );
-            _loadData();
-          }
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e')),
-          );
-        }
-      }
-    }
   }
+
+  // ─── BUILD ────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Manage Complaints',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-        backgroundColor: primaryColor,
+        title: const Text('Complaints',
+            style: TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w600)),
+        backgroundColor: _primary,
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loading ? null : _loadData,
+            onPressed: _loading ? null : _load,
           ),
         ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: _loadData,
+              onRefresh: _load,
               child: Column(
                 children: [
-                  // Filter Section
-                  Container(
-                    color: Colors.grey[100],
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Filters',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF2C3E50),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildFilterDropdown(
-                                label: 'Branch',
-                                value: _selectedBranch,
-                                items: [
-                                  'All',
-                                  ..._branches
-                                      .map((b) => b['name'] as String),
-                                ],
-                                onChanged: (value) {
-                                  setState(() {
-                                    _selectedBranch = value;
-                                    _applyFilters();
-                                  });
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildFilterDropdown(
-                                label: 'Status',
-                                value: _selectedStatus,
-                                items: ['All', 'raised', 'case_resolved', 'verified_closed'],
-                                onChanged: (value) {
-                                  setState(() {
-                                    _selectedStatus = value;
-                                    _applyFilters();
-                                  });
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Complaints List
+                  _buildFilterBar(),
                   Expanded(
-                    child: _filteredComplaints.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.inbox_rounded,
-                                  size: 64,
-                                  color: Colors.grey[300],
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'No complaints found',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.grey[500],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
+                    child: _filtered.isEmpty
+                        ? _buildEmpty()
                         : ListView.builder(
                             padding: const EdgeInsets.all(12),
-                            itemCount: _filteredComplaints.length,
-                            itemBuilder: (ctx, index) {
-                              final complaint = _filteredComplaints[index];
-                              return _buildComplaintCard(complaint);
-                            },
+                            itemCount: _filtered.length,
+                            itemBuilder: (_, i) =>
+                                _buildCard(_filtered[i]),
                           ),
                   ),
                 ],
@@ -236,206 +145,177 @@ class _DmeComplaintsManagementPageState
     );
   }
 
-  Widget _buildFilterDropdown({
-    required String label,
-    required String? value,
-    required List<String> items,
-    required Function(String?) onChanged,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: Colors.grey[600],
-          ),
+  Widget _buildFilterBar() {
+    final statuses = [
+      {'label': 'All', 'value': null},
+      {'label': 'Raised', 'value': 'raised'},
+      {'label': 'Resolved', 'value': 'case_resolved'},
+      {'label': 'Closed', 'value': 'verified_closed'},
+    ];
+    return Container(
+      color: Colors.grey[100],
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: statuses.map((s) {
+            final val = s['value'] as String?;
+            final isSelected = _selectedStatus == val;
+            return Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: FilterChip(
+                label: Text(s['label'] as String),
+                selected: isSelected,
+                onSelected: (_) {
+                  setState(() {
+                    _selectedStatus = val;
+                    _applyFilter();
+                  });
+                },
+                backgroundColor: Colors.white,
+                selectedColor: _primary.withValues(alpha: 0.15),
+                labelStyle: TextStyle(
+                  color: isSelected ? _primary : Colors.grey[600],
+                  fontWeight:
+                      isSelected ? FontWeight.w600 : FontWeight.normal,
+                ),
+                side: BorderSide(
+                    color: isSelected ? _primary : Colors.grey[300]!),
+              ),
+            );
+          }).toList(),
         ),
-        const SizedBox(height: 4),
-        Container(
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey[300]!),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: DropdownButton<String>(
-            value: value ?? 'All',
-            isExpanded: true,
-            underline: SizedBox(),
-            items: items
-                .map((item) => DropdownMenuItem(value: item, child: Text(item)))
-                .toList(),
-            onChanged: onChanged,
-          ),
-        ),
-      ],
+      ),
     );
   }
 
-  Widget _buildComplaintCard(DmeComplaint complaint) {
-    final dateFormat = DateFormat('dd MMM yyyy, hh:mm a');
-    final isOpen = complaint.status == 'OPEN';
+  Widget _buildCard(DmeComplaint c) {
+    final hasRemarks = c.remarks != null && c.remarks!.isNotEmpty;
+    final isAssigned = c.assignedToId == _currentUserId;
+    final statusColor = _statusColor(c.status);
+    final dateFormat = DateFormat('dd MMM yyyy');
 
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.only(bottom: 10),
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: Border(
-            left: BorderSide(
-              color: isOpen ? const Color(0xFFFF6B6B) : Colors.green,
-              width: 4,
-            ),
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _openDetail(c),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border(left: BorderSide(color: statusColor, width: 4)),
           ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header with Status
+              // Header
               Row(
                 children: [
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          complaint.customerName,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF2C3E50),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          complaint.customerPhone,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey[600],
-                          ),
-                        ),
+                        Text(c.customerName,
+                            style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 2),
+                        Text(c.customerPhone,
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.grey[600])),
                       ],
                     ),
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: isOpen
-                          ? const Color(0xFFFF6B6B).withValues(alpha: 0.1)
-                          : Colors.green.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      complaint.status,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: isOpen
-                            ? const Color(0xFFFF6B6B)
-                            : Colors.green,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              // Complaint Details
-              Text(
-                'Complaint',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[700],
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                complaint.complaintText,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Color(0xFF2C3E50),
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Metadata Row
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Branch',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey[600],
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      Text(
-                        complaint.branchName,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF2C3E50),
-                        ),
-                      ),
-                    ],
                   ),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(
-                        'Registered',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey[600],
-                          fontWeight: FontWeight.w500,
+                      _buildStatusBadge(c.status),
+                      if (isAssigned) ...[
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: _primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text('Assigned to me',
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  color: _primary,
+                                  fontWeight: FontWeight.w600)),
                         ),
-                      ),
-                      Text(
-                        dateFormat.format(complaint.createdAt),
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF2C3E50),
-                        ),
-                      ),
+                      ],
                     ],
                   ),
                 ],
               ),
-
-              // Close button for open complaints
-              if (isOpen) ...[
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF6B6B),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    onPressed: () => _closeComplaint(complaint),
-                    child: const Text(
-                      'Close Complaint',
+              const SizedBox(height: 10),
+              // Complaint snippet
+              Text(
+                c.complaintText,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF2C3E50),
+                    height: 1.4),
+              ),
+              const SizedBox(height: 10),
+              // Meta row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Branch: ${c.branchName}',
                       style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
+                          fontSize: 11, color: Colors.grey[600])),
+                  Text(dateFormat.format(c.createdAt),
+                      style: TextStyle(
+                          fontSize: 11, color: Colors.grey[600])),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Text('Assigned: ',
+                      style: TextStyle(
+                          fontSize: 11, color: Colors.grey[600])),
+                  Text(
+                    c.assignedToUsername ?? c.assignedToId,
+                    style: const TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              // Remarks teaser
+              if (hasRemarks) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.07),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: Colors.blue.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.comment,
+                          size: 14, color: Colors.blue),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(c.remarks!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.blue)),
                       ),
-                    ),
+                    ],
                   ),
                 ),
               ],
@@ -444,5 +324,60 @@ class _DmeComplaintsManagementPageState
         ),
       ),
     );
+  }
+
+  Widget _buildStatusBadge(String status) {
+    final color = _statusColor(status);
+    final label = _statusLabel(status);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(label,
+          style: TextStyle(
+              fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+    );
+  }
+
+  Widget _buildEmpty() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.inbox_rounded, size: 52, color: Colors.grey[300]),
+          const SizedBox(height: 16),
+          Text('No complaints found',
+              style: TextStyle(fontSize: 16, color: Colors.grey[400])),
+        ],
+      ),
+    );
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'raised':
+        return Colors.red;
+      case 'case_resolved':
+        return Colors.orange;
+      case 'verified_closed':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'raised':
+        return 'RAISED';
+      case 'case_resolved':
+        return 'RESOLVED';
+      case 'verified_closed':
+        return 'CLOSED';
+      default:
+        return status.toUpperCase();
+    }
   }
 }

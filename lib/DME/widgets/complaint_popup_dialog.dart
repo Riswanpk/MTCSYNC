@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/dme_reminder.dart';
 import '../models/dme_user.dart';
 import '../models/dme_complaint.dart';
@@ -30,24 +31,83 @@ class _ComplaintPopupDialogState extends State<ComplaintPopupDialog> {
   bool _loadingUsers = false;
   List<DmeUser> _branchUsers = [];
   DmeUser? _selectedUser;
+  String? _branchName; // Store branch name
 
   @override
   void initState() {
     super.initState();
-    _loadBranchUsers();
+    _loadBranchAndUsers();
   }
 
-  Future<void> _loadBranchUsers() async {
+  Future<void> _loadBranchAndUsers() async {
     setState(() => _loadingUsers = true);
     try {
-      final users = await _supabaseService.getUsersByBranch(widget.reminder.purchasedForBranchName);
+      // Debug: Log the branch ID being used
+      debugPrint('Complaint Dialog: Loading branch with ID: ${widget.reminder.purchasedForBranchId}');
+      debugPrint('Complaint Dialog: Fallback branch name: ${widget.reminder.purchasedForBranchName}');
+      
+      // Get branch name from Supabase
+      String? branchName;
+      if (widget.reminder.purchasedForBranchId > 0) {
+        branchName = await _supabaseService.getBranchNameById(
+          widget.reminder.purchasedForBranchId,
+        );
+        debugPrint('Complaint Dialog: Fetched branch name from Supabase: $branchName');
+      } else {
+        debugPrint('Complaint Dialog: Branch ID is 0 or less, using fallback');
+        branchName = widget.reminder.purchasedForBranchName;
+      }
+      
+      // If still no branch name, try to get the customer's default branch
+      if ((branchName == null || branchName.isEmpty) && widget.reminder.customerId > 0) {
+        debugPrint('Complaint Dialog: Trying to fetch customer default branch');
+        try {
+          branchName = await _supabaseService.getCustomerBranchName(
+            widget.reminder.customerId,
+          );
+          debugPrint('Complaint Dialog: Got customer default branch: $branchName');
+        } catch (e) {
+          debugPrint('Complaint Dialog: Error fetching customer branch: $e');
+        }
+      }
+      
+      // Load users from Firestore for this branch
+      List<DmeUser> users = [];
+      if (branchName != null && branchName.isNotEmpty) {
+        final db = FirebaseFirestore.instance;
+        debugPrint('Complaint Dialog: Querying Firestore for users with branch: $branchName');
+        
+        final snapshot = await db
+            .collection('users')
+            .where('branch', isEqualTo: branchName)
+            .where('role', whereIn: ['manager', 'asst_manager', 'sales', 'dme_user'])
+            .get();
+
+        debugPrint('Complaint Dialog: Found ${snapshot.docs.length} users for branch $branchName');
+
+        users = snapshot.docs.map((doc) {
+          final data = doc.data();
+          return DmeUser(
+            id: data['uid'] ?? doc.id,
+            firebaseUid: data['uid'] ?? doc.id,
+            email: data['email'] ?? '',
+            username: data['username'] ?? data['email'] ?? 'Unknown',
+            role: data['role'] ?? '',
+          );
+        }).toList();
+      } else {
+        debugPrint('Complaint Dialog: Branch name is null or empty');
+      }
+      
       if (mounted) {
         setState(() {
+          _branchName = branchName ?? 'Unknown';
           _branchUsers = users;
           _loadingUsers = false;
         });
       }
     } catch (e) {
+      debugPrint('Complaint Dialog Error: $e');
       if (mounted) {
         setState(() => _loadingUsers = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -84,7 +144,7 @@ class _ComplaintPopupDialogState extends State<ComplaintPopupDialog> {
       await _svc.createComplaint(
         customerName: widget.reminder.customerName ?? 'Unknown',
         customerPhone: widget.reminder.customerPhone ?? '',
-        branchName: widget.reminder.purchasedForBranchName,
+        branchId: widget.reminder.purchasedForBranchId,
         complaintText: _complaintCtrl.text.trim(),
         createdById: widget.dmeUser.id,
         assignedToId: _selectedUser!.id,
@@ -183,7 +243,7 @@ class _ComplaintPopupDialogState extends State<ComplaintPopupDialog> {
                     const SizedBox(height: 8),
                     _buildInfoRow('Phone', widget.reminder.customerPhone ?? 'N/A'),
                     const SizedBox(height: 8),
-                    _buildInfoRow('Branch', widget.reminder.purchasedForBranchName),
+                    _buildInfoRow('Branch', _branchName),
                     const SizedBox(height: 8),
                     _buildInfoRow(
                       'Date',
@@ -346,7 +406,7 @@ class _ComplaintPopupDialogState extends State<ComplaintPopupDialog> {
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
+  Widget _buildInfoRow(String label, String? value) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -359,7 +419,7 @@ class _ComplaintPopupDialogState extends State<ComplaintPopupDialog> {
           ),
         ),
         Text(
-          value,
+          value ?? 'N/A',
           style: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,

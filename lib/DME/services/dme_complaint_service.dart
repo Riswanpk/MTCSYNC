@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/dme_complaint.dart';
 
@@ -18,31 +19,40 @@ class DmeComplaintService {
     }
   }
 
-  /// Get select clause with all relationships
+  /// Get select clause - fetch complaints with branch name
+  /// Note: User relationships (assigned_to_user, etc) require proper FK constraints in database
+  /// For now, we fetch basic complaint data and let the model handle null usernames gracefully
   String get _selectClause =>
-      '*,created_by_user:dme_users!created_by(username),resolved_by_user:dme_users!resolved_by(username),closed_by_user:dme_users!closed_by(username),assigned_to_user:dme_users!assigned_to(username),remarked_by_user:dme_users!remarked_by(username)';
+      '*,dme_branches!branch_id(id,name)';
 
-  /// Create a new complaint with assignment
+  /// Create a new complaint with mandatory assignment
   Future<String> createComplaint({
     required String customerName,
     required String customerPhone,
-    required String branchName,
+    required int branchId,
     required String complaintText,
     required String createdById,
     required String assignedToId,
   }) async {
     _ensureSupabaseInitialized();
+    
+    // Validate that assignedToId is not empty
+    if (assignedToId.isEmpty) {
+      throw Exception('assignedToId is mandatory. Every complaint must be assigned to a user.');
+    }
+    
     final response = await _supabase
         .from(_table)
         .insert({
           'customer_name': customerName,
           'customer_phone': customerPhone,
-          'branch_name': branchName,
+          'branch_id': branchId,
           'complaint_text': complaintText,
           'created_by': createdById,
-          'assigned_to': assignedToId,
+          'assigned_to': assignedToId, // MANDATORY - included in initial insert
           'status': 'raised',
           'has_new_remarks': false,
+          'updated_at': DateTime.now().toIso8601String(),
         })
         .select('id')
         .single();
@@ -97,15 +107,15 @@ class DmeComplaintService {
   }
 
   /// Get all complaints with explicit relationship selects
-  Future<List<DmeComplaint>> getAllComplaints({String? status, String? branch}) async {
+  Future<List<DmeComplaint>> getAllComplaints({String? status, int? branchId}) async {
     _ensureSupabaseInitialized();
     dynamic query = _supabase.from(_table).select(_selectClause);
 
     if (status != null) {
       query = query.eq('status', status);
     }
-    if (branch != null) {
-      query = query.eq('branch_name', branch);
+    if (branchId != null) {
+      query = query.eq('branch_id', branchId);
     }
 
     query = query.order('created_at', ascending: false);
@@ -148,9 +158,9 @@ class DmeComplaintService {
   }
 
   /// Get complaints for a specific branch
-  Future<List<DmeComplaint>> getComplaintsForBranch({required String branch, String? status}) async {
+  Future<List<DmeComplaint>> getComplaintsForBranch({required int branchId, String? status}) async {
     _ensureSupabaseInitialized();
-    dynamic query = _supabase.from(_table).select(_selectClause).eq('branch_name', branch);
+    dynamic query = _supabase.from(_table).select(_selectClause).eq('branch_id', branchId);
 
     if (status != null) {
       query = query.eq('status', status);
@@ -170,5 +180,22 @@ class DmeComplaintService {
 
     if (response.isEmpty) return null;
     return DmeComplaint.fromMap(response as Map<String, dynamic>);
+  }
+
+  /// Get username for a given user ID by looking up in dme_users table
+  Future<String?> getUsernameById(String userId) async {
+    _ensureSupabaseInitialized();
+    try {
+      final response = await _supabase
+          .from('dme_users')
+          .select('username')
+          .eq('id', userId)
+          .maybeSingle();
+      
+      return response != null ? response['username'] as String? : null;
+    } catch (e) {
+      debugPrint('Error fetching username for user $userId: $e');
+      return null;
+    }
   }
 }

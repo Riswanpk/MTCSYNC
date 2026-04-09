@@ -2,7 +2,8 @@ class DmeComplaint {
   final String? id;
   final String customerName;
   final String customerPhone;
-  final String branchName;
+  final int branchId;
+  final String branchName; // Display name, fetched from branches table
   final String complaintText;
   final String status; // 'raised', 'case_resolved', 'verified_closed'
   final String createdById;
@@ -15,7 +16,7 @@ class DmeComplaint {
   final String? closedByUsername;
   final DateTime? closedAt;
   final DateTime updatedAt;
-  final String? assignedToId;
+  final String assignedToId; // MANDATORY - Every complaint must be assigned
   final String? assignedToUsername;
   final String? remarks;
   final String? remarkedByUsername;
@@ -26,6 +27,7 @@ class DmeComplaint {
     this.id,
     required this.customerName,
     required this.customerPhone,
+    required this.branchId,
     required this.branchName,
     required this.complaintText,
     required this.status,
@@ -39,7 +41,7 @@ class DmeComplaint {
     this.closedByUsername,
     this.closedAt,
     required this.updatedAt,
-    this.assignedToId,
+    required this.assignedToId, // MANDATORY
     this.assignedToUsername,
     this.remarks,
     this.remarkedByUsername,
@@ -52,7 +54,8 @@ class DmeComplaint {
       id: map['id'] as String?,
       customerName: map['customer_name'] as String? ?? '',
       customerPhone: map['customer_phone'] as String? ?? '',
-      branchName: map['branch_name'] as String? ?? '',
+      branchId: map['branch_id'] as int? ?? 0,
+      branchName: _extractBranchName(map['dme_branches']) ?? 'Unknown Branch',
       complaintText: map['complaint_text'] as String? ?? '',
       status: map['status'] as String? ?? 'raised',
       createdById: map['created_by'] as String? ?? '',
@@ -73,7 +76,7 @@ class DmeComplaint {
       updatedAt: map['updated_at'] != null
           ? DateTime.tryParse(map['updated_at'].toString()) ?? DateTime.now()
           : DateTime.now(),
-      assignedToId: map['assigned_to'] as String?,
+      assignedToId: map['assigned_to'] as String? ?? '', // MANDATORY - provide default if missing
       assignedToUsername: _extractUsername(map['assigned_to_user']),
       remarks: map['remarks'] as String?,
       remarkedByUsername: _extractUsername(map['remarked_by_user']),
@@ -91,12 +94,24 @@ class DmeComplaint {
     return null;
   }
 
+  static String? _extractBranchName(dynamic branchMap) {
+    if (branchMap is Map) {
+      return branchMap['name'] as String?;
+    }
+    return null;
+  }
+
   Map<String, dynamic> toMap() => {
         'customer_name': customerName,
         'customer_phone': customerPhone,
-        'branch_name': branchName,
+        'branch_id': branchId,
         'complaint_text': complaintText,
         'created_by': createdById,
+        'assigned_to': assignedToId, // MANDATORY
+        'remarks': remarks,
+        'remarked_by': remarkedByUsername,
+        'remarked_at': remarkedAt,
+        'has_new_remarks': hasNewRemarks,
       };
 
   /// Check status helpers
@@ -109,6 +124,7 @@ class DmeComplaint {
     String? id,
     String? customerName,
     String? customerPhone,
+    int? branchId,
     String? branchName,
     String? complaintText,
     String? status,
@@ -122,7 +138,7 @@ class DmeComplaint {
     String? closedByUsername,
     DateTime? closedAt,
     DateTime? updatedAt,
-    String? assignedToId,
+    String? assignedToId, // MANDATORY - but allow override in copyWith
     String? assignedToUsername,
     String? remarks,
     String? remarkedByUsername,
@@ -133,6 +149,7 @@ class DmeComplaint {
       id: id ?? this.id,
       customerName: customerName ?? this.customerName,
       customerPhone: customerPhone ?? this.customerPhone,
+      branchId: branchId ?? this.branchId,
       branchName: branchName ?? this.branchName,
       complaintText: complaintText ?? this.complaintText,
       status: status ?? this.status,
