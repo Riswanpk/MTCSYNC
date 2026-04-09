@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/dme_complaint.dart';
 
 class DmeComplaintService {
@@ -184,15 +185,16 @@ class DmeComplaintService {
 
   /// Get username for a given user ID by looking up in dme_users table
   Future<String?> getUsernameById(String userId) async {
-    _ensureSupabaseInitialized();
     try {
-      final response = await _supabase
-          .from('dme_users')
-          .select('username')
-          .eq('id', userId)
-          .maybeSingle();
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
       
-      return response != null ? response['username'] as String? : null;
+      if (userDoc.exists) {
+        return userDoc.data()?['username'] as String?;
+      }
+      return null;
     } catch (e) {
       debugPrint('Error fetching username for user $userId: $e');
       return null;

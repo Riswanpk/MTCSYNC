@@ -2,6 +2,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../models/dme_complaint.dart';
+import '../models/dme_user.dart';
 import '../services/dme_complaint_service.dart';
 import '../services/dme_supabase_service.dart';
 import 'dme_complaint_detail_page.dart';
@@ -49,9 +50,27 @@ class _DmeUserComplaintsPageState extends State<DmeUserComplaintsPage> {
     if (!mounted) return;
     setState(() => _loading = true);
     try {
-      final uid = _auth.currentUser?.uid;
-      if (uid == null) throw Exception('User not authenticated');
-      final complaints = await _svc.getMyComplaints(userId: uid);
+      final firebaseUid = _auth.currentUser?.uid;
+      if (firebaseUid == null) throw Exception('User not authenticated');
+      
+      debugPrint('[DME Complaints] Firebase UID: $firebaseUid');
+      
+      // Get the Supabase dme_users ID from Firebase UID
+      final dmeUser = await DmeSupabaseService.instance.getCurrentUser(firebaseUid);
+      if (dmeUser == null) {
+        throw Exception('DME user not found in Supabase');
+      }
+      
+      final supabaseUserId = dmeUser.id;
+      debugPrint('[DME Complaints] Supabase User ID: $supabaseUserId');
+      
+      // Query complaints where created_by matches the Supabase user ID
+      final complaints = await _svc.getMyComplaints(userId: supabaseUserId);
+      debugPrint('[DME Complaints] Found ${complaints.length} complaints');
+      if (complaints.isNotEmpty) {
+        debugPrint('[DME Complaints] First complaint: ${complaints.first.customerName}, created_by: ${complaints.first.createdById}');
+      }
+      
       if (mounted) {
         setState(() {
           _all = complaints;
@@ -60,6 +79,7 @@ class _DmeUserComplaintsPageState extends State<DmeUserComplaintsPage> {
         });
       }
     } catch (e) {
+      debugPrint('[DME Complaints] Error loading: $e');
       if (mounted) {
         setState(() => _loading = false);
         ScaffoldMessenger.of(context)

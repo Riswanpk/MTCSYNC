@@ -63,6 +63,17 @@ class _DmeComplaintsManagementPageState
       // Load all complaints – Supabase init is handled inside the service.
       final complaints = await _svc.getAllComplaints();
 
+      // Pre-fetch usernames for all assigned_to users to avoid multiple queries
+      final userIds = complaints.map((c) => c.assignedToId).toSet().cast<String>();
+      debugPrint('[Complaints Management] Fetching usernames for ${userIds.length} users');
+      for (final userId in userIds) {
+        if (!_usernameCache.containsKey(userId)) {
+          final username = await _svc.getUsernameById(userId);
+          _usernameCache[userId] = username;
+          debugPrint('[Complaints Management] User $userId -> $username');
+        }
+      }
+
       if (mounted) {
         setState(() {
           _all = complaints;
@@ -103,6 +114,16 @@ class _DmeComplaintsManagementPageState
     );
   }
 
+  /// Get username for a user ID, with caching
+  Future<String?> _getUsername(String userId) async {
+    if (_usernameCache.containsKey(userId)) {
+      return _usernameCache[userId];
+    }
+    final username = await _svc.getUsernameById(userId);
+    _usernameCache[userId] = username;
+    return username;
+  }
+
   // ─── BUILD ────────────────────────────────────────────────────────────────
 
   @override
@@ -135,8 +156,11 @@ class _DmeComplaintsManagementPageState
                         : ListView.builder(
                             padding: const EdgeInsets.all(12),
                             itemCount: _filtered.length,
-                            itemBuilder: (_, i) =>
-                                _buildCard(_filtered[i]),
+                            itemBuilder: (_, i) {
+                              final complaint = _filtered[i];
+                              final username = _usernameCache[complaint.assignedToId] ?? complaint.assignedToId;
+                              return _buildCard(complaint, username);
+                            },
                           ),
                   ),
                 ],
@@ -189,7 +213,7 @@ class _DmeComplaintsManagementPageState
     );
   }
 
-  Widget _buildCard(DmeComplaint c) {
+  Widget _buildCard(DmeComplaint c, String assignedUsername) {
     final hasRemarks = c.remarks != null && c.remarks!.isNotEmpty;
     final isAssigned = c.assignedToId == _currentUserId;
     final statusColor = _statusColor(c.status);
@@ -284,10 +308,13 @@ class _DmeComplaintsManagementPageState
                   Text('Assigned: ',
                       style: TextStyle(
                           fontSize: 11, color: Colors.grey[600])),
-                  Text(
-                    c.assignedToUsername ?? c.assignedToId,
-                    style: const TextStyle(
-                        fontSize: 11, fontWeight: FontWeight.w600),
+                  Expanded(
+                    child: Text(
+                      assignedUsername,
+                      style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
               ),

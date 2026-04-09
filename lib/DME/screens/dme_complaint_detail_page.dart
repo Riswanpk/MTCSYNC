@@ -34,17 +34,34 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
   final _remarksCtrl = TextEditingController();
   bool _submitting = false;
   late DmeComplaint _complaint;
+  String? _assignedToUsername;
 
   @override
   void initState() {
     super.initState();
     _complaint = widget.complaint;
+    _assignedToUsername = _complaint.assignedToUsername;
     // Pre-fill remarks field for assigned user so they can update
     if (widget.isAssignedUser) {
       _remarksCtrl.text = _complaint.remarks ?? '';
     }
     // Ensure Supabase is initialized
     _initSupabase();
+    _fetchAssignedToUsername();
+  }
+
+  Future<void> _fetchAssignedToUsername() async {
+    if (_assignedToUsername != null && _assignedToUsername!.isNotEmpty) return;
+    try {
+      final username = await _svc.getUsernameById(_complaint.assignedToId);
+      if (mounted && username != null && username.isNotEmpty) {
+        setState(() {
+          _assignedToUsername = username;
+        });
+      }
+    } catch (e) {
+      // ignore error, fallback to ID
+    }
   }
 
   Future<void> _initSupabase() async {
@@ -223,10 +240,9 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
                   child: _buildSection(
                     title: 'Assigned To',
                     child: Text(
-                      _complaint.assignedToUsername ??
-                          _complaint.assignedToId,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600),
+                      _assignedToUsername ?? _complaint.assignedToId,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ),
