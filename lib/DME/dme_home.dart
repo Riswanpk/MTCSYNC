@@ -7,6 +7,9 @@ import 'screens/dme_product_upload.dart';
 import 'screens/dme_customer_db_upload.dart';
 import 'screens/dme_user_management.dart';
 import 'screens/dme_dashboard.dart';
+import 'screens/dme_user_complaints.dart';
+import 'screens/dme_assigned_complaints.dart';
+import 'screens/dme_complaints_management.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);
 const Color _primaryGreen = Color(0xFF8CC63F);
@@ -112,6 +115,14 @@ class _DmeHomePageState extends State<DmeHomePage> {
               _navigate(const DmeUserManagementPage());
             },
           ),
+          ListTile(
+            leading: const Icon(Icons.warning_rounded, color: Color(0xFFFF6B6B)),
+            title: const Text('DME Complaints'),
+            onTap: () {
+              Navigator.pop(context);
+              _navigate(const DmeComplaintsManagementPage());
+            },
+          ),
           const Divider(),
         ],
       ),
@@ -149,6 +160,21 @@ class _DmeHomePageState extends State<DmeHomePage> {
             label: 'Reminders & Calls',
             color: _primaryGreen,
             onTap: () => _navigate(DmeRemindersAndCallsPage(dmeUser: _user!)),
+          ),
+          const SizedBox(height: 14),
+          _tileRow(
+            left: _DmeTile(
+              icon: Icons.warning_rounded,
+              label: 'Complaints',
+              color: const Color(0xFFFF6B6B),
+              onTap: () => _navigate(const DmeUserComplaintsPage()),
+            ),
+            right: _DmeTile(
+              icon: Icons.assignment_rounded,
+              label: 'Assigned',
+              color: const Color(0xFFFFA500),
+              onTap: () => _navigate(const DmeAssignedComplaintsPage()),
+            ),
           ),
           // ── Admin-only tiles ──
           if (_user!.isAdmin) ...[

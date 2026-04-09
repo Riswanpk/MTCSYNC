@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/dme_reminder.dart';
 import '../models/dme_sale.dart';
-import '../models/dme_complaint.dart';
 import '../services/dme_supabase_service.dart';
 import '../services/dme_complaint_service.dart';
 import '../../Leads/leadsform.dart';
@@ -614,18 +613,16 @@ class _ComplaintFormDialogState extends State<_ComplaintFormDialog> {
         throw Exception('User not authenticated');
       }
 
-      final complaint = DmeComplaint(
+      // For now, complaint creation requires assignment. Use a default assigned_to or ask user
+      // This is a fallback - the main complaint creation is in the popup dialog
+      await _complaintService.createComplaint(
         customerName: widget.customerName,
         customerPhone: widget.customerPhone,
         branchName: _userBranch ?? 'Unknown',
         complaintText: _complaintController.text.trim(),
-        status: 'raised',
         createdById: userId,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
+        assignedToId: userId, // Default to self if not specified
       );
-
-      await _complaintService.createComplaint(complaint);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

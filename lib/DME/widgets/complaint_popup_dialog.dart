@@ -4,6 +4,7 @@ import '../models/dme_reminder.dart';
 import '../models/dme_user.dart';
 import '../models/dme_complaint.dart';
 import '../services/dme_complaint_service.dart';
+import '../services/dme_supabase_service.dart';
 
 class ComplaintPopupDialog extends StatefulWidget {
   final DmeReminder reminder;
@@ -23,8 +24,38 @@ class ComplaintPopupDialog extends StatefulWidget {
 
 class _ComplaintPopupDialogState extends State<ComplaintPopupDialog> {
   final _svc = DmeComplaintService.instance;
+  final _supabaseService = DmeSupabaseService.instance;
   final _complaintCtrl = TextEditingController();
   bool _submitting = false;
+  bool _loadingUsers = false;
+  List<DmeUser> _branchUsers = [];
+  DmeUser? _selectedUser;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBranchUsers();
+  }
+
+  Future<void> _loadBranchUsers() async {
+    setState(() => _loadingUsers = true);
+    try {
+      final users = await _supabaseService.getUsersByBranch(widget.reminder.purchasedForBranchName);
+      if (mounted) {
+        setState(() {
+          _branchUsers = users;
+          _loadingUsers = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingUsers = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading users: $e')),
+        );
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -40,21 +71,24 @@ class _ComplaintPopupDialogState extends State<ComplaintPopupDialog> {
       return;
     }
 
+    if (_selectedUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a user to assign this complaint')),
+      );
+      return;
+    }
+
     setState(() => _submitting = true);
 
     try {
-      final complaint = DmeComplaint(
+      await _svc.createComplaint(
         customerName: widget.reminder.customerName ?? 'Unknown',
         customerPhone: widget.reminder.customerPhone ?? '',
         branchName: widget.reminder.purchasedForBranchName,
         complaintText: _complaintCtrl.text.trim(),
-        status: 'raised',
         createdById: widget.dmeUser.id,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
+        assignedToId: _selectedUser!.id,
       );
-
-      await _svc.createComplaint(complaint);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -158,6 +192,55 @@ class _ComplaintPopupDialogState extends State<ComplaintPopupDialog> {
                   ],
                 ),
               ),
+              const SizedBox(height: 20),
+
+              // Assign To User
+              Text(
+                'Assign To',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[700],
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (_loadingUsers)
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[300]!),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Center(child: CircularProgressIndicator()),
+                )
+              else
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[300]!),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: DropdownButton<DmeUser>(
+                    value: _selectedUser,
+                    isExpanded: true,
+                    hint: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: Text('Select a user...'),
+                    ),
+                    underline: const SizedBox(),
+                    items: _branchUsers
+                        .map((user) => DropdownMenuItem(
+                              value: user,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                child: Text('${user.username} (${user.role ?? ""})'),
+                              ),
+                            ))
+                        .toList(),
+                    onChanged: (user) {
+                      setState(() => _selectedUser = user);
+                    },
+                  ),
+                ),
               const SizedBox(height: 20),
 
               // Complaint Text Field

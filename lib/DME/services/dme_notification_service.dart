@@ -11,8 +11,10 @@ class DmeNotificationService {
   static const int _reminderChannelId = 123;
   static const String _reminderChannelKey = 'dme_reminder_channel';
   static const String _reminderChannelName = 'DME Reminders';
+  static const String _complaintChannelKey = 'dme_complaints_channel';
+  static const String _complaintChannelName = 'DME Complaints';
 
-  /// Initialize notification channels for DME reminders
+  /// Initialize notification channels for DME reminders and complaints
   static Future<void> initialize() async {
     await AwesomeNotifications().initialize(
       null, // Default icon
@@ -23,6 +25,15 @@ class DmeNotificationService {
           channelDescription: 'Notifications for DME customer reminders',
           defaultColor: const Color.fromARGB(255, 9, 201, 100),
           ledColor: const Color.fromARGB(255, 9, 201, 100),
+          importance: NotificationImportance.Max,
+          enableVibration: true,
+        ),
+        NotificationChannel(
+          channelKey: _complaintChannelKey,
+          channelName: _complaintChannelName,
+          channelDescription: 'Notifications for DME complaints',
+          defaultColor: const Color(0xFFFFA500),
+          ledColor: const Color(0xFFFFA500),
           importance: NotificationImportance.Max,
           enableVibration: true,
         ),
@@ -131,6 +142,67 @@ class DmeNotificationService {
     final dateStr =
         DateFormat('dd MMM').format(reminder.lastPurchaseDate);
     return 'Call $customerName - Last purchase: $dateStr';
+  }
+
+  /// Send immediate notification when complaint is assigned to a user
+  Future<void> sendComplaintAssignmentNotification({
+    required String complaintId,
+    required String customerName,
+    required String assignedToUsername,
+  }) async {
+    try {
+      await AwesomeNotifications().createNotification(
+        content: NotificationContent(
+          id: _generateComplaintNotificationId(complaintId),
+          channelKey: _complaintChannelKey,
+          title: 'New Complaint Assignment',
+          body: 'You have been assigned a complaint from $customerName',
+          payload: {
+            'type': 'complaint_assigned',
+            'complaintId': complaintId,
+            'customerName': customerName,
+            'page': 'assigned_complaints',
+          },
+          notificationLayout: NotificationLayout.Default,
+          actionType: ActionType.Default,
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error sending complaint assignment notification: $e');
+    }
+  }
+
+  /// Send immediate notification when remarks are added to a complaint
+  Future<void> sendRemarksNotification({
+    required String complaintId,
+    required String customerName,
+    required String remarkedByUsername,
+  }) async {
+    try {
+      await AwesomeNotifications().createNotification(
+        content: NotificationContent(
+          id: _generateComplaintNotificationId(complaintId),
+          channelKey: _complaintChannelKey,
+          title: 'New Remarks on Your Complaint',
+          body: '$remarkedByUsername has added remarks to the complaint for $customerName',
+          payload: {
+            'type': 'complaint_remarks',
+            'complaintId': complaintId,
+            'customerName': customerName,
+            'page': 'my_complaints',
+          },
+          notificationLayout: NotificationLayout.Default,
+          actionType: ActionType.Default,
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error sending remarks notification: $e');
+    }
+  }
+
+  /// Dynamically generate notification ID based on complaint ID
+  static int _generateComplaintNotificationId(String complaintId) {
+    return complaintId.hashCode.abs() % 2147483647;
   }
 
   /// Listen for notification taps and return payload

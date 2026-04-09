@@ -8,6 +8,33 @@ import '../services/dme_supabase_service.dart';
 import '../models/dme_sale.dart';
 import '../models/dme_customer.dart';
 
+// ── Hardcoded lookup tables ───────────────────────────────────────
+const Map<String, int> _categoryNameToId = {
+  'EVENT': 1,
+  'CATERING': 2,
+  'RESTAURANT': 3,
+  'PANTHAL': 4,
+  'STAGE DECORATION': 5,
+  'AUDITORIUM': 6,
+  'TRUST': 7,
+  'INSTITUTION': 8,
+  'RENTAL': 9,
+  'HIRING': 10,
+  'VEHICLE SHOWROOM': 11,
+  'RESORT': 12,
+  'GENERAL & OTHERS': 13,
+};
+
+const Map<String, int> _customerTypeNameToId = {
+  'PREMIUM': 1,
+  'RANDOM': 2,
+  'BARGAIN': 3,
+  'IMPULSE': 4,
+  'WANDERING': 5,
+  'SEASONAL': 6,
+  'NORMAL': 7,
+};
+
 // ── Preview item status ───────────────────────────────────────────
 enum _RecordStatus { pending, checking, matchFound, newCustomer, conflict }
 
@@ -199,7 +226,7 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
           int? categoryId;
           int? typeId;
           if (effectiveCategory != null && effectiveCategory.isNotEmpty) {
-            categoryId = await _svc.getCategoryIdByName(effectiveCategory);
+            categoryId = _categoryNameToId[effectiveCategory.toUpperCase()];
             if (categoryId == null) {
               errors.add('${record.customerName}: Category "$effectiveCategory" not found in lookup table');
               failed++;
@@ -207,7 +234,7 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
             }
           }
           if (effectiveType != null && effectiveType.isNotEmpty) {
-            typeId = await _svc.getTypeIdByName(effectiveType);
+            typeId = _customerTypeNameToId[effectiveType.toUpperCase()];
             if (typeId == null) {
               errors.add('${record.customerName}: Type "$effectiveType" not found in lookup table');
               failed++;
@@ -235,7 +262,7 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
         int? categoryId;
         int? typeId;
         if (effectiveCategory != null && effectiveCategory.isNotEmpty) {
-          categoryId = await _svc.getCategoryIdByName(effectiveCategory);
+          categoryId = _categoryNameToId[effectiveCategory.toUpperCase()];
           if (categoryId == null) {
             errors.add('Sale for ${record.customerName}: Category "$effectiveCategory" not found');
             failed++;
@@ -243,7 +270,7 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
           }
         }
         if (effectiveType != null && effectiveType.isNotEmpty) {
-          typeId = await _svc.getTypeIdByName(effectiveType);
+          typeId = _customerTypeNameToId[effectiveType.toUpperCase()];
           if (typeId == null) {
             errors.add('Sale for ${record.customerName}: Type "$effectiveType" not found');
             failed++;

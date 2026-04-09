@@ -53,7 +53,7 @@ class _DmeComplaintsViewPageState extends State<DmeComplaintsViewPage> {
         complaints = await _complaintService.getAllComplaints();
       } else if (_userRole == 'dme_user') {
         // DME user sees complaints they raised
-        complaints = await _complaintService.getComplaintsByUser(
+        complaints = await _complaintService.getMyComplaints(
           userId: _userName!,
         );
       } else if (_userBranch != null) {

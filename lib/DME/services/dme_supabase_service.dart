@@ -169,6 +169,42 @@ class DmeSupabaseService {
     await _client.from('dme_users').delete().eq('id', userId);
   }
 
+  /// Get all users assigned to a specific branch
+  Future<List<DmeUser>> getUsersByBranch(String branchName) async {
+    await ensureInitialized();
+    try {
+      // First get the branch ID from branch name
+      final branchRes = await _client
+          .from('dme_branches')
+          .select('id')
+          .eq('name', branchName)
+          .maybeSingle();
+
+      if (branchRes == null) {
+        return [];
+      }
+
+      final branchId = branchRes['id'] as int;
+
+      // Now get all users assigned to this branch
+      final res = await _client
+          .from('dme_user_branches')
+          .select('dme_users(*)')
+          .eq('branch_id', branchId);
+
+      final users = <DmeUser>[];
+      for (final row in res) {
+        final userData = row['dme_users'] as Map<String, dynamic>;
+        final branches = await getUserBranchNames(userData['id'] as String);
+        users.add(DmeUser.fromMap(userData, branches: branches));
+      }
+      return users;
+    } catch (e) {
+      debugPrint('Error getting users for branch: $e');
+      return [];
+    }
+  }
+
   /// Syncs Firebase users with role='dme_user' to Supabase dme_users table.
   /// Only creates new entries in Supabase for users not already present.
   /// Returns a map with sync results.

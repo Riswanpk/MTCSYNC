@@ -15,6 +15,12 @@ class DmeComplaint {
   final String? closedByUsername;
   final DateTime? closedAt;
   final DateTime updatedAt;
+  final String? assignedToId;
+  final String? assignedToUsername;
+  final String? remarks;
+  final String? remarkedByUsername;
+  final DateTime? remarkedAt;
+  final bool hasNewRemarks;
 
   DmeComplaint({
     this.id,
@@ -33,6 +39,12 @@ class DmeComplaint {
     this.closedByUsername,
     this.closedAt,
     required this.updatedAt,
+    this.assignedToId,
+    this.assignedToUsername,
+    this.remarks,
+    this.remarkedByUsername,
+    this.remarkedAt,
+    this.hasNewRemarks = false,
   });
 
   factory DmeComplaint.fromMap(Map<String, dynamic> map) {
@@ -61,6 +73,14 @@ class DmeComplaint {
       updatedAt: map['updated_at'] != null
           ? DateTime.tryParse(map['updated_at'].toString()) ?? DateTime.now()
           : DateTime.now(),
+      assignedToId: map['assigned_to'] as String?,
+      assignedToUsername: _extractUsername(map['assigned_to_user']),
+      remarks: map['remarks'] as String?,
+      remarkedByUsername: _extractUsername(map['remarked_by_user']),
+      remarkedAt: map['remarked_at'] != null
+          ? DateTime.tryParse(map['remarked_at'].toString())
+          : null,
+      hasNewRemarks: map['has_new_remarks'] as bool? ?? false,
     );
   }
 
@@ -102,6 +122,12 @@ class DmeComplaint {
     String? closedByUsername,
     DateTime? closedAt,
     DateTime? updatedAt,
+    String? assignedToId,
+    String? assignedToUsername,
+    String? remarks,
+    String? remarkedByUsername,
+    DateTime? remarkedAt,
+    bool? hasNewRemarks,
   }) {
     return DmeComplaint(
       id: id ?? this.id,
@@ -120,6 +146,12 @@ class DmeComplaint {
       closedByUsername: closedByUsername ?? this.closedByUsername,
       closedAt: closedAt ?? this.closedAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      assignedToId: assignedToId ?? this.assignedToId,
+      assignedToUsername: assignedToUsername ?? this.assignedToUsername,
+      remarks: remarks ?? this.remarks,
+      remarkedByUsername: remarkedByUsername ?? this.remarkedByUsername,
+      remarkedAt: remarkedAt ?? this.remarkedAt,
+      hasNewRemarks: hasNewRemarks ?? this.hasNewRemarks,
     );
   }
 }

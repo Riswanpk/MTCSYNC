@@ -1089,6 +1089,9 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                     controller: _remarksCtrl,
                     maxLines: 4,
                     readOnly: _isPreexistinglyCompleted,
+                    onChanged: (_) {
+                      setState(() {}); // Trigger rebuild to enable/disable save button
+                    },
                     decoration: InputDecoration(
                       hintText: _isPreexistinglyCompleted
                           ? 'Remarks (saved)'
