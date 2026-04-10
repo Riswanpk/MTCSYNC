@@ -27,12 +27,11 @@ const Map<String, int> _categoryNameToId = {
 
 const Map<String, int> _customerTypeNameToId = {
   'PREMIUM': 1,
-  'RANDOM': 2,
+  'REGULAR': 2,
   'BARGAIN': 3,
-  'IMPULSE': 4,
-  'WANDERING': 5,
-  'SEASONAL': 6,
-  'NORMAL': 7,
+  'INSTITUTIONS': 4,
+  'DEALERS': 5,
+  'GENERAL': 6,  
 };
 
 // ── Preview item status ───────────────────────────────────────────
