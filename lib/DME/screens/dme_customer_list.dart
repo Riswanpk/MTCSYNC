@@ -3,8 +3,33 @@ import 'package:intl/intl.dart';
 import '../services/dme_supabase_service.dart';
 import '../models/dme_user.dart';
 import '../models/dme_customer.dart';
-import '../dme_config.dart';
 import 'dme_customer_detail.dart';
+
+// ── Hardcoded lookup tables ───────────────────────────────────────
+const Map<String, int> _categoryNameToId = {
+  'EVENT': 1,
+  'CATERING': 2,
+  'RESTAURANT': 3,
+  'PANTHAL': 4,
+  'STAGE DECORATION': 5,
+  'AUDITORIUM': 6,
+  'TRUST': 7,
+  'INSTITUTION': 8,
+  'RENTAL': 9,
+  'HIRING': 10,
+  'VEHICLE SHOWROOM': 11,
+  'RESORT': 12,
+  'GENERAL & OTHERS': 13,
+};
+
+const Map<String, int> _customerTypeNameToId = {
+  'PREMIUM': 1,
+  'REGULAR': 2,
+  'BARGAIN': 3,
+  'INSTITUTIONS': 4,
+  'DEALERS': 5,
+  'GENERAL': 6,  
+};
 
 class DmeCustomerListPage extends StatefulWidget {
   final DmeUser dmeUser;
@@ -143,13 +168,12 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
                     Expanded(
                       child: _FilterDropdown(
                         hint: 'Category',
-                        items: [null, ...dmeCategories],
-                        onChanged: (v) async {
+                        items: [null, ..._categoryNameToId.keys],
+                        onChanged: (v) {
                           if (v == null) {
                             _selectedCategoryId = null;
                           } else {
-                            _selectedCategoryId =
-                                await _svc.getCategoryIdByName(v);
+                            _selectedCategoryId = _categoryNameToId[v];
                           }
                           _search();
                         },
@@ -159,12 +183,12 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
                     Expanded(
                       child: _FilterDropdown(
                         hint: 'Type',
-                        items: [null, ...dmeCustomerTypes],
-                        onChanged: (v) async {
+                        items: [null, ..._customerTypeNameToId.keys],
+                        onChanged: (v) {
                           if (v == null) {
                             _selectedTypeId = null;
                           } else {
-                            _selectedTypeId = await _svc.getTypeIdByName(v);
+                            _selectedTypeId = _customerTypeNameToId[v];
                           }
                           _search();
                         },
