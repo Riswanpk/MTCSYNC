@@ -32,6 +32,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
   bool _sortCalledFirst = true;
   String _searchText = '';
   bool _showSearchBar = false;
+  bool _highlightNoRemarks = false;
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -44,6 +45,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
   Future<void> _fetchCustomerData() async {
     setState(() {
       _error = null;
+      _highlightNoRemarks = false;
     });
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -230,6 +232,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
       }
 
       bool anyChanged = false;
+      final List<Map<String, dynamic>> newlyCalled = [];
 
       for (var customer in _customers!) {
         if (customer['callMade'] == true) continue;
@@ -237,27 +240,125 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
         String? c1 = customer['contact1'] ?? customer['contact'];
         String? c2 = customer['contact2'];
 
-        // Check for any call >15s to this customer today
-        bool hasLongCall = entries.any((entry) {
+        // Step 1: Find the latest outgoing call to this customer today.
+        // Without an outgoing call first, customer-initiated-only calls are ignored.
+        int latestOutgoingTime = -1;
+        for (final entry in entries) {
+          if (entry.callType != CallType.outgoing) continue;
+          String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
+          if (logNumber.isEmpty) continue;
+          if (numberMatches(logNumber, c1) || numberMatches(logNumber, c2)) {
+            if (entry.timestamp != null && entry.timestamp! > latestOutgoingTime) {
+              latestOutgoingTime = entry.timestamp!;
+            }
+          }
+        }
+        if (latestOutgoingTime == -1) continue; // No outgoing call found
+
+        // Step 2: Find any call (incoming or outgoing) >15s AFTER the outgoing call.
+        // This covers callbacks from the customer after the user's outgoing attempt.
+        bool hasLongCallAfter = entries.any((entry) {
+          if (entry.timestamp == null || entry.timestamp! <= latestOutgoingTime) return false;
           String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
           if (logNumber.isEmpty) return false;
           bool longEnough = (entry.duration ?? 0) > 15;
           return (numberMatches(logNumber, c1) || numberMatches(logNumber, c2)) && longEnough;
         });
 
-        if (hasLongCall) {
+        if (hasLongCallAfter) {
           customer['callMade'] = true;
           anyChanged = true;
+          newlyCalled.add(customer);
         }
       }
 
       if (anyChanged && mounted) {
         setState(() {});
         await _updateFirestore();
+        if (newlyCalled.isNotEmpty && mounted) {
+          _showRemarksPromptDialog(newlyCalled);
+        }
       }
     } catch (e) {
       debugPrint('Error in auto scan: $e');
     }
+  }
+
+  void _showRemarksPromptDialog(List<Map<String, dynamic>> customers) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.phone_callback, color: Colors.green),
+            SizedBox(width: 8),
+            Expanded(child: Text('Call Detected! Add Remarks', style: TextStyle(fontSize: 16))),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${customers.length} customer(s) were called today. Please add remarks.',
+                style: const TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: customers.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, i) {
+                    final c = customers[i];
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.green.shade50,
+                        child: const Icon(Icons.check_circle, color: Colors.green),
+                      ),
+                      title: Text(
+                        (c['name'] ?? '').toString().toUpperCase(),
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                      ),
+                      subtitle: Text(
+                        c['contact1'] ?? c['contact'] ?? '',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => SalesCustomerTileViewer(
+                              customer: c,
+                              onStatusChanged: (remarks) async {
+                                setState(() {
+                                  c['remarks'] = remarks;
+                                });
+                                await _updateFirestore();
+                              },
+                            ),
+                          ),
+                        ).then((_) => _fetchCustomerData());
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Later'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _makeCall(String contact, int index) async {
@@ -617,7 +718,31 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
           }
         });
 
-        return Scaffold(
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, result) {
+            if (didPop) return;
+            final pendingRemarks = _customers
+                    ?.where((c) =>
+                        c['callMade'] == true &&
+                        (c['remarks'] ?? '').toString().trim().isEmpty)
+                    .toList() ??
+                [];
+            if (pendingRemarks.isNotEmpty) {
+              setState(() => _highlightNoRemarks = true);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                      '${pendingRemarks.length} customer(s) need remarks. They are highlighted in orange.'),
+                  backgroundColor: Colors.orange,
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            } else {
+              Navigator.of(context).pop();
+            }
+          },
+          child: Scaffold(
           backgroundColor: bgColor,
           appBar: AppBar(
             title: Text('Customer List', style: TextStyle(color: Colors.white)),
@@ -842,10 +967,16 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                             ).then((_) => _fetchCustomerData());
                           }
 
+                          final bool needsRemarks = callMade &&
+                              (customer['remarks'] ?? '').toString().trim().isEmpty &&
+                              _highlightNoRemarks;
+
                           return Material(
-                            color: isEven
-                                ? (isDark ? const Color(0xFF1E2128) : Colors.white)
-                                : (isDark ? const Color(0xFF23272E) : const Color(0xFFF5F9FF)),
+                            color: needsRemarks
+                                ? Colors.orange.withValues(alpha: 0.12)
+                                : (isEven
+                                    ? (isDark ? const Color(0xFF1E2128) : Colors.white)
+                                    : (isDark ? const Color(0xFF23272E) : const Color(0xFFF5F9FF))),
                             child: InkWell(
                               onTap: openViewer,
                               onLongPress: () async {
@@ -929,6 +1060,9 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                                       color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
                                       width: 0.5,
                                     ),
+                                    left: needsRemarks
+                                        ? const BorderSide(color: Colors.orange, width: 4)
+                                        : BorderSide.none,
                                   ),
                                 ),
                                 child: Row(
@@ -1023,6 +1157,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
               ),
             ],
           ),
+        ),
         );
       },
     );

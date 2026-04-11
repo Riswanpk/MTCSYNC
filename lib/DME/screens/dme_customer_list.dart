@@ -28,7 +28,7 @@ const Map<String, int> _customerTypeNameToId = {
   'BARGAIN': 3,
   'INSTITUTIONS': 4,
   'DEALERS': 5,
-  'GENERAL': 6,  
+  'GENERAL': 6,
 };
 
 class DmeCustomerListPage extends StatefulWidget {
@@ -48,8 +48,8 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
   List<int> _branchIds = [];
   bool _loading = true;
   bool _loadingMore = false;
-  int? _selectedCategoryId;    // ← NEW: Use ID instead of name
-  int? _selectedTypeId;        // ← NEW: Use ID instead of name
+  int? _selectedCategoryId; // ← NEW: Use ID instead of name
+  int? _selectedTypeId; // ← NEW: Use ID instead of name
   int _offset = 0;
   static const _pageSize = 50;
 
@@ -67,13 +67,16 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
 
   Future<void> _loadCustomers({bool append = false}) async {
     if (!append) {
-      setState(() { _loading = true; _offset = 0; });
+      setState(() {
+        _loading = true;
+        _offset = 0;
+      });
     }
     final results = await _svc.getCustomers(
       branchIds: widget.dmeUser.isAdmin ? null : _branchIds,
       search: _searchCtrl.text.isEmpty ? null : _searchCtrl.text,
-      categoryId: _selectedCategoryId,    // ← NEW: Pass ID instead of name
-      customerTypeId: _selectedTypeId,    // ← NEW: Pass ID instead of name
+      categoryId: _selectedCategoryId, // ← NEW: Pass ID instead of name
+      customerTypeId: _selectedTypeId, // ← NEW: Pass ID instead of name
       limit: _pageSize,
       offset: _offset,
     );
@@ -89,7 +92,8 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
   }
 
   void _onScroll() {
-    if (_scrollCtrl.position.pixels >= _scrollCtrl.position.maxScrollExtent - 200 &&
+    if (_scrollCtrl.position.pixels >=
+            _scrollCtrl.position.maxScrollExtent - 200 &&
         !_loadingMore &&
         _customers.length >= _offset + _pageSize) {
       _loadingMore = true;
@@ -141,7 +145,8 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
                     controller: _searchCtrl,
                     decoration: InputDecoration(
                       hintText: 'Search by name or phone...',
-                      hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                      hintStyle:
+                          TextStyle(color: Colors.grey[400], fontSize: 14),
                       prefixIcon: const Icon(Icons.search_rounded,
                           color: Color(0xFF005BAC)),
                       suffixIcon: _searchCtrl.text.isNotEmpty
@@ -221,8 +226,7 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
                             const SizedBox(height: 16),
                             const Text('No customers found',
                                 style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold)),
+                                    fontSize: 16, fontWeight: FontWeight.bold)),
                             const SizedBox(height: 4),
                             Text('Try a different search or filter',
                                 style: TextStyle(color: Colors.grey[500])),
@@ -231,10 +235,8 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
                       )
                     : ListView.builder(
                         controller: _scrollCtrl,
-                        padding:
-                            const EdgeInsets.fromLTRB(12, 12, 12, 24),
-                        itemCount:
-                            _customers.length + (_loadingMore ? 1 : 0),
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+                        itemCount: _customers.length + (_loadingMore ? 1 : 0),
                         itemBuilder: (_, i) {
                           if (i == _customers.length) {
                             return const Center(
@@ -245,8 +247,7 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
                             );
                           }
                           return _CustomerCard(
-                              customer: _customers[i],
-                              dmeUser: widget.dmeUser);
+                              customer: _customers[i], dmeUser: widget.dmeUser);
                         },
                       ),
           ),
@@ -294,7 +295,8 @@ class _FilterDropdownState extends State<_FilterDropdown> {
         style: const TextStyle(fontSize: 12, color: Colors.black87),
         hint: Text(widget.hint,
             style: const TextStyle(color: Colors.white, fontSize: 12)),
-        icon: const Icon(Icons.expand_more_rounded, color: Colors.white, size: 16),
+        icon: const Icon(Icons.expand_more_rounded,
+            color: Colors.white, size: 16),
         items: [
           DropdownMenuItem<String?>(
             value: null,
@@ -406,41 +408,40 @@ class _CustomerCard extends StatelessWidget {
                             size: 12, color: Colors.grey),
                         const SizedBox(width: 3),
                         Text(
-                          customer.phone.isNotEmpty
-                              ? customer.phone
-                              : '–',
-                          style: TextStyle(
-                              fontSize: 12, color: Colors.grey[600]),
+                          customer.phone.isNotEmpty ? customer.phone : '–',
+                          style:
+                              TextStyle(fontSize: 12, color: Colors.grey[600]),
                         ),
                       ],
                     ),
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        if (customer.category != null) ...[
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: primaryBlue.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              customer.category!,
-                              style: const TextStyle(
-                                  fontSize: 10,
-                                  color: primaryBlue,
-                                  fontWeight: FontWeight.w600),
-                            ),
+                        if (customer.customerType != null)
+                          Text(
+                            customer.customerType!,
+                            style: TextStyle(
+                                fontSize: 11, color: Colors.grey[700]),
                           ),
-                          const SizedBox(width: 6),
-                        ],
+                        if (customer.customerType != null &&
+                            customer.category != null)
+                          Text(
+                            ' • ',
+                            style: TextStyle(
+                                fontSize: 11, color: Colors.grey[400]),
+                          ),
+                        if (customer.category != null)
+                          Text(
+                            customer.category!,
+                            style: TextStyle(
+                                fontSize: 11, color: Colors.grey[700]),
+                          ),
+                        const Spacer(),
                         if (customer.lastPurchaseDate != null)
                           Row(
                             children: [
                               Icon(Icons.shopping_bag_rounded,
-                                  size: 11,
-                                  color: Colors.grey[400]),
+                                  size: 11, color: Colors.grey[400]),
                               const SizedBox(width: 3),
                               Text(
                                 dateFmt.format(customer.lastPurchaseDate!),
