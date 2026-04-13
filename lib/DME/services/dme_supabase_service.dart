@@ -361,6 +361,9 @@ class DmeSupabaseService {
     String? search,
     int? categoryId,
     int? customerTypeId,
+    DateTime? lastPurchaseDateFrom,
+    DateTime? lastPurchaseDateTo,
+    String? salesman,
     int limit = 50,
     int offset = 0,
   }) async {
@@ -382,6 +385,19 @@ class DmeSupabaseService {
     
     if (customerTypeId != null) {
       query = query.eq('customer_type_id', customerTypeId);
+    }
+
+    // Date range filter for last purchase date
+    if (lastPurchaseDateFrom != null) {
+      query = query.gte('last_purchase_date', lastPurchaseDateFrom.toIso8601String().split('T')[0]);
+    }
+    if (lastPurchaseDateTo != null) {
+      query = query.lte('last_purchase_date', lastPurchaseDateTo.toIso8601String().split('T')[0]);
+    }
+
+    // Salesman filter
+    if (salesman != null && salesman.isNotEmpty) {
+      query = query.eq('salesman', salesman);
     }
 
     final res = await query

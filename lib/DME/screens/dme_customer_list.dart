@@ -46,10 +46,18 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
 
   List<DmeCustomer> _customers = [];
   List<int> _branchIds = [];
+  List<int> _filterBranchIds = []; // Selected branches for filtering
+  Map<String, int> _branchNameToId = {}; // Map branch names to IDs
+  List<String> _availableBranches = [];
+  List<String> _availableSalesmen = [];
+  String? _selectedBranchName; // Track selected branch
   bool _loading = true;
   bool _loadingMore = false;
   int? _selectedCategoryId; // ← NEW: Use ID instead of name
   int? _selectedTypeId; // ← NEW: Use ID instead of name
+  DateTime? _dateFrom;
+  DateTime? _dateTo;
+  String? _selectedSalesman;
   int _offset = 0;
   static const _pageSize = 50;
 
@@ -62,7 +70,94 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
 
   Future<void> _init() async {
     _branchIds = await _svc.getUserBranchIds(widget.dmeUser.id);
+    await _loadBranchesAndSalesmen();
     await _loadCustomers();
+  }
+
+  Future<void> _loadBranchesAndSalesmen() async {
+    try {
+      // Load available branches only
+      final branches = await _svc.getBranches();
+      print('DEBUG: Branches loaded: ${branches.length}');
+      
+      setState(() {
+        _availableBranches = [];
+        _branchNameToId = {};
+        
+        for (var b in branches) {
+          try {
+            final name = b['name'] as String?;
+            final id = b['id'] as int?;
+            print('DEBUG: Branch data - name: $name, id: $id');
+            if (name != null && id != null) {
+              _availableBranches.add(name);
+              _branchNameToId[name] = id;
+            }
+          } catch (e) {
+            print('DEBUG: Error parsing branch: $b, error: $e');
+          }
+        }
+        _availableBranches.sort(); // Sort alphabetically
+      });
+      print('DEBUG: Available branches: $_availableBranches');
+      print('DEBUG: Branch ID map: $_branchNameToId');
+    } catch (e, st) {
+      print('ERROR loading branches: $e');
+      print('Stack trace: $st');
+    }
+  }
+
+  Future<void> _loadSalesmenForBranch(String? branchName) async {
+    if (branchName == null) {
+      setState(() {
+        _availableSalesmen = [];
+        _selectedSalesman = null;
+      });
+      return;
+    }
+
+    try {
+      final branchId = _branchNameToId[branchName];
+      if (branchId == null) {
+        print('ERROR: Branch ID not found for: $branchName');
+        setState(() {
+          _availableSalesmen = [];
+          _selectedSalesman = null;
+        });
+        return;
+      }
+
+      print('DEBUG: Loading salesmen for branch: $branchName (ID: $branchId)');
+
+      // Load customers for selected branch only
+      final branchCustomers = await _svc.getCustomers(
+        branchIds: [branchId],
+        limit: 500,
+        offset: 0,
+      );
+      print('DEBUG: Customers in branch loaded: ${branchCustomers.length}');
+
+      final uniqueSalesmen = <String>{};
+      for (var customer in branchCustomers) {
+        if (customer.salesman != null && customer.salesman!.isNotEmpty) {
+          print('DEBUG: Found salesman in branch: ${customer.salesman}');
+          uniqueSalesmen.add(customer.salesman!);
+        }
+      }
+
+      setState(() {
+        _availableSalesmen = uniqueSalesmen.toList()..sort();
+        _selectedSalesman = null; // Reset salesman selection
+      });
+      print('DEBUG: Available salesmen for branch: $_availableSalesmen');
+    } catch (e, st) {
+      print('ERROR loading salesmen for branch: $e');
+      print('Stack trace: $st');
+      setState(() {
+        _availableSalesmen = [];
+        _selectedSalesman = null;
+      });
+    }
   }
 
   Future<void> _loadCustomers({bool append = false}) async {
@@ -72,14 +167,27 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
         _offset = 0;
       });
     }
+    final branchFilter = _filterBranchIds.isEmpty ? null : _filterBranchIds;
+    
+    // Use selected branch filter if set, otherwise use defaults
+    final effectiveBranchIds = branchFilter ?? (widget.dmeUser.isAdmin ? null : _branchIds);
+    
+    print('DEBUG: _loadCustomers - branchFilter: $branchFilter, isAdmin: ${widget.dmeUser.isAdmin}, effectiveBranchIds: $effectiveBranchIds');
+    
     final results = await _svc.getCustomers(
-      branchIds: widget.dmeUser.isAdmin ? null : _branchIds,
+      branchIds: effectiveBranchIds,
       search: _searchCtrl.text.isEmpty ? null : _searchCtrl.text,
-      categoryId: _selectedCategoryId, // ← NEW: Pass ID instead of name
-      customerTypeId: _selectedTypeId, // ← NEW: Pass ID instead of name
+      categoryId: _selectedCategoryId,
+      customerTypeId: _selectedTypeId,
+      lastPurchaseDateFrom: _dateFrom,
+      lastPurchaseDateTo: _dateTo,
+      salesman: _selectedSalesman,
       limit: _pageSize,
       offset: _offset,
     );
+    
+    print('DEBUG: _loadCustomers returned ${results.length} customers');
+    
     setState(() {
       if (append) {
         _customers.addAll(results);
@@ -167,7 +275,7 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                // Filter dropdowns
+                // Filter dropdowns - Row 1: Category & Type
                 Row(
                   children: [
                     Expanded(
@@ -199,6 +307,88 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
                         },
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // Filter dropdowns - Row 2: Branch & Salesman
+                Row(
+                  children: [
+                    Expanded(
+                      child: _FilterDropdown(
+                        hint: 'Branch',
+                        items: [null, ..._availableBranches],
+                        onChanged: (v) {
+                          setState(() {
+                            _selectedBranchName = v;
+                            if (v == null) {
+                              _filterBranchIds = [];
+                            } else {
+                              final branchId = _branchNameToId[v];
+                              _filterBranchIds = branchId != null ? [branchId] : [];
+                            }
+                          });
+                          // Load salesmen for the selected branch
+                          _loadSalesmenForBranch(v);
+                          _search();
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _FilterDropdown(
+                        hint: 'Salesman',
+                        items: _selectedBranchName == null ? [] : [null, ..._availableSalesmen],
+                        onChanged: (v) {
+                          if (_selectedBranchName != null) {
+                            setState(() => _selectedSalesman = v);
+                            _search();
+                          }
+                        },
+                        enabled: _selectedBranchName != null,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // Date range filter - Row 3
+                Row(
+                  children: [
+                    Expanded(
+                      child: _DateFilterButton(
+                        label: 'From',
+                        date: _dateFrom,
+                        onDateChanged: (date) {
+                          setState(() => _dateFrom = date);
+                          _search();
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _DateFilterButton(
+                        label: 'To',
+                        date: _dateTo,
+                        onDateChanged: (date) {
+                          setState(() => _dateTo = date);
+                          _search();
+                        },
+                      ),
+                    ),
+                    if (_dateFrom != null || _dateTo != null)
+                      IconButton(
+                        icon: const Icon(Icons.clear_rounded,
+                            color: Colors.white, size: 18),
+                        padding: EdgeInsets.zero,
+                        constraints:
+                            const BoxConstraints(minWidth: 36, minHeight: 36),
+                        onPressed: () {
+                          setState(() {
+                            _dateFrom = null;
+                            _dateTo = null;
+                          });
+                          _search();
+                        },
+                      ),
                   ],
                 ),
               ],
@@ -257,17 +447,83 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
   }
 }
 
+// ── Date Filter Button ────────────────────────────────────────────────────
+
+class _DateFilterButton extends StatelessWidget {
+  final String label;
+  final DateTime? date;
+  final ValueChanged<DateTime?> onDateChanged;
+
+  const _DateFilterButton({
+    required this.label,
+    required this.date,
+    required this.onDateChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () async {
+        final picked = await showDatePicker(
+          context: context,
+          initialDate: date ?? DateTime.now(),
+          firstDate: DateTime(2020),
+          lastDate: DateTime.now(),
+        );
+        if (picked != null) {
+          onDateChanged(picked);
+        }
+      },
+      child: Container(
+        height: 40,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: date != null
+                ? Colors.white
+                : Colors.white.withValues(alpha: 0.3),
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Flexible(
+              child: Text(
+                date != null
+                    ? DateFormat('MMM dd, yy').format(date!)
+                    : label,
+                style: TextStyle(
+                  color: date != null ? Colors.white : Colors.white70,
+                  fontSize: 12,
+                  fontWeight: date != null ? FontWeight.w600 : FontWeight.normal,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const Icon(Icons.calendar_today_rounded,
+                color: Colors.white, size: 14),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ── Filter Dropdown ────────────────────────────────────────────────────────
 
 class _FilterDropdown extends StatefulWidget {
   final String hint;
   final List<String?> items;
   final ValueChanged<String?> onChanged;
+  final bool enabled;
 
   const _FilterDropdown({
     required this.hint,
     required this.items,
     required this.onChanged,
+    this.enabled = true,
   });
 
   @override
@@ -278,13 +534,28 @@ class _FilterDropdownState extends State<_FilterDropdown> {
   String? _value;
 
   @override
+  void didUpdateWidget(_FilterDropdown oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reset value if widget becomes disabled
+    if (!widget.enabled && _value != null) {
+      setState(() => _value = null);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Container(
       height: 40,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.15),
+        color: widget.enabled
+            ? Colors.white.withValues(alpha: 0.15)
+            : Colors.grey.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+        border: Border.all(
+          color: widget.enabled
+              ? Colors.white.withValues(alpha: 0.3)
+              : Colors.grey.withValues(alpha: 0.2),
+        ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 10),
       child: DropdownButton<String?>(
@@ -292,28 +563,47 @@ class _FilterDropdownState extends State<_FilterDropdown> {
         isExpanded: true,
         underline: const SizedBox(),
         dropdownColor: Colors.white,
-        style: const TextStyle(fontSize: 12, color: Colors.black87),
-        hint: Text(widget.hint,
-            style: const TextStyle(color: Colors.white, fontSize: 12)),
-        icon: const Icon(Icons.expand_more_rounded,
-            color: Colors.white, size: 16),
-        items: [
-          DropdownMenuItem<String?>(
-            value: null,
-            child: Text('All ${widget.hint}s',
-                style: const TextStyle(fontSize: 12)),
+        style: TextStyle(
+          fontSize: 12,
+          color: widget.enabled ? Colors.black87 : Colors.grey[400],
+        ),
+        hint: Text(
+          widget.hint,
+          style: TextStyle(
+            color: widget.enabled ? Colors.white : Colors.grey[300],
+            fontSize: 12,
           ),
-          ...widget.items.where((i) => i != null).map(
-                (i) => DropdownMenuItem<String?>(
-                  value: i,
-                  child: Text(i!, style: const TextStyle(fontSize: 12)),
+        ),
+        icon: Icon(
+          Icons.expand_more_rounded,
+          color: widget.enabled ? Colors.white : Colors.grey[400],
+          size: 16,
+        ),
+        disabledHint: Text(
+          widget.hint,
+          style: TextStyle(color: Colors.grey[400], fontSize: 12),
+        ),
+        items: widget.enabled
+            ? [
+                DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text('All ${widget.hint}s',
+                      style: const TextStyle(fontSize: 12)),
                 ),
-              ),
-        ],
-        onChanged: (v) {
-          setState(() => _value = v);
-          widget.onChanged(v);
-        },
+                ...widget.items.where((i) => i != null).map(
+                      (i) => DropdownMenuItem<String?>(
+                        value: i,
+                        child: Text(i!, style: const TextStyle(fontSize: 12)),
+                      ),
+                    ),
+              ]
+            : [],
+        onChanged: widget.enabled
+            ? (v) {
+                setState(() => _value = v);
+                widget.onChanged(v);
+              }
+            : null,
       ),
     );
   }

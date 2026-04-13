@@ -399,6 +399,49 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     }
   }
 
+  Future<void> _updateRemarksInFirestore(String remarks) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      final now = DateTime.now();
+      final months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      ];
+      final monthYear = "${months[now.month - 1]} ${now.year}";
+      final docRef = FirebaseFirestore.instance
+          .collection('customer_target')
+          .doc(monthYear)
+          .collection('users')
+          .doc(user.email!.toLowerCase());
+      final doc = await docRef.get();
+      if (doc.exists && doc.data()?['customers'] != null) {
+        List customers = List.from(doc.data()!['customers']);
+        // Find the customer by contact1/contact
+        String? c1 = customer['contact1'] ?? customer['contact'];
+        String? c2 = customer['contact2'];
+        int idx = customers.indexWhere((c) =>
+          (c['contact'] == c1 || c['contact1'] == c1) ||
+          (c2 != null && c2.isNotEmpty && (c['contact'] == c2 || c['contact2'] == c2))
+        );
+        if (idx != -1) {
+          customers[idx]['remarks'] = remarks;
+          await docRef.update({'customers': customers});
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to update remarks in Firestore: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save remarks: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   String _formatFieldName(String key) {
     return key.split('_').map((word) => word[0].toUpperCase() + word.substring(1)).join(' ');
   }
@@ -1028,9 +1071,14 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                       child: InkWell(
                         onTap: called && remarksEntered
                             ? () async {
-                                customer['remarks'] = remarksController.text.trim();
+                                final remarks = remarksController.text.trim();
+                                customer['remarks'] = remarks;
+                                
+                                // Save to Firestore
+                                await _updateRemarksInFirestore(remarks);
+                                
                                 if (widget.onStatusChanged != null) {
-                                  await widget.onStatusChanged!(customer['remarks']);
+                                  await widget.onStatusChanged!(remarks);
                                 }
                                 setState(() {
                                   _remarksSaved = true; // Set flag after save
