@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'todoform.dart';
 import '../Navigation/user_cache_service.dart';
 import 'todo_widgets.dart';
@@ -89,6 +90,10 @@ class TaskDetailPage extends StatelessWidget {
                             ),
                           );
                           if (confirm == true && data['docId'] != null) {
+                            // Cancel the notification using the same ID calculation from todoform.dart
+                            final notificationId = data['docId'].hashCode & 0x7FFFFFFF;
+                            await AwesomeNotifications().cancel(notificationId);
+                            
                             await FirebaseFirestore.instance
                                 .collection('todo')
                                 .doc(data['docId'])

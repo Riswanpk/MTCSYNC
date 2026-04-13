@@ -178,15 +178,22 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
         return (matches1 || matches2) && wasConnected;
       });
       if (callMade) {
-        setState(() {
+        // Always update local map (used by _updateCallStatusInFirestore).
+        customer['callMade'] = true;
+        // Update UI only if still mounted; don't let a thrown setState
+        // exception block the Firestore write below.
+        if (mounted) {
+          setState(() {
+            called = true;
+          });
+        } else {
           called = true;
-          customer['callMade'] = true;
-        });
+        }
         // Clear persisted pending call state only after confirmed detection
         _pendingCallNumber = null;
         _callStartTime = null;
         await _clearPendingCallState();
-        // Update Firestore to persist callMade status
+        // Update Firestore to persist callMade status (always, regardless of mount)
         await _updateCallStatusInFirestore();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -261,10 +268,14 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
         return (_numberMatches(logNumber, c1) || _numberMatches(logNumber, c2)) && longEnough;
       });
       if (hasLongCallAfter) {
-        setState(() {
+        customer['callMade'] = true;
+        if (mounted) {
+          setState(() {
+            called = true;
+          });
+        } else {
           called = true;
-          customer['callMade'] = true;
-        });
+        }
         // Clear any lingering pending call state
         _pendingCallNumber = null;
         _callStartTime = null;
@@ -319,10 +330,14 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
       });
 
       if (hasOutgoingLongCall) {
-        setState(() {
+        customer['callMade'] = true;
+        if (mounted) {
+          setState(() {
+            called = true;
+          });
+        } else {
           called = true;
-          customer['callMade'] = true;
-        });
+        }
         _pendingCallNumber = null;
         _callStartTime = null;
         await _clearPendingCallState();

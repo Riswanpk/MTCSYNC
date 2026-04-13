@@ -29,6 +29,10 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
   /// True only after the current month's doc was confirmed from Firestore.
   /// Prevents stale cache / fallback data from being written back.
   bool _firestoreConfirmed = false;
+  /// True while the tile viewer is open. Prevents the list's lifecycle
+  /// handler from overwriting the tile viewer's Firestore updates with
+  /// stale data read from a race-condition fetch.
+  bool _isTileViewerOpen = false;
   bool _sortCalledFirst = true;
   String _searchText = '';
   bool _showSearchBar = false;
@@ -171,6 +175,11 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      // When the tile viewer is open it handles its own call detection and
+      // writes to Firestore. Running _autoScanCallLog() here would read
+      // stale data (tile hasn't written yet) and then overwrite Firestore
+      // with that stale data, erasing the tile viewer's correct update.
+      if (_isTileViewerOpen) return;
       // Always re-fetch from Firestore before scanning so stale in-memory
       // data cannot overwrite progress saved while the app was backgrounded.
       _fetchCustomerData().then((_) => _autoScanCallLog());
@@ -329,6 +338,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                       trailing: const Icon(Icons.arrow_forward_ios, size: 14),
                       onTap: () {
                         Navigator.of(ctx).pop();
+                        _isTileViewerOpen = true;
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -342,7 +352,10 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                               },
                             ),
                           ),
-                        ).then((_) => _fetchCustomerData());
+                        ).then((_) {
+                          _isTileViewerOpen = false;
+                          _fetchCustomerData();
+                        });
                       },
                     );
                   },
@@ -950,6 +963,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                           final bool isEven = customerIndex % 2 == 0;
 
                           void openViewer() {
+                            _isTileViewerOpen = true;
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -964,7 +978,10 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                                   },
                                 ),
                               ),
-                            ).then((_) => _fetchCustomerData());
+                            ).then((_) {
+                              _isTileViewerOpen = false;
+                              _fetchCustomerData();
+                            });
                           }
 
                           final bool needsRemarks = callMade &&
@@ -1001,6 +1018,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                                   ),
                                 );
                                 if (action == 'edit') {
+                                  _isTileViewerOpen = true;
                                   await Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -1016,6 +1034,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                                       ),
                                     ),
                                   );
+                                  _isTileViewerOpen = false;
                                   await _fetchCustomerData();
                                 } else if (action == 'delete') {
                                   final confirm = await showDialog<bool>(

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'todoform.dart' as todoform;
 import 'report_todo.dart';
 import '../Navigation/user_cache_service.dart';
@@ -382,6 +383,10 @@ class _TodoPageState extends State<TodoPage>
       );
       if (confirm != true) return;
 
+      // Cancel the notification using the same ID calculation from todoform.dart
+      final notificationId = doc.id.hashCode & 0x7FFFFFFF;
+      await AwesomeNotifications().cancel(notificationId);
+
       final today = _dateOnly(DateTime.now());
       await _firestore.collection('todo').doc(doc.id).update({
         'status': newStatus,
@@ -398,6 +403,10 @@ class _TodoPageState extends State<TodoPage>
   }
 
   Future<void> _deleteTodo(String docId) async {
+    // Cancel the notification using the same ID calculation from todoform.dart
+    final notificationId = docId.hashCode & 0x7FFFFFFF;
+    await AwesomeNotifications().cancel(notificationId);
+    
     await _firestore.collection('todo').doc(docId).delete();
     await updateTodoWidgetFromFirestore();
   }

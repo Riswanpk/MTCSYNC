@@ -280,7 +280,7 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
                   children: [
                     Expanded(
                       child: _FilterDropdown(
-                        hint: 'Category',
+                        hint: 'Categorie',
                         items: [null, ..._categoryNameToId.keys],
                         onChanged: (v) {
                           if (v == null) {
@@ -315,7 +315,7 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
                   children: [
                     Expanded(
                       child: _FilterDropdown(
-                        hint: 'Branch',
+                        hint: 'Branche',
                         items: [null, ..._availableBranches],
                         onChanged: (v) {
                           setState(() {
@@ -336,7 +336,7 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: _FilterDropdown(
-                        hint: 'Salesman',
+                        hint: 'Salesmen',
                         items: _selectedBranchName == null ? [] : [null, ..._availableSalesmen],
                         onChanged: (v) {
                           if (_selectedBranchName != null) {
