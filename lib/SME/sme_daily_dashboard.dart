@@ -31,11 +31,9 @@ class _SmeDailyDashboardState extends State<SmeDailyDashboard> {
 
   Future<void> _fetchBranches() async {
     // Fetch unique branches from Firestore
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
     final snapshot = await FirebaseFirestore.instance
         .collection('follow_ups')
-        .where('assigned_by', isEqualTo: uid)
+        .where('source', isEqualTo: 'sme')
         .get();
     final branches = <String>{};
     for (final doc in snapshot.docs) {
@@ -52,18 +50,12 @@ class _SmeDailyDashboardState extends State<SmeDailyDashboard> {
   Future<void> _fetchDailyLeads() async {
     setState(() => _isLoading = true);
 
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) {
-      setState(() => _isLoading = false);
-      return;
-    }
-
     final dayStart = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
     final dayEnd = dayStart.add(const Duration(days: 1));
 
     Query query = FirebaseFirestore.instance
         .collection('follow_ups')
-        .where('assigned_by', isEqualTo: uid)
+        .where('source', isEqualTo: 'sme')
         .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(dayStart))
         .where('created_at', isLessThan: Timestamp.fromDate(dayEnd));
     if (_selectedBranch != null && _selectedBranch!.isNotEmpty) {

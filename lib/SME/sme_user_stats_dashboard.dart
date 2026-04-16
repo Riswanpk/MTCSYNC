@@ -29,17 +29,11 @@ class _SmeUserStatsDashboardState extends State<SmeUserStatsDashboard> {
   Future<void> _fetchStats() async {
     setState(() => _isLoading = true);
 
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) {
-      setState(() => _isLoading = false);
-      return;
-    }
-
     final dayEnd = _endDate.add(const Duration(days: 1));
 
     final snapshot = await FirebaseFirestore.instance
         .collection('follow_ups')
-        .where('assigned_by', isEqualTo: uid)
+        .where('source', isEqualTo: 'sme')
         .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(_startDate))
         .where('created_at', isLessThan: Timestamp.fromDate(dayEnd))
         .get();
@@ -393,7 +387,7 @@ class _UserLeadsDetailPageState extends State<_UserLeadsDetailPage> {
 
     final snapshot = await FirebaseFirestore.instance
         .collection('follow_ups')
-        .where('assigned_by', isEqualTo: widget.smeUid)
+        .where('source', isEqualTo: 'sme')
         .where('assigned_to', isEqualTo: widget.assignedToUid)
         .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(widget.startDate))
         .where('created_at', isLessThan: Timestamp.fromDate(dayEnd))

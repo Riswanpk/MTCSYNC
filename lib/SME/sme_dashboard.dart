@@ -53,45 +53,61 @@ class _SmeDashboardState extends State<SmeDashboard>
   }
 
   Future<Map<String, dynamic>> _fetchCounts() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return {'totalLeads': 0, 'monthLeads': 0, 'todayLeads': 0, 'conversionRate': '0.0'};
-
     final now = DateTime.now();
     final monthStart = DateTime(now.year, now.month, 1);
     final todayStart = DateTime(now.year, now.month, now.day);
     final todayEnd = todayStart.add(const Duration(days: 1));
 
-    final baseQuery = FirebaseFirestore.instance
-        .collection('follow_ups')
-        .where('assigned_by', isEqualTo: uid);
+    try {
+      // Fetch all leads with source 'sme'
+      final snapshot = await FirebaseFirestore.instance
+          .collection('follow_ups')
+          .where('source', isEqualTo: 'sme')
+          .get();
 
-    final results = await Future.wait([
-      baseQuery.count().get(),
-      baseQuery
-          .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
-          .count()
-          .get(),
-      baseQuery
-          .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
-          .where('created_at', isLessThan: Timestamp.fromDate(todayEnd))
-          .count()
-          .get(),
-      baseQuery
-          .where('status', isEqualTo: 'Sale')
-          .count()
-          .get(),
-    ]);
+      int totalLeads = snapshot.docs.length;
+      int monthLeads = 0;
+      int todayLeads = 0;
+      int soldLeads = 0;
 
-    final total = (results[0] as AggregateQuerySnapshot).count ?? 0;
-    final sold = (results[3] as AggregateQuerySnapshot).count ?? 0;
-    final conversionRate = total > 0 ? (sold / total * 100).toStringAsFixed(1) : '0.0';
+      // Filter in-memory
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final createdAt = data['created_at'] as Timestamp?;
+        final status = data['status'] as String?;
 
-    return {
-      'totalLeads': total,
-      'monthLeads': (results[1] as AggregateQuerySnapshot).count ?? 0,
-      'todayLeads': (results[2] as AggregateQuerySnapshot).count ?? 0,
-      'conversionRate': conversionRate,
-    };
+        if (createdAt != null) {
+          final createdDate = createdAt.toDate();
+          if (createdDate.isAfter(monthStart)) {
+            monthLeads++;
+          }
+          if (createdDate.isAfter(todayStart) && createdDate.isBefore(todayEnd)) {
+            todayLeads++;
+          }
+        }
+
+        if (status == 'Sale') {
+          soldLeads++;
+        }
+      }
+
+      final conversionRate =
+          totalLeads > 0 ? (soldLeads / totalLeads * 100).toStringAsFixed(1) : '0.0';
+
+      return {
+        'totalLeads': totalLeads,
+        'monthLeads': monthLeads,
+        'todayLeads': todayLeads,
+        'conversionRate': conversionRate,
+      };
+    } catch (e) {
+      return {
+        'totalLeads': 0,
+        'monthLeads': 0,
+        'todayLeads': 0,
+        'conversionRate': '0.0'
+      };
+    }
   }
 
   @override

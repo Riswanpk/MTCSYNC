@@ -9,6 +9,7 @@ import '../Leads/leads.dart';
 import 'daily.dart';
 import 'insights.dart';
 import '../Navigation/user_cache_service.dart';
+import '../SME/sme_dashboard.dart';
 
 // Theme colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -173,11 +174,20 @@ class _DashboardPageState extends State<DashboardPage>
 
     return Scaffold(
       backgroundColor: surfaceColor,
-      body: FadeTransition(
-        opacity: _fadeIn,
-        child: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
+      body: GestureDetector(
+        onLongPress: (role == 'admin') ? () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const SmeDashboard(),
+            ),
+          );
+        } : null,
+        child: FadeTransition(
+          opacity: _fadeIn,
+          child: CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
             // ── Sliver App Bar ──
             SliverAppBar(
               expandedHeight: 120,
@@ -516,7 +526,8 @@ class _DashboardPageState extends State<DashboardPage>
           ],
         ),
       ),
-    );
+        ),
+      );
   }
 }
 
