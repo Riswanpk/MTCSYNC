@@ -1,6 +1,8 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:mtcsync/Navigation/user_cache_service.dart';
 import 'package:provider/provider.dart';
@@ -44,6 +46,20 @@ void main() async {
   ]);
 
   final prefs = results[1] as SharedPreferences;
+
+  // Enable Firebase Crashlytics
+  await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
+  
+  // Pass all uncaught errors from the Flutter framework to Crashlytics
+  FlutterError.onError = (errorDetails) {
+    FirebaseCrashlytics.instance.recordFlutterError(errorDetails);
+  };
+  
+  // Pass all uncaught asynchronous errors that aren't handled by the Flutter framework
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
 
   // Enable Firestore offline persistence
   FirebaseFirestore.instance.settings = const Settings(
