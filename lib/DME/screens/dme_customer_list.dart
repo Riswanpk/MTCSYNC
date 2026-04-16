@@ -51,7 +51,7 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
   List<String> _availableBranches = [];
   List<String> _availableSalesmen = [];
   String? _selectedBranchName; // Track selected branch
-  bool _loading = true;
+  bool _loading = false;
   bool _loadingMore = false;
   int? _selectedCategoryId; // ← NEW: Use ID instead of name
   int? _selectedTypeId; // ← NEW: Use ID instead of name
@@ -71,7 +71,7 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
   Future<void> _init() async {
     _branchIds = await _svc.getUserBranchIds(widget.dmeUser.id);
     await _loadBranchesAndSalesmen();
-    await _loadCustomers();
+    // Don't auto-load customers - wait for user to select filters
   }
 
   Future<void> _loadBranchesAndSalesmen() async {
@@ -281,6 +281,7 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
                     Expanded(
                       child: _FilterDropdown(
                         hint: 'Categorie',
+                        allLabel: 'All Categories',
                         items: [null, ..._categoryNameToId.keys],
                         onChanged: (v) {
                           if (v == null) {
@@ -296,6 +297,7 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
                     Expanded(
                       child: _FilterDropdown(
                         hint: 'Type',
+                        allLabel: 'All Types',
                         items: [null, ..._customerTypeNameToId.keys],
                         onChanged: (v) {
                           if (v == null) {
@@ -316,10 +318,12 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
                     Expanded(
                       child: _FilterDropdown(
                         hint: 'Branche',
+                        allLabel: 'All Branches',
                         items: [null, ..._availableBranches],
                         onChanged: (v) {
                           setState(() {
                             _selectedBranchName = v;
+                            _selectedSalesman = null; // Reset salesman when branch changes
                             if (v == null) {
                               _filterBranchIds = [];
                             } else {
@@ -337,6 +341,7 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
                     Expanded(
                       child: _FilterDropdown(
                         hint: 'Salesmen',
+                        allLabel: 'All Salesmen',
                         items: _selectedBranchName == null ? [] : [null, ..._availableSalesmen],
                         onChanged: (v) {
                           if (_selectedBranchName != null) {
@@ -518,12 +523,14 @@ class _FilterDropdown extends StatefulWidget {
   final List<String?> items;
   final ValueChanged<String?> onChanged;
   final bool enabled;
+  final String? allLabel; // Custom label for "All" option
 
   const _FilterDropdown({
     required this.hint,
     required this.items,
     required this.onChanged,
     this.enabled = true,
+    this.allLabel,
   });
 
   @override
@@ -536,8 +543,11 @@ class _FilterDropdownState extends State<_FilterDropdown> {
   @override
   void didUpdateWidget(_FilterDropdown oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Reset value if widget becomes disabled
-    if (!widget.enabled && _value != null) {
+    // Reset value if widget becomes disabled or items list changes
+    if ((!widget.enabled && _value != null) || 
+        (oldWidget.items != widget.items && 
+         _value != null && 
+         !widget.items.contains(_value))) {
       setState(() => _value = null);
     }
   }
@@ -587,7 +597,7 @@ class _FilterDropdownState extends State<_FilterDropdown> {
             ? [
                 DropdownMenuItem<String?>(
                   value: null,
-                  child: Text('All ${widget.hint}s',
+                  child: Text(widget.allLabel ?? 'All ${widget.hint}',
                       style: const TextStyle(fontSize: 12)),
                 ),
                 ...widget.items.where((i) => i != null).map(
