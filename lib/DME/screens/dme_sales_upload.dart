@@ -89,6 +89,7 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
   bool _uploading = false;
   String? _error;
   String? _fileName;
+  String? _selectedBranchName; // Track branch selected for all records
   final _svc = DmeSupabaseService.instance;
 
   static const _blue = Color(0xFF005BAC);
@@ -96,7 +97,7 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
   // ── Step 1: pick & parse ──────────────────────────────────────
 
   Future<void> _pickAndParse() async {
-    setState(() { _picking = true; _error = null; _items = null; });
+    setState(() { _picking = true; _error = null; _items = null; _selectedBranchName = null; });
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -114,10 +115,109 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
         _items = records.map((r) => _PreviewItem(record: r)).toList();
         _picking = false;
       });
-      // Automatically trigger DB check after parse
-      await _checkRecords();
+      
+      // Check if all records have null/empty branch
+      final allBranchesEmpty = _items!.every((item) =>
+          item.record.branch == null || item.record.branch!.trim().isEmpty);
+      
+      if (allBranchesEmpty) {
+        // Ask user to select branch for all records
+        final branchSelected = await _selectBranchForAllRecords();
+        if (!branchSelected) {
+          // User cancelled branch selection
+          setState(() => _items = null);
+          return;
+        }
+      }
+      
+      // Automatically trigger DB check after parse (and branch selection if needed)
+      if (mounted) {
+        await _checkRecords();
+      }
     } catch (e) {
       setState(() { _error = e.toString(); _picking = false; });
+    }
+  }
+
+  // ── Branch selection (if all records have null branch) ────────
+
+  Future<bool> _selectBranchForAllRecords() async {
+    try {
+      final branches = await _svc.getBranches();
+      if (branches.isEmpty) {
+        if (mounted) {
+          setState(() => _error = 'No branches available');
+        }
+        return false;
+      }
+
+      String? selectedBranch;
+      final result = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => StatefulBuilder(
+          builder: (_, dialogSetState) => AlertDialog(
+            title: const Text('Select Branch for All Records'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'No branch information found in the Excel file.\n'
+                  'Please select a branch to apply to all records:',
+                  style: TextStyle(fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedBranch,
+                  hint: const Text('Select a branch'),
+                  decoration: InputDecoration(
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  items: branches
+                      .map((b) => DropdownMenuItem(
+                          value: b['name'] as String?,
+                          child: Text(b['name'] as String? ?? 'Unknown')))
+                      .toList(),
+                  onChanged: (v) => dialogSetState(() => selectedBranch = v),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: selectedBranch != null
+                    ? () => Navigator.pop(context, selectedBranch)
+                    : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _blue,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Apply'),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      if (result != null && mounted) {
+        setState(() {
+          _selectedBranchName = result;
+        });
+        return true;
+      }
+      return false;
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = 'Error loading branches: $e');
+      }
+      return false;
     }
   }
 
@@ -196,8 +296,9 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
             ? record.category
             : item.resolvedCategory;
 
-        final branchId = record.branch != null
-            ? branchCache[record.branch!.toUpperCase()]
+        final effectiveBranch = record.branch ?? _selectedBranchName;
+        final branchId = effectiveBranch != null
+            ? branchCache[effectiveBranch.toUpperCase()]
             : null;
 
         if (item.status == _RecordStatus.matchFound) {
@@ -462,6 +563,17 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
             children: [
               Text('File: $_fileName',
                   style: const TextStyle(fontWeight: FontWeight.bold)),
+              if (_selectedBranchName != null) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.location_on, size: 14, color: Colors.blue),
+                    const SizedBox(width: 6),
+                    Text('Branch: $_selectedBranchName',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ],
               if (_checking) ...[
                 const SizedBox(height: 6),
                 const Row(children: [
@@ -511,7 +623,10 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => setState(() => _items = null),
+                    onPressed: () => setState(() {
+                      _items = null;
+                      _selectedBranchName = null;
+                    }),
                     child: const Text('Cancel'),
                   ),
                 ),
