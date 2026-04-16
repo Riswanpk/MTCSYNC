@@ -754,36 +754,35 @@ class DmeSupabaseService {
   }
 
   // ── Dashboard stats ──────────────────────────────────────────
-  Future<Map<String, int>> getDashboardCounts({List<int>? branchIds}) async {
+  Future<Map<String, int>> getDashboardCounts() async {
+    // Fetch TOTAL customer count directly from table
     int customerCount = 0;
-    int productCount = 0;
-    int pendingReminders = 0;
+    
+    try {
+      await ensureInitialized();
+      
+      final customers = await _client
+          .from('dme_customers')
+          .select('id');
+      
+      if (customers != null) {
+        customerCount = (customers as List).length;
+        debugPrint('Successfully fetched customer count: $customerCount');
+      } else {
+        debugPrint('Null response from dme_customers query');
+        customerCount = 0;
+      }
+    } catch (e) {
+      debugPrint('Error getting customer count: $e');
+      customerCount = 0;
+    }
 
-    final cRes = branchIds != null && branchIds.isNotEmpty
-        ? await _client
-            .from('dme_customers')
-            .select('id')
-            .inFilter('branch_id', branchIds)
-            .count(CountOption.exact)
-        : await _client.from('dme_customers').select('id').count(CountOption.exact);
-    customerCount = cRes.count;
-
-    final pRes =
-        await _client.from('dme_products').select('id').count(CountOption.exact);
-    productCount = pRes.count;
-
-    final rRes = await _client
-        .from('dme_reminders')
-        .select('id')
-        .eq('status', 'pending')
-        .count(CountOption.exact);
-    pendingReminders = rRes.count;
-
-    return {
+    final result = {
       'customers': customerCount,
-      'products': productCount,
-      'pendingReminders': pendingReminders,
     };
+    
+    debugPrint('getDashboardCounts returning: $result');
+    return result;
   }
 
   Future<List<Map<String, dynamic>>> getSalesSummaryByBranch({
@@ -838,6 +837,52 @@ class DmeSupabaseService {
         .take(limit)
         .map((e) => {'salesman': e.key, 'total_quantity': e.value})
         .toList();
+  }
+
+  // ── Customer Visit Analytics ─────────────────────────────────
+  /// Get customer visit analytics for a branch within a date range
+  /// Returns map with total visits and new customer count
+  Future<Map<String, dynamic>> getCustomerVisitAnalytics({
+    required DateTime from,
+    required DateTime to,
+    List<int>? branchIds,
+  }) async {
+    // Get unique customers from purchases within date range
+    var purchaseQuery = _client
+        .from('dme_customer_purchases')
+        .select('customer_id, dme_customers(created_at, branch_id)')
+        .gte('purchase_date', from.toIso8601String().split('T')[0])
+        .lte('purchase_date', to.toIso8601String().split('T')[0]);
+
+    if (branchIds != null && branchIds.isNotEmpty) {
+      purchaseQuery = purchaseQuery.inFilter('purchase_for_branch_id', branchIds);
+    }
+
+    final purchases = await purchaseQuery;
+    
+    Set<int> visitedCustomers = {};
+    int newCustomers = 0;
+    
+    for (final row in purchases) {
+      final customerId = row['customer_id'] as int;
+      visitedCustomers.add(customerId);
+      
+      final custData = row['dme_customers'] as Map?;
+      if (custData != null) {
+        final createdAt = custData['created_at'] as String?;
+        if (createdAt != null) {
+          final createdDate = DateTime.parse(createdAt);
+          if (createdDate.isAfter(from) && createdDate.isBefore(to.add(const Duration(days: 1)))) {
+            newCustomers++;
+          }
+        }
+      }
+    }
+
+    return {
+      'total_visits': visitedCustomers.length,
+      'new_customers': newCustomers,
+    };
   }
 
   // ── Customer Database Upload (with junction table) ─────────────
