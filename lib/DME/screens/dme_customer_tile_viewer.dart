@@ -150,11 +150,10 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
 
   // ── Call helpers ──────────────────────────────────────────────
 
-  bool _numberMatches(String logNumber, String contact) {
-    final clean = contact.replaceAll(RegExp(r'\D'), '');
-    final logClean = logNumber.replaceAll(RegExp(r'\D'), '');
-    if (clean.isEmpty || logClean.isEmpty) return false;
-    return logClean.endsWith(clean) || clean.endsWith(logClean);
+  bool _numberMatches(String logNumber, String? contact) {
+    if (contact == null || contact.isEmpty) return false;
+    String clean = contact.replaceAll(RegExp(r'\D'), '');
+    return logNumber.endsWith(clean) || clean.endsWith(logNumber);
   }
 
   Future<void> _makeCall() async {

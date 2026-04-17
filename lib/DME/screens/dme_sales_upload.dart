@@ -282,6 +282,7 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
 
     int success = 0;
     int failed = 0;
+    int ignored = 0;
     int alternateNamesRecorded = 0;
     final errors = <String>[];
 
@@ -392,6 +393,7 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
         await _svc.insertSale(sale);
 
         // Upsert reminder with purchase branch tracking
+        bool reminderProcessed = true;
         if (customerId != null && branchId != null) {
           final branches = await _svc.getBranches();
           final branchName = branches
@@ -400,7 +402,7 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
                 orElse: () => {'name': 'Unknown'},
               )['name'] as String?;
 
-          await _svc.upsertReminder(
+          reminderProcessed = await _svc.upsertReminder(
             customerId: customerId,
             purchaseDate: record.date,
             purchaseForBranchId: branchId,
@@ -415,7 +417,11 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
           );
         }
 
-        success++;
+        if (reminderProcessed) {
+          success++;
+        } else {
+          ignored++;
+        }
       } catch (e) {
         errors.add('${record.customerName}: $e');
         failed++;
@@ -424,11 +430,11 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
 
     if (mounted) {
       setState(() => _uploading = false);
-      _showResult(success, failed, alternateNamesRecorded, errors);
+      _showResult(success, failed, alternateNamesRecorded, ignored, errors);
     }
   }
 
-  void _showResult(int success, int failed, int alternates, List<String> errors) {
+  void _showResult(int success, int failed, int alternates, int ignored, List<String> errors) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -438,6 +444,11 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('✅ $success records uploaded successfully'),
+            if (ignored > 0) ...[
+              const SizedBox(height: 6),
+              Text('⏭️ $ignored records already uploaded (ignored)',
+                  style: const TextStyle(color: Colors.orange, fontSize: 13)),
+            ],
             if (alternates > 0) ...[
               const SizedBox(height: 6),
               Text('📋 $alternates alternate name(s) recorded in Purchased For',

@@ -521,8 +521,9 @@ class DmeSupabaseService {
 
   // ── Purchase Tracking (Branch-based) ────────────────────────
 
-  /// Record a purchase with branch information in dme_customer_purchases table
-  Future<void> recordPurchaseWithBranch({
+  /// Record a purchase with branch information in dme_customer_purchases table.
+  /// Returns true if inserted, false if already exists (ignored).
+  Future<bool> recordPurchaseWithBranch({
     required int customerId,
     required DateTime purchaseDate,
     required int purchaseForBranchId,
@@ -530,14 +531,32 @@ class DmeSupabaseService {
     Map<String, dynamic>? purchaseDetails, // items, salesman, etc.
   }) async {
     try {
+      final purchaseDateStr = purchaseDate.toIso8601String().split('T')[0];
+      
+      // Check if purchase already exists
+      final existing = await _client
+          .from('dme_customer_purchases')
+          .select()
+          .eq('customer_id', customerId)
+          .eq('purchase_date', purchaseDateStr)
+          .eq('purchase_for_branch_id', purchaseForBranchId)
+          .maybeSingle();
+      
+      if (existing != null) {
+        // Already exists, ignore it
+        return false;
+      }
+      
+      // Insert new record
       await _client.from('dme_customer_purchases').insert({
         'customer_id': customerId,
-        'purchase_date': purchaseDate.toIso8601String().split('T')[0],
+        'purchase_date': purchaseDateStr,
         'purchase_for_branch_id': purchaseForBranchId,
         'purchase_for_branch_name': purchaseForBranchName,
         'purchase_details': purchaseDetails,
         'created_at': DateTime.now().toIso8601String(),
       });
+      return true;
     } catch (e) {
       debugPrint('Error recording purchase with branch: $e');
       rethrow;
@@ -563,7 +582,7 @@ class DmeSupabaseService {
   }
 
   // ── Reminders ────────────────────────────────────────────────
-  Future<void> upsertReminder({
+  Future<bool> upsertReminder({
     required int customerId,
     required DateTime purchaseDate,
     required int purchaseForBranchId,
@@ -572,13 +591,20 @@ class DmeSupabaseService {
     Map<String, dynamic>? purchaseDetails,
   }) async {
     // First, record the purchase with branch information
-    await recordPurchaseWithBranch(
+    // Returns false if purchase already existed (duplicate)
+    final purchaseIsNew = await recordPurchaseWithBranch(
       customerId: customerId,
       purchaseDate: purchaseDate,
       purchaseForBranchId: purchaseForBranchId,
       purchaseForBranchName: purchaseForBranchName,
       purchaseDetails: purchaseDetails,
     );
+    
+    // If purchase already existed, we should not process the reminder further
+    // (it was already processed before)
+    if (!purchaseIsNew) {
+      return false;
+    }
 
     // Check if reminder already exists for this customer
     final existing = await _client
@@ -612,6 +638,7 @@ class DmeSupabaseService {
         'status': 'pending',
         'assigned_to': assignedUser,
       });
+      return true;
     } else {
       // Check current status of existing reminder
       final currentStatus = existing['status'] as String? ?? 'pending';
@@ -629,6 +656,7 @@ class DmeSupabaseService {
           'status': 'pending',
           'assigned_to': assignedUser,
         });
+        return true;
       } else {
         // Existing pending reminder: only update if new purchase date is AFTER last purchase date
         final lastPurchaseDateStr = existing['last_purchase_date'] as String?;
@@ -646,7 +674,9 @@ class DmeSupabaseService {
             'purchased_for_branch_name': purchaseForBranchName,
             'assigned_to': assignedUser,
           }).eq('customer_id', customerId);
+          return true;
         }
+        return true;
       }
     }
   }
