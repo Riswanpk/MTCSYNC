@@ -29,9 +29,9 @@ import 'DME/services/dme_supabase_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase and SharedPreferences in parallel (both required before UI)
-  final results = await Future.wait([
-    Firebase.initializeApp(
+  // Initialize Firebase — guard against duplicate-app from google-services auto-init on Android
+  try {
+    await Firebase.initializeApp(
       options: FirebaseOptions(
         apiKey: firebaseApiKey,
         appId: firebaseAppId,
@@ -41,11 +41,12 @@ void main() async {
         storageBucket: firebaseStorageBucket,
         measurementId: firebaseMeasurementId,
       ),
-    ),
-    SharedPreferences.getInstance(),
-  ]);
+    );
+  } on FirebaseException catch (e) {
+    if (e.code != 'duplicate-app') rethrow;
+  }
 
-  final prefs = results[1] as SharedPreferences;
+  final prefs = await SharedPreferences.getInstance();
 
   // Enable Firebase Crashlytics
   await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
