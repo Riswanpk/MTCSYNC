@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart'; // Import to use clearNotificationOpened
 import 'leads_detail_widgets.dart';
+import 'transfer_lead_dialog.dart';
 class PresentFollowUp extends StatefulWidget {
   final String docId;
   final bool editMode; // <-- Add this
@@ -19,6 +20,7 @@ class PresentFollowUp extends StatefulWidget {
 }
 
 class _PresentFollowUpState extends State<PresentFollowUp> {
+    String? _originalUserName;
   bool _isEditing = false;
   bool _isSaving = false;
   Map<String, dynamic>? _data;
@@ -59,6 +61,11 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
     _status = data['status'];
     _branch = data['branch'];
 
+    // Fetch original user name if needed
+    if (data['original_created_user'] != null) {
+      _fetchOriginalUserName(data['original_created_user']);
+    }
+
     // Handle reminder
     final dynamic reminderValue = data['reminder'];
     String reminderText = '';
@@ -95,6 +102,25 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
       }
     }
     _reminderController = TextEditingController(text: reminderText);
+  }
+
+  Future<void> _fetchOriginalUserName(String uid) async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (doc.exists) {
+        setState(() {
+          _originalUserName = doc.data()?['username'] ?? doc.data()?['email'] ?? uid;
+        });
+      } else {
+        setState(() {
+          _originalUserName = uid;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _originalUserName = uid;
+      });
+    }
   }
 
   Future<void> _pickDateTime(BuildContext context) async {
@@ -625,9 +651,98 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
           leadInfoTile(Icons.alarm, 'Reminder', Text(formatLeadDisplayDate(_data?['reminder'], isReminder: true), style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
           leadInfoTile(Icons.comment, 'Comments', Text(_data?['comments'] ?? 'N/A', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
           leadInfoTile(Icons.location_city, 'Branch', Text(_data?['branch'] ?? 'N/A', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
+          
+          // Display original branch and creator if this is a transferred lead
+          if (_data?['original_branch'] != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF23272F) : const Color(0xFFF0F2F5),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.1),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Transfer History',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white70 : Colors.black54,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.location_city, size: 14, color: isDark ? Colors.white54 : Colors.black54),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Original Branch: ${_data?['original_branch'] ?? 'N/A'}',
+                        style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black87),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.person, size: 14, color: isDark ? Colors.white54 : Colors.black54),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Original User: ${_originalUserName ?? 'Loading...'}',
+                        style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black87),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+          
+          // Transfer Button
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.send),
+              label: const Text('Transfer Lead'),
+              onPressed: () => _showTransferDialog(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue[700],
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _showTransferDialog(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => TransferLeadDialog(
+        leadDocId: widget.docId,
+        currentBranch: _data?['branch'] ?? 'Unknown',
+        currentCreatedBy: _data?['created_by'] ?? 'Unknown',
+        leadData: _data ?? {},
+      ),
+    );
+
+    if (result == true && mounted) {
+      // Refresh the page after successful transfer
+      setState(() {
+        _data = null; // Clear data to trigger FutureBuilder refresh
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lead transferred successfully!')),
+      );
+    }
   }
 }
 
