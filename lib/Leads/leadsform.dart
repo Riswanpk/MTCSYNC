@@ -147,9 +147,10 @@ class _FollowUpFormState extends State<FollowUpForm> {
         );
 
         // Schedule notification with Edit button and docId payload
+        final notifId = int.tryParse(followUpRef.id.hashCode.abs().toString().substring(0, 7)) ?? 0;
         await AwesomeNotifications().createNotification(
           content: NotificationContent(
-            id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+            id: notifId,
             channelKey: 'basic_channel', // Use basic_channel for consistency
             title: 'Follow-Up Reminder',
             body: 'Reminder for ${_nameController.text.trim()}',

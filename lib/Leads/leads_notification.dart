@@ -1,3 +1,4 @@
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -77,6 +78,64 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
     } catch (e) {
       // Optionally handle error
     }
+
+    // Schedule the reminder on this device (the new owner's device) so they
+    // receive the notification at the right time.
+    try {
+      final leadDoc = await FirebaseFirestore.instance
+          .collection('follow_ups')
+          .doc(docId)
+          .get();
+      final leadData = leadDoc.data();
+      if (leadData != null) {
+        final reminderStr = leadData['reminder'];
+        if (reminderStr is String && reminderStr.isNotEmpty) {
+          final reminderDate =
+              DateFormat('dd-MM-yyyy hh:mm a').tryParse(reminderStr);
+          if (reminderDate != null && reminderDate.isAfter(DateTime.now())) {
+            final notifId = int.tryParse(
+                    docId.hashCode.abs().toString().substring(0, 7)) ??
+                0;
+            await AwesomeNotifications().cancelSchedule(notifId);
+            await AwesomeNotifications().createNotification(
+              content: NotificationContent(
+                id: notifId,
+                channelKey: 'basic_channel',
+                title: 'Follow-Up Reminder',
+                body: 'Reminder for ${leadData['name'] ?? 'lead'}',
+                notificationLayout: NotificationLayout.Default,
+                payload: {
+                  'docId': docId,
+                  'type': 'lead',
+                  'action': 'edit_followup',
+                },
+              ),
+              actionButtons: [
+                NotificationActionButton(
+                  key: 'EDIT_FOLLOWUP',
+                  label: 'Edit',
+                  autoDismissible: true,
+                ),
+              ],
+              schedule: NotificationCalendar(
+                year: reminderDate.year,
+                month: reminderDate.month,
+                day: reminderDate.day,
+                hour: reminderDate.hour,
+                minute: reminderDate.minute,
+                second: 0,
+                millisecond: 0,
+                repeats: false,
+                preciseAlarm: true,
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error scheduling reminder for transferred lead: $e');
+    }
+
     if (!mounted) return;
     Navigator.of(context).pop(); // Close notification page
     Navigator.push(

@@ -1,3 +1,4 @@
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -150,6 +151,13 @@ class _TransferLeadDialogState extends State<TransferLeadDialog> {
           .collection('follow_ups')
           .doc(widget.leadDocId)
           .update(updateData);
+
+      // Cancel the local reminder notification on this device so it doesn't
+      // fire for the original owner after the lead has been transferred away.
+      final notifId = int.tryParse(
+              widget.leadDocId.hashCode.abs().toString().substring(0, 7)) ??
+          0;
+      await AwesomeNotifications().cancelSchedule(notifId);
 
       if (mounted) {
         Navigator.of(context).pop(true); // Return true to indicate success
