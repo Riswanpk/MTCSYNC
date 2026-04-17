@@ -73,12 +73,15 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
 
     _leads = leads;
 
-    _branches = leads
-        .map((l) => l['branch'] as String? ?? '')
-        .where((b) => b.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
+    _branches = [
+      'All Branches',
+      ...leads
+          .map((l) => l['branch'] as String? ?? '')
+          .where((b) => b.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort()
+    ];
 
     _users = leads
         .map((l) => l['assigned_to_name'] as String? ?? '')
@@ -98,8 +101,11 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
   }
 
   void _applyFilters() {
+
     final filtered = _leads.where((lead) {
-      if (_selectedBranch != null && (lead['branch'] ?? '') != _selectedBranch) return false;
+      if (_selectedBranch != null &&
+          _selectedBranch != 'All Branches' &&
+          (lead['branch'] ?? '') != _selectedBranch) return false;
       if (_selectedUser != null && (lead['assigned_to_name'] ?? '') != _selectedUser) return false;
       if (_selectedStatus != null && (lead['status'] ?? '') != _selectedStatus) return false;
       return true;
@@ -190,7 +196,13 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
                           options: _branches,
                           isDark: isDark,
                           onChanged: (val) {
-                            setState(() => _selectedBranch = val.isEmpty ? null : val);
+                            setState(() {
+                              if (val.isEmpty || val == 'All Branches') {
+                                _selectedBranch = null;
+                              } else {
+                                _selectedBranch = val;
+                              }
+                            });
                             _applyFilters();
                           },
                         ),
