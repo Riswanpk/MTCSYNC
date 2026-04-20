@@ -379,7 +379,7 @@ class _DmeCustomerVisitAnalyticsPageState
                           _SummaryRow(
                             label: 'Returning Customers',
                             value:
-                                '${((_analyticsData['total_visits'] ?? 0) as int) - ((_analyticsData['new_customers'] ?? 0) as int)}',
+                                '${_analyticsData['returning_customers'] ?? 0}',
                             isDark: isDark,
                           ),
                         ],

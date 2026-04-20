@@ -1038,14 +1038,14 @@ class DmeSupabaseService {
     const batchSize = 1000;
     int batchOffset = 0;
 
-    Set<int> visitedCustomers = {};
-    Set<int> newCustomers = {};
+    // customer_id -> number of purchases in period
+    final Map<int, int> visitCounts = {};
 
     // Paginate through ALL purchases — Supabase defaults to 1000 rows per request
     while (true) {
       var batchQuery = _client
           .from('dme_customer_purchases')
-          .select('customer_id, dme_customers(created_at, branch_id)')
+          .select('customer_id')
           .gte('purchase_date', fromStr)
           .lte('purchase_date', toStr);
 
@@ -1059,30 +1059,27 @@ class DmeSupabaseService {
 
       for (final row in batch) {
         final customerId = row['customer_id'] as int;
-        visitedCustomers.add(customerId);
-
-        final custData = row['dme_customers'] as Map?;
-        if (custData != null) {
-          final createdAt = custData['created_at'] as String?;
-          if (createdAt != null) {
-            final createdDate = DateTime.parse(createdAt);
-            if (!createdDate.isBefore(from) &&
-                createdDate.isBefore(to.add(const Duration(days: 1)))) {
-              newCustomers.add(customerId);
-            }
-          }
-        }
+        visitCounts[customerId] = (visitCounts[customerId] ?? 0) + 1;
       }
 
       if (batch.length < batchSize) break;
       batchOffset += batchSize;
     }
 
-    debugPrint('Customer visit analytics: visited=${visitedCustomers.length}, new=${newCustomers.length}, batches fetched=${(batchOffset ~/ batchSize) + 1}');
+    // Returning = visited 2+ times in the period
+    final int returningCustomers =
+        visitCounts.values.where((count) => count >= 2).length;
+    // New = visited only once in the period
+    final int newCustomers =
+        visitCounts.values.where((count) => count == 1).length;
+    final int uniqueCustomers = visitCounts.keys.length;
+
+    debugPrint('Customer visit analytics: total=$uniqueCustomers, new=$newCustomers, returning=$returningCustomers, batches=${(batchOffset ~/ batchSize) + 1}');
 
     return {
-      'total_visits': visitedCustomers.length,
-      'new_customers': newCustomers.length,
+      'total_visits': uniqueCustomers,
+      'new_customers': newCustomers,
+      'returning_customers': returningCustomers,
     };
   }
 

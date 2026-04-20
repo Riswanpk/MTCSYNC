@@ -166,14 +166,16 @@ class _NeumorphicButtonState extends State<NeumorphicButton>
                     child: Text(
                       widget.text,
                       overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
+                      maxLines: 2,
+                      textAlign: TextAlign.center,
                       style: widget.textStyle ??
                           TextStyle(
                             fontWeight: FontWeight.w700,
-                            fontSize: 15,
-                            letterSpacing: 0.6,
+                            fontSize: 14,
+                            letterSpacing: 0.4,
                             color: widget.textColor,
                             fontFamily: 'Montserrat',
+                            height: 1.2,
                             shadows: [
                               Shadow(
                                 color: Colors.black.withValues(alpha: 0.25),
