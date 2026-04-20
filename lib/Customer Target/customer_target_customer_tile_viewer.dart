@@ -374,7 +374,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
   Future<void> _updateCallStatusInFirestore() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      if (user == null || user.email == null) return;
       final now = DateTime.now();
       final months = [
         'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -417,7 +417,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
   Future<void> _updateRemarksInFirestore(String remarks) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      if (user == null || user.email == null) return;
       final now = DateTime.now();
       final months = [
         'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -551,7 +551,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                           });
                           // Update Firestore
                           final user = FirebaseAuth.instance.currentUser;
-                          if (user != null) {
+                          if (user != null && user.email != null) {
                             final docId = user.email!.toLowerCase();
                             final now = DateTime.now();
                             final months = [
@@ -599,19 +599,24 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
   }
 
   Future<void> _fetchLastRemarks() async {
+    if (!mounted) return;
     setState(() {
       _loadingLastRemarks = true;
     });
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        setState(() => _loadingLastRemarks = false);
+      if (user == null || user.email == null) {
+        if (mounted) {
+          setState(() => _loadingLastRemarks = false);
+        }
         return;
       }
       final contact1 = customer['contact1'] ?? customer['contact'];
       final contact2 = customer['contact2'];
       if ((contact1 == null || contact1.isEmpty) && (contact2 == null || contact2.isEmpty)) {
-        setState(() => _loadingLastRemarks = false);
+        if (mounted) {
+          setState(() => _loadingLastRemarks = false);
+        }
         return;
       }
 
@@ -663,15 +668,19 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
         }
       }
 
-      setState(() {
-        _pastRemarks = results;
-        _loadingLastRemarks = false;
-      });
+      if (mounted) {
+        setState(() {
+          _pastRemarks = results;
+          _loadingLastRemarks = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _pastRemarks = [];
-        _loadingLastRemarks = false;
-      });
+      if (mounted) {
+        setState(() {
+          _pastRemarks = [];
+          _loadingLastRemarks = false;
+        });
+      }
     }
   }
 
