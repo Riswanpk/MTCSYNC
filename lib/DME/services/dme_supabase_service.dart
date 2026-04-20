@@ -310,6 +310,68 @@ class DmeSupabaseService {
     }
   }
 
+  /// Syncs Firebase users with role='dme_admin' to Supabase dme_users table.
+  /// Only creates new entries in Supabase for admins not already present.
+  /// Returns a map with sync results.
+  Future<Map<String, dynamic>> syncDmeAdminUsers() async {
+    await ensureInitialized();
+    
+    try {
+      // Fetch all Firebase users with role='dme_admin'
+      final firebaseSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('role', isEqualTo: 'dme_admin')
+          .get();
+
+      int addedCount = 0;
+      int skippedCount = 0;
+
+      for (final doc in firebaseSnapshot.docs) {
+        final firebaseUid = doc.id;
+        final email = doc['email'] as String? ?? '';
+        final username = doc['username'] as String? ?? '';
+
+        // Check if this admin already exists in Supabase dme_users
+        final existing = await _client
+            .from('dme_users')
+            .select('id')
+            .eq('firebase_uid', firebaseUid)
+            .maybeSingle();
+
+        if (existing == null) {
+          // Admin doesn't exist in Supabase, add them with empty branch list
+          try {
+            await _client.from('dme_users').insert({
+              'firebase_uid': firebaseUid,
+              'email': email,
+              'username': username,
+              'role': 'dme_admin',
+            });
+            addedCount++;
+          } catch (e) {
+            debugPrint('Error adding admin $username: $e');
+          }
+        } else {
+          skippedCount++;
+        }
+      }
+
+      return {
+        'success': true,
+        'addedCount': addedCount,
+        'skippedCount': skippedCount,
+        'totalProcessed': firebaseSnapshot.docs.length,
+        'message': 'Synced $addedCount new DME admin users from Firebase',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'error': e.toString(),
+        'message': 'Error syncing DME admin users: $e',
+      };
+    }
+  }
+
 
 
   // ── Categories & Types (Lookup) ──────────────────────────────
@@ -970,41 +1032,57 @@ class DmeSupabaseService {
     List<int>? branchIds,
   }) async {
     await ensureInitialized();
-    // Get unique customers from purchases within date range
-    var purchaseQuery = _client
-        .from('dme_customer_purchases')
-        .select('customer_id, dme_customers(created_at, branch_id)')
-        .gte('purchase_date', from.toIso8601String().split('T')[0])
-        .lte('purchase_date', to.toIso8601String().split('T')[0]);
 
-    if (branchIds != null && branchIds.isNotEmpty) {
-      purchaseQuery = purchaseQuery.inFilter('purchase_for_branch_id', branchIds);
-    }
+    final fromStr = from.toIso8601String().split('T')[0];
+    final toStr = to.toIso8601String().split('T')[0];
+    const batchSize = 1000;
+    int batchOffset = 0;
 
-    final purchases = await purchaseQuery;
-    
     Set<int> visitedCustomers = {};
-    int newCustomers = 0;
-    
-    for (final row in purchases) {
-      final customerId = row['customer_id'] as int;
-      visitedCustomers.add(customerId);
-      
-      final custData = row['dme_customers'] as Map?;
-      if (custData != null) {
-        final createdAt = custData['created_at'] as String?;
-        if (createdAt != null) {
-          final createdDate = DateTime.parse(createdAt);
-          if (createdDate.isAfter(from) && createdDate.isBefore(to.add(const Duration(days: 1)))) {
-            newCustomers++;
+    Set<int> newCustomers = {};
+
+    // Paginate through ALL purchases — Supabase defaults to 1000 rows per request
+    while (true) {
+      var batchQuery = _client
+          .from('dme_customer_purchases')
+          .select('customer_id, dme_customers(created_at, branch_id)')
+          .gte('purchase_date', fromStr)
+          .lte('purchase_date', toStr);
+
+      if (branchIds != null && branchIds.isNotEmpty) {
+        batchQuery = batchQuery.inFilter('purchase_for_branch_id', branchIds);
+      }
+
+      final batch = await batchQuery.range(batchOffset, batchOffset + batchSize - 1);
+
+      if (batch.isEmpty) break;
+
+      for (final row in batch) {
+        final customerId = row['customer_id'] as int;
+        visitedCustomers.add(customerId);
+
+        final custData = row['dme_customers'] as Map?;
+        if (custData != null) {
+          final createdAt = custData['created_at'] as String?;
+          if (createdAt != null) {
+            final createdDate = DateTime.parse(createdAt);
+            if (!createdDate.isBefore(from) &&
+                createdDate.isBefore(to.add(const Duration(days: 1)))) {
+              newCustomers.add(customerId);
+            }
           }
         }
       }
+
+      if (batch.length < batchSize) break;
+      batchOffset += batchSize;
     }
+
+    debugPrint('Customer visit analytics: visited=${visitedCustomers.length}, new=${newCustomers.length}, batches fetched=${(batchOffset ~/ batchSize) + 1}');
 
     return {
       'total_visits': visitedCustomers.length,
-      'new_customers': newCustomers,
+      'new_customers': newCustomers.length,
     };
   }
 

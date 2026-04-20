@@ -473,11 +473,11 @@ class HomeButtonsContainer extends StatelessWidget {
             children: [
               Expanded(
                 child: NeumorphicButton(
-                  onTap: () => _navigateToDmeComplaints(context),
-                  text: 'Complaints',
-                  color: const Color(0xFFFF6B6B),
+                  onTap: () => _navigateToDmeCustomerList(context),
+                  text: 'Customer List',
+                  color: const Color(0xFF6B4423),
                   textColor: Colors.white,
-                  icon: Icons.warning_rounded,
+                  icon: Icons.groups_rounded,
                 ),
               ),
               const SizedBox(width: 14),
@@ -759,12 +759,40 @@ class HomeButtonsContainer extends StatelessWidget {
 
   Future<void> _navigateToDmeCustomerList(BuildContext context) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    final dmeUser = await DmeSupabaseService.instance.getCurrentUser(uid);
-    if (dmeUser == null || !context.mounted) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => DmeCustomerListPage(dmeUser: dmeUser)),
-    );
+    if (uid == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User not authenticated')),
+      );
+      return;
+    }
+
+    try {
+      var dmeUser = await DmeSupabaseService.instance.getCurrentUser(uid);
+      
+      // For dme_admin users not yet synced, sync them first
+      if (dmeUser == null) {
+        await DmeSupabaseService.instance.syncDmeAdminUsers();
+        dmeUser = await DmeSupabaseService.instance.getCurrentUser(uid);
+      }
+      
+      if (dmeUser == null || !context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('User profile not found. Please contact admin.')),
+        );
+        return;
+      }
+      
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => DmeCustomerListPage(dmeUser: dmeUser!)),
+      );
+    } catch (e) {
+      debugPrint('Error navigating to customer list: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _navigateToDmeRemindersAndCalls(BuildContext context) async {
