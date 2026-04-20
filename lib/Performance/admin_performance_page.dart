@@ -51,6 +51,7 @@ class _AdminPerformancePageState extends State<AdminPerformancePage>
   Future<void> fetchBranches() async {
     setState(() => isLoadingBranches = true);
     final branchList = await UserCacheService.instance.getBranches();
+    if (!mounted) return;
     setState(() {
       branches = branchList.map((b) => {'branch': b}).toList();
       isLoadingBranches = false;

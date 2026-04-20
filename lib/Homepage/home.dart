@@ -316,16 +316,27 @@ class _HomePageState extends State<HomePage>
     }
   }
 
+  bool _isPickingImage = false;
+
   Future<void> _pickProfileImage() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setState(() {
-        _profileImage = File(pickedFile.path);
-        _profileImagePath = pickedFile.path;
-      });
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('profile_image_path', pickedFile.path);
+    if (_isPickingImage) return;
+    _isPickingImage = true;
+    try {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+      if (pickedFile != null) {
+        if (!mounted) return;
+        setState(() {
+          _profileImage = File(pickedFile.path);
+          _profileImagePath = pickedFile.path;
+        });
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('profile_image_path', pickedFile.path);
+      }
+    } catch (e) {
+      debugPrint('Image picker error: $e');
+    } finally {
+      _isPickingImage = false;
     }
   }
 
@@ -389,16 +400,20 @@ class _HomePageState extends State<HomePage>
     }
 
     if (hasOverdueTask) {
-      await NotificationPermissionService.instance.safeCreateNotification(
-        content: NotificationContent(
-          id: 2003,
-          channelKey: 'reminder_channel',
-          title: 'Overdue Tasks!',
-          body:
-              'You have pending tasks that are more than a day old. Please complete them.',
-          payload: {'page': 'todo'},
-        ),
-      );
+      try {
+        await NotificationPermissionService.instance.safeCreateNotification(
+          content: NotificationContent(
+            id: 2003,
+            channelKey: 'reminder_channel',
+            title: 'Overdue Tasks!',
+            body:
+                'You have pending tasks that are more than a day old. Please complete them.',
+            payload: {'page': 'todo'},
+          ),
+        );
+      } catch (_) {
+        // Notification channel may be disabled by user; ignore silently.
+      }
     }
   }
 

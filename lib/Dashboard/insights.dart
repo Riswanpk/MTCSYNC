@@ -28,13 +28,15 @@ class _InsightsPageState extends State<InsightsPage> {
 
   Future<void> _fetchBranchesAndUser() async {
     final currentUser = FirebaseAuth.instance.currentUser;
-    final userDoc = await FirebaseFirestore.instance.collection('users').doc(currentUser!.uid).get();
+    if (currentUser == null) return;
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(currentUser.uid).get();
     final userData = userDoc.data() ?? {};
     final role = userData['role'] ?? 'sales';
     final userBranch = userData['branch'] ?? '';
 
     final branches = await UserCacheService.instance.getBranches();
 
+    if (!mounted) return;
     setState(() {
       _role = role;
       _userBranch = userBranch;

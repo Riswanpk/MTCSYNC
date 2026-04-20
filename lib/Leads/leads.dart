@@ -160,6 +160,7 @@ class _LeadsPageState extends State<LeadsPage> {
       }
     }
 
+    if (!mounted) return;
     setState(() {
       availableUsers = users;
     });
@@ -167,6 +168,7 @@ class _LeadsPageState extends State<LeadsPage> {
 
   // --- NEW: Pagination Logic ---
   Future<void> _fetchLeadsPage({bool nextPage = false, bool prevPage = false, bool isSearch = false}) async {
+    if (!mounted) return;
     if (_isLoading) return;
     setState(() {
       _isLoading = true;
@@ -177,6 +179,7 @@ class _LeadsPageState extends State<LeadsPage> {
     final branch = (role == 'admin' || role == 'Sync Head' || role == 'sync_head') ? selectedBranch : userData?['branch'];
 
     if (branch == null || branch.isEmpty) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _leads = [];
@@ -251,6 +254,7 @@ class _LeadsPageState extends State<LeadsPage> {
       _lastDocument = null;
     }
 
+    if (!mounted) return;
     setState(() {
       _leads = snapshot.docs;
       _isLoading = false;

@@ -6,6 +6,7 @@ import '../services/dme_supabase_service.dart';
 import '../models/dme_user.dart';
 import '../models/dme_customer.dart';
 import 'dme_customer_purchases.dart';
+import 'dme_customer_branches.dart';
 
 // ── Hardcoded lookup tables ───────────────────────────────────────
 const Map<int, String> _categoryIdToName = {
@@ -267,6 +268,15 @@ class _DmeCustomerDetailPageState extends State<DmeCustomerDetailPage>
                             label: 'Salesman',
                             value: c.salesman!,
                             showChevron: true,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => DmeCustomerBranchesPage(
+                                  customer: c,
+                                  dmeUser: widget.dmeUser,
+                                ),
+                              ),
+                            ),
                           ),
                         if (c.salesman != null && c.branchName != null)
                           const Divider(height: 1, indent: 64),
@@ -276,6 +286,15 @@ class _DmeCustomerDetailPageState extends State<DmeCustomerDetailPage>
                             label: 'Branch',
                             value: c.branchName!,
                             showChevron: true,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => DmeCustomerBranchesPage(
+                                  customer: c,
+                                  dmeUser: widget.dmeUser,
+                                ),
+                              ),
+                            ),
                           ),
                       ],
                     ),

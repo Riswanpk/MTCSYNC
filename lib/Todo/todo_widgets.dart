@@ -221,7 +221,7 @@ class TodoListItem extends StatelessWidget {
         extentRatio: 0.28,
         children: [
           SlidableAction(
-            onPressed: (context) async {
+            onPressed: (_) async {
               await onToggleStatus(doc);
             },
             backgroundColor: Colors.green.shade400,
@@ -237,7 +237,7 @@ class TodoListItem extends StatelessWidget {
         extentRatio: 0.25,
         children: [
           SlidableAction(
-            onPressed: (context) async {
+            onPressed: (_) async {
               // Show time picker for new reminder
               final now = DateTime.now();
               final initialTime = reminderDateTime != null
@@ -247,7 +247,7 @@ class TodoListItem extends StatelessWidget {
                 context: context,
                 initialTime: initialTime,
               );
-              if (pickedTime != null) {
+              if (pickedTime != null && context.mounted) {
                 // Use today's date or existing reminder date
                 final baseDate = reminderDateTime ?? now;
                 final newReminder = DateTime(
@@ -261,9 +261,11 @@ class TodoListItem extends StatelessWidget {
                     .collection('todo')
                     .doc(doc.id)
                     .update({'reminder': newReminder.toIso8601String()});
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Reminder time updated')),
-                );
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Reminder time updated')),
+                  );
+                }
               }
             },
             backgroundColor: Colors.orange.shade400,

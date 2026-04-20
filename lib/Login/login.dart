@@ -216,16 +216,19 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                     try {
                       await FirebaseAuth.instance
                           .sendPasswordResetEmail(email: email);
+                      if (!context.mounted) return;
                       Navigator.of(context).pop();
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                             content: Text('Password reset email sent!')),
                       );
                     } on FirebaseAuthException catch (e) {
+                      if (!context.mounted) return;
                       setState(() {
                         dialogError = e.message ?? 'Failed to send reset email';
                       });
                     } catch (_) {
+                      if (!context.mounted) return;
                       setState(() {
                         dialogError = 'Unexpected error occurred';
                       });

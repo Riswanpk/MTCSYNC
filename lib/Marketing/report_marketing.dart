@@ -197,6 +197,7 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> with SingleTi
           // Update progress after each row
           processedRows++;
           double newProgress = processedRows / totalRows;
+          if (!mounted) break;
           _progressController.stop();
           _progressAnimation = Tween<double>(begin: progress, end: newProgress).animate(
             CurvedAnimation(parent: _progressController, curve: Curves.easeInOutCubic),

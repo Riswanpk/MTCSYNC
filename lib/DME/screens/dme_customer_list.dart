@@ -76,7 +76,7 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
 
   Future<void> _loadBranchesAndSalesmen() async {
     try {
-      // Load available branches only
+      // Load all available branches
       final branches = await _svc.getBranches();
       print('DEBUG: Branches loaded: ${branches.length}');
       
@@ -89,7 +89,8 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
             final name = b['name'] as String?;
             final id = b['id'] as int?;
             print('DEBUG: Branch data - name: $name, id: $id');
-            if (name != null && id != null) {
+            // Only include branches assigned to this user
+            if (name != null && id != null && _branchIds.contains(id)) {
               _availableBranches.add(name);
               _branchNameToId[name] = id;
             }

@@ -386,8 +386,22 @@ class DmeSupabaseService {
         .select('*, dme_branches(name), dme_categories(id, name), dme_customer_types(id, name)');
 
     if (branchIds != null && branchIds.isNotEmpty) {
-      // Include customers from primary branch OR where purchased_for_branch_id matches
-      query = query.or('branch_id.in.(${branchIds.join(',')}),purchased_for_branch_id.in.(${branchIds.join(",")})');
+      // Get customer IDs that have a purchase record for any of these branches
+      final purchaseRows = await _client
+          .from('dme_customer_purchases')
+          .select('customer_id')
+          .inFilter('purchase_for_branch_id', branchIds);
+      final purchasedCustomerIds = (purchaseRows as List)
+          .map((e) => e['customer_id'] as int)
+          .toSet()
+          .toList();
+
+      if (purchasedCustomerIds.isNotEmpty) {
+        // Include customers whose primary branch matches OR who have a purchase from these branches
+        query = query.or('branch_id.in.(${branchIds.join(',')}),id.in.(${purchasedCustomerIds.join(',')})');
+      } else {
+        query = query.inFilter('branch_id', branchIds);
+      }
     }
     if (search != null && search.isNotEmpty) {
       query = query.or('name.ilike.%$search%,phone.ilike.%$search%');
@@ -540,6 +554,78 @@ class DmeSupabaseService {
         .eq('customer_id', customerId)
         .order('date', ascending: false);
     return (res as List).map((e) => DmeSale.fromMap(e)).toList();
+  }
+
+  /// Get all branches a customer has purchases from with salesman and count info
+  /// Returns list of {branch_id, branch_name, salesman, purchase_count, last_purchase_date}
+  Future<List<Map<String, dynamic>>> getCustomerBranchesWithPurchases(int customerId) async {
+    try {
+      await ensureInitialized();
+      
+      // Get primary branch
+      final customer = await _client
+          .from('dme_customers')
+          .select('id, branch_id, salesman, dme_branches(id, name)')
+          .eq('id', customerId)
+          .maybeSingle();
+      
+      if (customer == null) return [];
+      
+      final branches = <String, Map<String, dynamic>>{};
+      
+      // Add primary branch
+      final primaryBranchId = customer['branch_id'] as int?;
+      if (primaryBranchId != null && customer['dme_branches'] is Map) {
+        final branchData = customer['dme_branches'] as Map;
+        branches[primaryBranchId.toString()] = {
+          'branch_id': primaryBranchId,
+          'branch_name': branchData['name'] ?? 'Unknown',
+          'salesman': customer['salesman'] ?? 'Not Assigned',
+          'purchase_count': 0,
+          'last_purchase_date': null,
+          'is_primary': true,
+        };
+      }
+      
+      // Get purchases from other branches
+      final purchases = await _client
+          .from('dme_customer_purchases')
+          .select('purchase_for_branch_id, purchase_for_branch_name, purchase_date, purchase_details')
+          .eq('customer_id', customerId)
+          .order('purchase_date', ascending: false);
+      
+      for (final purchase in purchases) {
+        final branchId = purchase['purchase_for_branch_id'] as int;
+        final branchName = purchase['purchase_for_branch_name'] as String?;
+        final purchaseDate = purchase['purchase_date'] as String?;
+        final details = purchase['purchase_details'] as Map?;
+        final salesman = (details != null ? details['salesman'] : null) as String?;
+        
+        final key = branchId.toString();
+        if (branches.containsKey(key)) {
+          // Update existing branch with purchase info
+          branches[key]!['purchase_count'] = (branches[key]!['purchase_count'] as int) + 1;
+          if (branches[key]!['last_purchase_date'] == null) {
+            branches[key]!['last_purchase_date'] = purchaseDate;
+          }
+        } else {
+          // Add new branch
+          branches[key] = {
+            'branch_id': branchId,
+            'branch_name': branchName ?? 'Unknown',
+            'salesman': salesman ?? 'Not Assigned',
+            'purchase_count': 1,
+            'last_purchase_date': purchaseDate,
+            'is_primary': false,
+          };
+        }
+      }
+      
+      return branches.values.toList();
+    } catch (e) {
+      debugPrint('Error getting customer branch purchases: $e');
+      return [];
+    }
   }
 
   // ── Purchase Tracking (Branch-based) ────────────────────────
@@ -999,7 +1085,6 @@ class DmeSupabaseService {
         int customerId;
         if (existingRes != null) {
           customerId = existingRes['id'] as int;
-          final existingBranchId = existingRes['branch_id'] as int?;
           
           // Append alternate name to purchased_for if name differs
           final existingName = (existingRes['name'] as String? ?? '').toLowerCase().trim();
@@ -1008,22 +1093,13 @@ class DmeSupabaseService {
             await appendPurchasedFor(customerId, customer.name);
           }
           
-          // Track the purchased_for_branch_id if this is from a different branch
-          int? purchasedForBranchIdToSet;
-          if (existingBranchId != branchId) {
-            purchasedForBranchIdToSet = branchId;
-          }
-          
-          // Update last_purchase_date, category_id, customer_type_id, and purchased_for_branch_id
+          // Update last_purchase_date, category_id, customer_type_id
           final updateMap = {
             'last_purchase_date': customer.lastPurchaseDate?.toIso8601String().split('T')[0],
             'category_id': categoryId,
             'customer_type_id': typeId,
             'updated_at': DateTime.now().toUtc().toIso8601String(),
           };
-          if (purchasedForBranchIdToSet != null) {
-            updateMap['purchased_for_branch_id'] = purchasedForBranchIdToSet;
-          }
           
           await _client.from('dme_customers').update(updateMap).eq('id', customerId);
           linkedToExisting++;

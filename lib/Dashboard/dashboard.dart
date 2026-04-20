@@ -67,6 +67,7 @@ class _DashboardPageState extends State<DashboardPage>
 
   Future<void> _fetchBranches() async {
     final branches = await UserCacheService.instance.getBranches();
+    if (!mounted) return;
     setState(() {
       _branches = branches;
       _selectedBranch = null;
@@ -75,15 +76,18 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
   Future<void> _fetchUserData() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
     final userSnapshot = await FirebaseFirestore.instance
         .collection('users')
-        .doc(FirebaseAuth.instance.currentUser!.uid)
+        .doc(currentUser.uid)
         .get();
+    if (!mounted) return;
     setState(() {
       _userData = userSnapshot.data() as Map<String, dynamic>?;
       _loadingUser = false;
     });
-    _animController.forward();
+    if (mounted) _animController.forward();
   }
 
   Future<Map<String, int>> _fetchCounts({String? branch}) async {
