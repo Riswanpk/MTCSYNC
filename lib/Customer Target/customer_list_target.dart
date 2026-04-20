@@ -65,6 +65,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
       // Load from local cache for instant display on first load
       if (_customers == null) {
         final cached = await _loadFromLocalCache();
+        if (!mounted) return;
         if (cached != null) {
           setState(() {
             _customers = cached;
@@ -103,6 +104,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
         }
       }
 
+      if (!mounted) return;
       if (doc.exists && doc.data()?['customers'] != null) {
         final List<dynamic> data = doc.data()!['customers'];
         setState(() {
@@ -120,6 +122,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
         });
       }
     } catch (e) {
+      if (!mounted) return;
       // If we have cached data, just dismiss loading
       if (_customers != null) {
         setState(() {
