@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:mtcsync/Misc/notification_permission_service.dart';
 
 /// Listens for SME lead assignment FCM messages and triggers local push
 /// notifications (foreground) for the assigned user.
@@ -18,7 +19,7 @@ class SmeNotificationService {
     if (_isListening) return;
     _isListening = true;
 
-    _subscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    _subscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
       final data = message.data;
       if (data['type'] != 'sme_lead_assignment') return;
 
@@ -27,7 +28,7 @@ class SmeNotificationService {
       final leadDocId = data['leadDocId'] ?? '';
 
       // Show local notification so AwesomeNotifications action buttons work
-      AwesomeNotifications().createNotification(
+      await NotificationPermissionService.instance.safeCreateNotification(
         content: NotificationContent(
           id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
           channelKey: 'basic_channel',
@@ -59,7 +60,7 @@ class SmeNotificationService {
   /// Schedule a local reminder notification on the assigned user's device.
   Future<void> _scheduleReminder(String leadDocId, String leadName, DateTime reminderDate) async {
     final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
-    await AwesomeNotifications().createNotification(
+    await NotificationPermissionService.instance.safeCreateNotification(
       content: NotificationContent(
         id: ('sme_reminder_$leadDocId').hashCode.abs().remainder(2000000000),
         channelKey: 'reminder_channel',
@@ -71,13 +72,6 @@ class SmeNotificationService {
           'type': 'lead',
         },
       ),
-      actionButtons: [
-        NotificationActionButton(
-          key: 'EDIT_FOLLOWUP',
-          label: 'Edit',
-          autoDismissible: true,
-        ),
-      ],
       schedule: NotificationCalendar(
         year: reminderDate.year,
         month: reminderDate.month,

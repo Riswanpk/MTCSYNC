@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:mtcsync/Misc/notification_permission_service.dart';
 import 'presentfollowup.dart';
 
 class LeadsNotificationPage extends StatefulWidget {
@@ -97,7 +98,7 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
                     docId.hashCode.abs().toString().substring(0, 7)) ??
                 0;
             await AwesomeNotifications().cancelSchedule(notifId);
-            await AwesomeNotifications().createNotification(
+            await NotificationPermissionService.instance.safeCreateNotification(
               content: NotificationContent(
                 id: notifId,
                 channelKey: 'basic_channel',
@@ -110,13 +111,6 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
                   'action': 'edit_followup',
                 },
               ),
-              actionButtons: [
-                NotificationActionButton(
-                  key: 'EDIT_FOLLOWUP',
-                  label: 'Edit',
-                  autoDismissible: true,
-                ),
-              ],
               schedule: NotificationCalendar(
                 year: reminderDate.year,
                 month: reminderDate.month,

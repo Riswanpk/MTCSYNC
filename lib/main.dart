@@ -16,6 +16,7 @@ import 'Misc/constant.dart';
 import 'DME/dme_config.dart';
 import 'Login/login.dart';
 import '../Homepage/home.dart';
+import 'Misc/notification_permission_service.dart';
 import 'Navigation/splash_screen.dart';
 import 'Misc/theme_notifier.dart'; // Now imports ThemeProvider
 import 'Login/auth_wrapper.dart';
@@ -459,7 +460,7 @@ class NotificationController {
         }
 
         final channelKey = type == 'todo' ? 'reminder_channel' : 'basic_channel';
-        await AwesomeNotifications().createNotification(
+        await NotificationPermissionService.instance.safeCreateNotification(
           content: NotificationContent(
             id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
             channelKey: channelKey,
@@ -467,13 +468,6 @@ class NotificationController {
             body: body,
             payload: {'docId': docId, 'type': type},
           ),
-          actionButtons: [
-            NotificationActionButton(
-              key: 'EDIT_FOLLOWUP',
-              label: 'Edit',
-              autoDismissible: true,
-            ),
-          ],
           schedule: NotificationCalendar.fromDate(
             date: DateTime.now().add(rescheduleDelay),
           ),

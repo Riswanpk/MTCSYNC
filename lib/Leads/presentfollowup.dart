@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:mtcsync/Misc/notification_permission_service.dart';
 import '../main.dart'; // Import to use clearNotificationOpened
 import 'leads_detail_widgets.dart';
 import 'transfer_lead_dialog.dart';
@@ -258,7 +259,7 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
         await AwesomeNotifications().cancelSchedule(int.tryParse(widget.docId.hashCode.toString().substring(0, 7)) ?? 0);
 
         // Schedule new notification with action button
-        await AwesomeNotifications().createNotification(
+        await NotificationPermissionService.instance.safeCreateNotification(
           content: NotificationContent(
             id: int.tryParse(widget.docId.hashCode.toString().substring(0, 7)) ?? 0,
             channelKey: 'basic_channel',
@@ -271,13 +272,6 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
               'action': 'edit_followup'
             },
           ),
-          actionButtons: [
-            NotificationActionButton(
-              key: 'EDIT_FOLLOWUP',
-              label: 'Edit',
-              autoDismissible: true,
-            ),
-          ],
           schedule: NotificationCalendar(
             year: scheduledDateTime.year,
             month: scheduledDateTime.month,

@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:mtcsync/Misc/notification_permission_service.dart';
 import 'todo_widget_updater.dart'; // At the top
 import '../Navigation/user_cache_service.dart';
 
@@ -94,7 +95,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
     // Use a consistent ID based on the docId to allow for cancellation/rescheduling
     final notificationId = docId.hashCode & 0x7FFFFFFF;
 
-    await AwesomeNotifications().createNotification(
+    await NotificationPermissionService.instance.safeCreateNotification(
       content: NotificationContent(
         id: notificationId,
         channelKey: 'reminder_channel',

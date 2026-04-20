@@ -1,6 +1,7 @@
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:mtcsync/Misc/notification_permission_service.dart';
 import '../models/dme_reminder.dart';
 
 /// Service for scheduling and managing reminder notifications
@@ -67,7 +68,7 @@ class DmeNotificationService {
 
       final message = _generateNotificationMessage(reminder);
 
-      await AwesomeNotifications().createNotification(
+      await NotificationPermissionService.instance.safeCreateNotification(
         content: NotificationContent(
           id: _generateNotificationId(customerId),
           channelKey: _reminderChannelKey,
@@ -96,7 +97,7 @@ class DmeNotificationService {
     required Map<String, String> payload,
   }) async {
     try {
-      await AwesomeNotifications().createNotification(
+      await NotificationPermissionService.instance.safeCreateNotification(
         content: NotificationContent(
           id: DateTime.now().millisecondsSinceEpoch % 2147483647,
           channelKey: _reminderChannelKey,
@@ -151,7 +152,7 @@ class DmeNotificationService {
     required String assignedToUsername,
   }) async {
     try {
-      await AwesomeNotifications().createNotification(
+      await NotificationPermissionService.instance.safeCreateNotification(
         content: NotificationContent(
           id: _generateComplaintNotificationId(complaintId),
           channelKey: _complaintChannelKey,
@@ -179,7 +180,7 @@ class DmeNotificationService {
     required String remarkedByUsername,
   }) async {
     try {
-      await AwesomeNotifications().createNotification(
+      await NotificationPermissionService.instance.safeCreateNotification(
         content: NotificationContent(
           id: _generateComplaintNotificationId(complaintId),
           channelKey: _complaintChannelKey,

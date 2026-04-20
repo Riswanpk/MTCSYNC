@@ -13,6 +13,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'dart:convert';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:home_widget/home_widget.dart';
+import 'package:mtcsync/Misc/notification_permission_service.dart';
 import '../main.dart';
 import '../Todo/todo.dart';
 import '../Todo/todoform.dart';
@@ -256,7 +257,7 @@ class _HomePageState extends State<HomePage>
     final lastNotified = prefs.getString('last_perf_deduction_notify');
     final todayStr = "${now.year}-${now.month}-${now.day}";
     if (deduction && lastNotified != todayStr) {
-      await AwesomeNotifications().createNotification(
+      await NotificationPermissionService.instance.safeCreateNotification(
         content: NotificationContent(
           id: 2002,
           channelKey: 'reminder_channel',
@@ -388,7 +389,7 @@ class _HomePageState extends State<HomePage>
     }
 
     if (hasOverdueTask) {
-      await AwesomeNotifications().createNotification(
+      await NotificationPermissionService.instance.safeCreateNotification(
         content: NotificationContent(
           id: 2003,
           channelKey: 'reminder_channel',

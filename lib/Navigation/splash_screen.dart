@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:mtcsync/Misc/notification_permission_service.dart';
 import '../Login/login.dart';
 import '../Version/force_update_checker.dart';
 import '../Version/force_update_screen.dart';
@@ -125,6 +126,9 @@ class _SplashScreenState extends State<SplashScreen> {
       await Permission.scheduleExactAlarm.request();
       await Permission.reminders.request();
       await Permission.ignoreBatteryOptimizations.request();
+
+      // Initialize notification permission service after requesting permission
+      await NotificationPermissionService.instance.isNotificationPermissionGranted();
     } catch (e) {
       debugPrint('Permission error: $e');
     }

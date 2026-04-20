@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:mtcsync/Misc/notification_permission_service.dart';
 import 'dart:convert';
 import 'leads.dart';
 import 'leads_helpers.dart';
@@ -49,7 +50,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
   bool _isSaving = false;
 
   Future<void> _scheduleNotification(DateTime dateTime) async {
-    await AwesomeNotifications().createNotification(
+    await NotificationPermissionService.instance.safeCreateNotification(
       content: NotificationContent(
         id: DateTime.now().millisecondsSinceEpoch.remainder(100000), // unique ID
         channelKey: 'reminder_channel',
@@ -148,7 +149,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
 
         // Schedule notification with Edit button and docId payload
         final notifId = int.tryParse(followUpRef.id.hashCode.abs().toString().substring(0, 7)) ?? 0;
-        await AwesomeNotifications().createNotification(
+        await NotificationPermissionService.instance.safeCreateNotification(
           content: NotificationContent(
             id: notifId,
             channelKey: 'basic_channel', // Use basic_channel for consistency
@@ -160,13 +161,6 @@ class _FollowUpFormState extends State<FollowUpForm> {
               'type': 'lead', // Specify that this is a lead
             },
           ),
-          actionButtons: [
-            NotificationActionButton(
-              key: 'EDIT_FOLLOWUP',
-              label: 'Edit',
-              autoDismissible: true,
-            ),
-          ],
           schedule: NotificationCalendar(
             year: scheduledDate.year,
             month: scheduledDate.month,
