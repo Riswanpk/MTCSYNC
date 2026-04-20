@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:getwidget/getwidget.dart';
+import 'package:mtcsync/Misc/sound_service.dart';
 import '../Leads/presentfollowup.dart';
 import 'sme_lead_form.dart';
 import '../Navigation/user_cache_service.dart';
@@ -140,11 +140,8 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
   }
 
   Future<void> _playClickSound() async {
-    await _clickPlayer.stop();
-    await _clickPlayer.play(AssetSource('sounds/click.mp3'), volume: 0.5);
+    await SoundService.instance.playClickSound(volume: 0.5);
   }
-
-  static final _clickPlayer = AudioPlayer();
 
   @override
   Widget build(BuildContext context) {

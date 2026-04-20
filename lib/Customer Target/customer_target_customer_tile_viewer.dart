@@ -1095,12 +1095,14 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                                 if (widget.onStatusChanged != null) {
                                   await widget.onStatusChanged!(remarks);
                                 }
-                                setState(() {
-                                  _remarksSaved = true; // Set flag after save
-                                });
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Remarks saved.'), backgroundColor: Colors.green),
-                                );
+                                if (mounted) {
+                                  setState(() {
+                                    _remarksSaved = true; // Set flag after save
+                                  });
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Remarks saved.'), backgroundColor: Colors.green),
+                                  );
+                                }
                               }
                             : null,
                         child: Padding(
@@ -1171,16 +1173,18 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                                 final prefillPhone = customerData?['phone'] ?? phone ?? '';
                                 final prefillAddress = customerData?['address'] ?? address ?? '';
 
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (context) => FollowUpForm(
-                                      key: UniqueKey(),
-                                      initialName: prefillName,
-                                      initialPhone: prefillPhone,
-                                      initialAddress: prefillAddress,
+                                if (mounted) {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) => FollowUpForm(
+                                        key: UniqueKey(),
+                                        initialName: prefillName,
+                                        initialPhone: prefillPhone,
+                                        initialAddress: prefillAddress,
+                                      ),
                                     ),
-                                  ),
-                                );
+                                  );
+                                }
                               }
                             : null,
                         child: Padding(

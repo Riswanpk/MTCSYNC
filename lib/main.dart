@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:mtcsync/Navigation/user_cache_service.dart';
+import 'package:mtcsync/Misc/sound_service.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:in_app_update/in_app_update.dart';
@@ -73,6 +74,9 @@ void main() async {
   // CRITICAL: Initialize AwesomeNotifications BEFORE runApp() 
   // This ensures scheduled notifications work even when app is killed
   await _initializeNotifications();
+
+  // Initialize SoundService for audio playback
+  await SoundService.instance.initialize();
 
   // Run the app
   runApp(

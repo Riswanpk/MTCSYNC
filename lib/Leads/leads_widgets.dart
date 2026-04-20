@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:intl/intl.dart';
+import 'package:mtcsync/Misc/sound_service.dart';
 import 'presentfollowup.dart';
 
 Color getPriorityColor(String priority) {
@@ -111,11 +111,8 @@ class LeadCard extends StatelessWidget {
     this.onStatusChanged,
   });
 
-  static final _clickPlayer = AudioPlayer();
-
   Future<void> _playClickSound() async {
-    await _clickPlayer.stop();
-    await _clickPlayer.play(AssetSource('sounds/click.mp3'), volume: 0.5);
+    await SoundService.instance.playClickSound(volume: 0.5);
   }
 
   @override
