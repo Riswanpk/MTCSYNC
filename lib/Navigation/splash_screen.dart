@@ -35,7 +35,11 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
     // Listen for widget clicks when app is already running (warm start)
-    _widgetClickSub = HomeWidget.widgetClicked.listen(_handleWidgetClick);
+    try {
+      _widgetClickSub = HomeWidget.widgetClicked.listen(_handleWidgetClick);
+    } catch (_) {
+      // Platform may not have an active stream — safe to ignore
+    }
     // Check if app was cold-started from a widget/deep link via the platform channel
     _checkInitialDeepLink();
     // Delay permission request and navigation until after first frame (UI visible)
@@ -95,7 +99,13 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   void dispose() {
-    _widgetClickSub?.cancel();
+    if (_widgetClickSub != null) {
+      try {
+        _widgetClickSub?.cancel();
+      } catch (_) {
+        // No active stream to cancel — safe to ignore
+      }
+    }
     super.dispose();
   }
 

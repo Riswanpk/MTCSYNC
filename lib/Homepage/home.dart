@@ -147,10 +147,12 @@ class _HomePageState extends State<HomePage>
   void dispose() {
     _authSubscription?.cancel();
     _fcmTokenSubscription?.cancel();
-    try {
-      _widgetClickSub?.cancel();
-    } catch (_) {
-      // No active stream to cancel — safe to ignore
+    if (_widgetClickSub != null) {
+      try {
+        _widgetClickSub?.cancel();
+      } catch (_) {
+        // No active stream to cancel — safe to ignore
+      }
     }
     SmeNotificationService.instance.stopListening();
     routeObserver.unsubscribe(this);
