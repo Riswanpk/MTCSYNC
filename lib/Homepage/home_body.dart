@@ -24,7 +24,6 @@ import '../DME/services/dme_supabase_service.dart';
 import '../DME/screens/dme_sales_upload.dart';
 import '../DME/screens/dme_customer_list.dart';
 import '../DME/screens/dme_reminders_and_calls.dart';
-import '../DME/screens/dme_product_upload.dart';
 import '../DME/screens/dme_customer_db_upload.dart';
 import '../DME/screens/dme_user_management.dart';
 import '../DME/screens/dme_dashboard.dart';
@@ -442,22 +441,12 @@ class HomeButtonsContainer extends StatelessWidget {
 
   /// Builds the DME-specific home tiles.
   Widget _buildDmeTiles(BuildContext context) {
-    // dme_admin sees Products, Dashboard, Customer DB Upload, and Complaints
+    // dme_admin sees Dashboard, Customer DB Upload, and Complaints
     if (role == 'dme_admin') {
       return Column(
         children: [
           Row(
             children: [
-              Expanded(
-                child: NeumorphicButton(
-                  onTap: () => _navigateToDmeProductUpload(context),
-                  text: 'Products',
-                  color: const Color(0xFF7B68EE),
-                  textColor: Colors.white,
-                  icon: Icons.inventory_2,
-                ),
-              ),
-              const SizedBox(width: 14),
               Expanded(
                 child: NeumorphicButton(
                   onTap: () => _navigateToDmeDashboard(context),
@@ -467,11 +456,7 @@ class HomeButtonsContainer extends StatelessWidget {
                   icon: Icons.analytics_rounded,
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
+              const SizedBox(width: 14),
               Expanded(
                 child: NeumorphicButton(
                   onTap: () => _navigateToDmeCustomerDbUpload(context),
@@ -479,6 +464,20 @@ class HomeButtonsContainer extends StatelessWidget {
                   color: const Color(0xFF20B2AA),
                   textColor: Colors.white,
                   icon: Icons.storage_rounded,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: NeumorphicButton(
+                  onTap: () => _navigateToDmeComplaints(context),
+                  text: 'Complaints',
+                  color: const Color(0xFFFF6B6B),
+                  textColor: Colors.white,
+                  icon: Icons.warning_rounded,
                 ),
               ),
               const SizedBox(width: 14),
@@ -775,12 +774,6 @@ class HomeButtonsContainer extends StatelessWidget {
     if (dmeUser == null || !context.mounted) return;
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => DmeRemindersAndCallsPage(dmeUser: dmeUser)),
-    );
-  }
-
-  Future<void> _navigateToDmeProductUpload(BuildContext context) async {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const DmeProductUploadPage()),
     );
   }
 

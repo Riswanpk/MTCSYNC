@@ -3,7 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../dme_config.dart';
 import '../models/dme_user.dart';
-import '../models/dme_product.dart';
 import '../models/dme_customer.dart';
 import '../models/dme_sale.dart';
 import '../models/dme_reminder.dart';
@@ -311,29 +310,7 @@ class DmeSupabaseService {
     }
   }
 
-  // ── Products ─────────────────────────────────────────────────
-  Future<List<DmeProduct>> getProducts({String? search}) async {
-    await ensureInitialized();
-    var query = _client.from('dme_products').select();
-    if (search != null && search.isNotEmpty) {
-      query = query.ilike('name', '%$search%');
-    }
-    final res = await query.order('name');
-    return (res as List).map((e) => DmeProduct.fromMap(e)).toList();
-  }
 
-  Future<int> getProductCount() async {
-    await ensureInitialized();
-    final res =
-        await _client.from('dme_products').select('id').count(CountOption.exact);
-    return res.count;
-  }
-
-  Future<void> upsertProducts(List<DmeProduct> products) async {
-    await ensureInitialized();
-    final rows = products.map((p) => p.toInsertMap()).toList();
-    await _client.from('dme_products').upsert(rows, onConflict: 'name');
-  }
 
   // ── Categories & Types (Lookup) ──────────────────────────────
   /// Looks up category ID by name. Returns null if not found.
@@ -902,23 +879,19 @@ class DmeSupabaseService {
 
   // ── Dashboard stats ──────────────────────────────────────────
   Future<Map<String, int>> getDashboardCounts() async {
-    // Fetch TOTAL customer count directly from table
+    // Fetch TOTAL customer count using count() to avoid 1000 row limit
     int customerCount = 0;
     
     try {
       await ensureInitialized();
       
-      final customers = await _client
+      final response = await _client
           .from('dme_customers')
-          .select('id');
+          .select('id')
+          .count(CountOption.exact);
       
-      if (customers != null) {
-        customerCount = (customers as List).length;
-        debugPrint('Successfully fetched customer count: $customerCount');
-      } else {
-        debugPrint('Null response from dme_customers query');
-        customerCount = 0;
-      }
+      customerCount = response.count;
+      debugPrint('Successfully fetched customer count: $customerCount');
     } catch (e) {
       debugPrint('Error getting customer count: $e');
       customerCount = 0;

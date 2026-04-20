@@ -5,7 +5,6 @@ import 'services/dme_supabase_service.dart';
 import 'models/dme_user.dart';
 import '../Misc/theme_notifier.dart';
 import 'screens/dme_reminders_and_calls.dart';
-import 'screens/dme_product_upload.dart';
 import 'screens/dme_customer_db_upload.dart';
 import 'screens/dme_user_management.dart';
 import 'screens/dme_dashboard.dart';
@@ -232,19 +231,26 @@ class _DmeHomePageState extends State<DmeHomePage> {
                   )),
             ),
             const SizedBox(height: 10),
-            _tileRow(
-              left: _DmeTile(
-                icon: Icons.inventory_2_rounded,
-                label: 'Products',
-                color: const Color(0xFF607D8B),
-                onTap: () => _navigate(const DmeProductUploadPage()),
-              ),
-              right: _DmeTile(
-                icon: Icons.dashboard_rounded,
-                label: 'Dashboard',
-                color: const Color(0xFF607D8B),
-                onTap: () => _navigate(const DmeDashboardPage()),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: _DmeTile(
+                    icon: Icons.dashboard_rounded,
+                    label: 'Dashboard',
+                    color: const Color(0xFF607D8B),
+                    onTap: () => _navigate(const DmeDashboardPage()),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: _DmeTile(
+                    icon: Icons.upload_file_rounded,
+                    label: 'Uploads',
+                    color: const Color(0xFF607D8B),
+                    onTap: () => _navigate(const DmeCustomerDbUploadPage()),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 14),
             _DmeTile(
