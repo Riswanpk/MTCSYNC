@@ -6,6 +6,7 @@ class DmeCustomer {
   final String? address;
   final int? branchId;
   final String? branchName;
+  final int? purchasedForBranchId;  // Branch ID if customer was purchased from a different branch
   final String? category;
   final String? customerType;
   final int? categoryId;      // ← NEW: FK to dme_categories
@@ -21,6 +22,7 @@ class DmeCustomer {
     this.address,
     this.branchId,
     this.branchName,
+    this.purchasedForBranchId,
     this.category,
     this.customerType,
     this.categoryId,
@@ -40,6 +42,7 @@ class DmeCustomer {
       branchName: (map['dme_branches'] is Map)
           ? map['dme_branches']['name'] as String?
           : null,
+      purchasedForBranchId: map['purchased_for_branch_id'] as int?,
       category: map['category'] as String?,
       customerType: map['customer_type'] as String?,
       categoryId: map['category_id'] as int?,      // ← NEW
@@ -57,6 +60,7 @@ class DmeCustomer {
         'phone': normalizePhone(phone),
         'address': address,
         'branch_id': branchId,
+        'purchased_for_branch_id': purchasedForBranchId,
         'category_id': categoryId,        // FK only (TEXT column removed from DB)
         'customer_type_id': customerTypeId,  // FK only (TEXT column removed from DB)
         'salesman': salesman,

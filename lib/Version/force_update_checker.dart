@@ -6,8 +6,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 /// Firestore path: `config/app_config`
 /// Required field:  `min_version_code` (int)  — matches Android versionCode
 ///
-/// To force all users below versionCode 147 to update, set:
-///   config/app_config → { min_version_code: 147 }
+/// To force all users below versionCode 148 to update, set:
+///   config/app_config → { min_version_code: 148 }
 class ForceUpdateChecker {
   static Future<bool> isUpdateRequired() async {
     try {

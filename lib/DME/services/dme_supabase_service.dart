@@ -82,6 +82,7 @@ class DmeSupabaseService {
   /// Upserts the fixed app branch list into dme_branches (runs once per session).
   Future<void> _syncAppBranches() async {
     if (_branchesSynced) return;
+    await ensureInitialized();
     await _client.from('dme_branches').upsert(
       kAppBranches.map((name) => {'name': name}).toList(),
       onConflict: 'name',
@@ -134,6 +135,7 @@ class DmeSupabaseService {
   }
 
   Future<List<String>> getUserBranchNames(String dmeUserId) async {
+    await ensureInitialized();
     final res = await _client
         .from('dme_user_branches')
         .select('branch_id, dme_branches(name)')
@@ -144,6 +146,7 @@ class DmeSupabaseService {
   }
 
   Future<List<int>> getUserBranchIds(String dmeUserId) async {
+    await ensureInitialized();
     final res = await _client
         .from('dme_user_branches')
         .select('branch_id')
@@ -155,6 +158,7 @@ class DmeSupabaseService {
 
   // ── DME Users (admin) ────────────────────────────────────────
   Future<List<DmeUser>> getAllDmeUsers() async {
+    await ensureInitialized();
     final res = await _client.from('dme_users').select().order('username');
     final users = <DmeUser>[];
     for (final row in res) {
@@ -171,6 +175,7 @@ class DmeSupabaseService {
     required String role,
     required List<int> branchIds,
   }) async {
+    await ensureInitialized();
     final row = await _client.from('dme_users').insert({
       'firebase_uid': firebaseUid,
       'email': email,
@@ -188,10 +193,12 @@ class DmeSupabaseService {
   }
 
   Future<void> updateDmeUserRole(String userId, String role) async {
+    await ensureInitialized();
     await _client.from('dme_users').update({'role': role}).eq('id', userId);
   }
 
   Future<void> setUserBranches(String userId, List<int> branchIds) async {
+    await ensureInitialized();
     await _client.from('dme_user_branches').delete().eq('user_id', userId);
     if (branchIds.isNotEmpty) {
       await _client.from('dme_user_branches').insert(
@@ -202,6 +209,7 @@ class DmeSupabaseService {
   }
 
   Future<void> deleteDmeUser(String userId) async {
+    await ensureInitialized();
     await _client.from('dme_users').delete().eq('id', userId);
   }
 
@@ -305,6 +313,7 @@ class DmeSupabaseService {
 
   // ── Products ─────────────────────────────────────────────────
   Future<List<DmeProduct>> getProducts({String? search}) async {
+    await ensureInitialized();
     var query = _client.from('dme_products').select();
     if (search != null && search.isNotEmpty) {
       query = query.ilike('name', '%$search%');
@@ -314,12 +323,14 @@ class DmeSupabaseService {
   }
 
   Future<int> getProductCount() async {
+    await ensureInitialized();
     final res =
         await _client.from('dme_products').select('id').count(CountOption.exact);
     return res.count;
   }
 
   Future<void> upsertProducts(List<DmeProduct> products) async {
+    await ensureInitialized();
     final rows = products.map((p) => p.toInsertMap()).toList();
     await _client.from('dme_products').upsert(rows, onConflict: 'name');
   }
@@ -327,6 +338,7 @@ class DmeSupabaseService {
   // ── Categories & Types (Lookup) ──────────────────────────────
   /// Looks up category ID by name. Returns null if not found.
   Future<int?> getCategoryIdByName(String name) async {
+    await ensureInitialized();
     try {
       final res = await _client
           .from('dme_categories')
@@ -342,6 +354,7 @@ class DmeSupabaseService {
 
   /// Looks up customer type ID by name. Returns null if not found.
   Future<int?> getTypeIdByName(String name) async {
+    await ensureInitialized();
     try {
       final res = await _client
           .from('dme_customer_types')
@@ -367,12 +380,14 @@ class DmeSupabaseService {
     int limit = 50,
     int offset = 0,
   }) async {
+    await ensureInitialized();
     var query = _client
         .from('dme_customers')
         .select('*, dme_branches(name), dme_categories(id, name), dme_customer_types(id, name)');
 
     if (branchIds != null && branchIds.isNotEmpty) {
-      query = query.inFilter('branch_id', branchIds);
+      // Include customers from primary branch OR where purchased_for_branch_id matches
+      query = query.or('branch_id.in.(${branchIds.join(',')}),purchased_for_branch_id.in.(${branchIds.join(",")})');
     }
     if (search != null && search.isNotEmpty) {
       query = query.or('name.ilike.%$search%,phone.ilike.%$search%');
@@ -408,6 +423,7 @@ class DmeSupabaseService {
 
   /// Find customer by phone (phone is now the sole unique key).
   Future<DmeCustomer?> findCustomerByPhone(String phone) async {
+    await ensureInitialized();
     final normalized = DmeCustomer.normalizePhone(phone);
     if (normalized.isEmpty) return null;
     final res = await _client
@@ -419,6 +435,7 @@ class DmeSupabaseService {
   }
 
   Future<DmeCustomer> upsertCustomer(DmeCustomer customer) async {
+    await ensureInitialized();
     final map = customer.toInsertMap();
     map['updated_at'] = DateTime.now().toUtc().toIso8601String();
     final res = await _client
@@ -432,6 +449,7 @@ class DmeSupabaseService {
   /// Append an alternate name to a customer's purchased_for field.
   /// Skips if the name is already present (case-insensitive).
   Future<void> appendPurchasedFor(int customerId, String alternateName) async {
+    await ensureInitialized();
     final res = await _client
         .from('dme_customers')
         .select('purchased_for')
@@ -453,6 +471,7 @@ class DmeSupabaseService {
 
   Future<void> upsertCustomersBatch(
       List<Map<String, dynamic>> rows, {void Function(int done, int total)? onProgress}) async {
+    await ensureInitialized();
     const batchSize = 500;
     for (var i = 0; i < rows.length; i += batchSize) {
       final batch = rows.sublist(
@@ -463,6 +482,7 @@ class DmeSupabaseService {
   }
 
   Future<void> updateLastPurchaseDate(int customerId, DateTime date) async {
+    await ensureInitialized();
     await _client.from('dme_customers').update({
       'last_purchase_date': date.toIso8601String().split('T')[0],
       'updated_at': DateTime.now().toUtc().toIso8601String(),
@@ -471,6 +491,7 @@ class DmeSupabaseService {
 
   // ── Sales ────────────────────────────────────────────────────
   Future<int> insertSale(DmeSale sale) async {
+    await ensureInitialized();
     final res = await _client
         .from('dme_sales')
         .upsert(sale.toInsertMap(), onConflict: 'date,customer_id')
@@ -490,6 +511,7 @@ class DmeSupabaseService {
   }
 
   Future<List<DmeSale>> getSalesByDate(DateTime date, {List<int>? branchIds}) async {
+    await ensureInitialized();
     var query = _client
         .from('dme_sales')
         .select('*, dme_customers(name, phone, branch_id), dme_sale_items(*)');
@@ -511,6 +533,7 @@ class DmeSupabaseService {
   }
 
   Future<List<DmeSale>> getSalesForCustomer(int customerId) async {
+    await ensureInitialized();
     final res = await _client
         .from('dme_sales')
         .select('*, dme_sale_items(*)')
@@ -531,6 +554,7 @@ class DmeSupabaseService {
     Map<String, dynamic>? purchaseDetails, // items, salesman, etc.
   }) async {
     try {
+      await ensureInitialized();
       final purchaseDateStr = purchaseDate.toIso8601String().split('T')[0];
       
       // Check if purchase already exists
@@ -566,6 +590,7 @@ class DmeSupabaseService {
   /// Get assigned DME user for a specific branch
   Future<DmeUser?> getDmeUserForBranch(int branchId) async {
     try {
+      await ensureInitialized();
       final res = await _client
           .from('dme_users')
           .select()
@@ -590,6 +615,7 @@ class DmeSupabaseService {
     String? assignedTo,
     Map<String, dynamic>? purchaseDetails,
   }) async {
+    await ensureInitialized();
     // First, record the purchase with branch information
     // Returns false if purchase already existed (duplicate)
     final purchaseIsNew = await recordPurchaseWithBranch(
@@ -687,6 +713,7 @@ class DmeSupabaseService {
     DateTime? from,
     DateTime? to,
   }) async {
+    await ensureInitialized();
     var query = _client
         .from('dme_reminders')
         .select('*, dme_customers(name, phone, address, branch_id, salesman)');
@@ -722,6 +749,7 @@ class DmeSupabaseService {
   }
 
   Future<void> updateReminderStatus(int id, String status, {String? notes}) async {
+    await ensureInitialized();
     final map = <String, dynamic>{'status': status};
     if (notes != null) map['notes'] = notes;
     await _client.from('dme_reminders').update(map).eq('id', id);
@@ -731,6 +759,7 @@ class DmeSupabaseService {
   /// Returns empty list if no sale exists or items have been deleted.
   Future<List<DmeSaleItem>> getSaleItemsByCustomerDate(
       int customerId, DateTime date) async {
+    await ensureInitialized();
     final dateStr = date.toIso8601String().split('T')[0];
     final res = await _client
         .from('dme_sales')
@@ -747,6 +776,7 @@ class DmeSupabaseService {
   /// Hard-delete sale items for a customer's purchase date after call+remarks.
   Future<void> deleteSaleItemsByCustomerDate(
       int customerId, DateTime date) async {
+    await ensureInitialized();
     final dateStr = date.toIso8601String().split('T')[0];
     final res = await _client
         .from('dme_sales')
@@ -774,6 +804,7 @@ class DmeSupabaseService {
 
   /// Get call logs for a customer (returns reminders with 'called' status)
   Future<List<Map<String, dynamic>>> getCallLogs(int customerId) async {
+    await ensureInitialized();
     final res = await _client
         .from('dme_reminders')
         .select()
@@ -819,6 +850,7 @@ class DmeSupabaseService {
     required DateTime from,
     required DateTime to,
   }) async {
+    await ensureInitialized();
     final res = await _client
         .from('dme_sales')
         .select('total_quantity, dme_customers(branch_id, dme_branches(name))')
@@ -847,6 +879,7 @@ class DmeSupabaseService {
     required DateTime to,
     int limit = 10,
   }) async {
+    await ensureInitialized();
     final res = await _client
         .from('dme_sales')
         .select('salesman, total_quantity')
@@ -877,6 +910,7 @@ class DmeSupabaseService {
     required DateTime to,
     List<int>? branchIds,
   }) async {
+    await ensureInitialized();
     // Get unique customers from purchases within date range
     var purchaseQuery = _client
         .from('dme_customer_purchases')
@@ -923,6 +957,7 @@ class DmeSupabaseService {
     required String branchName,
     void Function(int done, int total)? onProgress,
   }) async {
+    await ensureInitialized();
     int created = 0;
     int linkedToExisting = 0;
     int remindersCreated = 0;
@@ -957,26 +992,40 @@ class DmeSupabaseService {
         // Check if phone already exists
         final existingRes = await _client
             .from('dme_customers')
-            .select('id, name, purchased_for')
+            .select('id, name, purchased_for, branch_id')
             .eq('phone', customer.phone)
             .maybeSingle();
         
         int customerId;
         if (existingRes != null) {
           customerId = existingRes['id'] as int;
+          final existingBranchId = existingRes['branch_id'] as int?;
+          
           // Append alternate name to purchased_for if name differs
           final existingName = (existingRes['name'] as String? ?? '').toLowerCase().trim();
           if (existingName != customer.name.toLowerCase().trim() &&
               customer.name.isNotEmpty) {
             await appendPurchasedFor(customerId, customer.name);
           }
-          // Update last_purchase_date, category_id, and customer_type_id
-          await _client.from('dme_customers').update({
+          
+          // Track the purchased_for_branch_id if this is from a different branch
+          int? purchasedForBranchIdToSet;
+          if (existingBranchId != branchId) {
+            purchasedForBranchIdToSet = branchId;
+          }
+          
+          // Update last_purchase_date, category_id, customer_type_id, and purchased_for_branch_id
+          final updateMap = {
             'last_purchase_date': customer.lastPurchaseDate?.toIso8601String().split('T')[0],
             'category_id': categoryId,
             'customer_type_id': typeId,
             'updated_at': DateTime.now().toUtc().toIso8601String(),
-          }).eq('id', customerId);
+          };
+          if (purchasedForBranchIdToSet != null) {
+            updateMap['purchased_for_branch_id'] = purchasedForBranchIdToSet;
+          }
+          
+          await _client.from('dme_customers').update(updateMap).eq('id', customerId);
           linkedToExisting++;
         } else {
           // New customer

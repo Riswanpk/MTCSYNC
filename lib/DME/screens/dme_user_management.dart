@@ -21,7 +21,15 @@ class _DmeUserManagementPageState extends State<DmeUserManagementPage> {
   @override
   void initState() {
     super.initState();
-    _load();
+    // Initialize Supabase before loading DME users
+    _initializeAndLoad();
+  }
+
+  Future<void> _initializeAndLoad() async {
+    await _svc.ensureInitialized();
+    if (mounted) {
+      _load();
+    }
   }
 
   Future<void> _load() async {
