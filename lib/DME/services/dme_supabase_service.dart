@@ -651,18 +651,47 @@ class DmeSupabaseService {
 
     query = query.eq('date', date.toIso8601String().split('T')[0]);
 
-    final res = await query.order('uploaded_at', ascending: false);
-    final sales = (res as List).map((e) => DmeSale.fromMap(e)).toList();
+    // Paginate through all sales for the date to avoid hitting the 1000 row limit
+    final allSales = <DmeSale>[];
+    final rawRows = <Map<String, dynamic>>[];
+    const pageSize = 1000;
+    int offset = 0;
+    bool hasMore = true;
+    
+    while (hasMore) {
+      final res = await query
+          .order('uploaded_at', ascending: false)
+          .range(offset, offset + pageSize - 1);
+      
+      if ((res as List).isEmpty) {
+        hasMore = false;
+      } else {
+        for (var row in res) {
+          allSales.add(DmeSale.fromMap(row as Map<String, dynamic>));
+          rawRows.add(row as Map<String, dynamic>);
+        }
+        offset += pageSize;
+        hasMore = (res as List).length == pageSize;
+      }
+    }
+
     if (branchIds != null && branchIds.isNotEmpty) {
-      return sales
-          .where((s) =>
-              s.customerId != null &&
-              branchIds.contains(
-                  (res.firstWhere((r) => r['id'] == s.id)['dme_customers']
-                      as Map?)?['branch_id']))
+      return allSales
+          .where((s) {
+            try {
+              final raw = rawRows.firstWhere((r) => r['id'] == s.id);
+              final custBranch =
+                  (raw['dme_customers'] as Map?)?['branch_id'] as int?;
+              return s.customerId != null &&
+                  custBranch != null &&
+                  branchIds.contains(custBranch);
+            } catch (e) {
+              return false;
+            }
+          })
           .toList();
     }
-    return sales;
+    return allSales;
   }
 
   Future<List<DmeSale>> getSalesForCustomer(int customerId) async {
@@ -931,22 +960,42 @@ class DmeSupabaseService {
       query = query.lte('reminder_date', to.toIso8601String().split('T')[0]);
     }
 
-    final res = await query.order('reminder_date', ascending: true);
-    debugPrint('getReminders raw response: ${res.toString()}');
+    // Paginate through all reminders to avoid hitting the 1000 row limit
+    final reminders = <DmeReminder>[];
+    final rawRows = <Map<String, dynamic>>[];
+    const pageSize = 1000;
+    int offset = 0;
+    bool hasMore = true;
     
-    var reminders =
-        (res as List).map((e) {
-          debugPrint('Mapping reminder: purchased_for_branch_id=${e['purchased_for_branch_id']}, purchased_for_branch_name=${e['purchased_for_branch_name']}');
-          return DmeReminder.fromMap(e);
-        }).toList();
+    while (hasMore) {
+      final res = await query
+          .order('reminder_date', ascending: true)
+          .range(offset, offset + pageSize - 1);
+      
+      if ((res as List).isEmpty) {
+        hasMore = false;
+      } else {
+        for (var row in res) {
+          reminders.add(DmeReminder.fromMap(row as Map<String, dynamic>));
+          rawRows.add(row as Map<String, dynamic>);
+        }
+        offset += pageSize;
+        hasMore = (res as List).length == pageSize;
+      }
+    }
 
+    // Filter by branch if needed
     if (branchIds != null && branchIds.isNotEmpty) {
-      reminders = reminders
+      return reminders
           .where((r) {
-            final raw = res.firstWhere((row) => row['id'] == r.id);
-            final custBranch =
-                (raw['dme_customers'] as Map?)?['branch_id'] as int?;
-            return custBranch != null && branchIds.contains(custBranch);
+            try {
+              final raw = rawRows.firstWhere((row) => row['id'] == r.id);
+              final custBranch =
+                  (raw['dme_customers'] as Map?)?['branch_id'] as int?;
+              return custBranch != null && branchIds.contains(custBranch);
+            } catch (e) {
+              return false;
+            }
           })
           .toList();
     }
