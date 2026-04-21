@@ -55,8 +55,7 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
   bool _loadingMore = false;
   int? _selectedCategoryId; // ← NEW: Use ID instead of name
   int? _selectedTypeId; // ← NEW: Use ID instead of name
-  DateTime? _dateFrom;
-  DateTime? _dateTo;
+  DateTimeRange? _dateRange;
   String? _selectedSalesman;
   int _offset = 0;
   static const _pageSize = 50;
@@ -78,7 +77,6 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
     try {
       // Load all available branches
       final branches = await _svc.getBranches();
-      print('DEBUG: Branches loaded: ${branches.length}');
       
       setState(() {
         _availableBranches = [];
@@ -88,23 +86,19 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
           try {
             final name = b['name'] as String?;
             final id = b['id'] as int?;
-            print('DEBUG: Branch data - name: $name, id: $id');
-            // Only include branches assigned to this user
-            if (name != null && id != null && _branchIds.contains(id)) {
+            // Show all branches for admins, or only assigned branches for regular users
+            if (name != null && id != null && (widget.dmeUser.isAdmin || _branchIds.contains(id))) {
               _availableBranches.add(name);
               _branchNameToId[name] = id;
             }
           } catch (e) {
-            print('DEBUG: Error parsing branch: $b, error: $e');
+            // Silently ignore parsing errors
           }
         }
         _availableBranches.sort(); // Sort alphabetically
       });
-      print('DEBUG: Available branches: $_availableBranches');
-      print('DEBUG: Branch ID map: $_branchNameToId');
-    } catch (e, st) {
-      print('ERROR loading branches: $e');
-      print('Stack trace: $st');
+    } catch (e) {
+      // Silently handle errors
     }
   }
 
@@ -120,7 +114,6 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
     try {
       final branchId = _branchNameToId[branchName];
       if (branchId == null) {
-        print('ERROR: Branch ID not found for: $branchName');
         setState(() {
           _availableSalesmen = [];
           _selectedSalesman = null;
@@ -128,20 +121,16 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
         return;
       }
 
-      print('DEBUG: Loading salesmen for branch: $branchName (ID: $branchId)');
-
       // Load customers for selected branch only
       final branchCustomers = await _svc.getCustomers(
         branchIds: [branchId],
         limit: 500,
         offset: 0,
       );
-      print('DEBUG: Customers in branch loaded: ${branchCustomers.length}');
 
       final uniqueSalesmen = <String>{};
       for (var customer in branchCustomers) {
         if (customer.salesman != null && customer.salesman!.isNotEmpty) {
-          print('DEBUG: Found salesman in branch: ${customer.salesman}');
           uniqueSalesmen.add(customer.salesman!);
         }
       }
@@ -150,10 +139,7 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
         _availableSalesmen = uniqueSalesmen.toList()..sort();
         _selectedSalesman = null; // Reset salesman selection
       });
-      print('DEBUG: Available salesmen for branch: $_availableSalesmen');
-    } catch (e, st) {
-      print('ERROR loading salesmen for branch: $e');
-      print('Stack trace: $st');
+    } catch (e) {
       setState(() {
         _availableSalesmen = [];
         _selectedSalesman = null;
@@ -173,21 +159,17 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
     // Use selected branch filter if set, otherwise use defaults
     final effectiveBranchIds = branchFilter ?? (widget.dmeUser.isAdmin ? null : _branchIds);
     
-    print('DEBUG: _loadCustomers - branchFilter: $branchFilter, isAdmin: ${widget.dmeUser.isAdmin}, effectiveBranchIds: $effectiveBranchIds');
-    
     final results = await _svc.getCustomers(
       branchIds: effectiveBranchIds,
       search: _searchCtrl.text.isEmpty ? null : _searchCtrl.text,
       categoryId: _selectedCategoryId,
       customerTypeId: _selectedTypeId,
-      lastPurchaseDateFrom: _dateFrom,
-      lastPurchaseDateTo: _dateTo,
+      lastPurchaseDateFrom: _dateRange?.start,
+      lastPurchaseDateTo: _dateRange?.end,
       salesman: _selectedSalesman,
       limit: _pageSize,
       offset: _offset,
     );
-    
-    print('DEBUG: _loadCustomers returned ${results.length} customers');
     
     setState(() {
       if (append) {
@@ -360,27 +342,15 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
                 Row(
                   children: [
                     Expanded(
-                      child: _DateFilterButton(
-                        label: 'From',
-                        date: _dateFrom,
-                        onDateChanged: (date) {
-                          setState(() => _dateFrom = date);
+                      child: _DateRangeFilterButton(
+                        dateRange: _dateRange,
+                        onDateRangeChanged: (dateRange) {
+                          setState(() => _dateRange = dateRange);
                           _search();
                         },
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _DateFilterButton(
-                        label: 'To',
-                        date: _dateTo,
-                        onDateChanged: (date) {
-                          setState(() => _dateTo = date);
-                          _search();
-                        },
-                      ),
-                    ),
-                    if (_dateFrom != null || _dateTo != null)
+                    if (_dateRange != null)
                       IconButton(
                         icon: const Icon(Icons.clear_rounded,
                             color: Colors.white, size: 18),
@@ -388,10 +358,7 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
                         constraints:
                             const BoxConstraints(minWidth: 36, minHeight: 36),
                         onPressed: () {
-                          setState(() {
-                            _dateFrom = null;
-                            _dateTo = null;
-                          });
+                          setState(() => _dateRange = null);
                           _search();
                         },
                       ),
@@ -453,7 +420,69 @@ class _DmeCustomerListPageState extends State<DmeCustomerListPage> {
   }
 }
 
-// ── Date Filter Button ────────────────────────────────────────────────────
+// ── Date Range Filter Button ────────────────────────────────────────────────
+
+class _DateRangeFilterButton extends StatelessWidget {
+  final DateTimeRange? dateRange;
+  final ValueChanged<DateTimeRange?> onDateRangeChanged;
+
+  const _DateRangeFilterButton({
+    required this.dateRange,
+    required this.onDateRangeChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () async {
+        final picked = await showDateRangePicker(
+          context: context,
+          firstDate: DateTime(2020),
+          lastDate: DateTime.now(),
+          initialDateRange: dateRange,
+        );
+        if (picked != null) {
+          onDateRangeChanged(picked);
+        }
+      },
+      child: Container(
+        height: 40,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: dateRange != null
+                ? Colors.white
+                : Colors.white.withValues(alpha: 0.3),
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Flexible(
+              child: Text(
+                dateRange != null
+                    ? '${DateFormat('MMM dd, yy').format(dateRange!.start)} - ${DateFormat('MMM dd, yy').format(dateRange!.end)}'
+                    : 'Select Date Range',
+                style: TextStyle(
+                  color: dateRange != null ? Colors.white : Colors.white70,
+                  fontSize: 12,
+                  fontWeight: dateRange != null ? FontWeight.w600 : FontWeight.normal,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const Icon(Icons.calendar_today_rounded,
+                color: Colors.white, size: 14),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Filter Dropdown ────────────────────────────────────────────────────────
 
 class _DateFilterButton extends StatelessWidget {
   final String label;

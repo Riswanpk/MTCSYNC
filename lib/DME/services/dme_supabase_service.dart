@@ -501,12 +501,46 @@ class DmeSupabaseService {
       query = query.eq('customer_type_id', customerTypeId);
     }
 
-    // Date range filter for last purchase date
-    if (lastPurchaseDateFrom != null) {
-      query = query.gte('last_purchase_date', lastPurchaseDateFrom.toIso8601String().split('T')[0]);
-    }
-    if (lastPurchaseDateTo != null) {
-      query = query.lte('last_purchase_date', lastPurchaseDateTo.toIso8601String().split('T')[0]);
+    // Date range filter - get customers with ANY purchase in the date range from dme_customer_purchases
+    if (lastPurchaseDateFrom != null || lastPurchaseDateTo != null) {
+      var purchaseQuery = _client.from('dme_customer_purchases').select('customer_id');
+      
+      if (lastPurchaseDateFrom != null) {
+        purchaseQuery = purchaseQuery.gte('purchase_date', lastPurchaseDateFrom.toIso8601String().split('T')[0]);
+      }
+      if (lastPurchaseDateTo != null) {
+        purchaseQuery = purchaseQuery.lte('purchase_date', lastPurchaseDateTo.toIso8601String().split('T')[0]);
+      }
+      
+      // Paginate through all purchase records to avoid hitting the 1000 row limit
+      final customerIdSet = <int>{};
+      const pageSize = 1000;
+      int offset = 0;
+      bool hasMore = true;
+      
+      while (hasMore) {
+        final purchaseRows = await purchaseQuery
+            .range(offset, offset + pageSize - 1);
+        
+        if ((purchaseRows as List).isEmpty) {
+          hasMore = false;
+        } else {
+          for (var row in purchaseRows) {
+            final customerId = row['customer_id'] as int?;
+            if (customerId != null) {
+              customerIdSet.add(customerId);
+            }
+          }
+          offset += pageSize;
+          hasMore = (purchaseRows as List).length == pageSize;
+        }
+      }
+      
+      if (customerIdSet.isEmpty) {
+        return []; // No purchases in the date range
+      }
+      
+      query = query.inFilter('id', customerIdSet.toList());
     }
 
     // Salesman filter
