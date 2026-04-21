@@ -44,10 +44,23 @@ class DmeSupabaseService {
         'hint': 'Check your Supabase anon key in lib/DME/dme_config.dart',
       };
     } catch (e) {
+      final errorString = e.toString().toLowerCase();
+      if (errorString.contains('host lookup') || 
+          errorString.contains('socket') ||
+          errorString.contains('no address associated') ||
+          errorString.contains('failed to connect') ||
+          errorString.contains('network')) {
+        return {
+          'status': 'network_error',
+          'message': 'Cannot reach Supabase server',
+          'error': e.toString(),
+          'hint': 'Check internet connection. Supabase URL: $supabaseUrl',
+        };
+      }
       return {
         'status': 'error',
         'message': e.toString(),
-        'hint': 'Verify Supabase URL and anon key are correct',
+        'hint': 'Verify Supabase URL and anon key in lib/DME/dme_config.dart',
       };
     }
   }
@@ -57,16 +70,22 @@ class DmeSupabaseService {
     if (_currentUser != null && _currentUser!.firebaseUid == firebaseUid) {
       return _currentUser;
     }
-    final res = await _client
-        .from('dme_users')
-        .select()
-        .eq('firebase_uid', firebaseUid)
-        .maybeSingle();
-    if (res == null) return null;
+    try {
+      final res = await _client
+          .from('dme_users')
+          .select()
+          .eq('firebase_uid', firebaseUid)
+          .maybeSingle();
+      if (res == null) return null;
 
-    final branches = await getUserBranchNames(res['id'] as String);
-    _currentUser = DmeUser.fromMap(res, branches: branches);
-    return _currentUser;
+      final branches = await getUserBranchNames(res['id'] as String);
+      _currentUser = DmeUser.fromMap(res, branches: branches);
+      return _currentUser;
+    } catch (e) {
+      debugPrint('Network error getting current user: $e');
+      // Return cached user if available, otherwise null
+      return _currentUser;
+    }
   }
 
   void clearCache() => _currentUser = null;
@@ -135,36 +154,53 @@ class DmeSupabaseService {
 
   Future<List<String>> getUserBranchNames(String dmeUserId) async {
     await ensureInitialized();
-    final res = await _client
-        .from('dme_user_branches')
-        .select('branch_id, dme_branches(name)')
-        .eq('user_id', dmeUserId);
-    return List<Map<String, dynamic>>.from(res)
-        .map((e) => (e['dme_branches'] as Map)['name'] as String)
-        .toList();
+    try {
+      final res = await _client
+          .from('dme_user_branches')
+          .select('branch_id, dme_branches(name)')
+          .eq('user_id', dmeUserId);
+      return List<Map<String, dynamic>>.from(res)
+          .map((e) => (e['dme_branches'] as Map)['name'] as String)
+          .toList();
+    } catch (e) {
+      debugPrint('Network error fetching user branches for $dmeUserId: $e');
+      // Return empty list on network error - allow graceful degradation
+      return [];
+    }
   }
 
   Future<List<int>> getUserBranchIds(String dmeUserId) async {
     await ensureInitialized();
-    final res = await _client
-        .from('dme_user_branches')
-        .select('branch_id')
-        .eq('user_id', dmeUserId);
-    return List<Map<String, dynamic>>.from(res)
-        .map((e) => e['branch_id'] as int)
-        .toList();
+    try {
+      final res = await _client
+          .from('dme_user_branches')
+          .select('branch_id')
+          .eq('user_id', dmeUserId);
+      return List<Map<String, dynamic>>.from(res)
+          .map((e) => e['branch_id'] as int)
+          .toList();
+    } catch (e) {
+      debugPrint('Network error fetching user branch IDs for $dmeUserId: $e');
+      // Return empty list on network error
+      return [];
+    }
   }
 
   // ── DME Users (admin) ────────────────────────────────────────
   Future<List<DmeUser>> getAllDmeUsers() async {
     await ensureInitialized();
-    final res = await _client.from('dme_users').select().order('username');
-    final users = <DmeUser>[];
-    for (final row in res) {
-      final branches = await getUserBranchNames(row['id'] as String);
-      users.add(DmeUser.fromMap(row, branches: branches));
+    try {
+      final res = await _client.from('dme_users').select().order('username');
+      final users = <DmeUser>[];
+      for (final row in res) {
+        final branches = await getUserBranchNames(row['id'] as String);
+        users.add(DmeUser.fromMap(row, branches: branches));
+      }
+      return users;
+    } catch (e) {
+      debugPrint('Network error fetching all DME users: $e');
+      return [];
     }
-    return users;
   }
 
   Future<DmeUser> createDmeUser({
@@ -175,20 +211,25 @@ class DmeSupabaseService {
     required List<int> branchIds,
   }) async {
     await ensureInitialized();
-    final row = await _client.from('dme_users').insert({
-      'firebase_uid': firebaseUid,
-      'email': email,
-      'username': username,
-      'role': role,
-    }).select().single();
+    try {
+      final row = await _client.from('dme_users').insert({
+        'firebase_uid': firebaseUid,
+        'email': email,
+        'username': username,
+        'role': role,
+      }).select().single();
 
-    if (branchIds.isNotEmpty) {
-      await _client.from('dme_user_branches').insert(
-        branchIds.map((bid) => {'user_id': row['id'], 'branch_id': bid}).toList(),
-      );
+      if (branchIds.isNotEmpty) {
+        await _client.from('dme_user_branches').insert(
+          branchIds.map((bid) => {'user_id': row['id'], 'branch_id': bid}).toList(),
+        );
+      }
+      final branches = await getUserBranchNames(row['id'] as String);
+      return DmeUser.fromMap(row, branches: branches);
+    } catch (e) {
+      debugPrint('Network error creating DME user: $e');
+      rethrow; // Let caller handle critical creation failures
     }
-    final branches = await getUserBranchNames(row['id'] as String);
-    return DmeUser.fromMap(row, branches: branches);
   }
 
   Future<void> updateDmeUserRole(String userId, String role) async {
@@ -198,13 +239,18 @@ class DmeSupabaseService {
 
   Future<void> setUserBranches(String userId, List<int> branchIds) async {
     await ensureInitialized();
-    await _client.from('dme_user_branches').delete().eq('user_id', userId);
-    if (branchIds.isNotEmpty) {
-      await _client.from('dme_user_branches').insert(
-        branchIds.map((bid) => {'user_id': userId, 'branch_id': bid}).toList(),
-      );
+    try {
+      await _client.from('dme_user_branches').delete().eq('user_id', userId);
+      if (branchIds.isNotEmpty) {
+        await _client.from('dme_user_branches').insert(
+          branchIds.map((bid) => {'user_id': userId, 'branch_id': bid}).toList(),
+        );
+      }
+      _currentUser = null; // invalidate cache
+    } catch (e) {
+      debugPrint('Network error setting user branches: $e');
+      rethrow; // Let caller handle critical update failures
     }
-    _currentUser = null; // invalidate cache
   }
 
   Future<void> deleteDmeUser(String userId) async {

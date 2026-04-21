@@ -131,11 +131,13 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
       }
       
       // Automatically trigger DB check after parse (and branch selection if needed)
-      if (mounted) {
+      if (mounted && _items != null) {
         await _checkRecords();
       }
     } catch (e) {
-      setState(() { _error = e.toString(); _picking = false; });
+      if (mounted) {
+        setState(() { _error = e.toString(); _picking = false; });
+      }
     }
   }
 
@@ -225,33 +227,45 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
 
   Future<void> _checkRecords() async {
     if (_items == null) return;
-    setState(() => _checking = true);
+    if (mounted) {
+      setState(() => _checking = true);
+    }
 
     for (final item in _items!) {
-      setState(() => item.status = _RecordStatus.checking);
+      if (mounted && _items != null) {
+        setState(() => item.status = _RecordStatus.checking);
+      }
       try {
         final phone = item.record.phone;
         if (phone == null || phone.trim().isEmpty) {
-          setState(() => item.status = _RecordStatus.newCustomer);
+          if (mounted && _items != null) {
+            setState(() => item.status = _RecordStatus.newCustomer);
+          }
           continue;
         }
         final existing = await _svc.findCustomerByPhone(phone);
-        if (existing != null) {
-          final nameMatch = existing.name.trim().toLowerCase() ==
-              item.record.customerName.trim().toLowerCase();
-          setState(() {
-            item.existingCustomer = existing;
-            item.status =
-                nameMatch ? _RecordStatus.matchFound : _RecordStatus.conflict;
-          });
-        } else {
-          setState(() => item.status = _RecordStatus.newCustomer);
+        if (mounted && _items != null) {
+          if (existing != null) {
+            final nameMatch = existing.name.trim().toLowerCase() ==
+                item.record.customerName.trim().toLowerCase();
+            setState(() {
+              item.existingCustomer = existing;
+              item.status =
+                  nameMatch ? _RecordStatus.matchFound : _RecordStatus.conflict;
+            });
+          } else {
+            setState(() => item.status = _RecordStatus.newCustomer);
+          }
         }
       } catch (_) {
-        setState(() => item.status = _RecordStatus.newCustomer);
+        if (mounted && _items != null) {
+          setState(() => item.status = _RecordStatus.newCustomer);
+        }
       }
     }
-    setState(() => _checking = false);
+    if (mounted) {
+      setState(() => _checking = false);
+    }
   }
 
   // ── Step 3: upload ────────────────────────────────────────────
@@ -268,7 +282,9 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
 
   Future<void> _upload() async {
     if (_items == null) return;
-    setState(() { _uploading = true; _error = null; });
+    if (mounted) {
+      setState(() { _uploading = true; _error = null; });
+    }
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
     final dmeUser = uid != null ? await _svc.getCurrentUser(uid) : null;
