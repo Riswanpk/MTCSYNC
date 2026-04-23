@@ -973,11 +973,13 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                                 builder: (context) => SalesCustomerTileViewer(
                                   customer: customer,
                                   onStatusChanged: (remarks) async {
-                                    setState(() {
-                                      customer['callMade'] = true;
-                                      customer['remarks'] = remarks;
-                                    });
-                                    await _updateFirestore();
+                                    if (mounted && customer.isNotEmpty) {
+                                      setState(() {
+                                        customer['callMade'] = true;
+                                        customer['remarks'] = remarks;
+                                      });
+                                      await _updateFirestore();
+                                    }
                                   },
                                 ),
                               ),

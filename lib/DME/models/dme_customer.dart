@@ -6,7 +6,6 @@ class DmeCustomer {
   final String? address;
   final int? branchId;
   final String? branchName;
-  final int? purchasedForBranchId;  // Branch ID if customer was purchased from a different branch
   final String? category;
   final String? customerType;
   final int? categoryId;      // ← NEW: FK to dme_categories
@@ -22,7 +21,6 @@ class DmeCustomer {
     this.address,
     this.branchId,
     this.branchName,
-    this.purchasedForBranchId,
     this.category,
     this.customerType,
     this.categoryId,

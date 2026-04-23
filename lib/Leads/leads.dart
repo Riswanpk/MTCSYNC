@@ -69,7 +69,11 @@ class _LeadsPageState extends State<LeadsPage> {
   void initState() {
     super.initState();
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    _currentUserData = FirebaseFirestore.instance.collection('users').doc(uid).get().then((doc) => doc.data());
+    if (uid != null) {
+      _currentUserData = FirebaseFirestore.instance.collection('users').doc(uid).get().then((doc) => doc.data());
+    } else {
+      _currentUserData = Future.value(null);
+    }
     _initialize();
     _listenForTransferredLeads();
   }

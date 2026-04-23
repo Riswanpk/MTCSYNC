@@ -271,7 +271,7 @@ class _DashboardPageState extends State<DashboardPage>
                           Icons.calendar_month_rounded,
                           1,
                           () async {
-                            if (role == 'manager' || role == 'asst_manager' || isAdminLike) {
+                            if ((role == 'manager' || role == 'asst_manager') && branch.isNotEmpty) {
                               final usersSnapshot = await FirebaseFirestore
                                   .instance
                                   .collection('users')
@@ -292,6 +292,29 @@ class _DashboardPageState extends State<DashboardPage>
                                 MaterialPageRoute(
                                   builder: (_) => MonthlyReportPage(
                                       branch: branch, users: users),
+                                ),
+                              );
+                            } else if (isAdminLike) {
+                              // For admin/sync_head: get all users
+                              final usersSnapshot = await FirebaseFirestore
+                                  .instance
+                                  .collection('users')
+                                  .where('role', isNotEqualTo: 'admin')
+                                  .get();
+                              final users = usersSnapshot.docs
+                                  .map((doc) => {
+                                        'uid': doc.id,
+                                        'username': doc['username'] ?? '',
+                                        'role': doc['role'] ?? '',
+                                        'email': doc['email'] ?? '',
+                                        'branch': doc['branch'] ?? '',
+                                      })
+                                  .toList();
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => MonthlyReportPage(
+                                      branch: null, users: users),
                                 ),
                               );
                             } else {

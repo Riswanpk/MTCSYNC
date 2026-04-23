@@ -1096,21 +1096,23 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                         onTap: called && remarksEntered
                             ? () async {
                                 final remarks = remarksController.text.trim();
-                                customer['remarks'] = remarks;
-                                
-                                // Save to Firestore
-                                await _updateRemarksInFirestore(remarks);
-                                
-                                if (widget.onStatusChanged != null) {
-                                  await widget.onStatusChanged!(remarks);
-                                }
-                                if (mounted) {
-                                  setState(() {
-                                    _remarksSaved = true; // Set flag after save
-                                  });
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Remarks saved.'), backgroundColor: Colors.green),
-                                  );
+                                if (customer.isNotEmpty) {
+                                  customer['remarks'] = remarks;
+                                  
+                                  // Save to Firestore
+                                  await _updateRemarksInFirestore(remarks);
+                                  
+                                  if (widget.onStatusChanged != null) {
+                                    await widget.onStatusChanged!(remarks);
+                                  }
+                                  if (mounted) {
+                                    setState(() {
+                                      _remarksSaved = true; // Set flag after save
+                                    });
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Remarks saved.'), backgroundColor: Colors.green),
+                                    );
+                                  }
                                 }
                               }
                             : null,
