@@ -27,6 +27,7 @@ import '../DME/screens/dme_reminders_and_calls.dart';
 import '../DME/screens/dme_customer_db_upload.dart';
 import '../DME/screens/dme_user_management.dart';
 import '../DME/screens/dme_dashboard.dart';
+import '../DME/screens/dme_user_dashboard.dart';
 import '../DME/screens/dme_complaints_management.dart';
 
 /// App brand colors
@@ -523,12 +524,28 @@ class HomeButtonsContainer extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 14),
-        NeumorphicButton(
-          onTap: () => _navigateToDmeRemindersAndCalls(context),
-          text: 'Reminders & Calls',
-          color: const Color(0xFF8CC63F),
-          textColor: Colors.white,
-          icon: Icons.phone_in_talk_rounded,
+        Row(
+          children: [
+            Expanded(
+              child: NeumorphicButton(
+                onTap: () => _navigateToDmeRemindersAndCalls(context),
+                text: 'Reminders & Calls',
+                color: const Color(0xFF8CC63F),
+                textColor: Colors.white,
+                icon: Icons.phone_in_talk_rounded,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: NeumorphicButton(
+                onTap: () => _navigateToDmeUserDashboard(context),
+                text: 'My Dashboard',
+                color: const Color(0xFF005BAC),
+                textColor: Colors.white,
+                icon: Icons.bar_chart_rounded,
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -820,6 +837,16 @@ class HomeButtonsContainer extends StatelessWidget {
   Future<void> _navigateToDmeDashboard(BuildContext context) async {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const DmeDashboardPage()),
+    );
+  }
+
+  Future<void> _navigateToDmeUserDashboard(BuildContext context) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final dmeUser = await DmeSupabaseService.instance.getCurrentUser(uid);
+    if (dmeUser == null || !context.mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => DmeUserDashboardPage(dmeUser: dmeUser)),
     );
   }
 

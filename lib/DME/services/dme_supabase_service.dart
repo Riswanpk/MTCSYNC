@@ -1424,4 +1424,6 @@ class DmeSupabaseService {
     
     return false;
   }
+
+  Future<Object?> getAllBranches() async {}
 }

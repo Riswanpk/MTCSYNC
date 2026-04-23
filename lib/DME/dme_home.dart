@@ -8,6 +8,7 @@ import 'screens/dme_reminders_and_calls.dart';
 import 'screens/dme_customer_db_upload.dart';
 import 'screens/dme_user_management.dart';
 import 'screens/dme_dashboard.dart';
+import 'screens/dme_user_dashboard.dart';
 import 'screens/dme_user_complaints.dart';
 import 'screens/dme_assigned_complaints.dart';
 import 'screens/dme_complaints_management.dart';
@@ -201,6 +202,13 @@ class _DmeHomePageState extends State<DmeHomePage> {
             label: 'Reminders & Calls',
             color: _primaryGreen,
             onTap: () => _navigate(DmeRemindersAndCallsPage(dmeUser: _user!)),
+          ),
+          const SizedBox(height: 14),
+          _DmeTile(
+            icon: Icons.bar_chart_rounded,
+            label: 'My Dashboard',
+            color: _primaryBlue,
+            onTap: () => _navigate(DmeUserDashboardPage(dmeUser: _user!)),
           ),
           const SizedBox(height: 14),
           _tileRow(
