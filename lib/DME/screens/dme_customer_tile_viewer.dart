@@ -53,14 +53,49 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
   static const _blue = Color(0xFF005BAC);
   static const _green = Color(0xFF4CAF50);
 
+  // ── Lookup tables for editing ─────────────────────────────────
+  static const Map<String, int> _categoryNameToId = {
+    'EVENT': 1,
+    'CATERING': 2,
+    'RESTAURANT': 3,
+    'PANTHAL': 4,
+    'STAGE DECORATION': 5,
+    'AUDITORIUM': 6,
+    'TRUST': 7,
+    'INSTITUTION': 8,
+    'RENTAL': 9,
+    'HIRING': 10,
+    'VEHICLE SHOWROOM': 11,
+    'RESORT': 12,
+    'GENERAL & OTHERS': 13,
+  };
+
+  static const Map<String, int> _customerTypeNameToId = {
+    'PREMIUM': 1,
+    'REGULAR': 2,
+    'BARGAIN': 3,
+    'INSTITUTIONS': 4,
+    'DEALERS': 5,
+    'GENERAL': 6,
+  };
+
+  // ── Edit customer state ───────────────────────────────────────
+  bool _editingCustomer = false;
+  final _editNameCtrl = TextEditingController();
+  final _editPhoneCtrl = TextEditingController();
+  final _editAddressCtrl = TextEditingController();
+  final _editSalesmanCtrl = TextEditingController();
+  String? _editCategory;
+  String? _editCustomerType;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    
+
     // Load purchase history
     _loadSalesData();
-    
+
     // If reminder is already completed, load existing remarks and mark as called
     if (widget.reminder.status == 'completed') {
       _called = true;
@@ -96,6 +131,10 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _remarksCtrl.dispose();
+    _editNameCtrl.dispose();
+    _editPhoneCtrl.dispose();
+    _editAddressCtrl.dispose();
+    _editSalesmanCtrl.dispose();
     super.dispose();
   }
 
@@ -191,9 +230,10 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
       for (final entry in entries) {
         if ((entry.duration ?? 0) > 15 &&
             _numberMatches(entry.number ?? '', _pendingCallPhone!)) {
-          if (mounted) setState(() {
-            _called = true;
-          });
+          if (mounted)
+            setState(() {
+              _called = true;
+            });
           await _clearPendingCallState();
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -231,7 +271,8 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
         final num = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
         if (num.isEmpty) continue;
         if (_numberMatches(num, phone)) {
-          if (entry.timestamp != null && entry.timestamp! > latestOutgoingTime) {
+          if (entry.timestamp != null &&
+              entry.timestamp! > latestOutgoingTime) {
             latestOutgoingTime = entry.timestamp!;
             latestDuration = entry.duration;
           }
@@ -278,15 +319,15 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
       }
       return;
     }
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Scanning call log…')),
       );
     }
-    
+
     await _checkCallLogAndUpdate();
-    
+
     if (!_called && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -306,7 +347,7 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
       final now = DateTime.now();
       final startOfDay = DateTime(now.year, now.month, now.day);
       final phone = widget.reminder.customerPhone;
-      
+
       if (phone == null || phone.isEmpty) return;
 
       final entries = await CallLog.query(
@@ -352,7 +393,7 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
         );
       }
       if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Remarks saved & reminder marked complete ✅'),
             backgroundColor: Colors.green,
@@ -367,6 +408,397 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
         );
       }
     }
+  }
+
+  // ── Edit Customer ──────────────────────────────────────────────
+
+  Future<void> _updateCustomer() async {
+    final name = _editNameCtrl.text.trim();
+    final phone = _editPhoneCtrl.text.trim();
+
+    if (name.isEmpty || phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Name and phone are required'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      final categoryId = _editCategory != null
+          ? _categoryNameToId[_editCategory!.toUpperCase()]
+          : null;
+      final typeId = _editCustomerType != null
+          ? _customerTypeNameToId[_editCustomerType!.toUpperCase()]
+          : null;
+
+      await _svc.updateCustomer(
+        customerId: widget.reminder.customerId,
+        name: name,
+        phone: phone,
+        address: _editAddressCtrl.text.trim().isEmpty
+            ? null
+            : _editAddressCtrl.text.trim(),
+        category: _editCategory,
+        customerType: _editCustomerType,
+        categoryId: categoryId,
+        customerTypeId: typeId,
+        salesman: _editSalesmanCtrl.text.trim().isEmpty
+            ? null
+            : _editSalesmanCtrl.text.trim(),
+      );
+
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Customer details updated ✅'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context); // Close edit dialog
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating customer: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showEditCustomerDialog() async {
+    final r = widget.reminder;
+
+    // Pre-populate fields
+    _editNameCtrl.text = r.customerName ?? '';
+    _editPhoneCtrl.text = r.customerPhone ?? '';
+    _editAddressCtrl.text = r.customerAddress ?? '';
+    _editSalesmanCtrl.text = r.salesman ?? '';
+
+    // Fetch current customer to get category and type
+    try {
+      final customer = await _svc.getCustomerById(r.customerId);
+      _editCategory = customer?.category;
+      _editCustomerType = customer?.customerType;
+    } catch (e) {
+      debugPrint('Error loading customer for edit: $e');
+      _editCategory = null;
+      _editCustomerType = null;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (_, dialogSetState) => AlertDialog(
+          backgroundColor: Colors.white,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Container(
+            padding: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              border: Border(
+                  bottom: BorderSide(color: _blue.withValues(alpha: 0.2))),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _blue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.edit_rounded, color: _blue, size: 24),
+                ),
+                const SizedBox(width: 12),
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Edit Customer Details',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    Text(
+                      'Update customer information',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          contentPadding: const EdgeInsets.all(24),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Name
+                _buildEditField(
+                  controller: _editNameCtrl,
+                  label: 'Customer Name',
+                  icon: Icons.person_rounded,
+                  hintText: 'Enter name',
+                ),
+                const SizedBox(height: 16),
+
+                // Phone
+                _buildEditField(
+                  controller: _editPhoneCtrl,
+                  label: 'Phone Number',
+                  icon: Icons.phone_rounded,
+                  hintText: '10 digits',
+                  keyboardType: TextInputType.phone,
+                  maxLength: 10,
+                ),
+                const SizedBox(height: 16),
+
+                // Address
+                _buildEditField(
+                  controller: _editAddressCtrl,
+                  label: 'Address',
+                  icon: Icons.location_on_rounded,
+                  hintText: 'Enter address',
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+
+                // Category Dropdown
+                _buildDropdownField(
+                  label: 'Category',
+                  icon: Icons.category_rounded,
+                  value: _editCategory,
+                  items: _categoryNameToId.keys.toList(),
+                  onChanged: (v) => dialogSetState(() => _editCategory = v),
+                ),
+                const SizedBox(height: 16),
+
+                // Customer Type Dropdown
+                _buildDropdownField(
+                  label: 'Customer Type',
+                  icon: Icons.badge_rounded,
+                  value: _editCustomerType,
+                  items: _customerTypeNameToId.keys.toList(),
+                  onChanged: (v) => dialogSetState(() => _editCustomerType = v),
+                ),
+                const SizedBox(height: 16),
+
+                // Salesman
+                _buildEditField(
+                  controller: _editSalesmanCtrl,
+                  label: 'Salesman',
+                  icon: Icons.person_outline_rounded,
+                  hintText: 'Enter salesman name',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: Colors.grey[200]!)),
+              ),
+              child: Row(
+                children: [
+                  TextButton(
+                    onPressed: _saving ? null : () => Navigator.pop(ctx),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
+                    ),
+                    child: const Text(
+                      'Cancel',
+                      style:
+                          TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const Spacer(),
+                  ElevatedButton(
+                    onPressed: _saving ? null : _updateCustomer,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _blue,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 28, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: _saving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Text(
+                            'Save',
+                            style: TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w600),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Edit field helper ──────────────────────────────────────────
+  Widget _buildEditField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    String? hintText,
+    TextInputType? keyboardType,
+    int maxLength = 0,
+    int maxLines = 1,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 18, color: _blue),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          keyboardType: keyboardType,
+          maxLength: maxLength > 0 ? maxLength : null,
+          maxLines: maxLines,
+          decoration: InputDecoration(
+            hintText: hintText,
+            hintStyle: TextStyle(color: Colors.grey[400]),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: _blue, width: 2),
+            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            counterText: '',
+            filled: true,
+            fillColor: Colors.grey[50],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Dropdown field helper ──────────────────────────────────────
+  Widget _buildDropdownField({
+    required String label,
+    required IconData icon,
+    required String? value,
+    required List<String> items,
+    required Function(String?) onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 18, color: _blue),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<String>(
+          value: value,
+          decoration: InputDecoration(
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: _blue, width: 2),
+            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            filled: true,
+            fillColor: Colors.grey[50],
+          ),
+          items: items
+              .map((item) => DropdownMenuItem(
+                    value: item,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 4, horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: value == item
+                            ? _blue.withValues(alpha: 0.1)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        item,
+                        style: TextStyle(
+                          fontWeight:
+                              value == item ? FontWeight.w700 : FontWeight.w500,
+                          color: value == item ? _blue : Colors.black87,
+                          fontSize: value == item ? 13 : 12,
+                        ),
+                      ),
+                    ),
+                  ))
+              .toList(),
+          onChanged: onChanged,
+          icon: Icon(Icons.keyboard_arrow_down_rounded, color: _blue),
+        ),
+      ],
+    );
   }
 
   // ── Assign Lead ────────────────────────────────────────────────
@@ -399,8 +831,8 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
       final snapshot = await db
           .collection('users')
           .where('branch', isEqualTo: branch)
-          .where('role', whereIn: ['manager', 'asst_manager', 'sales', 'dme_user'])
-          .get();
+          .where('role',
+              whereIn: ['manager', 'asst_manager', 'sales', 'dme_user']).get();
 
       final users = <Map<String, dynamic>>[];
       for (final doc in snapshot.docs) {
@@ -450,7 +882,7 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
       }
 
       final r = widget.reminder;
-      
+
       // Create lead in Firestore
       await FirebaseFirestore.instance.collection('dme_leads').add({
         'date': DateTime.now(),
@@ -600,18 +1032,16 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                       items: _branchUsers
                           .map((u) => DropdownMenuItem(
                                 value: u['id'] as String,
-                                child: Text(
-                                    '${u['username']} (${u['role']})'),
+                                child: Text('${u['username']} (${u['role']})'),
                               ))
                           .toList(),
                       onChanged: (val) {
                         if (val == null) return;
-                        final user = _branchUsers
-                            .firstWhere((u) => u['id'] == val);
+                        final user =
+                            _branchUsers.firstWhere((u) => u['id'] == val);
                         setDialogState(() {
                           _selectedUserId = val;
-                          _selectedUserName =
-                              user['username'] as String;
+                          _selectedUserName = user['username'] as String;
                         });
                       },
                       decoration: InputDecoration(
@@ -619,9 +1049,8 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        contentPadding:
-                            const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 10),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
                       ),
                     ),
                 ],
@@ -645,8 +1074,8 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                         height: 16,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.white),
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
                         ),
                       )
                     : const Icon(Icons.check),
@@ -760,10 +1189,16 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Customer Details',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
           backgroundColor: primaryColor,
           iconTheme: const IconThemeData(color: Colors.white),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.edit_rounded),
+              tooltip: 'Edit Customer',
+              onPressed: _showEditCustomerDialog,
+            ),
             IconButton(
               icon: const Icon(Icons.warning_rounded),
               tooltip: 'File Complaint',
@@ -963,7 +1398,8 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                 )
               else
                 ..._sales.map((s) => Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      margin: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 6),
                       decoration: BoxDecoration(
                         color: Theme.of(context).brightness == Brightness.dark
                             ? Colors.grey[850]
@@ -983,8 +1419,7 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                         ),
                         child: ExpansionTile(
                           leading: Icon(Icons.receipt_long,
-                              color: const Color(0xFF005BAC),
-                              size: 20),
+                              color: const Color(0xFF005BAC), size: 20),
                           title: Text(
                             dateFmt.format(s.date),
                             style: const TextStyle(
@@ -1010,11 +1445,10 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                             else
                               ...s.items.map((item) => ListTile(
                                     dense: true,
-                                    contentPadding:
-                                        const EdgeInsets.symmetric(horizontal: 20),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 20),
                                     leading: Icon(Icons.inventory_2,
-                                        size: 16,
-                                        color: Colors.grey[600]),
+                                        size: 16, color: Colors.grey[600]),
                                     title: Text(item.productName,
                                         style: const TextStyle(fontSize: 14)),
                                     trailing: Text('Qty: ${item.quantity}',
@@ -1070,7 +1504,8 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                       )),
                 ),
                 Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   decoration: BoxDecoration(
                     color: Theme.of(context).brightness == Brightness.dark
                         ? Colors.grey[850]
@@ -1089,7 +1524,8 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                     maxLines: 4,
                     readOnly: _isPreexistinglyCompleted,
                     onChanged: (_) {
-                      setState(() {}); // Trigger rebuild to enable/disable save button
+                      setState(
+                          () {}); // Trigger rebuild to enable/disable save button
                     },
                     decoration: InputDecoration(
                       hintText: _isPreexistinglyCompleted
@@ -1126,7 +1562,9 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                                     strokeWidth: 2, color: Colors.white))
                             : const Icon(Icons.save)),
                     label: Text(
-                      _isPreexistinglyCompleted ? 'Already Saved' : 'Save Remarks',
+                      _isPreexistinglyCompleted
+                          ? 'Already Saved'
+                          : 'Save Remarks',
                       style: const TextStyle(
                           fontSize: 16, fontWeight: FontWeight.bold),
                     ),
@@ -1150,8 +1588,8 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                     icon: const Icon(Icons.person_add),
                     label: const Text(
                       'Assign Lead',
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold),
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF008BD6),
