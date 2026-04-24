@@ -25,7 +25,7 @@ class _DmeUserDashboardPageState extends State<DmeUserDashboardPage> {
   bool _branchesLoaded = false;
 
   // ── Date range state ─────────────────────────────────────────────────────
-  static const _presets = ['This Month', 'Last Month', 'This Week', 'Custom'];
+  static const _presets = ['This Month', 'This Week', 'Today', 'Custom'];
   String _selectedPreset = 'This Month';
   late DateTime _fromDate;
   late DateTime _toDate;
@@ -66,20 +66,20 @@ class _DmeUserDashboardPageState extends State<DmeUserDashboardPage> {
 
   void _setDateRangeForPreset(String preset) {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     switch (preset) {
       case 'This Month':
         _fromDate = DateTime(now.year, now.month, 1);
-        _toDate = DateTime(now.year, now.month + 1, 0);
-        break;
-      case 'Last Month':
-        final first = DateTime(now.year, now.month - 1, 1);
-        _fromDate = first;
-        _toDate = DateTime(now.year, now.month, 0);
+        _toDate = today;
         break;
       case 'This Week':
         final weekStart = now.subtract(Duration(days: now.weekday - 1));
         _fromDate = DateTime(weekStart.year, weekStart.month, weekStart.day);
-        _toDate = _fromDate.add(const Duration(days: 6));
+        _toDate = today;
+        break;
+      case 'Today':
+        _fromDate = today;
+        _toDate = today;
         break;
       default:
         break; // keep current for 'Custom'
@@ -342,7 +342,19 @@ class _DmeUserDashboardPageState extends State<DmeUserDashboardPage> {
         // ── Category breakdown ────────────────────────────────────────────
         if (data.byCategory.isNotEmpty) ...[
           const SizedBox(height: 16),
-          CategoryPieCard(stats: data.byCategory),
+          CategoryPieCard(
+            stats: data.byCategory,
+            totalUniqueCustomers: data.totalUniqueCustomers,
+          ),
+        ],
+
+        // ── Customer type breakdown ───────────────────────────────────────
+        if (data.byCustomerType.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          CustomerTypePieCard(
+            stats: data.byCustomerType,
+            totalUniqueCustomers: data.totalUniqueCustomers,
+          ),
         ],
 
         // ── Branch breakdown ──────────────────────────────────────────────

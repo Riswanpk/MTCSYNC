@@ -5,14 +5,14 @@ import '../services/dme_user_dashboard_service.dart';
 
 // -- Premium palette ----------------------------------------------------------
 const List<Color> _palette = [
-  Color(0xFF3B82F6), // vivid blue
-  Color(0xFF10B981), // emerald
-  Color(0xFFF59E0B), // amber
-  Color(0xFFEF4444), // red
-  Color(0xFF8B5CF6), // violet
-  Color(0xFF06B6D4), // cyan
-  Color(0xFFF97316), // orange
-  Color(0xFFEC4899), // pink
+  Color(0xFF2979FF), // electric blue
+  Color(0xFF00C853), // vivid green
+  Color(0xFFFFB300), // vibrant amber
+  Color(0xFFFF3D57), // punchy red
+  Color(0xFF7C4DFF), // saturated violet
+  Color(0xFF00B8D4), // bright cyan
+  Color(0xFFFF6D00), // tangerine
+  Color(0xFFFF2D95), // hot pink
 ];
 
 const Color _primaryBlue = Color(0xFF005BAC);
@@ -133,34 +133,120 @@ class DashboardStatCard extends StatelessWidget {
   }
 }
 
-// -- Premium Pie Chart with center overlay + tappable legend -----------------
+// -- Shared pie stat model ----------------------------------------------------
 
-class CategoryPieCard extends StatefulWidget {
-  final List<CategoryPurchaseStat> stats;
-
-  const CategoryPieCard({super.key, required this.stats});
-
-  @override
-  State<CategoryPieCard> createState() => _CategoryPieCardState();
+class _PieStat {
+  final String label;
+  final int count;
+  const _PieStat({required this.label, required this.count});
 }
 
-class _CategoryPieCardState extends State<CategoryPieCard> {
+// -- Public wrappers ----------------------------------------------------------
+
+/// Pie chart for category breakdown.
+class CategoryPieCard extends StatelessWidget {
+  final List<CategoryPurchaseStat> stats;
+  final int totalUniqueCustomers;
+  const CategoryPieCard({
+    super.key,
+    required this.stats,
+    required this.totalUniqueCustomers,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _PieCard(
+      title: 'Category Mix',
+      accentColor: const Color(0xFF2979FF),
+      totalUniqueCustomers: totalUniqueCustomers,
+      stats: stats
+          .map((s) => _PieStat(label: s.categoryName, count: s.uniqueCustomers))
+          .toList(),
+    );
+  }
+}
+
+/// Pie chart for customer type breakdown.
+class CustomerTypePieCard extends StatelessWidget {
+  final List<CustomerTypeStat> stats;
+  final int totalUniqueCustomers;
+  const CustomerTypePieCard({
+    super.key,
+    required this.stats,
+    required this.totalUniqueCustomers,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _PieCard(
+      title: 'Customer Type Mix',
+      accentColor: const Color(0xFF7C4DFF),
+      totalUniqueCustomers: totalUniqueCustomers,
+      stats: stats
+          .map((s) => _PieStat(label: s.typeName, count: s.uniqueCustomers))
+          .toList(),
+    );
+  }
+}
+
+// -- Generic premium pie card -------------------------------------------------
+
+class _PieCard extends StatefulWidget {
+  final String title;
+  final Color accentColor;
+  final int totalUniqueCustomers;
+  final List<_PieStat> stats;
+
+  const _PieCard({
+    required this.title,
+    required this.accentColor,
+    required this.totalUniqueCustomers,
+    required this.stats,
+  });
+
+  @override
+  State<_PieCard> createState() => _PieCardState();
+}
+
+class _PieCardState extends State<_PieCard> {
   int _touched = -1;
 
-  double _percentFor(CategoryPurchaseStat stat, int total) {
-    if (total <= 0) return 0;
-    return (stat.uniqueCustomers / total) * 100;
+  // Group slices with < 2 % of total into a single "Others" bucket
+  List<_PieStat> _mergeSmall(List<_PieStat> input, int total) {
+    if (total <= 0) return input;
+    const threshold = 2.0;
+    final List<_PieStat> main = [];
+    int othersCount = 0;
+    for (final s in input) {
+      if (s.count / total * 100 < threshold) {
+        othersCount += s.count;
+      } else {
+        main.add(s);
+      }
+    }
+    if (othersCount > 0) {
+      main.add(_PieStat(label: 'Others', count: othersCount));
+    }
+    return main;
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    if (widget.stats.isEmpty) return const SizedBox.shrink();
+    final rawTotal = widget.stats.fold(0, (s, e) => s + e.count);
+    if (rawTotal == 0) return const SizedBox.shrink();
 
-    final total = widget.stats.fold(0, (s, e) => s + e.uniqueCustomers);
-    final selectedStat = _touched >= 0 && _touched < widget.stats.length
-        ? widget.stats[_touched]
-        : null;
+    final sections = _mergeSmall(widget.stats, rawTotal);
+    // Clamp touch index after merging (sections list may be shorter)
+    if (_touched >= sections.length) _touched = -1;
+
+    final total = sections.fold(0, (s, e) => s + e.count);
+    final selectedStat =
+        _touched >= 0 && _touched < sections.length ? sections[_touched] : null;
+    final accent = widget.accentColor;
+
+    // Unique border color that matches card background for clean slice edges
+    final borderColor = isDark ? const Color(0xFF172334) : Colors.white;
 
     return Container(
       decoration: BoxDecoration(
@@ -169,26 +255,19 @@ class _CategoryPieCardState extends State<CategoryPieCard> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: isDark
-              ? [const Color(0xFF172334), const Color(0xFF1D4168)]
-              : [Colors.white, const Color(0xFFEFF7FF)],
+              ? [const Color(0xFF172334), const Color(0xFF1C2F4A)]
+              : [Colors.white, const Color(0xFFF5F8FF)],
         ),
         border: Border.all(
-          color: isDark
-              ? const Color(0xFF60A5FA).withOpacity(0.16)
-              : const Color(0xFF3B82F6).withOpacity(0.14),
+          color: accent.withOpacity(isDark ? 0.18 : 0.13),
           width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: _primaryBlue.withOpacity(isDark ? 0.26 : 0.14),
-            blurRadius: 34,
-            spreadRadius: 1,
-            offset: const Offset(0, 12),
-          ),
-          BoxShadow(
-            color: Colors.white.withOpacity(isDark ? 0.0 : 0.5),
-            blurRadius: 10,
-            offset: const Offset(0, -1),
+            color: accent.withOpacity(isDark ? 0.22 : 0.12),
+            blurRadius: 30,
+            spreadRadius: 0,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -197,55 +276,37 @@ class _CategoryPieCardState extends State<CategoryPieCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── Header row ──────────────────────────────────────────────
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _sectionTitle('Category Mix', isDark),
+                _sectionTitle(widget.title, isDark),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                   decoration: BoxDecoration(
-                    color: _primaryBlue.withOpacity(0.12),
+                    color: accent.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: _primaryBlue.withOpacity(0.25),
-                      width: 1,
-                    ),
+                    border: Border.all(color: accent.withOpacity(0.28), width: 1),
                   ),
                   child: Text(
-                    '$total customers',
+                    '${widget.totalUniqueCustomers} customers',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
-                      color: isDark ? const Color(0xFF60A5FA) : _primaryBlue,
+                      color: isDark ? accent.withOpacity(0.9) : accent,
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 22),
+            const SizedBox(height: 24),
+            // ── Pie chart ────────────────────────────────────────────────
             SizedBox(
-              height: 252,
+              height: 300,
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  Container(
-                    width: 230,
-                    height: 230,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: isDark
-                            ? [
-                                const Color(0xFF60A5FA).withOpacity(0.2),
-                                const Color(0xFF60A5FA).withOpacity(0.0),
-                              ]
-                            : [
-                                const Color(0xFF3B82F6).withOpacity(0.15),
-                                const Color(0xFF3B82F6).withOpacity(0.0),
-                              ],
-                      ),
-                    ),
-                  ),
                   PieChart(
                     PieChartData(
                       pieTouchData: PieTouchData(
@@ -255,131 +316,56 @@ class _CategoryPieCardState extends State<CategoryPieCard> {
                                 r?.touchedSection == null) {
                               _touched = -1;
                             } else {
-                              _touched = r!.touchedSection!.touchedSectionIndex;
+                              _touched =
+                                  r!.touchedSection!.touchedSectionIndex;
                             }
                           });
                         },
                       ),
-                      centerSpaceRadius: 74,
-                      sectionsSpace: 4,
-                      sections: widget.stats.asMap().entries.map((entry) {
+                      centerSpaceRadius: 72,
+                      sectionsSpace: 2.5,
+                      sections: sections.asMap().entries.map((entry) {
                         final i = entry.key;
                         final stat = entry.value;
                         final color = _palette[i % _palette.length];
                         final isTouched = i == _touched;
                         final pct = total > 0
-                            ? (stat.uniqueCustomers / total * 100).round()
+                            ? (stat.count / total * 100).round()
                             : 0;
                         return PieChartSectionData(
-                          value: stat.uniqueCustomers.toDouble(),
+                          value: stat.count.toDouble(),
                           color: color,
-                          radius: isTouched ? 84 : 66,
+                          radius: isTouched ? 80 : 64,
                           title: isTouched ? '$pct%' : '',
                           titleStyle: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w800,
                             color: Colors.white,
+                            shadows: [
+                              Shadow(
+                                color: Colors.black26,
+                                blurRadius: 4,
+                              ),
+                            ],
                           ),
-                          titlePositionPercentageOffset: 0.66,
+                          titlePositionPercentageOffset: 0.65,
                           borderSide: BorderSide(
-                            color: isDark
-                                ? const Color(0xFF1A2332)
-                                : Colors.white,
-                            width: isTouched ? 3.2 : 2.2,
+                            color: borderColor,
+                            width: 2.5,
                           ),
                         );
                       }).toList(),
                     ),
                   ),
-                  Container(
-                    width: 156,
-                    height: 156,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: isDark
-                            ? Colors.white.withOpacity(0.12)
-                            : Colors.black.withOpacity(0.08),
-                        width: 1.1,
-                      ),
-                    ),
-                  ),
+                  // Center content
                   AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
+                    duration: const Duration(milliseconds: 200),
                     transitionBuilder: (child, anim) =>
                         FadeTransition(opacity: anim, child: child),
                     child: selectedStat != null
-                        ? Column(
-                            key: ValueKey(_touched),
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 10,
-                                height: 10,
-                                decoration: BoxDecoration(
-                                  color: _palette[_touched % _palette.length],
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                '${selectedStat.uniqueCustomers}',
-                                style: TextStyle(
-                                  fontSize: 30,
-                                  fontWeight: FontWeight.w900,
-                                  height: 1.0,
-                                  color: isDark ? Colors.white : Colors.black87,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${_percentFor(selectedStat, total).toStringAsFixed(1)}%',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: _palette[_touched % _palette.length],
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              SizedBox(
-                                width: 90,
-                                child: Text(
-                                  selectedStat.categoryName,
-                                  textAlign: TextAlign.center,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: isDark ? Colors.white54 : Colors.black54,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          )
-                        : Column(
-                            key: const ValueKey(-1),
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '$total',
-                                style: TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.w900,
-                                  height: 1.0,
-                                  color: isDark ? Colors.white : Colors.black87,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'customers',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: isDark ? Colors.white38 : Colors.black38,
-                                ),
-                              ),
-                            ],
-                          ),
+                        ? _buildCenterSelected(
+                            selectedStat, total, isDark)
+                        : _buildCenterDefault(rawTotal, isDark),
                   ),
                 ],
               ),
@@ -395,20 +381,22 @@ class _CategoryPieCardState extends State<CategoryPieCard> {
               ),
             ),
             const SizedBox(height: 18),
+            // ── Legend grid ──────────────────────────────────────────────
             ...() {
               final rows = <Widget>[];
-              for (int i = 0; i < widget.stats.length; i += 2) {
+              for (int i = 0; i < sections.length; i += 2) {
                 rows.add(Row(
                   children: [
-                    Expanded(child: _legendTile(widget.stats[i], i, total, isDark)),
+                    Expanded(child: _legendTile(sections[i], i, total, isDark)),
                     const SizedBox(width: 8),
-                    if (i + 1 < widget.stats.length)
-                      Expanded(child: _legendTile(widget.stats[i + 1], i + 1, total, isDark))
+                    if (i + 1 < sections.length)
+                      Expanded(
+                          child: _legendTile(sections[i + 1], i + 1, total, isDark))
                     else
                       const Expanded(child: SizedBox()),
                   ],
                 ));
-                if (i + 2 < widget.stats.length) rows.add(const SizedBox(height: 8));
+                if (i + 2 < sections.length) rows.add(const SizedBox(height: 8));
               }
               return rows;
             }(),
@@ -418,11 +406,86 @@ class _CategoryPieCardState extends State<CategoryPieCard> {
     );
   }
 
-  Widget _legendTile(CategoryPurchaseStat stat, int index, int total, bool isDark) {
+  Widget _buildCenterSelected(_PieStat stat, int total, bool isDark) {
+    final color = _palette[_touched % _palette.length];
+    final pct = total > 0 ? (stat.count / total * 100).toStringAsFixed(1) : '0.0';
+    return Column(
+      key: ValueKey(_touched),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '${stat.count}',
+          style: TextStyle(
+            fontSize: 30,
+            fontWeight: FontWeight.w900,
+            height: 1.0,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          '$pct%',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: color,
+          ),
+        ),
+        const SizedBox(height: 3),
+        SizedBox(
+          width: 88,
+          child: Text(
+            stat.label,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.white54 : Colors.black54,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCenterDefault(int total, bool isDark) {
+    return Column(
+      key: const ValueKey(-1),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '$total',
+          style: TextStyle(
+            fontSize: 32,
+            fontWeight: FontWeight.w900,
+            height: 1.0,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'customers',
+          style: TextStyle(
+            fontSize: 11,
+            color: isDark ? Colors.white38 : Colors.black38,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _legendTile(_PieStat stat, int index, int total, bool isDark) {
     final color = _palette[index % _palette.length];
-    final pct = total > 0
-        ? (stat.uniqueCustomers / total * 100).toStringAsFixed(1)
-        : '0.0';
+    final pct =
+        total > 0 ? (stat.count / total * 100).toStringAsFixed(1) : '0.0';
     final isSelected = index == _touched;
 
     return GestureDetector(
@@ -433,7 +496,7 @@ class _CategoryPieCardState extends State<CategoryPieCard> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           color: isSelected
-              ? color.withOpacity(0.14)
+              ? color.withOpacity(0.13)
               : (isDark
                   ? Colors.white.withOpacity(0.04)
                   : Colors.black.withOpacity(0.03)),
@@ -444,8 +507,8 @@ class _CategoryPieCardState extends State<CategoryPieCard> {
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: color.withOpacity(0.24),
-                    blurRadius: 10,
+                    color: color.withOpacity(0.22),
+                    blurRadius: 8,
                     offset: const Offset(0, 3),
                   ),
                 ]
@@ -461,7 +524,7 @@ class _CategoryPieCardState extends State<CategoryPieCard> {
             const SizedBox(width: 7),
             Expanded(
               child: Text(
-                stat.categoryName,
+                stat.label,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 11,
@@ -475,12 +538,12 @@ class _CategoryPieCardState extends State<CategoryPieCard> {
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
                 color: isDark
-                    ? Colors.white.withOpacity(0.06)
+                    ? Colors.white.withOpacity(0.07)
                     : Colors.black.withOpacity(0.05),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                '${stat.uniqueCustomers}',
+                '${stat.count}',
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
@@ -490,7 +553,7 @@ class _CategoryPieCardState extends State<CategoryPieCard> {
             ),
             const SizedBox(width: 6),
             SizedBox(
-              width: 44,
+              width: 42,
               child: Text(
                 '$pct%',
                 textAlign: TextAlign.right,

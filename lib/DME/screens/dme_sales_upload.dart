@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:async' show unawaited;
 import '../dme_config.dart';
 import '../services/dme_excel_parser.dart';
 import '../services/dme_supabase_service.dart';
@@ -31,7 +32,7 @@ const Map<String, int> _customerTypeNameToId = {
   'BARGAIN': 3,
   'INSTITUTIONS': 4,
   'DEALERS': 5,
-  'GENERAL': 6,  
+  'GENERAL': 6,
 };
 
 // ── Preview item status ───────────────────────────────────────────
@@ -44,6 +45,7 @@ class _PreviewItem {
   DmeCustomer? existingCustomer; // null = not found
   String? resolvedCustomerType;
   String? resolvedCategory;
+  String? correctedPhone; // User-corrected phone (10 digits)
 
   _PreviewItem({
     required this.record,
@@ -51,6 +53,7 @@ class _PreviewItem {
     this.existingCustomer,
     this.resolvedCustomerType,
     this.resolvedCategory,
+    this.correctedPhone,
   });
 
   // Conflict: phone matches but name differs → alternate name will be saved in purchased_for
@@ -93,11 +96,188 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
   final _svc = DmeSupabaseService.instance;
 
   static const _blue = Color(0xFF005BAC);
+  static const _maxRetries = 3;
+  static const _initialRetryDelayMs = 500;
+
+  // ── Retry helper with exponential backoff ─────────────────────
+  Future<T> _retryWithBackoff<T>({
+    required Future<T> Function() operation,
+    int maxRetries = _maxRetries,
+    int initialDelayMs = _initialRetryDelayMs,
+  }) async {
+    int attempt = 0;
+    while (true) {
+      try {
+        return await operation();
+      } catch (e) {
+        attempt++;
+        if (attempt >= maxRetries) rethrow;
+        final delayMs = initialDelayMs * (1 << (attempt - 1)); // exponential
+        await Future.delayed(Duration(milliseconds: delayMs));
+      }
+    }
+  }
+
+  // ── Async reminder update (non-blocking, fire-and-forget) ───────
+  Future<void> _updateReminderAsync({
+    required int customerId,
+    required DmeSaleRecord record,
+    required int branchId,
+    required dynamic dmeUser,
+    required String? effectiveCategory,
+    required String? effectiveType,
+  }) async {
+    try {
+      final branches = await _svc.getBranches();
+      final branchName = branches.firstWhere(
+        (b) => b['id'] == branchId,
+        orElse: () => {'name': 'Unknown'},
+      )['name'] as String?;
+
+      await _retryWithBackoff(
+        operation: () => _svc.upsertReminder(
+          customerId: customerId,
+          purchaseDate: record.date,
+          purchaseForBranchId: branchId,
+          purchaseForBranchName: branchName,
+          assignedTo: dmeUser?.id,
+          purchaseDetails: {
+            'salesman': record.salesman,
+            'category': effectiveCategory,
+            'customer_type': effectiveType,
+            'items_count': record.items.length,
+          },
+        ),
+      );
+    } catch (e) {
+      // Log error but don't fail - reminder is non-critical
+      debugPrint('Reminder update failed for customer $customerId: $e');
+    }
+  }
+
+  // ── Phone validation dialog ────────────────────────────────────
+  Future<bool> _validatePhoneNumbers() async {
+    final itemsWithLongPhone = _items!.where((item) {
+      final phone = item.record.phone;
+      return phone != null && phone.replaceAll(RegExp(r'\D'), '').length > 10;
+    }).toList();
+
+    if (itemsWithLongPhone.isEmpty) return true;
+
+    // Show dialog to correct phone numbers
+    final Map<int, TextEditingController> controllers = {};
+    for (int i = 0; i < itemsWithLongPhone.length; i++) {
+      controllers[i] = TextEditingController(
+        text: itemsWithLongPhone[i]
+                .record
+                .phone
+                ?.replaceAll(RegExp(r'\D'), '')
+                .substring(0, 10) ??
+            '',
+      );
+    }
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => StatefulBuilder(
+        builder: (_, dialogSetState) => AlertDialog(
+          title: const Text('Correct Phone Numbers'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'The following customers have phone numbers exceeding 10 digits.\n'
+                'Please enter the correct 10-digit phone number:',
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: itemsWithLongPhone.length,
+                  itemBuilder: (_, i) {
+                    final item = itemsWithLongPhone[i];
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.record.customerName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        TextField(
+                          controller: controllers[i],
+                          keyboardType: TextInputType.number,
+                          maxLength: 10,
+                          decoration: InputDecoration(
+                            hintText: 'Enter 10-digit number',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            counterText: '',
+                          ),
+                          onChanged: (v) => dialogSetState(() {}),
+                        ),
+                        if (i < itemsWithLongPhone.length - 1)
+                          const SizedBox(height: 12),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: controllers.values.every((c) => c.text.length == 10)
+                  ? () => Navigator.pop(context, true)
+                  : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _blue,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Confirm'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == true) {
+      // Save corrected phone numbers
+      for (int i = 0; i < itemsWithLongPhone.length; i++) {
+        itemsWithLongPhone[i].correctedPhone = controllers[i]!.text;
+      }
+      // Clean up controllers
+      for (final controller in controllers.values) {
+        controller.dispose();
+      }
+      return true;
+    }
+    // Clean up controllers
+    for (final controller in controllers.values) {
+      controller.dispose();
+    }
+    return false;
+  }
 
   // ── Step 1: pick & parse ──────────────────────────────────────
 
   Future<void> _pickAndParse() async {
-    setState(() { _picking = true; _error = null; _items = null; _selectedBranchName = null; });
+    setState(() {
+      _picking = true;
+      _error = null;
+      _items = null;
+      _selectedBranchName = null;
+    });
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -110,16 +290,17 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
       _fileName = result.files.single.name;
       final bytes = await File(result.files.single.path!).readAsBytes();
       final records = DmeExcelParser.parseDailySalesExcel(bytes);
-      if (records.isEmpty) throw Exception('No sales records found in the file');
+      if (records.isEmpty)
+        throw Exception('No sales records found in the file');
       setState(() {
         _items = records.map((r) => _PreviewItem(record: r)).toList();
         _picking = false;
       });
-      
+
       // Check if all records have null/empty branch
       final allBranchesEmpty = _items!.every((item) =>
           item.record.branch == null || item.record.branch!.trim().isEmpty);
-      
+
       if (allBranchesEmpty) {
         // Ask user to select branch for all records
         final branchSelected = await _selectBranchForAllRecords();
@@ -129,14 +310,17 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
           return;
         }
       }
-      
+
       // Automatically trigger DB check after parse (and branch selection if needed)
       if (mounted && _items != null) {
         await _checkRecords();
       }
     } catch (e) {
       if (mounted) {
-        setState(() { _error = e.toString(); _picking = false; });
+        setState(() {
+          _error = e.toString();
+          _picking = false;
+        });
       }
     }
   }
@@ -282,8 +466,16 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
 
   Future<void> _upload() async {
     if (_items == null) return;
+
+    // Validate phone numbers before proceeding
+    final phoneValid = await _validatePhoneNumbers();
+    if (!phoneValid) return;
+
     if (mounted) {
-      setState(() { _uploading = true; _error = null; });
+      setState(() {
+        _uploading = true;
+        _error = null;
+      });
     }
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -321,31 +513,44 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
         if (item.status == _RecordStatus.matchFound) {
           // Exact match — update last_purchase_date only
           customerId = item.existingCustomer!.id;
-          await _svc.updateLastPurchaseDate(customerId!, record.date);
+          await _retryWithBackoff(
+            operation: () =>
+                _svc.updateLastPurchaseDate(customerId!, record.date),
+          );
         } else if (item.status == _RecordStatus.conflict) {
           // Phone matches, name differs → keep existing, record alternate name
           customerId = item.existingCustomer!.id;
-          await _svc.updateLastPurchaseDate(customerId!, record.date);
-          await _svc.appendPurchasedFor(customerId!, record.customerName);
+          await _retryWithBackoff(
+            operation: () =>
+                _svc.updateLastPurchaseDate(customerId!, record.date),
+          );
+          await _retryWithBackoff(
+            operation: () =>
+                _svc.appendPurchasedFor(customerId!, record.customerName),
+          );
           alternateNamesRecorded++;
         } else {
           // New customer
-          final phone = record.phone != null
-              ? DmeCustomer.normalizePhone(record.phone!)
-              : '';
+          final phone =
+              (item.correctedPhone != null && item.correctedPhone!.isNotEmpty)
+                  ? item.correctedPhone!
+                  : (record.phone != null
+                      ? DmeCustomer.normalizePhone(record.phone!)
+                      : '');
           if (phone.isEmpty) {
             errors.add('${record.customerName}: No phone number');
             failed++;
             continue;
           }
-          
+
           // Look up category and type IDs for new customer
           int? categoryId;
           int? typeId;
           if (effectiveCategory != null && effectiveCategory.isNotEmpty) {
             categoryId = _categoryNameToId[effectiveCategory.toUpperCase()];
             if (categoryId == null) {
-              errors.add('${record.customerName}: Category "$effectiveCategory" not found in lookup table');
+              errors.add(
+                  '${record.customerName}: Category "$effectiveCategory" not found in lookup table');
               failed++;
               continue;
             }
@@ -353,24 +558,27 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
           if (effectiveType != null && effectiveType.isNotEmpty) {
             typeId = _customerTypeNameToId[effectiveType.toUpperCase()];
             if (typeId == null) {
-              errors.add('${record.customerName}: Type "$effectiveType" not found in lookup table');
+              errors.add(
+                  '${record.customerName}: Type "$effectiveType" not found in lookup table');
               failed++;
               continue;
             }
           }
-          
-          final newCust = await _svc.upsertCustomer(DmeCustomer(
-            name: record.customerName,
-            phone: phone,
-            address: record.address,
-            branchId: branchId,
-            category: effectiveCategory,
-            customerType: effectiveType,
-            categoryId: categoryId,
-            customerTypeId: typeId,
-            salesman: record.salesman,
-            lastPurchaseDate: record.date,
-          ));
+
+          final newCust = await _retryWithBackoff(
+            operation: () => _svc.upsertCustomer(DmeCustomer(
+              name: record.customerName,
+              phone: phone,
+              address: record.address,
+              branchId: branchId,
+              category: effectiveCategory,
+              customerType: effectiveType,
+              categoryId: categoryId,
+              customerTypeId: typeId,
+              salesman: record.salesman,
+              lastPurchaseDate: record.date,
+            )),
+          );
           customerId = newCust.id;
         }
 
@@ -381,7 +589,8 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
         if (effectiveCategory != null && effectiveCategory.isNotEmpty) {
           categoryId = _categoryNameToId[effectiveCategory.toUpperCase()];
           if (categoryId == null) {
-            errors.add('Sale for ${record.customerName}: Category "$effectiveCategory" not found');
+            errors.add(
+                'Sale for ${record.customerName}: Category "$effectiveCategory" not found');
             failed++;
             continue;
           }
@@ -389,12 +598,13 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
         if (effectiveType != null && effectiveType.isNotEmpty) {
           typeId = _customerTypeNameToId[effectiveType.toUpperCase()];
           if (typeId == null) {
-            errors.add('Sale for ${record.customerName}: Type "$effectiveType" not found');
+            errors.add(
+                'Sale for ${record.customerName}: Type "$effectiveType" not found');
             failed++;
             continue;
           }
         }
-        
+
         final sale = DmeSale(
           date: record.date,
           customerId: customerId,
@@ -406,38 +616,24 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
           uploadedBy: dmeUser?.id,
           items: record.items,
         );
-        await _svc.insertSale(sale);
+        await _retryWithBackoff(
+          operation: () => _svc.insertSale(sale),
+        );
 
-        // Upsert reminder with purchase branch tracking
-        bool reminderProcessed = true;
+        // Upsert reminder with purchase branch tracking (non-blocking)
+        // Details are saved to dme_customers and purchases tables
+        // Reminder update failure does not fail the sale record
         if (customerId != null && branchId != null) {
-          final branches = await _svc.getBranches();
-          final branchName = branches
-              .firstWhere(
-                (b) => b['id'] == branchId,
-                orElse: () => {'name': 'Unknown'},
-              )['name'] as String?;
-
-          reminderProcessed = await _svc.upsertReminder(
+          unawaited(_updateReminderAsync(
             customerId: customerId,
-            purchaseDate: record.date,
-            purchaseForBranchId: branchId,
-            purchaseForBranchName: branchName,
-            assignedTo: dmeUser?.id,
-            purchaseDetails: {
-              'salesman': record.salesman,
-              'category': effectiveCategory,
-              'customer_type': effectiveType,
-              'items_count': record.items.length,
-            },
-          );
+            record: record,
+            branchId: branchId,
+            dmeUser: dmeUser,
+            effectiveCategory: effectiveCategory,
+            effectiveType: effectiveType,
+          ));
         }
-
-        if (reminderProcessed) {
-          success++;
-        } else {
-          ignored++;
-        }
+        success++;
       } catch (e) {
         errors.add('${record.customerName}: $e');
         failed++;
@@ -450,7 +646,8 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
     }
   }
 
-  void _showResult(int success, int failed, int alternates, int ignored, List<String> errors) {
+  void _showResult(int success, int failed, int alternates, int ignored,
+      List<String> errors) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -552,8 +749,8 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: _blue,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 28, vertical: 14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
               ),
             ),
             if (_error != null) ...[
@@ -570,9 +767,8 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
 
   Widget _buildPreview() {
     final items = _items!;
-    final newCount = items
-        .where((i) => i.status == _RecordStatus.newCustomer)
-        .length;
+    final newCount =
+        items.where((i) => i.status == _RecordStatus.newCustomer).length;
     final matchCount =
         items.where((i) => i.status == _RecordStatus.matchFound).length;
     final conflictCount =
@@ -597,7 +793,8 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
                     const Icon(Icons.location_on, size: 14, color: Colors.blue),
                     const SizedBox(width: 6),
                     Text('Branch: $_selectedBranchName',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        style: const TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ],
@@ -607,11 +804,9 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
                   SizedBox(
                       width: 14,
                       height: 14,
-                      child:
-                          CircularProgressIndicator(strokeWidth: 2)),
+                      child: CircularProgressIndicator(strokeWidth: 2)),
                   SizedBox(width: 8),
-                  Text('Checking database…',
-                      style: TextStyle(fontSize: 13)),
+                  Text('Checking database…', style: TextStyle(fontSize: 13)),
                 ]),
               ] else ...[
                 const SizedBox(height: 4),
@@ -620,13 +815,10 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
                   children: [
                     _chip('${items.length} total', Colors.grey),
                     if (matchCount > 0)
-                      _chip('$matchCount match',
-                          Colors.green),
-                    if (newCount > 0)
-                      _chip('$newCount new', _blue),
+                      _chip('$matchCount match', Colors.green),
+                    if (newCount > 0) _chip('$newCount new', _blue),
                     if (conflictCount > 0)
-                      _chip('$conflictCount conflict',
-                          Colors.orange),
+                      _chip('$conflictCount conflict', Colors.orange),
                   ],
                 ),
               ],
@@ -663,15 +855,15 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
                   child: ElevatedButton.icon(
                     onPressed: _canUpload ? _upload : null,
                     icon: const Icon(Icons.cloud_upload),
-                    label: Text(
-                        _checking ? 'Checking…' : 'Upload ${items.length} Sales'),
+                    label: Text(_checking
+                        ? 'Checking…'
+                        : 'Upload ${items.length} Sales'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _blue,
                       foregroundColor: Colors.white,
                       disabledBackgroundColor: Colors.grey[400],
                       disabledForegroundColor: Colors.white,
-                      padding:
-                          const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                   ),
                 ),
@@ -824,11 +1016,12 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('New customer — fill in missing details:',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 13)),
+                      style:
+                          TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                   const SizedBox(height: 8),
                   if (item.needsCustomerType) ...[
-                    const Text('Customer Type', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    const Text('Customer Type',
+                        style: TextStyle(fontSize: 12, color: Colors.grey)),
                     const SizedBox(height: 4),
                     DropdownButtonFormField<String>(
                       value: item.resolvedCustomerType,
@@ -840,8 +1033,8 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
                             borderRadius: BorderRadius.circular(8)),
                       ),
                       items: dmeCustomerTypes
-                          .map((t) =>
-                              DropdownMenuItem(value: t, child: Text(t)))
+                          .map(
+                              (t) => DropdownMenuItem(value: t, child: Text(t)))
                           .toList(),
                       onChanged: (v) =>
                           setState(() => item.resolvedCustomerType = v),
@@ -849,7 +1042,8 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
                     const SizedBox(height: 8),
                   ],
                   if (item.needsCategory) ...[
-                    const Text('Category', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    const Text('Category',
+                        style: TextStyle(fontSize: 12, color: Colors.grey)),
                     const SizedBox(height: 4),
                     DropdownButtonFormField<String>(
                       value: item.resolvedCategory,
@@ -861,8 +1055,8 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
                             borderRadius: BorderRadius.circular(8)),
                       ),
                       items: dmeCategories
-                          .map((c) =>
-                              DropdownMenuItem(value: c, child: Text(c)))
+                          .map(
+                              (c) => DropdownMenuItem(value: c, child: Text(c)))
                           .toList(),
                       onChanged: (v) =>
                           setState(() => item.resolvedCategory = v),

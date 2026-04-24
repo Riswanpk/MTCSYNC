@@ -15,6 +15,17 @@ class CategoryPurchaseStat {
   });
 }
 
+/// Data model for a single customer type's purchase breakdown
+class CustomerTypeStat {
+  final String typeName;
+  final int uniqueCustomers;
+
+  const CustomerTypeStat({
+    required this.typeName,
+    required this.uniqueCustomers,
+  });
+}
+
 /// Data model for a single branch's purchase stat
 class BranchPurchaseStat {
   final String branchName;
@@ -45,6 +56,9 @@ class DmeUserDashboardData {
   /// Breakdown by branch
   final List<BranchPurchaseStat> byBranch;
 
+  /// Breakdown by customer type (from purchase_details.customer_type)
+  final List<CustomerTypeStat> byCustomerType;
+
   /// Daily trend: date string → unique customer count
   final Map<String, int> dailyTrend;
 
@@ -54,6 +68,7 @@ class DmeUserDashboardData {
     required this.returningCustomers,
     required this.byCategory,
     required this.byBranch,
+    required this.byCustomerType,
     required this.dailyTrend,
   });
 
@@ -63,6 +78,7 @@ class DmeUserDashboardData {
         returningCustomers: 0,
         byCategory: [],
         byBranch: [],
+        byCustomerType: [],
         dailyTrend: {},
       );
 }
@@ -98,6 +114,9 @@ class DmeUserDashboardService {
 
     // category → {set of unique customer ids}
     final Map<String, Set<int>> categoryCustomers = {};
+
+    // customer_type → {set of unique customer ids}
+    final Map<String, Set<int>> customerTypeCustomers = {};
 
     // branch → {purchase count, unique customer ids}
     final Map<String, _BranchAccum> branchAccum = {};
@@ -136,6 +155,13 @@ class DmeUserDashboardService {
         // --- Category breakdown ---
         final category = details?['category'] as String? ?? 'Uncategorised';
         categoryCustomers.putIfAbsent(category, () => <int>{}).add(customerId);
+
+        // --- Customer type breakdown ---
+        final customerType =
+            details?['customer_type'] as String? ?? 'Uncategorised';
+        customerTypeCustomers
+            .putIfAbsent(customerType, () => <int>{})
+            .add(customerId);
 
         // --- Branch breakdown ---
         branchAccum.putIfAbsent(
@@ -176,6 +202,14 @@ class DmeUserDashboardService {
     }).toList()
       ..sort((a, b) => b.totalPurchases.compareTo(a.totalPurchases));
 
+    final byCustomerType = customerTypeCustomers.entries.map((e) {
+      return CustomerTypeStat(
+        typeName: e.key,
+        uniqueCustomers: e.value.length,
+      );
+    }).toList()
+      ..sort((a, b) => b.uniqueCustomers.compareTo(a.uniqueCustomers));
+
     // Convert daily map: date → unique customer count, sorted by date
     final Map<String, int> dailyTrend = {};
     final sortedDates = dailyCustomers.keys.toList()..sort();
@@ -184,7 +218,7 @@ class DmeUserDashboardService {
     }
 
     debugPrint(
-        'DmeUserDashboard: total=$totalUnique, returning=$returning, categories=${byCategory.length}, branches=${byBranch.length}');
+        'DmeUserDashboard: total=$totalUnique, returning=$returning, categories=${byCategory.length}, branches=${byBranch.length}, types=${byCustomerType.length}');
 
     return DmeUserDashboardData(
       totalUniqueCustomers: totalUnique,
@@ -192,6 +226,7 @@ class DmeUserDashboardService {
       returningCustomers: returning,
       byCategory: byCategory,
       byBranch: byBranch,
+      byCustomerType: byCustomerType,
       dailyTrend: dailyTrend,
     );
   }
