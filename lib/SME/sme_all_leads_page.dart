@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../Leads/presentfollowup.dart';
+import 'sme_report.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);
 
@@ -158,6 +159,14 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.assessment_rounded),
+            tooltip: 'SME Report',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SmeReportPage()),
+            ),
+          ),
           TextButton.icon(
             style: TextButton.styleFrom(
               foregroundColor: Colors.white,
