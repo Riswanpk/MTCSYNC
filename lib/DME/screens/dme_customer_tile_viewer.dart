@@ -79,6 +79,32 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
     'GENERAL': 6,
   };
 
+  // ── Reverse lookups: ID to Name ─────────────────────────────
+  static const Map<int, String> _categoryIdToName = {
+    1: 'EVENT',
+    2: 'CATERING',
+    3: 'RESTAURANT',
+    4: 'PANTHAL',
+    5: 'STAGE DECORATION',
+    6: 'AUDITORIUM',
+    7: 'TRUST',
+    8: 'INSTITUTION',
+    9: 'RENTAL',
+    10: 'HIRING',
+    11: 'VEHICLE SHOWROOM',
+    12: 'RESORT',
+    13: 'GENERAL & OTHERS',
+  };
+
+  static const Map<int, String> _customerTypeIdToName = {
+    1: 'PREMIUM',
+    2: 'REGULAR',
+    3: 'BARGAIN',
+    4: 'INSTITUTIONS',
+    5: 'DEALERS',
+    6: 'GENERAL',
+  };
+
   // ── Edit customer state ───────────────────────────────────────
   bool _editingCustomer = false;
   final _editNameCtrl = TextEditingController();
@@ -88,10 +114,17 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
   String? _editCategory;
   String? _editCustomerType;
 
+  // ── Customer data for display ──────────────────────────────────
+  String? _displayCategory;
+  String? _displayCustomerType;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    // Load customer data for category and type display
+    _loadCustomerData();
 
     // Load purchase history
     _loadSalesData();
@@ -107,6 +140,22 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
       // For pending reminders, check for calls
       _restorePendingCallState();
       _checkForAnyRecentCall();
+    }
+  }
+
+  Future<void> _loadCustomerData() async {
+    try {
+      final customer = await _svc.getCustomerById(widget.reminder.customerId);
+      if (mounted && customer != null) {
+        setState(() {
+          _displayCategory =
+              customer.category ?? _categoryIdToName[customer.categoryId];
+          _displayCustomerType = customer.customerType ??
+              _customerTypeIdToName[customer.customerTypeId];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading customer data: $e');
     }
   }
 
@@ -1309,6 +1358,91 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                                 ),
                               ),
                             ),
+                    // ── Category and Type info ────────────────────────
+                    const SizedBox(height: 20),
+                    if (_displayCustomerType != null ||
+                        _displayCategory != null)
+                      Row(
+                        children: [
+                          if (_displayCustomerType != null)
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.3),
+                                      width: 1),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Customer Type',
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _displayCustomerType ?? 'N/A',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          if (_displayCustomerType != null &&
+                              _displayCategory != null)
+                            const SizedBox(width: 12),
+                          if (_displayCategory != null)
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.3),
+                                      width: 1),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Category',
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _displayCategory ?? 'N/A',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                   ],
                 ),
               ),
