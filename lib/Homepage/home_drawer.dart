@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mtcsync/DME/screens/dme_user_complaints.dart';
+import 'package:mtcsync/DME/screens/dme_customer_variants_page.dart';
 import 'package:provider/provider.dart';
 
 import '../Login/login.dart';
@@ -47,6 +48,7 @@ class HomeDrawer extends StatelessWidget {
           if (role == 'manager' || role == 'asst_manager' || role == 'sales') _buildComplaintsTile(context),
           // DME users: 'My Complaints' showing only their own raised complaints
           if (role == 'dme_user') _buildDmeUserComplaintsTile(context),
+          if (role == 'dme_user') _buildDmeUserVariantsTile(context),
           if (role == 'admin' || role == 'sync_head' || role == 'Sync Head') _buildManageUsersTile(context),
           if (role == 'dme_admin') _buildDmeUsersTile(context),
           if (role == 'manager') _buildDailyFormTile(context),
@@ -73,6 +75,24 @@ class HomeDrawer extends StatelessWidget {
           context,
           MaterialPageRoute(
               builder: (context) => const DmeUserComplaintsPage()),
+        );
+      },
+    );
+  }
+
+  Widget _buildDmeUserVariantsTile(BuildContext context) {
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: const Icon(Icons.category_rounded, color: Colors.purpleAccent),
+      title: const Text('Multi-Category Customers'),
+      subtitle: const Text('2+ categories or types', style: TextStyle(fontSize: 10)),
+      onTap: () {
+        Navigator.pop(context);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (context) => const DmeCustomerVariantsPage()),
         );
       },
     );
