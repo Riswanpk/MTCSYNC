@@ -34,6 +34,8 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
   final TextEditingController _reminderController = TextEditingController();
 
   String _priority = 'High';
+  String? _selectedPlatform;
+  final TextEditingController _otherPlatformController = TextEditingController();
   TimeOfDay? _selectedReminderTime;
   List<Contact>? _deviceContacts;
   bool _deviceContactsLoading = false;
@@ -61,6 +63,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
     _phoneController.dispose();
     _commentsController.dispose();
     _reminderController.dispose();
+    _otherPlatformController.dispose();
     super.dispose();
   }
 
@@ -157,6 +160,9 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
         'name': _nameController.text.trim(),
         'address': _addressController.text.trim(),
         'phone': _phoneController.text.trim(),
+        'platform': _selectedPlatform == 'Other'
+            ? _otherPlatformController.text.trim()
+            : (_selectedPlatform ?? ''),
         'status': 'In Progress',
         'priority': _priority,
         'comments': _commentsController.text.trim(),
@@ -616,6 +622,37 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                         );
                       },
                     ),
+                    const SizedBox(height: 14),
+                    DropdownButtonFormField<String>(
+                      value: _selectedPlatform,
+                      items: ['Instagram', 'Facebook', 'Youtube', 'Other']
+                          .map((p) =>
+                              DropdownMenuItem(value: p, child: Text(p)))
+                          .toList(),
+                      onChanged: (val) =>
+                          setState(() => _selectedPlatform = val),
+                      decoration: _inputDecoration(
+                        label: 'Platform',
+                        icon: Icons.share_rounded,
+                        hint: 'Select platform',
+                      ),
+                    ),
+                    if (_selectedPlatform == 'Other') ...
+                      [
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: _otherPlatformController,
+                          decoration: _inputDecoration(
+                            label: 'Specify Platform *',
+                            icon: Icons.edit_rounded,
+                          ),
+                          validator: (v) =>
+                              (_selectedPlatform == 'Other' &&
+                                      (v == null || v.trim().isEmpty))
+                                  ? 'Please specify the platform'
+                                  : null,
+                        ),
+                      ],
                     const SizedBox(height: 14),
                     TextFormField(
                       controller: _commentsController,

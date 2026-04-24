@@ -47,6 +47,12 @@ class _PreviewItem {
   String? resolvedCategory;
   String? correctedPhone; // User-corrected phone (10 digits)
 
+  // Category / type conflict (existing DB value ≠ Excel value)
+  bool hasCategoryConflict = false;
+  bool hasTypeConflict = false;
+  bool updateCategoryToExcel = false; // default: keep existing DB value
+  bool updateTypeToExcel = false; // default: keep existing DB value
+
   _PreviewItem({
     required this.record,
     this.status = _RecordStatus.pending,
@@ -407,6 +413,157 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
     }
   }
 
+  // ── Category / Type conflict resolution dialog ─────────────
+
+  Future<bool> _validateCategoryTypeConflicts() async {
+    final conflictItems = _items!
+        .where((item) =>
+            (item.status == _RecordStatus.matchFound ||
+                item.status == _RecordStatus.conflict) &&
+            (item.hasCategoryConflict || item.hasTypeConflict))
+        .toList();
+
+    if (conflictItems.isEmpty) return true;
+
+    // Default all choices to "keep existing"
+    for (final item in conflictItems) {
+      item.updateCategoryToExcel = false;
+      item.updateTypeToExcel = false;
+    }
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => StatefulBuilder(
+        builder: (_, dialogSetState) => AlertDialog(
+          title: const Text('Category / Type Mismatch'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'These customers exist in the database with a different '
+                  'category or type than the Excel file.\n'
+                  'Choose which value to keep for each:',
+                  style: TextStyle(fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: conflictItems.length,
+                    separatorBuilder: (_, __) =>
+                        const Divider(height: 20),
+                    itemBuilder: (_, i) {
+                      final item = conflictItems[i];
+                      final r = item.record;
+                      final existing = item.existingCustomer!;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            r.customerName,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          if (item.hasCategoryConflict) ...
+                            [
+                              const Text(
+                                'Category',
+                                style: TextStyle(
+                                    fontSize: 11, color: Colors.grey),
+                              ),
+                              RadioListTile<bool>(
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(
+                                  'Keep existing: ${existing.category ?? "—"}',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                value: false,
+                                groupValue: item.updateCategoryToExcel,
+                                onChanged: (v) => dialogSetState(
+                                    () => item.updateCategoryToExcel = v!),
+                              ),
+                              RadioListTile<bool>(
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(
+                                  'Update to: ${r.category ?? "—"}',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                value: true,
+                                groupValue: item.updateCategoryToExcel,
+                                onChanged: (v) => dialogSetState(
+                                    () => item.updateCategoryToExcel = v!),
+                              ),
+                            ],
+                          if (item.hasTypeConflict) ...
+                            [
+                              const Text(
+                                'Customer Type',
+                                style: TextStyle(
+                                    fontSize: 11, color: Colors.grey),
+                              ),
+                              RadioListTile<bool>(
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(
+                                  'Keep existing: ${existing.customerType ?? "—"}',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                value: false,
+                                groupValue: item.updateTypeToExcel,
+                                onChanged: (v) => dialogSetState(
+                                    () => item.updateTypeToExcel = v!),
+                              ),
+                              RadioListTile<bool>(
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(
+                                  'Update to: ${r.customerType ?? "—"}',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                value: true,
+                                groupValue: item.updateTypeToExcel,
+                                onChanged: (v) => dialogSetState(
+                                    () => item.updateTypeToExcel = v!),
+                              ),
+                            ],
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _blue,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Confirm'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    return result == true;
+  }
+
   // ── Step 2: DB check ──────────────────────────────────────────
 
   Future<void> _checkRecords() async {
@@ -432,10 +589,30 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
           if (existing != null) {
             final nameMatch = existing.name.trim().toLowerCase() ==
                 item.record.customerName.trim().toLowerCase();
+
+            // Detect category / type mismatches
+            final excelCat = item.record.category?.trim().toUpperCase();
+            final dbCat = existing.category?.trim().toUpperCase();
+            final catConflict = excelCat != null &&
+                excelCat.isNotEmpty &&
+                dbCat != null &&
+                dbCat.isNotEmpty &&
+                excelCat != dbCat;
+
+            final excelType = item.record.customerType?.trim().toUpperCase();
+            final dbType = existing.customerType?.trim().toUpperCase();
+            final typeConflict = excelType != null &&
+                excelType.isNotEmpty &&
+                dbType != null &&
+                dbType.isNotEmpty &&
+                excelType != dbType;
+
             setState(() {
               item.existingCustomer = existing;
               item.status =
                   nameMatch ? _RecordStatus.matchFound : _RecordStatus.conflict;
+              item.hasCategoryConflict = catConflict;
+              item.hasTypeConflict = typeConflict;
             });
           } else {
             setState(() => item.status = _RecordStatus.newCustomer);
@@ -464,12 +641,53 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
     return true;
   }
 
+  /// Updates category / type on an existing customer record if the user
+  /// chose to overwrite the DB value with the Excel value.
+  Future<void> _applyExistingCustomerCategoryTypeUpdate({
+    required _PreviewItem item,
+    required int customerId,
+    required String? effectiveCategory,
+    required String? effectiveType,
+  }) async {
+    final updateCat = item.hasCategoryConflict && item.updateCategoryToExcel;
+    final updateType = item.hasTypeConflict && item.updateTypeToExcel;
+    if (!updateCat && !updateType) return;
+
+    final existing = item.existingCustomer!;
+    final newCategory = updateCat ? effectiveCategory : existing.category;
+    final newType = updateType ? effectiveType : existing.customerType;
+    final newCategoryId = newCategory != null
+        ? _categoryNameToId[newCategory.toUpperCase()]
+        : existing.categoryId;
+    final newTypeId = newType != null
+        ? _customerTypeNameToId[newType.toUpperCase()]
+        : existing.customerTypeId;
+
+    await _retryWithBackoff(
+      operation: () => _svc.updateCustomer(
+        customerId: customerId,
+        name: existing.name,
+        phone: existing.phone,
+        address: existing.address,
+        category: newCategory,
+        customerType: newType,
+        categoryId: newCategoryId,
+        customerTypeId: newTypeId,
+        salesman: existing.salesman,
+      ),
+    );
+  }
+
   Future<void> _upload() async {
     if (_items == null) return;
 
     // Validate phone numbers before proceeding
     final phoneValid = await _validatePhoneNumbers();
     if (!phoneValid) return;
+
+    // Resolve category / type conflicts for existing customers
+    final categoryTypeValid = await _validateCategoryTypeConflicts();
+    if (!categoryTypeValid) return;
 
     if (mounted) {
       setState(() {
@@ -517,6 +735,13 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
             operation: () =>
                 _svc.updateLastPurchaseDate(customerId!, record.date),
           );
+          // Update category / type if user chose the Excel value
+          await _applyExistingCustomerCategoryTypeUpdate(
+            item: item,
+            customerId: customerId!,
+            effectiveCategory: effectiveCategory,
+            effectiveType: effectiveType,
+          );
         } else if (item.status == _RecordStatus.conflict) {
           // Phone matches, name differs → keep existing, record alternate name
           customerId = item.existingCustomer!.id;
@@ -529,6 +754,13 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
                 _svc.appendPurchasedFor(customerId!, record.customerName),
           );
           alternateNamesRecorded++;
+          // Update category / type if user chose the Excel value
+          await _applyExistingCustomerCategoryTypeUpdate(
+            item: item,
+            customerId: customerId!,
+            effectiveCategory: effectiveCategory,
+            effectiveType: effectiveType,
+          );
         } else {
           // New customer
           final phone =
@@ -968,7 +1200,7 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
         childrenPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         children: [
-          // ── Conflict info (auto-resolved) ────────────────────
+          // ── Name conflict info (auto-resolved) ────────────────────
           if (item.status == _RecordStatus.conflict) ...[
             Container(
               padding: const EdgeInsets.all(10),
@@ -995,6 +1227,51 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
                   const Text(
                     '📋 The name from the file will be saved in '
                     '"Purchased For" of the existing customer.',
+                    style: TextStyle(fontSize: 12, color: Colors.blueGrey),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+
+          // ── Category / type conflict info ──────────────────────
+          if ((item.status == _RecordStatus.matchFound ||
+                  item.status == _RecordStatus.conflict) &&
+              (item.hasCategoryConflict || item.hasTypeConflict)) ...[
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.purple.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.purple.shade300),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '⚠ Category / type differs from database:',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: Colors.purple),
+                  ),
+                  const SizedBox(height: 6),
+                  if (item.hasCategoryConflict)
+                    Text(
+                      'Category — DB: ${item.existingCustomer!.category}  |  Excel: ${item.record.category}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  if (item.hasTypeConflict) ...[
+                    if (item.hasCategoryConflict) const SizedBox(height: 4),
+                    Text(
+                      'Type — DB: ${item.existingCustomer!.customerType}  |  Excel: ${item.record.customerType}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  const Text(
+                    '📋 You will be asked which value to keep before uploading.',
                     style: TextStyle(fontSize: 12, color: Colors.blueGrey),
                   ),
                 ],
