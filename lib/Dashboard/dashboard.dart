@@ -97,21 +97,9 @@ class _DashboardPageState extends State<DashboardPage>
     final todayEnd = todayStart.add(const Duration(days: 1));
 
     Query followUps = FirebaseFirestore.instance.collection('follow_ups');
-    Query todos = FirebaseFirestore.instance.collection('todo');
 
-    List<String> branchEmails = [];
     if (branch != null && branch.isNotEmpty) {
       followUps = followUps.where('branch', isEqualTo: branch);
-
-      final usersSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where('branch', isEqualTo: branch)
-          .where('role', isEqualTo: 'sales')
-          .get();
-      branchEmails = usersSnapshot.docs
-          .map((doc) => doc['email'] as String)
-          .where((e) => e.isNotEmpty)
-          .toList();
     }
 
     final results = await Future.wait([
@@ -127,34 +115,12 @@ class _DashboardPageState extends State<DashboardPage>
           .where('created_at', isLessThan: Timestamp.fromDate(todayEnd))
           .count()
           .get(),
-      (() async {
-        Query pendingTodosQuery = todos.where('status', isEqualTo: 'pending');
-        if (branchEmails.isNotEmpty) {
-          int pendingCount = 0;
-          List<Future<AggregateQuerySnapshot>> futures = [];
-          for (var i = 0; i < branchEmails.length; i += 30) {
-            final batch = branchEmails.sublist(
-                i, i + 30 > branchEmails.length ? branchEmails.length : i + 30);
-            futures.add(
-                pendingTodosQuery.where('email', whereIn: batch).count().get());
-          }
-          final snapshots = await Future.wait(futures);
-          for (final snap in snapshots) {
-            pendingCount += snap.count ?? 0;
-          }
-          return pendingCount;
-        } else {
-          final pendingTodosSnap = await pendingTodosQuery.count().get();
-          return pendingTodosSnap.count ?? 0;
-        }
-      })(),
     ]);
 
     return {
       'totalLeads': (results[0] as AggregateQuerySnapshot).count ?? 0,
       'monthLeads': (results[1] as AggregateQuerySnapshot).count ?? 0,
       'todayLeads': (results[2] as AggregateQuerySnapshot).count ?? 0,
-      'pendingTodos': results[3] as int,
     };
   }
 
@@ -341,42 +307,44 @@ class _DashboardPageState extends State<DashboardPage>
                             );
                           },
                         ),
-                        _CardData(
-                          "Pending",
-                          counts['pendingTodos'].toString(),
-                          Icons.pending_actions_rounded,
-                          3,
-                          () {
-                            showModalBottomSheet(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              builder: (_) =>
-                                  PendingTodosModal(role: isAdminLike ? 'admin' : role, branch: branch),
-                            );
-                          },
-                        ),
                       ];
 
-                      return GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 14,
-                          mainAxisSpacing: 14,
-                          childAspectRatio: 1.3,
-                        ),
-                        itemCount: cards.length,
-                        itemBuilder: (context, index) {
-                          final card = cards[index];
-                          return _AnimatedStatCard(
-                            data: card,
-                            isDark: isDark,
-                            delay: index * 100,
-                          );
-                        },
+                      return Column(
+                        children: [
+                          // First row with 2 cards
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _AnimatedStatCard(
+                                  data: cards[0],
+                                  isDark: isDark,
+                                  delay: 0,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: _AnimatedStatCard(
+                                  data: cards[1],
+                                  isDark: isDark,
+                                  delay: 100,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          // Second row with centered card
+                          Align(
+                            alignment: Alignment.center,
+                            child: SizedBox(
+                              width: (MediaQuery.of(context).size.width - 32 - 14) / 2,
+                              child: _AnimatedStatCard(
+                                data: cards[2],
+                                isDark: isDark,
+                                delay: 200,
+                              ),
+                            ),
+                          ),
+                        ],
                       );
                     },
                   ),

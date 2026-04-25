@@ -101,21 +101,33 @@ class DmeSupabaseService {
   Future<void> _syncAppBranches() async {
     if (_branchesSynced) return;
     await ensureInitialized();
-    await _client.from('dme_branches').upsert(
-          kAppBranches.map((name) => {'name': name}).toList(),
-          onConflict: 'name',
-        );
-    _branchesSynced = true;
+    try {
+      await _client.from('dme_branches').upsert(
+            kAppBranches.map((name) => {'name': name}).toList(),
+            onConflict: 'name',
+          );
+      _branchesSynced = true;
+    } catch (e) {
+      debugPrint('Network error syncing app branches: $e');
+      // Log but don't rethrow - allow app to continue with cached branches
+      // The upsert failure is not critical to app functionality
+    }
   }
 
   Future<List<Map<String, dynamic>>> getBranches() async {
     await ensureInitialized();
-    await _syncAppBranches();
-    final res = await _client
-        .from('dme_branches')
-        .select()
-        .order('name', ascending: true);
-    return List<Map<String, dynamic>>.from(res);
+    try {
+      await _syncAppBranches();
+      final res = await _client
+          .from('dme_branches')
+          .select()
+          .order('name', ascending: true);
+      return List<Map<String, dynamic>>.from(res);
+    } catch (e) {
+      debugPrint('Network error fetching branches: $e');
+      // Return empty list on network error - graceful degradation
+      return [];
+    }
   }
 
   /// Get branch name by ID
@@ -242,7 +254,12 @@ class DmeSupabaseService {
 
   Future<void> updateDmeUserRole(String userId, String role) async {
     await ensureInitialized();
-    await _client.from('dme_users').update({'role': role}).eq('id', userId);
+    try {
+      await _client.from('dme_users').update({'role': role}).eq('id', userId);
+    } catch (e) {
+      debugPrint('Network error updating user role: $e');
+      rethrow; // Let caller handle critical update failures
+    }
   }
 
   Future<void> setUserBranches(String userId, List<int> branchIds) async {
@@ -265,7 +282,12 @@ class DmeSupabaseService {
 
   Future<void> deleteDmeUser(String userId) async {
     await ensureInitialized();
-    await _client.from('dme_users').delete().eq('id', userId);
+    try {
+      await _client.from('dme_users').delete().eq('id', userId);
+    } catch (e) {
+      debugPrint('Network error deleting DME user: $e');
+      rethrow; // Let caller handle critical delete failures
+    }
   }
 
   /// Get all users assigned to a specific branch
@@ -627,29 +649,39 @@ class DmeSupabaseService {
     if (customerTypeId != null) map['customer_type_id'] = customerTypeId;
     if (salesman != null) map['salesman'] = salesman;
 
-    await _client.from('dme_customers').update(map).eq('id', customerId);
+    try {
+      await _client.from('dme_customers').update(map).eq('id', customerId);
+    } catch (e) {
+      debugPrint('Network error updating customer $customerId: $e');
+      rethrow;
+    }
   }
 
   /// Append an alternate name to a customer's purchased_for field.
   /// Skips if the name is already present (case-insensitive).
   Future<void> appendPurchasedFor(int customerId, String alternateName) async {
     await ensureInitialized();
-    final res = await _client
-        .from('dme_customers')
-        .select('purchased_for')
-        .eq('id', customerId)
-        .single();
-    final existing = res['purchased_for'] as String? ?? '';
-    final parts = existing.isEmpty
-        ? <String>[]
-        : existing.split(',').map((s) => s.trim()).toList();
-    final lowerParts = parts.map((s) => s.toLowerCase()).toSet();
-    if (!lowerParts.contains(alternateName.toLowerCase().trim())) {
-      parts.add(alternateName.trim());
-      await _client.from('dme_customers').update({
-        'purchased_for': parts.join(', '),
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', customerId);
+    try {
+      final res = await _client
+          .from('dme_customers')
+          .select('purchased_for')
+          .eq('id', customerId)
+          .single();
+      final existing = res['purchased_for'] as String? ?? '';
+      final parts = existing.isEmpty
+          ? <String>[]
+          : existing.split(',').map((s) => s.trim()).toList();
+      final lowerParts = parts.map((s) => s.toLowerCase()).toSet();
+      if (!lowerParts.contains(alternateName.toLowerCase().trim())) {
+        parts.add(alternateName.trim());
+        await _client.from('dme_customers').update({
+          'purchased_for': parts.join(', '),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }).eq('id', customerId);
+      }
+    } catch (e) {
+      debugPrint('Network error appending purchased_for for customer $customerId: $e');
+      rethrow;
     }
   }
 
@@ -657,41 +689,56 @@ class DmeSupabaseService {
       {void Function(int done, int total)? onProgress}) async {
     await ensureInitialized();
     const batchSize = 500;
-    for (var i = 0; i < rows.length; i += batchSize) {
-      final batch = rows.sublist(
-          i, i + batchSize > rows.length ? rows.length : i + batchSize);
-      await _client.from('dme_customers').upsert(batch, onConflict: 'phone');
-      onProgress?.call(i + batch.length, rows.length);
+    try {
+      for (var i = 0; i < rows.length; i += batchSize) {
+        final batch = rows.sublist(
+            i, i + batchSize > rows.length ? rows.length : i + batchSize);
+        await _client.from('dme_customers').upsert(batch, onConflict: 'phone');
+        onProgress?.call(i + batch.length, rows.length);
+      }
+    } catch (e) {
+      debugPrint('Network error upserting customer batch: $e');
+      rethrow;
     }
   }
 
   Future<void> updateLastPurchaseDate(int customerId, DateTime date) async {
     await ensureInitialized();
-    await _client.from('dme_customers').update({
-      'last_purchase_date': date.toIso8601String().split('T')[0],
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', customerId);
+    try {
+      await _client.from('dme_customers').update({
+        'last_purchase_date': date.toIso8601String().split('T')[0],
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', customerId);
+    } catch (e) {
+      debugPrint('Network error updating last purchase date for customer $customerId: $e');
+      rethrow;
+    }
   }
 
   // ── Sales ────────────────────────────────────────────────────
   Future<int> insertSale(DmeSale sale) async {
     await ensureInitialized();
-    final res = await _client
-        .from('dme_sales')
-        .upsert(sale.toInsertMap(), onConflict: 'date,customer_id')
-        .select('id')
-        .single();
-    final saleId = res['id'] as int;
+    try {
+      final res = await _client
+          .from('dme_sales')
+          .upsert(sale.toInsertMap(), onConflict: 'date,customer_id')
+          .select('id')
+          .single();
+      final saleId = res['id'] as int;
 
-    // delete old items if re-upload
-    await _client.from('dme_sale_items').delete().eq('sale_id', saleId);
+      // delete old items if re-upload
+      await _client.from('dme_sale_items').delete().eq('sale_id', saleId);
 
-    if (sale.items.isNotEmpty) {
-      await _client.from('dme_sale_items').insert(
-            sale.items.map((item) => item.toInsertMap(saleId)).toList(),
-          );
+      if (sale.items.isNotEmpty) {
+        await _client.from('dme_sale_items').insert(
+              sale.items.map((item) => item.toInsertMap(saleId)).toList(),
+            );
+      }
+      return saleId;
+    } catch (e) {
+      debugPrint('Network error inserting sale: $e');
+      rethrow;
     }
-    return saleId;
   }
 
   Future<List<DmeSale>> getSalesByDate(DateTime date,

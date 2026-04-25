@@ -29,6 +29,14 @@ class _SmeDailyDashboardState extends State<SmeDailyDashboard> {
     _fetchDailyLeads();
   }
 
+  @override
+  void dispose() {
+    // Clear state to prevent any pending callbacks from accessing disposed widget
+    _leads.clear();
+    _branches.clear();
+    super.dispose();
+  }
+
   Future<void> _fetchBranches() async {
     // Fetch unique branches from Firestore
     final snapshot = await FirebaseFirestore.instance
@@ -109,7 +117,7 @@ class _SmeDailyDashboardState extends State<SmeDailyDashboard> {
       firstDate: DateTime(2023),
       lastDate: DateTime.now(),
     );
-    if (picked != null) {
+    if (picked != null && mounted) {
       setState(() => _selectedDate = picked);
       _fetchDailyLeads();
     }
@@ -166,10 +174,12 @@ class _SmeDailyDashboardState extends State<SmeDailyDashboard> {
                                   )),
                             ],
                             onChanged: (val) {
-                              setState(() {
-                                _selectedBranch = (val != null && val.isNotEmpty) ? val : null;
-                              });
-                              _fetchDailyLeads();
+                              if (mounted) {
+                                setState(() {
+                                  _selectedBranch = (val != null && val.isNotEmpty) ? val : null;
+                                });
+                                _fetchDailyLeads();
+                              }
                             },
                           ),
                         ),
