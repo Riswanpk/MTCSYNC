@@ -47,6 +47,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
   }
 
   Future<void> _fetchCustomerData() async {
+    if (!mounted) return;
     setState(() {
       _error = null;
       _highlightNoRemarks = false;
@@ -54,6 +55,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
+        if (!mounted) return;
         setState(() {
           _error = "Not logged in";
           _loading = false;
