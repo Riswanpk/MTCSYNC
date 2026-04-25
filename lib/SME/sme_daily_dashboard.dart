@@ -42,12 +42,15 @@ class _SmeDailyDashboardState extends State<SmeDailyDashboard> {
         branches.add(branch.toString());
       }
     }
-    setState(() {
-      _branches = branches.toList()..sort();
-    });
+    if (mounted) {
+      setState(() {
+        _branches = branches.toList()..sort();
+      });
+    }
   }
 
   Future<void> _fetchDailyLeads() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     final dayStart = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
@@ -87,14 +90,16 @@ class _SmeDailyDashboardState extends State<SmeDailyDashboard> {
       }
     }
 
-    setState(() {
-      _leads = leads;
-      _totalToday = leads.length;
-      _inProgress = inProgress;
-      _sold = sold;
-      _cancelled = cancelled;
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _leads = leads;
+        _totalToday = leads.length;
+        _inProgress = inProgress;
+        _sold = sold;
+        _cancelled = cancelled;
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _pickDate() async {
