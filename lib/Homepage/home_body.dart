@@ -506,7 +506,7 @@ class HomeButtonsContainer extends StatelessWidget {
               child: NeumorphicButton(
                 onTap: () => _navigateToDmeSalesUpload(context),
                 text: 'Upload Sales',
-                color: const Color(0xFF8B6914),
+                color: const Color(0xFF1E88E5),
                 textColor: Colors.white,
                 icon: Icons.upload_file,
               ),
@@ -516,8 +516,8 @@ class HomeButtonsContainer extends StatelessWidget {
               child: NeumorphicButton(
                 onTap: () => _navigateToDmeCustomerList(context),
                 text: 'Customers',
-                color: const Color(0xFFFFD580),
-                textColor: const Color(0xFFE65100),
+                color: const Color(0xFF8CC63F),
+                textColor: Colors.white,
                 icon: Icons.groups_rounded,
               ),
             ),
@@ -530,7 +530,7 @@ class HomeButtonsContainer extends StatelessWidget {
               child: NeumorphicButton(
                 onTap: () => _navigateToDmeRemindersAndCalls(context),
                 text: 'Reminders & Calls',
-                color: const Color(0xFF8CC63F),
+                color: const Color(0xFFE65100),
                 textColor: Colors.white,
                 icon: Icons.phone_in_talk_rounded,
               ),
@@ -540,7 +540,7 @@ class HomeButtonsContainer extends StatelessWidget {
               child: NeumorphicButton(
                 onTap: () => _navigateToDmeUserDashboard(context),
                 text: 'My Dashboard',
-                color: const Color(0xFF005BAC),
+                color: const Color(0xFFFFA000),
                 textColor: Colors.white,
                 icon: Icons.bar_chart_rounded,
               ),

@@ -3,8 +3,10 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../services/dme_supabase_service.dart';
+import '../services/dme_complaint_service.dart';
 import '../models/dme_user.dart';
 import '../models/dme_customer.dart';
+import '../models/dme_complaint.dart';
 import 'dme_customer_purchases.dart';
 import 'dme_customer_branches.dart';
 
@@ -51,14 +53,18 @@ class DmeCustomerDetailPage extends StatefulWidget {
 class _DmeCustomerDetailPageState extends State<DmeCustomerDetailPage>
     with WidgetsBindingObserver {
   final _svc = DmeSupabaseService.instance;
+  final _complaintSvc = DmeComplaintService.instance;
   final _remarksCtrl = TextEditingController();
 
   bool _loading = false;
+  List<DmeComplaint> _complaints = [];
+  bool _loadingComplaints = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _loadComplaints();
   }
 
   @override
@@ -84,6 +90,26 @@ class _DmeCustomerDetailPageState extends State<DmeCustomerDetailPage>
 
     final uri = Uri(scheme: 'tel', path: phone);
     await launchUrl(uri);
+  }
+
+  Future<void> _loadComplaints() async {
+    try {
+      setState(() => _loadingComplaints = true);
+      final complaints = await _complaintSvc.getComplaintsForCustomer(
+        customerName: widget.customer.name,
+      );
+      if (mounted) {
+        setState(() {
+          _complaints = complaints;
+          _loadingComplaints = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading complaints: $e');
+      if (mounted) {
+        setState(() => _loadingComplaints = false);
+      }
+    }
   }
 
   @override
@@ -302,7 +328,7 @@ class _DmeCustomerDetailPageState extends State<DmeCustomerDetailPage>
                   ],
 
                   // ── Recent Activity ───────────────────────────────
-                  if (c.lastPurchaseDate != null)
+                  if (c.lastPurchaseDate != null) ...[
                     _sectionCard(
                       header: 'Recent Activity',
                       headerColor: accentGreen,
@@ -331,10 +357,143 @@ class _DmeCustomerDetailPageState extends State<DmeCustomerDetailPage>
                         ),
                       ],
                     ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // ── Complaint History ─────────────────────────────
+                  if (_complaints.isNotEmpty)
+                    _buildComplaintHistorySection(),
                 ],
               ),
             ),
     );
+  }
+
+  Widget _buildComplaintHistorySection() {
+    const accentGreen = Color(0xFF8CC63F);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final dateFmt = DateFormat('dd-MMM-yy');
+
+    return _sectionCard(
+      header: 'Complaint History',
+      headerColor: accentGreen,
+      children: [
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _complaints.length,
+          separatorBuilder: (_, __) => const Divider(height: 1, indent: 64),
+          itemBuilder: (_, index) {
+            final complaint = _complaints[index];
+            final statusColor = _statusColor(complaint.status);
+            
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              complaint.complaintText,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF2C3E50),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              dateFmt.format(complaint.createdAt),
+                              style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          _statusLabel(complaint.status),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: statusColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (complaint.remarks != null && complaint.remarks!.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.07),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.green.withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.check_circle, size: 12, color: Colors.green[600]),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              complaint.remarks!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 11, color: Colors.green[600]),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'raised':
+        return Colors.red;
+      case 'case_resolved':
+        return Colors.orange;
+      case 'verified_closed':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'raised':
+        return 'RAISED';
+      case 'case_resolved':
+        return 'RESOLVED';
+      case 'verified_closed':
+        return 'CLOSED';
+      default:
+        return status.toUpperCase();
+    }
   }
 
   Widget _badge(String text, Color color) {

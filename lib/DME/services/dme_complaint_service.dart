@@ -183,6 +183,22 @@ class DmeComplaintService {
     return DmeComplaint.fromMap(response as Map<String, dynamic>);
   }
 
+  /// Get complaints for a specific customer by name
+  Future<List<DmeComplaint>> getComplaintsForCustomer({required String customerName, String? status}) async {
+    _ensureSupabaseInitialized();
+    dynamic query = _supabase.from(_table).select(_selectClause).eq('customer_name', customerName);
+
+    if (status != null) {
+      query = query.eq('status', status);
+    }
+
+    query = query.order('created_at', ascending: false);
+
+    final response = await query;
+    final data = response as List<dynamic>? ?? [];
+    return data.map((doc) => DmeComplaint.fromMap(doc as Map<String, dynamic>)).toList();
+  }
+
   /// Get username for a given user ID by looking up in dme_users table
   Future<String?> getUsernameById(String userId) async {
     try {

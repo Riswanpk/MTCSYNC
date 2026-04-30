@@ -30,8 +30,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
-  final TextEditingController _phoneController =
-      TextEditingController(text: '+91 ');
+  final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _commentsController = TextEditingController();
   final TextEditingController _reminderController = TextEditingController();
 
@@ -486,14 +485,108 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                   title: 'Lead Details',
                   icon: Icons.badge_rounded,
                   children: [
-                    TextFormField(
-                      controller: _nameController,
-                      decoration: _inputDecoration(
-                        label: 'Customer Name *',
-                        icon: Icons.person,
-                      ),
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Enter name' : null,
+                    RawAutocomplete<Map<String, dynamic>>(
+                      textEditingController: _nameController,
+                      focusNode: FocusNode(),
+                      optionsBuilder: (TextEditingValue textEditingValue) async {
+                        if (textEditingValue.text.isEmpty) {
+                          return const Iterable<Map<String, dynamic>>.empty();
+                        }
+                        return await fetchCustomersByName(textEditingValue.text);
+                      },
+                      displayStringForOption: (option) => option['name'] ?? '',
+                      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                        return TextFormField(
+                          controller: controller,
+                          focusNode: focusNode,
+                          decoration: _inputDecoration(
+                            label: 'Customer Name *',
+                            icon: Icons.person,
+                          ),
+                          validator: (v) =>
+                              (v == null || v.trim().isEmpty) ? 'Enter name' : null,
+                        );
+                      },
+                      optionsViewBuilder: (context, onSelected, options) {
+                        return Align(
+                          alignment: Alignment.topLeft,
+                          child: Material(
+                            elevation: 4.0,
+                            child: SizedBox(
+                              height: 300,
+                              child: ListView.builder(
+                                padding: EdgeInsets.zero,
+                                itemCount: options.length,
+                                itemBuilder: (context, index) {
+                                  final option = options.elementAt(index);
+                                  final name = option['name'] ?? '';
+                                  final phone = option['phone'] ?? '';
+                                  final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+                                  
+                                  return Material(
+                                    color: Colors.white,
+                                    child: InkWell(
+                                      onTap: () => onSelected(option),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                        child: Row(
+                                          children: [
+                                            CircleAvatar(
+                                              radius: 20,
+                                              backgroundColor: const Color(0xFF005BAC),
+                                              child: Text(
+                                                initial,
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    name,
+                                                    style: const TextStyle(
+                                                      fontSize: 14,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: Colors.black87,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    phone,
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color: Colors.grey[600],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                      onSelected: (selectedCustomer) {
+                        setState(() {
+                          _nameController.text = selectedCustomer['name'] ?? '';
+                          _addressController.text = selectedCustomer['address'] ?? '';
+                          _phoneController.text = selectedCustomer['phone'] ?? '';
+                        });
+                      },
                     ),
                     const SizedBox(height: 14),
                     TextFormField(
@@ -519,16 +612,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                                 final clipboardData =
                                     await Clipboard.getData('text/plain');
                                 if (clipboardData?.text != null) {
-                                  final digits = RegExp(r'\d')
-                                      .allMatches(clipboardData!.text!)
-                                      .map((m) => m.group(0))
-                                      .join();
-                                  if (digits.length >= 10) {
-                                    final tenDigits =
-                                        digits.substring(digits.length - 10);
-                                    _phoneController.text =
-                                        '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
-                                  }
+                                  _phoneController.text = clipboardData!.text!;
                                 }
                               },
                             ),
@@ -563,21 +647,11 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                                               _deviceContactsLoading,
                                           scrollController: scrollController,
                                           onSelect: (name, phone) {
-                                            final digits = RegExp(r'\d')
-                                                .allMatches(phone)
-                                                .map((m) => m.group(0))
-                                                .join();
-                                            if (digits.length >= 10) {
-                                              final tenDigits =
-                                                  digits.substring(
-                                                      digits.length - 10);
-                                              setState(() {
-                                                _phoneController.text =
-                                                    '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
-                                                if (name.isNotEmpty)
-                                                  _nameController.text = name;
-                                              });
-                                            }
+                                            setState(() {
+                                              _phoneController.text = phone;
+                                              if (name.isNotEmpty)
+                                                _nameController.text = name;
+                                            });
                                           },
                                         );
                                       },
@@ -591,37 +665,9 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                       ),
                       keyboardType: TextInputType.phone,
                       validator: (value) {
-                        if (value == null ||
-                            value.isEmpty ||
-                            !value.startsWith('+91 '))
-                          return 'Phone must start with +91';
-                        if (value.trim() == '+91') return 'Enter phone number';
-                        final digits = value.replaceAll(RegExp(r'\D'), '');
-                        if (digits.length != 12)
-                          return 'Enter a valid 10-digit number after +91';
+                        if (value == null || value.isEmpty)
+                          return 'Enter phone number';
                         return null;
-                      },
-                      onChanged: (val) {
-                        if (!val.startsWith('+91 ')) {
-                          _phoneController.text = '+91 ';
-                          _phoneController.selection =
-                              TextSelection.fromPosition(
-                            TextPosition(offset: _phoneController.text.length),
-                          );
-                          return;
-                        }
-                        String raw =
-                            val.replaceAll('+91 ', '').replaceAll(' ', '');
-                        if (raw.length > 10) raw = raw.substring(0, 10);
-                        if (raw.length > 5) {
-                          _phoneController.text =
-                              '+91 ${raw.substring(0, 5)} ${raw.substring(5)}';
-                        } else {
-                          _phoneController.text = '+91 $raw';
-                        }
-                        _phoneController.selection = TextSelection.fromPosition(
-                          TextPosition(offset: _phoneController.text.length),
-                        );
                       },
                     ),
                     const SizedBox(height: 14),
