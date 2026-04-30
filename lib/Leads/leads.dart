@@ -131,6 +131,7 @@ class _LeadsPageState extends State<LeadsPage> {
 
   Future<void> _fetchBranches() async {
     final branches = await UserCacheService.instance.getBranches();
+    if (!mounted) return;
     setState(() {
       availableBranches = branches;
       // Do not auto-select a branch or load leads here

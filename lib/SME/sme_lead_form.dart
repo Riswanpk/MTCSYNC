@@ -34,6 +34,9 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
   final TextEditingController _commentsController = TextEditingController();
   final TextEditingController _reminderController = TextEditingController();
 
+  // FocusNode for RawAutocomplete widget
+  late FocusNode _nameFieldFocusNode;
+
   String _priority = 'High';
   String? _selectedPlatform;
   final TextEditingController _otherPlatformController = TextEditingController();
@@ -53,12 +56,15 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
   @override
   void initState() {
     super.initState();
+    // Initialize FocusNode
+    _nameFieldFocusNode = FocusNode();
     _loadBranches();
     _loadDeviceContacts();
   }
 
   @override
   void dispose() {
+    _nameFieldFocusNode.dispose();
     _nameController.dispose();
     _addressController.dispose();
     _phoneController.dispose();
@@ -487,7 +493,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                   children: [
                     RawAutocomplete<Map<String, dynamic>>(
                       textEditingController: _nameController,
-                      focusNode: FocusNode(),
+                      focusNode: _nameFieldFocusNode,
                       optionsBuilder: (TextEditingValue textEditingValue) async {
                         if (textEditingValue.text.isEmpty) {
                           return const Iterable<Map<String, dynamic>>.empty();

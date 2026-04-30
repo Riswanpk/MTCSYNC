@@ -42,6 +42,10 @@ class _FollowUpFormState extends State<FollowUpForm> {
   final TextEditingController _commentsController = TextEditingController();
   final TextEditingController _reminderController = TextEditingController();
 
+  // FocusNodes for RawAutocomplete widgets
+  late FocusNode _nameFieldFocusNode;
+  late FocusNode _phoneFieldFocusNode;
+
   String _status = 'In Progress';
   String _priority = 'High';
   TimeOfDay? _selectedReminderTime;
@@ -284,6 +288,9 @@ class _FollowUpFormState extends State<FollowUpForm> {
   @override
   void initState() {
     super.initState();
+    // Initialize FocusNodes
+    _nameFieldFocusNode = FocusNode();
+    _phoneFieldFocusNode = FocusNode();
     // REMOVE date field logic
     if (!_phoneController.text.startsWith('+91 ')) {
       _phoneController.text = '+91 ';
@@ -306,6 +313,18 @@ class _FollowUpFormState extends State<FollowUpForm> {
     if (widget.initialAddress != null && widget.initialAddress!.isNotEmpty) {
       _addressController.text = widget.initialAddress!;
     }
+  }
+
+  @override
+  void dispose() {
+    _nameFieldFocusNode.dispose();
+    _phoneFieldFocusNode.dispose();
+    _nameController.dispose();
+    _addressController.dispose();
+    _phoneController.dispose();
+    _commentsController.dispose();
+    _reminderController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadDeviceContacts() async {
@@ -389,7 +408,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                       final branch = userSnap.data!.get('branch') ?? '';
                       return RawAutocomplete<Map<String, dynamic>>(
                         textEditingController: _nameController,
-                        focusNode: FocusNode(),
+                        focusNode: _nameFieldFocusNode,
                         optionsBuilder:
                             (TextEditingValue textEditingValue) async {
                           if (textEditingValue.text.isEmpty) {
@@ -462,7 +481,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                   const SizedBox(height: 16),
                   RawAutocomplete<Map<String, dynamic>>(
                     textEditingController: _phoneController,
-                    focusNode: FocusNode(),
+                    focusNode: _phoneFieldFocusNode,
                     optionsBuilder:
                         (TextEditingValue textEditingValue) async {
                       if (textEditingValue.text.isEmpty) {
