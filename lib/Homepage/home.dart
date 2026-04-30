@@ -190,8 +190,12 @@ class _HomePageState extends State<HomePage>
   Future<void> _setupFcmTokenSync() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      final token = await FirebaseMessaging.instance.getToken();
-      await _saveFcmToken(user.uid, token);
+      try {
+        final token = await FirebaseMessaging.instance.getToken();
+        await _saveFcmToken(user.uid, token);
+      } catch (e) {
+        debugPrint('Failed to get FCM token: $e');
+      }
     }
 
     _fcmTokenSubscription =

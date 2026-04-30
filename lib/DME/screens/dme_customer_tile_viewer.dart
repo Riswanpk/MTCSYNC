@@ -270,6 +270,8 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
 
   Future<void> _checkIfCallWasMade() async {
     if (_callStartTime == null || _pendingCallPhone == null) return;
+    final permStatus = await Permission.phone.status;
+    if (!permStatus.isGranted) return;
     try {
       final entries = await CallLog.query(
         dateFrom: _callStartTime!.millisecondsSinceEpoch,
@@ -302,6 +304,8 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
   /// after it (mirrors SalesCustomerTileViewer logic).
   Future<void> _checkForAnyRecentCall() async {
     if (_called) return;
+    final permStatus = await Permission.phone.status;
+    if (!permStatus.isGranted) return;
     try {
       final now = DateTime.now();
       final startOfDay = DateTime(now.year, now.month, now.day);

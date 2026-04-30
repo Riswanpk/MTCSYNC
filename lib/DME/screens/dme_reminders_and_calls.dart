@@ -184,6 +184,9 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
   Future<void> _checkIfCallWasMade() async {
     if (_callStartTime == null || _pendingCallCustomerId == null) return;
 
+    final permStatus = await Permission.phone.status;
+    if (!permStatus.isGranted) return;
+
     await Future.delayed(const Duration(seconds: 2));
 
     final entries = await CallLog.query(

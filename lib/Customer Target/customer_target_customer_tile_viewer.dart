@@ -161,6 +161,8 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
 
   Future<void> _checkIfCallWasMade() async {
     if (_pendingCallNumber == null || _callStartTime == null) return;
+    final permStatus = await Permission.phone.status;
+    if (!permStatus.isGranted) return;
     try {
       final now = DateTime.now();
       final Iterable<CallLogEntry> entries = await CallLog.query(
@@ -229,6 +231,8 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
   /// rejected/short outgoing calls while ignoring customer-initiated-only calls.
   Future<void> _checkForAnyRecentCall() async {
     if (called) return; // Already ticked, nothing to do
+    final permStatus = await Permission.phone.status;
+    if (!permStatus.isGranted) return;
     try {
       final now = DateTime.now();
       final startOfDay = DateTime(now.year, now.month, now.day);
@@ -305,6 +309,8 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
       }
       return;
     }
+    final permStatus = await Permission.phone.request();
+    if (!permStatus.isGranted) return;
     try {
       final now = DateTime.now();
       final startOfDay = DateTime(now.year, now.month, now.day);

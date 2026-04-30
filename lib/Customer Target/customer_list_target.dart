@@ -194,6 +194,9 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
   Future<void> _checkIfCallWasMade() async {
     if (_pendingCallNumber == null || _pendingCallIndex == null) return;
 
+    final permStatus = await Permission.phone.status;
+    if (!permStatus.isGranted) return;
+
     try {
       final now = DateTime.now();
       final Iterable<CallLogEntry> entries = await CallLog.query(

@@ -248,6 +248,7 @@ class _PerformanceFormState extends State<PerformanceForm> {
       'achievedDailyTargetDescription': achievedDailyTarget == true ? achievedDailyTargetDescription : null,
     });
 
+    if (!mounted) return;
     setState(() {
       // Reset form
       attendanceStatus = null;

@@ -356,6 +356,7 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                           return GestureDetector(
                             onTap: () async {
                               await _playClickSound();
+                              if (!mounted) return;
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(

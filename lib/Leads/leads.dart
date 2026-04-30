@@ -113,6 +113,7 @@ class _LeadsPageState extends State<LeadsPage> {
   }
 
   void _applyDefaultFiltersAndFetch(String role, String branch, String? uid) {
+    if (!mounted) return;
     final isAdminLike = role == 'admin' || role == 'sync_head' || role == 'Sync Head';
     if (!isAdminLike) {
       setState(() {
