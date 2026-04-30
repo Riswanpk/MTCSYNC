@@ -3,7 +3,8 @@ import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/dme_supabase_service.dart';
-import 'dme_customer_visit_analytics.dart';
+import '../models/dme_user.dart';
+import 'dme_user_dashboard.dart';
 
 class DmeDashboardPage extends StatefulWidget {
   const DmeDashboardPage({super.key});
@@ -18,11 +19,20 @@ class _DmeDashboardPageState extends State<DmeDashboardPage> {
   Map<String, int> _counts = {};
   List<Map<String, dynamic>> _branchSales = [];
   bool _loading = true;
+  DmeUser? _currentUser;
 
   @override
   void initState() {
     super.initState();
+    _loadCurrentUser();
     _loadAll();
+  }
+
+  Future<void> _loadCurrentUser() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final user = await _svc.getCurrentUser(uid);
+    if (mounted) setState(() { _currentUser = user; });
   }
 
   Future<void> _loadAll() async {
@@ -187,19 +197,21 @@ class _DmeDashboardPageState extends State<DmeDashboardPage> {
                     ),
                   const SizedBox(height: 24),
 
-                  // ── Customer Visit Analytics Button ──
+                  // ── My Dashboard Button ──
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const DmeCustomerVisitAnalyticsPage(),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.analytics),
-                      label: const Text('Customer Visit Analytics'),
+                      onPressed: _currentUser != null
+                          ? () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => DmeUserDashboardPage(dmeUser: _currentUser!),
+                                ),
+                              );
+                            }
+                          : null,
+                      icon: const Icon(Icons.bar_chart_rounded),
+                      label: const Text('My Dashboard'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF005BAC),
                         foregroundColor: Colors.white,

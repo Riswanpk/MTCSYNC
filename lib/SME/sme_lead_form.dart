@@ -13,7 +13,9 @@ import '../Leads/contact_picker_modal.dart';
 import '../Navigation/user_cache_service.dart';
 
 class SmeLeadForm extends StatefulWidget {
-  const SmeLeadForm({super.key});
+  final String source;
+
+  const SmeLeadForm({super.key, this.source = 'sme'});
 
   @override
   State<SmeLeadForm> createState() => _SmeLeadFormState();
@@ -173,7 +175,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
         'assigned_to': _selectedUserId,
         'assigned_to_name': _selectedUserName,
         'assigned_by': user.uid,
-        'source': 'sme',
+        'source': widget.source,
       });
 
       // Upsert customer profile
@@ -353,9 +355,9 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
             textTheme: const TextTheme(
               titleLarge: TextStyle(color: Colors.white, fontSize: 20),
             ),
-            title: const Text(
-              'New SME Lead',
-              style: TextStyle(
+            title: Text(
+              widget.source == 'dme' ? 'New DME Lead' : 'New SME Lead',
+              style: const TextStyle(
                   fontFamily: 'Montserrat', fontWeight: FontWeight.w700),
             ),
             flexibleSpace: Container(
@@ -625,7 +627,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                     const SizedBox(height: 14),
                     DropdownButtonFormField<String>(
                       value: _selectedPlatform,
-                      items: ['Instagram', 'Facebook', 'Youtube', 'Other']
+                      items: ['Instagram', 'Facebook', 'Youtube', 'DME', 'Other']
                           .map((p) =>
                               DropdownMenuItem(value: p, child: Text(p)))
                           .toList(),

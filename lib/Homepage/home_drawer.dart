@@ -18,6 +18,7 @@ import '../Sync Head/sync_head_performance_drawer.dart';
 import '../Performance/my_performance_page.dart';
 import '../DME/screens/dme_user_management.dart';
 import '../DME/screens/dme_complaints_management.dart';
+import '../SME/sme_lead_form.dart';
 
 /// Builds the drawer widget for the home page.
 class HomeDrawer extends StatelessWidget {
@@ -48,6 +49,7 @@ class HomeDrawer extends StatelessWidget {
           if (role == 'manager' || role == 'asst_manager' || role == 'sales') _buildComplaintsTile(context),
           // DME users: 'My Complaints' showing only their own raised complaints
           if (role == 'dme_user') _buildDmeUserComplaintsTile(context),
+          if (role == 'dme_user') _buildDmeUserAddLeadTile(context),
           if (role == 'dme_user') _buildDmeUserVariantsTile(context),
           if (role == 'admin' || role == 'sync_head' || role == 'Sync Head') _buildManageUsersTile(context),
           if (role == 'dme_admin') _buildDmeUsersTile(context),
@@ -75,6 +77,23 @@ class HomeDrawer extends StatelessWidget {
           context,
           MaterialPageRoute(
               builder: (context) => const DmeUserComplaintsPage()),
+        );
+      },
+    );
+  }
+
+  Widget _buildDmeUserAddLeadTile(BuildContext context) {
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: const Icon(Icons.person_add_rounded, color: Colors.teal),
+      title: const Text('Add Lead'),
+      onTap: () {
+        Navigator.pop(context);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (context) => const SmeLeadForm(source: 'dme')),
         );
       },
     );
