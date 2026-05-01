@@ -394,7 +394,7 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                             child: _customerProgressTable(isDark, textColor, primaryBlue, primaryGreen),
                           ),
                         ),
-                      if (_selectedUserEmail != null) ...[
+                      if (_selectedUserEmail != null && _userRole == 'admin') ...[
                         const SizedBox(height: 16),
                         SizedBox(
                           width: double.infinity,
