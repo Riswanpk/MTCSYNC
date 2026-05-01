@@ -132,6 +132,75 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
     }
   }
 
+  Future<void> _deleteAllMonthsForUser() async {
+    if (_selectedUserEmail == null) return;
+
+    final userName = _users
+        .firstWhere((u) => u['email'] == _selectedUserEmail, orElse: () => {})
+        ['name'] ?? _selectedUserEmail;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Delete Customer List', style: TextStyle(fontSize: 16)),
+          ],
+        ),
+        content: Text(
+          'This will permanently delete all customer list data for "$userName" across ALL months. This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete All', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() { _loading = true; _error = null; });
+    try {
+      final email = _selectedUserEmail!.toLowerCase();
+      final batch = FirebaseFirestore.instance.batch();
+      for (final monthYear in _monthYears) {
+        final ref = FirebaseFirestore.instance
+            .collection('customer_target')
+            .doc(monthYear)
+            .collection('users')
+            .doc(email);
+        batch.delete(ref);
+      }
+      await batch.commit();
+      setState(() {
+        _customers = null;
+        _loading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('All customer data deleted for $userName.'),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _error = 'Failed to delete: $e';
+        _loading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<ThemeProvider>(
@@ -325,6 +394,24 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                             child: _customerProgressTable(isDark, textColor, primaryBlue, primaryGreen),
                           ),
                         ),
+                      if (_selectedUserEmail != null) ...[
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.delete_forever, color: Colors.red),
+                            label: const Text(
+                              'Delete All Customer Data for This User',
+                              style: TextStyle(color: Colors.red),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Colors.red),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                            onPressed: _deleteAllMonthsForUser,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
