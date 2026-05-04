@@ -116,12 +116,43 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
         _firestoreConfirmed = true;
         await _saveToLocalCache();
       } else {
-        // Document genuinely missing for this month – keep cached data
-        // for display only but do NOT allow writes back to Firestore
-        _firestoreConfirmed = false;
-        setState(() {
-          _loading = false;
-        });
+        // Document missing for this month – try to copy from previous month
+        final previousMonthData = await _tryGetPreviousMonthData();
+        if (previousMonthData != null) {
+          // Initialize this month with previous month's data
+          final newData = previousMonthData.map((e) {
+            final copy = Map<String, dynamic>.from(e);
+            copy['callMade'] = false;
+            copy['remarks'] = '';
+            return copy;
+          }).toList();
+
+          // Write to Firestore for current month
+          await usersRef.doc(_docId).set({'customers': newData});
+          
+          setState(() {
+            _customers = newData;
+            _loading = false;
+          });
+          _firestoreConfirmed = true;
+          await _saveToLocalCache();
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Customer list initialized from previous month'),
+                backgroundColor: Colors.blue,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        } else {
+          // No previous month data either – keep cached data for display only
+          _firestoreConfirmed = false;
+          setState(() {
+            _loading = false;
+          });
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -146,6 +177,45 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
     return months[month - 1];
+  }
+
+  /// Try to fetch the previous month's customer data
+  Future<List<Map<String, dynamic>>?> _tryGetPreviousMonthData() async {
+    if (_docId == null) return null;
+    
+    try {
+      final now = DateTime.now();
+      final prevDate = DateTime(now.year, now.month - 1);
+      final prevMonthYear = "${_monthName(prevDate.month)} ${prevDate.year}";
+
+      final prevUsersRef = FirebaseFirestore.instance
+          .collection('customer_target')
+          .doc(prevMonthYear)
+          .collection('users');
+
+      var prevDoc = await prevUsersRef.doc(_docId).get();
+
+      // If not found with lowercase email, search case-insensitively
+      if (!prevDoc.exists || prevDoc.data()?['customers'] == null) {
+        final querySnap = await prevUsersRef.get();
+        for (final d in querySnap.docs) {
+          if (d.id.toLowerCase() == _docId!.toLowerCase()) {
+            prevDoc = d;
+            break;
+          }
+        }
+      }
+
+      if (prevDoc.exists && prevDoc.data()?['customers'] != null) {
+        final List<dynamic> data = prevDoc.data()!['customers'];
+        return data.map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+      
+      return null;
+    } catch (e) {
+      debugPrint('Error fetching previous month data: $e');
+      return null;
+    }
   }
 
   String _cacheKey() {
