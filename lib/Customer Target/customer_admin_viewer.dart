@@ -103,16 +103,26 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
   }
 
   Future<void> _fetchCustomerTarget() async {
-    if (_selectedUserEmail == null || _selectedMonthYear == null) return;
+    // Store values in local variables to prevent race conditions
+    final userEmail = _selectedUserEmail;
+    final monthYear = _selectedMonthYear;
+    
+    if (userEmail == null || monthYear == null) return;
+    
+    if (!mounted) return;
     setState(() { _loading = true; _error = null; });
+    
     try {
       final doc = await FirebaseFirestore.instance
           .collection('customer_target')
-          .doc(_selectedMonthYear)
+          .doc(monthYear)
           .collection('users')
-          .doc(_selectedUserEmail!.toLowerCase())
+          .doc(userEmail.toLowerCase())
           .get();
-      if (doc.exists && doc.data()?['customers'] != null) {
+      
+      if (!mounted) return;
+      
+      if (doc.exists && doc.data() != null && doc.data()!['customers'] != null) {
         final List<dynamic> data = doc.data()!['customers'];
         setState(() {
           _customers = data.map((e) => Map<String, dynamic>.from(e)).toList();
@@ -125,6 +135,7 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
         });
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = "Failed to fetch customer target: $e";
         _loading = false;
@@ -168,9 +179,13 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
 
     if (confirmed != true) return;
 
+    final userEmail = _selectedUserEmail;
+    if (userEmail == null) return;
+
+    if (!mounted) return;
     setState(() { _loading = true; _error = null; });
     try {
-      final email = _selectedUserEmail!.toLowerCase();
+      final email = userEmail.toLowerCase();
       final batch = FirebaseFirestore.instance.batch();
       for (final monthYear in _monthYears) {
         final ref = FirebaseFirestore.instance

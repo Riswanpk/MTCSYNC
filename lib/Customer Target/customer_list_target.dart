@@ -1119,16 +1119,16 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                                 } else if (action == 'delete') {
                                   final confirm = await showDialog<bool>(
                                     context: context,
-                                    builder: (context) => AlertDialog(
+                                    builder: (dialogContext) => AlertDialog(
                                       title: const Text('Delete Customer'),
                                       content: const Text('Are you sure you want to delete this customer?'),
                                       actions: [
                                         TextButton(
-                                          onPressed: () => Navigator.pop(context, false),
+                                          onPressed: () => Navigator.pop(dialogContext, false),
                                           child: const Text('Cancel'),
                                         ),
                                         TextButton(
-                                          onPressed: () => Navigator.pop(context, true),
+                                          onPressed: () => Navigator.pop(dialogContext, true),
                                           child: const Text('Delete', style: TextStyle(color: Colors.red)),
                                         ),
                                       ],
@@ -1143,9 +1143,11 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                                     });
                                     await _updateFirestore();
                                     await _fetchCustomerData();
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Customer deleted.'), backgroundColor: Colors.red),
-                                    );
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Customer deleted.'), backgroundColor: Colors.red),
+                                      );
+                                    }
                                   }
                                 }
                               },

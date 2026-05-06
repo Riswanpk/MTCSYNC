@@ -176,6 +176,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> {
         initialName: _currentReminder.customerName,
         initialPhone: _currentReminder.customerPhone,
         initialAddress: _currentReminder.customerAddress,
+        source: 'DME',
       ),
     );
   }

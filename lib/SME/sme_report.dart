@@ -91,7 +91,7 @@ class _SmeReportPageState extends State<SmeReportPage> {
 
       // -- Fetch all SME leads for selected branch(es) and date range --
       Query leadsQuery = FirebaseFirestore.instance.collection('follow_ups')
-          .where('source', isEqualTo: 'sme')
+          .where('source', whereIn: ['sme', 'SME'])
           .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
           .where('created_at', isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd));
 

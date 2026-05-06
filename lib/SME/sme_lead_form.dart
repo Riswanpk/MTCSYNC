@@ -15,7 +15,7 @@ import '../Navigation/user_cache_service.dart';
 class SmeLeadForm extends StatefulWidget {
   final String source;
 
-  const SmeLeadForm({super.key, this.source = 'sme'});
+  const SmeLeadForm({super.key, this.source = 'SME'});
 
   @override
   State<SmeLeadForm> createState() => _SmeLeadFormState();

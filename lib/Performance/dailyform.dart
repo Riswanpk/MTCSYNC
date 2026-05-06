@@ -25,7 +25,7 @@ class _PerformanceFormState extends State<PerformanceForm> {
     bool? achievedDailyTarget;
     String? achievedDailyTargetDescription;
   // Date selection
-  DateTime selectedDate = DateTime.now();
+  DateTime? selectedDate; // Now nullable to handle edge cases
   List<DateTime> allowedDates = [];
 
   // Attendance
@@ -97,9 +97,16 @@ class _PerformanceFormState extends State<PerformanceForm> {
 
     if (branch == null) return;
 
+    // Ensure selectedDate is not null before accessing properties
+    if (selectedDate == null) {
+      debugPrint('Error: selectedDate is null in fetchBranchUsers()');
+      setState(() => isLoadingUsers = false);
+      return;
+    }
+
     // Get selected date range
     final dateStart =
-        DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+        DateTime(selectedDate!.year, selectedDate!.month, selectedDate!.day);
     final dateEnd = dateStart.add(const Duration(days: 1));
 
     // Fetch users of the same branch
@@ -121,6 +128,8 @@ class _PerformanceFormState extends State<PerformanceForm> {
     final filledUserIds =
         dailyFormSnapshot.docs.map((doc) => doc['userId'] as String).toSet();
 
+    if (!mounted) return;
+    
     setState(() {
       branchUsers = usersSnapshot.docs
           .where((doc) => doc.id != currentUser.uid) // Exclude self
@@ -136,11 +145,7 @@ class _PerformanceFormState extends State<PerformanceForm> {
     });
   }
 
-  bool _isEndOfMonth() {
-    final now = DateTime.now();
-    final lastDay = DateTime(now.year, now.month + 1, 0).day;
-    return now.day >= lastDay - 2; // Allow last 3 days of month
-  }
+
 
   Future<void> submitForm() async {
     if (selectedUserId == null) {
@@ -151,8 +156,16 @@ class _PerformanceFormState extends State<PerformanceForm> {
     }
 
     // Check again before submit (in case of race condition)
+    if (selectedDate == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select a date')),
+        );
+      }
+      return;
+    }
     final dateStart =
-        DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+        DateTime(selectedDate!.year, selectedDate!.month, selectedDate!.day);
     final dateEnd = dateStart.add(const Duration(days: 1));
     final currentUser = FirebaseAuth.instance.currentUser;
 
@@ -189,9 +202,9 @@ class _PerformanceFormState extends State<PerformanceForm> {
     // Create timestamp for the selected date with current time
     final now = DateTime.now();
     final submissionTimestamp = DateTime(
-      selectedDate.year,
-      selectedDate.month,
-      selectedDate.day,
+      selectedDate!.year,
+      selectedDate!.month,
+      selectedDate!.day,
       now.hour,
       now.minute,
       now.second,
@@ -249,6 +262,13 @@ class _PerformanceFormState extends State<PerformanceForm> {
     });
 
     if (!mounted) return;
+    // Show success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Form submitted successfully!'),
+        backgroundColor: Color(0xFF8CC63F),
+      ),
+    );
     setState(() {
       // Reset form
       attendanceStatus = null;
@@ -283,6 +303,10 @@ class _PerformanceFormState extends State<PerformanceForm> {
       crossSellingUpselling = null;
       productComplaints = null;
       achievedDailyTarget = null;
+      
+      // Re-initialize selectedDate to today
+      final now = DateTime.now();
+      selectedDate = DateTime(now.year, now.month, now.day);
     });
     // Refresh user list to remove the just-filled user
     fetchBranchUsers();
@@ -1186,7 +1210,8 @@ class _PerformanceFormState extends State<PerformanceForm> {
     );
   }
 
-  String _formatDate(DateTime date) {
+  String _formatDate(DateTime? date) {
+    if (date == null) return 'Select date';
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));

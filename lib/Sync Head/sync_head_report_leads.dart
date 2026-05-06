@@ -144,28 +144,40 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         List<DocumentSnapshot> cancelledLeads = [];
 
         if (_statusFilter == 'All') {
-          // Fetch all current leads (any status, any date) broken by status
+          // Fetch all current leads (any status) within the date range, broken by status
           final results = await Future.wait([
-            // In Progress leads
+            // In Progress leads created in range
             FirebaseFirestore.instance
               .collection('follow_ups')
               .where('created_by', isEqualTo: uid)
               .where('branch', isEqualTo: branchForQuery)
               .where('status', isEqualTo: 'In Progress')
+              .where('created_at',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
+              .where('created_at',
+                isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
               .get(),
-            // Sale leads
+            // Sale leads created in range
             FirebaseFirestore.instance
               .collection('follow_ups')
               .where('created_by', isEqualTo: uid)
               .where('branch', isEqualTo: branchForQuery)
               .where('status', isEqualTo: 'Sale')
+              .where('created_at',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
+              .where('created_at',
+                isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
               .get(),
-            // Cancelled leads
+            // Cancelled leads created in range
             FirebaseFirestore.instance
               .collection('follow_ups')
               .where('created_by', isEqualTo: uid)
               .where('branch', isEqualTo: branchForQuery)
               .where('status', isEqualTo: 'Cancelled')
+              .where('created_at',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
+              .where('created_at',
+                isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
               .get(),
           ]);
 
@@ -266,7 +278,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
 
           // Title row
           final allBranchesStatusText = _statusFilter == 'All' ? '' : ' [$_statusFilter]';
-          final titleRange = sheet.getRangeByName('A1:F1');
+          final titleRange = sheet.getRangeByName('A1:G1');
           titleRange.merge();
           titleRange.setText(
               'Leads Report — $branch$allBranchesStatusText  (${_formatDate(rangeStart)} → ${_formatDate(rangeEnd)})');
@@ -415,6 +427,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
             sheet.getRangeByIndex(1, 4).columnWidth = 14;
             sheet.getRangeByIndex(1, 5).columnWidth = 36;
             sheet.getRangeByIndex(1, 6).columnWidth = 28;
+            sheet.getRangeByIndex(1, 7).columnWidth = 10;
 
             // ── Detailed Lead Breakdown ────────────────────────────────────
             int detailRow = 2;
@@ -447,19 +460,36 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
             detailRedSt.hAlign = xlsio.HAlignType.left;
             detailRedSt.backColor = '#FFD0D0';
 
+            final detailSourceSmeSt = workbook.styles.add('detailSourceSme_$sheetIdx');
+            detailSourceSmeSt.fontSize = 10;
+            detailSourceSmeSt.hAlign = xlsio.HAlignType.center;
+            detailSourceSmeSt.backColor = '#87CEEB'; // Sky blue
+
+            final detailSourceDmeSt = workbook.styles.add('detailSourceDme_$sheetIdx');
+            detailSourceDmeSt.fontSize = 10;
+            detailSourceDmeSt.hAlign = xlsio.HAlignType.center;
+            detailSourceDmeSt.backColor = '#FFFF00'; // Yellow
+            detailSourceDmeSt.fontColor = '#000000';
+
+            final detailSourceCcSt = workbook.styles.add('detailSourceCc_$sheetIdx');
+            detailSourceCcSt.fontSize = 10;
+            detailSourceCcSt.hAlign = xlsio.HAlignType.center;
+            detailSourceCcSt.backColor = '#FFA500'; // Orange
+            detailSourceCcSt.fontColor = '#FFFFFF';
+
             for (final userStat in usersForBranch) {
               final inProgressLeadsDocs = userStat['inProgressLeads'] as List<dynamic>;
               final saleLeadsDocs = userStat['saleLeads'] as List<dynamic>;
               final cancelledLeadsDocs = userStat['cancelledLeads'] as List<dynamic>;
               if (inProgressLeadsDocs.isEmpty && saleLeadsDocs.isEmpty && cancelledLeadsDocs.isEmpty) continue;
 
-              final userHdrRange = sheet.getRangeByIndex(detailRow, 1, detailRow, 6);
+              final userHdrRange = sheet.getRangeByIndex(detailRow, 1, detailRow, 7);
               userHdrRange.merge();
               userHdrRange.setText(userStat['username'] as String);
               userHdrRange.cellStyle = detailUserHdrSt;
               detailRow++;
 
-              const detailHeaders = ['Customer Name', 'Status', 'Created Date', 'Completed Date', 'Comments', 'Cancellation Reason'];
+              const detailHeaders = ['Customer Name', 'Status', 'Created Date', 'Completed Date', 'Comments', 'Cancellation Reason', 'Source'];
               for (int c = 0; c < detailHeaders.length; c++) {
                 final cell = sheet.getRangeByIndex(detailRow, c + 1);
                 cell.setText(detailHeaders[c]);
@@ -478,12 +508,15 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
                 final completedDateStr = completedAt is Timestamp
                     ? DateFormat('dd MMM yyyy').format(completedAt.toDate())
                     : '';
+                final statusVal = d['status'] ?? '';
+                final source = d['source'] ?? '';
                 final isQuickClose = createdAt is Timestamp &&
                     completedAt is Timestamp &&
-                    completedAt.toDate().difference(createdAt.toDate()).inDays.abs() <= 2;
+                    completedAt.toDate().difference(createdAt.toDate()).inDays.abs() <= 2 &&
+                    statusVal != 'Cancelled' &&
+                    !['CC', 'SME', 'DME'].contains(source);
                 final isAlt = leadIdx % 2 == 1;
                 final st = isQuickClose ? detailRedSt : (isAlt ? detailAltSt : detailDataSt);
-                final statusVal = d['status'] ?? '';
                 final statusLabel = statusVal == 'Sale'
                     ? 'Sold'
                     : statusVal == 'Cancelled'
@@ -502,6 +535,21 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
                 sheet.getRangeByIndex(detailRow, 6).setText(
                     statusVal == 'Cancelled' ? (d['cancellation_reason'] ?? '') : '');
                 sheet.getRangeByIndex(detailRow, 6).cellStyle = st;
+
+                // Source column with conditional coloring
+                final sourceVal = source.toUpperCase();
+                final sourceCell = sheet.getRangeByIndex(detailRow, 7);
+                sourceCell.setText(sourceVal);
+                if (sourceVal == 'SME') {
+                  sourceCell.cellStyle = detailSourceSmeSt;
+                } else if (sourceVal == 'DME') {
+                  sourceCell.cellStyle = detailSourceDmeSt;
+                } else if (sourceVal == 'CC') {
+                  sourceCell.cellStyle = detailSourceCcSt;
+                } else {
+                  sourceCell.cellStyle = st;
+                }
+
                 detailRow++;
                 leadIdx++;
               }
@@ -550,7 +598,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
 
       // Title row
       final singleBranchStatusText = _statusFilter == 'All' ? '' : ' [$_statusFilter]';
-      final titleRange = sheet.getRangeByName('A1:F1');
+      final titleRange = sheet.getRangeByName('A1:G1');
       titleRange.merge();
       titleRange.setText(
           'Leads Report — $_selectedBranch$singleBranchStatusText  (${_formatDate(rangeStart)} → ${_formatDate(rangeEnd)})');
@@ -699,6 +747,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         sheet.getRangeByIndex(1, 4).columnWidth = 14;
         sheet.getRangeByIndex(1, 5).columnWidth = 36;
         sheet.getRangeByIndex(1, 6).columnWidth = 28;
+        sheet.getRangeByIndex(1, 7).columnWidth = 10;
 
         // ── Detailed Lead Breakdown ──────────────────────────────────────
         int detailRow = 2;
@@ -731,19 +780,36 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         detailRedSt.hAlign = xlsio.HAlignType.left;
         detailRedSt.backColor = '#FFD0D0';
 
+        final detailSourceSmeSt = workbook.styles.add('detailSourceSme');
+        detailSourceSmeSt.fontSize = 10;
+        detailSourceSmeSt.hAlign = xlsio.HAlignType.center;
+        detailSourceSmeSt.backColor = '#87CEEB'; // Sky blue
+
+        final detailSourceDmeSt = workbook.styles.add('detailSourceDme');
+        detailSourceDmeSt.fontSize = 10;
+        detailSourceDmeSt.hAlign = xlsio.HAlignType.center;
+        detailSourceDmeSt.backColor = '#FFFF00'; // Yellow
+        detailSourceDmeSt.fontColor = '#000000';
+
+        final detailSourceCcSt = workbook.styles.add('detailSourceCc');
+        detailSourceCcSt.fontSize = 10;
+        detailSourceCcSt.hAlign = xlsio.HAlignType.center;
+        detailSourceCcSt.backColor = '#FFA500'; // Orange
+        detailSourceCcSt.fontColor = '#FFFFFF';
+
         for (final userStat in stats) {
           final inProgressLeadsDocs = userStat['inProgressLeads'] as List<dynamic>;
           final saleLeadsDocs = userStat['saleLeads'] as List<dynamic>;
           final cancelledLeadsDocs = userStat['cancelledLeads'] as List<dynamic>;
           if (inProgressLeadsDocs.isEmpty && saleLeadsDocs.isEmpty && cancelledLeadsDocs.isEmpty) continue;
 
-          final userHdrRange = sheet.getRangeByIndex(detailRow, 1, detailRow, 6);
+          final userHdrRange = sheet.getRangeByIndex(detailRow, 1, detailRow, 7);
           userHdrRange.merge();
           userHdrRange.setText(userStat['username'] as String);
           userHdrRange.cellStyle = detailUserHdrSt;
           detailRow++;
 
-          const detailHeaders = ['Customer Name', 'Status', 'Created Date', 'Completed Date', 'Comments', 'Cancellation Reason'];
+          const detailHeaders = ['Customer Name', 'Status', 'Created Date', 'Completed Date', 'Comments', 'Cancellation Reason', 'Source'];
           for (int c = 0; c < detailHeaders.length; c++) {
             final cell = sheet.getRangeByIndex(detailRow, c + 1);
             cell.setText(detailHeaders[c]);
@@ -762,12 +828,15 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
             final completedDateStr = completedAt is Timestamp
                 ? DateFormat('dd MMM yyyy').format(completedAt.toDate())
                 : '';
+            final statusVal = d['status'] ?? '';
+            final source = d['source'] ?? '';
             final isQuickClose = createdAt is Timestamp &&
                 completedAt is Timestamp &&
-                completedAt.toDate().difference(createdAt.toDate()).inDays.abs() <= 2;
+                completedAt.toDate().difference(createdAt.toDate()).inDays.abs() <= 2 &&
+                statusVal != 'Cancelled' &&
+                !['CC', 'SME', 'DME'].contains(source);
             final isAlt = leadIdx % 2 == 1;
             final st = isQuickClose ? detailRedSt : (isAlt ? detailAltSt : detailDataSt);
-            final statusVal = d['status'] ?? '';
             final statusLabel = statusVal == 'Sale'
                 ? 'Sold'
                 : statusVal == 'Cancelled'
@@ -786,6 +855,21 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
             sheet.getRangeByIndex(detailRow, 6).setText(
                 statusVal == 'Cancelled' ? (d['cancellation_reason'] ?? '') : '');
             sheet.getRangeByIndex(detailRow, 6).cellStyle = st;
+
+            // Source column with conditional coloring
+            final sourceVal = source.toUpperCase();
+            final sourceCell = sheet.getRangeByIndex(detailRow, 7);
+            sourceCell.setText(sourceVal);
+            if (sourceVal == 'SME') {
+              sourceCell.cellStyle = detailSourceSmeSt;
+            } else if (sourceVal == 'DME') {
+              sourceCell.cellStyle = detailSourceDmeSt;
+            } else if (sourceVal == 'CC') {
+              sourceCell.cellStyle = detailSourceCcSt;
+            } else {
+              sourceCell.cellStyle = st;
+            }
+
             detailRow++;
             leadIdx++;
           }

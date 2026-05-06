@@ -19,12 +19,14 @@ class FollowUpForm extends StatefulWidget {
   final String? initialName;
   final String? initialPhone;
   final String? initialAddress;
+  final String source;
 
   const FollowUpForm({
     super.key,
     this.initialName,
     this.initialPhone,
     this.initialAddress,
+    this.source = 'Sales',
   });
 
   @override
@@ -121,6 +123,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
         'branch': branch,
         'created_by': user.uid,
         'created_at': FieldValue.serverTimestamp(),
+        'source': widget.source,
         // Track original reminder date for auto-reschedule logic
         if (parsedReminderDate != null) 'original_reminder_date': Timestamp.fromDate(parsedReminderDate),
         'reminder_date_changed': false, // Flag for manual reschedule

@@ -7,6 +7,7 @@ import '../models/dme_customer.dart';
 import '../models/dme_sale.dart';
 import '../models/dme_reminder.dart';
 import '../models/dme_complaint.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 class DmeSupabaseService {
   DmeSupabaseService._();
@@ -495,96 +496,172 @@ class DmeSupabaseService {
     int limit = 50,
     int offset = 0,
   }) async {
-    await ensureInitialized();
-    var query = _client.from('dme_customers').select(
-        '*, dme_branches(name), dme_categories(id, name), dme_customer_types(id, name)');
+    try {
+      await ensureInitialized();
+      
+      // Retry logic with exponential backoff for connection issues
+      const maxRetries = 3;
+      final delays = [1000, 2000, 4000]; // milliseconds
+      
+      for (int attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          var query = _client.from('dme_customers').select(
+              '*, dme_branches(name), dme_categories(id, name), dme_customer_types(id, name)');
 
-    if (branchIds != null && branchIds.isNotEmpty) {
-      // Get customer IDs that have a purchase record for any of these branches
-      final purchaseRows = await _client
-          .from('dme_customer_purchases')
-          .select('customer_id')
-          .inFilter('purchase_for_branch_id', branchIds);
-      final purchasedCustomerIds = (purchaseRows as List)
-          .map((e) => e['customer_id'] as int)
-          .toSet()
-          .toList();
+          if (branchIds != null && branchIds.isNotEmpty) {
+            // Get customer IDs that have a purchase record for any of these branches
+            final purchaseRows = await _client
+                .from('dme_customer_purchases')
+                .select('customer_id')
+                .inFilter('purchase_for_branch_id', branchIds);
+            final purchasedCustomerIds = (purchaseRows as List)
+                .map((e) => e['customer_id'] as int)
+                .toSet()
+                .toList();
 
-      if (purchasedCustomerIds.isNotEmpty) {
-        // Include customers whose primary branch matches OR who have a purchase from these branches
-        query = query.or(
-            'branch_id.in.(${branchIds.join(',')}),id.in.(${purchasedCustomerIds.join(',')})');
-      } else {
-        query = query.inFilter('branch_id', branchIds);
-      }
-    }
-    if (search != null && search.isNotEmpty) {
-      query = query.or('name.ilike.%$search%,phone.ilike.%$search%');
-    }
-
-    // Filter by FK columns only (TEXT columns removed from DB)
-    if (categoryId != null) {
-      query = query.eq('category_id', categoryId);
-    }
-
-    if (customerTypeId != null) {
-      query = query.eq('customer_type_id', customerTypeId);
-    }
-
-    // Date range filter - get customers with ANY purchase in the date range from dme_customer_purchases
-    if (lastPurchaseDateFrom != null || lastPurchaseDateTo != null) {
-      var purchaseQuery =
-          _client.from('dme_customer_purchases').select('customer_id');
-
-      if (lastPurchaseDateFrom != null) {
-        purchaseQuery = purchaseQuery.gte('purchase_date',
-            lastPurchaseDateFrom.toIso8601String().split('T')[0]);
-      }
-      if (lastPurchaseDateTo != null) {
-        purchaseQuery = purchaseQuery.lte('purchase_date',
-            lastPurchaseDateTo.toIso8601String().split('T')[0]);
-      }
-
-      // Paginate through all purchase records to avoid hitting the 1000 row limit
-      final customerIdSet = <int>{};
-      const pageSize = 1000;
-      int offset = 0;
-      bool hasMore = true;
-
-      while (hasMore) {
-        final purchaseRows =
-            await purchaseQuery.range(offset, offset + pageSize - 1);
-
-        if ((purchaseRows as List).isEmpty) {
-          hasMore = false;
-        } else {
-          for (var row in purchaseRows) {
-            final customerId = row['customer_id'] as int?;
-            if (customerId != null) {
-              customerIdSet.add(customerId);
+            if (purchasedCustomerIds.isNotEmpty) {
+              // Split large ID lists to avoid URL overflow and connection issues
+              // Supabase has URL length limits; keep individual OR clauses reasonable
+              if (purchasedCustomerIds.length > 200 || branchIds.length > 200) {
+                // For very large ID lists, use batch approach instead of single OR clause
+                query = query.inFilter('branch_id', branchIds);
+              } else {
+                // Include customers whose primary branch matches OR who have a purchase from these branches
+                query = query.or(
+                    'branch_id.in.(${branchIds.join(',')}),id.in.(${purchasedCustomerIds.join(',')})');
+              }
+            } else {
+              query = query.inFilter('branch_id', branchIds);
             }
           }
-          offset += pageSize;
-          hasMore = (purchaseRows as List).length == pageSize;
+          if (search != null && search.isNotEmpty) {
+            query = query.or('name.ilike.%$search%,phone.ilike.%$search%');
+          }
+
+          // Filter by FK columns only (TEXT columns removed from DB)
+          if (categoryId != null) {
+            query = query.eq('category_id', categoryId);
+          }
+
+          if (customerTypeId != null) {
+            query = query.eq('customer_type_id', customerTypeId);
+          }
+
+          // Date range filter - get customers with ANY purchase in the date range from dme_customer_purchases
+          if (lastPurchaseDateFrom != null || lastPurchaseDateTo != null) {
+            var purchaseQuery =
+                _client.from('dme_customer_purchases').select('customer_id');
+
+            if (lastPurchaseDateFrom != null) {
+              purchaseQuery = purchaseQuery.gte('purchase_date',
+                  lastPurchaseDateFrom.toIso8601String().split('T')[0]);
+            }
+            if (lastPurchaseDateTo != null) {
+              purchaseQuery = purchaseQuery.lte('purchase_date',
+                  lastPurchaseDateTo.toIso8601String().split('T')[0]);
+            }
+
+            // Paginate through all purchase records to avoid hitting the 1000 row limit
+            final customerIdSet = <int>{};
+            const pageSize = 1000;
+            int purchaseOffset = 0;
+            bool hasMore = true;
+
+            while (hasMore) {
+              final purchaseRows =
+                  await purchaseQuery.range(purchaseOffset, purchaseOffset + pageSize - 1);
+
+              if ((purchaseRows as List).isEmpty) {
+                hasMore = false;
+              } else {
+                for (var row in purchaseRows) {
+                  final customerId = row['customer_id'] as int?;
+                  if (customerId != null) {
+                    customerIdSet.add(customerId);
+                  }
+                }
+                purchaseOffset += pageSize;
+                hasMore = (purchaseRows as List).length == pageSize;
+              }
+            }
+
+            if (customerIdSet.isEmpty) {
+              return []; // No purchases in the date range
+            }
+
+            // For large ID sets, batch them to avoid URL overflow
+            if (customerIdSet.length > 1000) {
+              final customerList = customerIdSet.toList();
+              final results = <DmeCustomer>[];
+              const batchSize = 1000;
+              
+              for (int i = 0; i < customerList.length; i += batchSize) {
+                final batchEnd = (i + batchSize > customerList.length) 
+                    ? customerList.length 
+                    : i + batchSize;
+                final batch = customerList.sublist(i, batchEnd);
+                
+                var batchQuery = _client.from('dme_customers').select(
+                    '*, dme_branches(name), dme_categories(id, name), dme_customer_types(id, name)');
+                batchQuery = batchQuery.inFilter('id', batch);
+                
+                if (categoryId != null) {
+                  batchQuery = batchQuery.eq('category_id', categoryId);
+                }
+                if (customerTypeId != null) {
+                  batchQuery = batchQuery.eq('customer_type_id', customerTypeId);
+                }
+                if (salesman != null && salesman.isNotEmpty) {
+                  batchQuery = batchQuery.eq('salesman', salesman);
+                }
+                
+                final batchRes = await batchQuery.order('name', ascending: true);
+                results.addAll((batchRes as List).map((e) => DmeCustomer.fromMap(e)));
+              }
+              
+              return results;
+            } else {
+              query = query.inFilter('id', customerIdSet.toList());
+            }
+          }
+
+          // Salesman filter
+          if (salesman != null && salesman.isNotEmpty) {
+            query = query.eq('salesman', salesman);
+          }
+
+          final res = await query
+              .order('name', ascending: true)
+              .range(offset, offset + limit - 1);
+          return (res as List).map((e) => DmeCustomer.fromMap(e)).toList();
+        } catch (e) {
+          final errorStr = e.toString();
+          // Check for transient network errors (connection reset, timeout, etc.)
+          final isTransientError = errorStr.contains('Connection reset') ||
+              errorStr.contains('connection closed') ||
+              errorStr.contains('timeout') ||
+              errorStr.contains('SocketException') ||
+              errorStr.contains('ClientException');
+          
+          if (isTransientError && attempt < maxRetries - 1) {
+            debugPrint(
+                'DME getCustomers - Connection error on attempt ${attempt + 1}, retrying in ${delays[attempt]}ms: $e');
+            await Future.delayed(Duration(milliseconds: delays[attempt]));
+            continue;
+          } else {
+            debugPrint('DME getCustomers - Error (final attempt): $e');
+            rethrow;
+          }
         }
       }
-
-      if (customerIdSet.isEmpty) {
-        return []; // No purchases in the date range
-      }
-
-      query = query.inFilter('id', customerIdSet.toList());
+      
+      return [];
+    } catch (e) {
+      debugPrint('Error fetching DME customers: $e');
+      // Log to Crashlytics but don't crash the app
+      FirebaseCrashlytics.instance.recordError(e, StackTrace.current);
+      return [];
     }
-
-    // Salesman filter
-    if (salesman != null && salesman.isNotEmpty) {
-      query = query.eq('salesman', salesman);
-    }
-
-    final res = await query
-        .order('name', ascending: true)
-        .range(offset, offset + limit - 1);
-    return (res as List).map((e) => DmeCustomer.fromMap(e)).toList();
   }
 
   /// Find customer by ID
