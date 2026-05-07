@@ -143,95 +143,54 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         List<DocumentSnapshot> saleLeads = [];
         List<DocumentSnapshot> cancelledLeads = [];
 
-        if (_statusFilter == 'All') {
-          // Fetch all current leads (any status) within the date range, broken by status
-          final results = await Future.wait([
-            // In Progress leads created in range
-            FirebaseFirestore.instance
-              .collection('follow_ups')
-              .where('created_by', isEqualTo: uid)
-              .where('branch', isEqualTo: branchForQuery)
-              .where('status', isEqualTo: 'In Progress')
-              .where('created_at',
-                isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
-              .where('created_at',
-                isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
-              .get(),
-            // Sale leads created in range
-            FirebaseFirestore.instance
-              .collection('follow_ups')
-              .where('created_by', isEqualTo: uid)
-              .where('branch', isEqualTo: branchForQuery)
-              .where('status', isEqualTo: 'Sale')
-              .where('created_at',
-                isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
-              .where('created_at',
-                isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
-              .get(),
-            // Cancelled leads created in range
-            FirebaseFirestore.instance
-              .collection('follow_ups')
-              .where('created_by', isEqualTo: uid)
-              .where('branch', isEqualTo: branchForQuery)
-              .where('status', isEqualTo: 'Cancelled')
-              .where('created_at',
-                isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
-              .where('created_at',
-                isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
-              .get(),
-          ]);
-
-          inProgressCount = (results[0] as QuerySnapshot).size;
-          saleCount = (results[1] as QuerySnapshot).size;
-          cancelledCount = (results[2] as QuerySnapshot).size;
-          inProgressLeads = (results[0] as QuerySnapshot).docs;
-          saleLeads = (results[1] as QuerySnapshot).docs;
-          cancelledLeads = (results[2] as QuerySnapshot).docs;
-        } else if (_statusFilter == 'Created in this Interval') {
-          // Get leads created in the interval broken by their status
-          final results = await Future.wait([
-            // In Progress leads created in range
-            FirebaseFirestore.instance
-              .collection('follow_ups')
-              .where('created_by', isEqualTo: uid)
-              .where('branch', isEqualTo: branchForQuery)
-              .where('status', isEqualTo: 'In Progress')
-              .where('created_at',
-                isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
-              .where('created_at',
-                isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
-              .get(),
-            // Sale leads created in range
-            FirebaseFirestore.instance
-              .collection('follow_ups')
-              .where('created_by', isEqualTo: uid)
-              .where('branch', isEqualTo: branchForQuery)
-              .where('status', isEqualTo: 'Sale')
-              .where('created_at',
-                isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
-              .where('created_at',
-                isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
-              .get(),
-            // Cancelled leads created in range
-            FirebaseFirestore.instance
-              .collection('follow_ups')
-              .where('created_by', isEqualTo: uid)
-              .where('branch', isEqualTo: branchForQuery)
-              .where('status', isEqualTo: 'Cancelled')
-              .where('created_at',
-                isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
-              .where('created_at',
-                isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
-              .get(),
-          ]);
-
-          inProgressCount = (results[0] as QuerySnapshot).size;
-          saleCount = (results[1] as QuerySnapshot).size;
-          cancelledCount = (results[2] as QuerySnapshot).size;
-          inProgressLeads = (results[0] as QuerySnapshot).docs;
-          saleLeads = (results[1] as QuerySnapshot).docs;
-          cancelledLeads = (results[2] as QuerySnapshot).docs;
+        // Helper to merge two query snapshots, deduplicating by document ID
+        List<DocumentSnapshot> mergeDocs(QuerySnapshot a, QuerySnapshot b) {
+          final seen = <String>{};
+          final merged = <DocumentSnapshot>[];
+          for (final doc in [...a.docs, ...b.docs]) {
+            if (seen.add(doc.id)) merged.add(doc);
+          }
+          return merged;
         }
+
+        // Helper to build query with optional date range
+        Query _buildQuery(String createdBy, String status) {
+          Query q = FirebaseFirestore.instance
+            .collection('follow_ups')
+            .where(createdBy, isEqualTo: uid)
+            .where('branch', isEqualTo: branchForQuery)
+            .where('status', isEqualTo: status);
+          
+          if (_statusFilter != 'All') {
+            q = q.where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
+                 .where('created_at', isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd));
+          }
+          return q;
+        }
+
+        // Fetch leads both created_by the user AND assigned_to the user,
+        // then merge (SME/DME leads are assigned_to the user, not created_by).
+        final results = await Future.wait([
+          // In Progress — created by user
+          _buildQuery('created_by', 'In Progress').get(),
+          // In Progress — assigned to user
+          _buildQuery('assigned_to', 'In Progress').get(),
+          // Sale — created by user
+          _buildQuery('created_by', 'Sale').get(),
+          // Sale — assigned to user
+          _buildQuery('assigned_to', 'Sale').get(),
+          // Cancelled — created by user
+          _buildQuery('created_by', 'Cancelled').get(),
+          // Cancelled — assigned to user
+          _buildQuery('assigned_to', 'Cancelled').get(),
+        ]);
+
+        inProgressLeads = mergeDocs(results[0] as QuerySnapshot, results[1] as QuerySnapshot);
+        saleLeads       = mergeDocs(results[2] as QuerySnapshot, results[3] as QuerySnapshot);
+        cancelledLeads  = mergeDocs(results[4] as QuerySnapshot, results[5] as QuerySnapshot);
+        inProgressCount = inProgressLeads.length;
+        saleCount       = saleLeads.length;
+        cancelledCount  = cancelledLeads.length;
 
         final totalCreated = inProgressCount + saleCount + cancelledCount;
 
@@ -462,18 +421,18 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
 
             final detailSourceSmeSt = workbook.styles.add('detailSourceSme_$sheetIdx');
             detailSourceSmeSt.fontSize = 10;
-            detailSourceSmeSt.hAlign = xlsio.HAlignType.center;
+            detailSourceSmeSt.hAlign = xlsio.HAlignType.left;
             detailSourceSmeSt.backColor = '#87CEEB'; // Sky blue
 
             final detailSourceDmeSt = workbook.styles.add('detailSourceDme_$sheetIdx');
             detailSourceDmeSt.fontSize = 10;
-            detailSourceDmeSt.hAlign = xlsio.HAlignType.center;
+            detailSourceDmeSt.hAlign = xlsio.HAlignType.left;
             detailSourceDmeSt.backColor = '#FFFF00'; // Yellow
             detailSourceDmeSt.fontColor = '#000000';
 
             final detailSourceCcSt = workbook.styles.add('detailSourceCc_$sheetIdx');
             detailSourceCcSt.fontSize = 10;
-            detailSourceCcSt.hAlign = xlsio.HAlignType.center;
+            detailSourceCcSt.hAlign = xlsio.HAlignType.left;
             detailSourceCcSt.backColor = '#FFA500'; // Orange
             detailSourceCcSt.fontColor = '#FFFFFF';
 
@@ -510,45 +469,52 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
                     : '';
                 final statusVal = d['status'] ?? '';
                 final source = d['source'] ?? '';
+                final sourceUpper = source.toUpperCase();
                 final isQuickClose = createdAt is Timestamp &&
                     completedAt is Timestamp &&
                     completedAt.toDate().difference(createdAt.toDate()).inDays.abs() <= 2 &&
                     statusVal != 'Cancelled' &&
-                    !['CC', 'SME', 'DME'].contains(source);
+                    !['CC', 'SME', 'DME'].contains(sourceUpper);
                 final isAlt = leadIdx % 2 == 1;
-                final st = isQuickClose ? detailRedSt : (isAlt ? detailAltSt : detailDataSt);
+                
+                // Determine row style: Cancelled (red) > Source color > Quick close (red) > Alternating > Regular
+                final xlsio.Style rowStyle;
+                if (statusVal == 'Cancelled') {
+                  rowStyle = detailRedSt; // Cancelled → always red
+                } else if (sourceUpper == 'SME') {
+                  rowStyle = detailSourceSmeSt; // SME → blue
+                } else if (sourceUpper == 'DME') {
+                  rowStyle = detailSourceDmeSt; // DME → yellow
+                } else if (sourceUpper == 'CC') {
+                  rowStyle = detailSourceCcSt; // CC → orange
+                } else if (isQuickClose) {
+                  rowStyle = detailRedSt; // Quick close → red
+                } else {
+                  rowStyle = isAlt ? detailAltSt : detailDataSt; // Regular alternating
+                }
+                
                 final statusLabel = statusVal == 'Sale'
                     ? 'Sold'
                     : statusVal == 'Cancelled'
                         ? 'Cancelled'
                         : 'In Progress';
+                
+                // Apply same style to all 7 cells
                 sheet.getRangeByIndex(detailRow, 1).setText(d['name'] ?? '');
-                sheet.getRangeByIndex(detailRow, 1).cellStyle = st;
+                sheet.getRangeByIndex(detailRow, 1).cellStyle = rowStyle;
                 sheet.getRangeByIndex(detailRow, 2).setText(statusLabel);
-                sheet.getRangeByIndex(detailRow, 2).cellStyle = st;
+                sheet.getRangeByIndex(detailRow, 2).cellStyle = rowStyle;
                 sheet.getRangeByIndex(detailRow, 3).setText(createdDateStr);
-                sheet.getRangeByIndex(detailRow, 3).cellStyle = st;
+                sheet.getRangeByIndex(detailRow, 3).cellStyle = rowStyle;
                 sheet.getRangeByIndex(detailRow, 4).setText(completedDateStr);
-                sheet.getRangeByIndex(detailRow, 4).cellStyle = st;
+                sheet.getRangeByIndex(detailRow, 4).cellStyle = rowStyle;
                 sheet.getRangeByIndex(detailRow, 5).setText(d['comments'] ?? '');
-                sheet.getRangeByIndex(detailRow, 5).cellStyle = st;
+                sheet.getRangeByIndex(detailRow, 5).cellStyle = rowStyle;
                 sheet.getRangeByIndex(detailRow, 6).setText(
                     statusVal == 'Cancelled' ? (d['cancellation_reason'] ?? '') : '');
-                sheet.getRangeByIndex(detailRow, 6).cellStyle = st;
-
-                // Source column with conditional coloring
-                final sourceVal = source.toUpperCase();
-                final sourceCell = sheet.getRangeByIndex(detailRow, 7);
-                sourceCell.setText(sourceVal);
-                if (sourceVal == 'SME') {
-                  sourceCell.cellStyle = detailSourceSmeSt;
-                } else if (sourceVal == 'DME') {
-                  sourceCell.cellStyle = detailSourceDmeSt;
-                } else if (sourceVal == 'CC') {
-                  sourceCell.cellStyle = detailSourceCcSt;
-                } else {
-                  sourceCell.cellStyle = st;
-                }
+                sheet.getRangeByIndex(detailRow, 6).cellStyle = rowStyle;
+                sheet.getRangeByIndex(detailRow, 7).setText(sourceUpper);
+                sheet.getRangeByIndex(detailRow, 7).cellStyle = rowStyle;
 
                 detailRow++;
                 leadIdx++;
@@ -782,18 +748,18 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
 
         final detailSourceSmeSt = workbook.styles.add('detailSourceSme');
         detailSourceSmeSt.fontSize = 10;
-        detailSourceSmeSt.hAlign = xlsio.HAlignType.center;
+        detailSourceSmeSt.hAlign = xlsio.HAlignType.left;
         detailSourceSmeSt.backColor = '#87CEEB'; // Sky blue
 
         final detailSourceDmeSt = workbook.styles.add('detailSourceDme');
         detailSourceDmeSt.fontSize = 10;
-        detailSourceDmeSt.hAlign = xlsio.HAlignType.center;
+        detailSourceDmeSt.hAlign = xlsio.HAlignType.left;
         detailSourceDmeSt.backColor = '#FFFF00'; // Yellow
         detailSourceDmeSt.fontColor = '#000000';
 
         final detailSourceCcSt = workbook.styles.add('detailSourceCc');
         detailSourceCcSt.fontSize = 10;
-        detailSourceCcSt.hAlign = xlsio.HAlignType.center;
+        detailSourceCcSt.hAlign = xlsio.HAlignType.left;
         detailSourceCcSt.backColor = '#FFA500'; // Orange
         detailSourceCcSt.fontColor = '#FFFFFF';
 
@@ -830,45 +796,52 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
                 : '';
             final statusVal = d['status'] ?? '';
             final source = d['source'] ?? '';
+            final sourceUpper = source.toUpperCase();
             final isQuickClose = createdAt is Timestamp &&
                 completedAt is Timestamp &&
                 completedAt.toDate().difference(createdAt.toDate()).inDays.abs() <= 2 &&
                 statusVal != 'Cancelled' &&
-                !['CC', 'SME', 'DME'].contains(source);
+                !['CC', 'SME', 'DME'].contains(sourceUpper);
             final isAlt = leadIdx % 2 == 1;
-            final st = isQuickClose ? detailRedSt : (isAlt ? detailAltSt : detailDataSt);
+            
+            // Determine row style: Cancelled (red) > Source color > Quick close (red) > Alternating > Regular
+            final xlsio.Style rowStyle;
+            if (statusVal == 'Cancelled') {
+              rowStyle = detailRedSt; // Cancelled → always red
+            } else if (sourceUpper == 'SME') {
+              rowStyle = detailSourceSmeSt; // SME → blue
+            } else if (sourceUpper == 'DME') {
+              rowStyle = detailSourceDmeSt; // DME → yellow
+            } else if (sourceUpper == 'CC') {
+              rowStyle = detailSourceCcSt; // CC → orange
+            } else if (isQuickClose) {
+              rowStyle = detailRedSt; // Quick close → red
+            } else {
+              rowStyle = isAlt ? detailAltSt : detailDataSt; // Regular alternating
+            }
+            
             final statusLabel = statusVal == 'Sale'
                 ? 'Sold'
                 : statusVal == 'Cancelled'
                     ? 'Cancelled'
                     : 'In Progress';
+            
+            // Apply same style to all 7 cells
             sheet.getRangeByIndex(detailRow, 1).setText(d['name'] ?? '');
-            sheet.getRangeByIndex(detailRow, 1).cellStyle = st;
+            sheet.getRangeByIndex(detailRow, 1).cellStyle = rowStyle;
             sheet.getRangeByIndex(detailRow, 2).setText(statusLabel);
-            sheet.getRangeByIndex(detailRow, 2).cellStyle = st;
+            sheet.getRangeByIndex(detailRow, 2).cellStyle = rowStyle;
             sheet.getRangeByIndex(detailRow, 3).setText(createdDateStr);
-            sheet.getRangeByIndex(detailRow, 3).cellStyle = st;
+            sheet.getRangeByIndex(detailRow, 3).cellStyle = rowStyle;
             sheet.getRangeByIndex(detailRow, 4).setText(completedDateStr);
-            sheet.getRangeByIndex(detailRow, 4).cellStyle = st;
+            sheet.getRangeByIndex(detailRow, 4).cellStyle = rowStyle;
             sheet.getRangeByIndex(detailRow, 5).setText(d['comments'] ?? '');
-            sheet.getRangeByIndex(detailRow, 5).cellStyle = st;
+            sheet.getRangeByIndex(detailRow, 5).cellStyle = rowStyle;
             sheet.getRangeByIndex(detailRow, 6).setText(
                 statusVal == 'Cancelled' ? (d['cancellation_reason'] ?? '') : '');
-            sheet.getRangeByIndex(detailRow, 6).cellStyle = st;
-
-            // Source column with conditional coloring
-            final sourceVal = source.toUpperCase();
-            final sourceCell = sheet.getRangeByIndex(detailRow, 7);
-            sourceCell.setText(sourceVal);
-            if (sourceVal == 'SME') {
-              sourceCell.cellStyle = detailSourceSmeSt;
-            } else if (sourceVal == 'DME') {
-              sourceCell.cellStyle = detailSourceDmeSt;
-            } else if (sourceVal == 'CC') {
-              sourceCell.cellStyle = detailSourceCcSt;
-            } else {
-              sourceCell.cellStyle = st;
-            }
+            sheet.getRangeByIndex(detailRow, 6).cellStyle = rowStyle;
+            sheet.getRangeByIndex(detailRow, 7).setText(sourceUpper);
+            sheet.getRangeByIndex(detailRow, 7).cellStyle = rowStyle;
 
             detailRow++;
             leadIdx++;

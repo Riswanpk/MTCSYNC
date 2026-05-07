@@ -361,7 +361,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
               titleLarge: TextStyle(color: Colors.white, fontSize: 20),
             ),
             title: Text(
-              widget.source == 'dme' ? 'New DME Lead' : 'New SME Lead',
+              widget.source == 'DME' ? 'New DME Lead' : 'New SME Lead',
               style: const TextStyle(
                   fontFamily: 'Montserrat', fontWeight: FontWeight.w700),
             ),

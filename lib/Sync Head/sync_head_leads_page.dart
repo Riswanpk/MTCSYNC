@@ -84,6 +84,9 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
             (u) => u['role'] != 'admin' && u['role'] != 'sync_head')
         .toList();
 
+    // Helper to merge two count results, handling null values
+    int mergeCount(int? a, int? b) => (a ?? 0) + (b ?? 0);
+
     // For each user, run parallel queries based on status filter
     final List<Map<String, dynamic>> stats = [];
     await Future.wait(users.map((user) async {
@@ -94,8 +97,9 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
       int cancelledCount = 0;
 
       if (_statusFilter == 'All') {
-        // Use count() aggregation — downloads zero documents, just the count
+        // Use count() aggregation — include both created_by AND assigned_to leads
         final results = await Future.wait([
+          // In Progress — created by
           FirebaseFirestore.instance
               .collection('follow_ups')
               .where('created_by', isEqualTo: uid)
@@ -103,6 +107,15 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
               .where('status', isEqualTo: 'In Progress')
               .count()
               .get(),
+          // In Progress — assigned to
+          FirebaseFirestore.instance
+              .collection('follow_ups')
+              .where('assigned_to', isEqualTo: uid)
+              .where('branch', isEqualTo: _selectedBranch)
+              .where('status', isEqualTo: 'In Progress')
+              .count()
+              .get(),
+          // Sale — created by
           FirebaseFirestore.instance
               .collection('follow_ups')
               .where('created_by', isEqualTo: uid)
@@ -110,6 +123,15 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
               .where('status', isEqualTo: 'Sale')
               .count()
               .get(),
+          // Sale — assigned to
+          FirebaseFirestore.instance
+              .collection('follow_ups')
+              .where('assigned_to', isEqualTo: uid)
+              .where('branch', isEqualTo: _selectedBranch)
+              .where('status', isEqualTo: 'Sale')
+              .count()
+              .get(),
+          // Cancelled — created by
           FirebaseFirestore.instance
               .collection('follow_ups')
               .where('created_by', isEqualTo: uid)
@@ -117,14 +139,32 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
               .where('status', isEqualTo: 'Cancelled')
               .count()
               .get(),
+          // Cancelled — assigned to
+          FirebaseFirestore.instance
+              .collection('follow_ups')
+              .where('assigned_to', isEqualTo: uid)
+              .where('branch', isEqualTo: _selectedBranch)
+              .where('status', isEqualTo: 'Cancelled')
+              .count()
+              .get(),
         ]);
 
-        inProgressCount = (results[0] as AggregateQuerySnapshot).count ?? 0;
-        saleCount = (results[1] as AggregateQuerySnapshot).count ?? 0;
-        cancelledCount = (results[2] as AggregateQuerySnapshot).count ?? 0;
+        inProgressCount = mergeCount(
+          (results[0] as AggregateQuerySnapshot).count,
+          (results[1] as AggregateQuerySnapshot).count,
+        );
+        saleCount = mergeCount(
+          (results[2] as AggregateQuerySnapshot).count,
+          (results[3] as AggregateQuerySnapshot).count,
+        );
+        cancelledCount = mergeCount(
+          (results[4] as AggregateQuerySnapshot).count,
+          (results[5] as AggregateQuerySnapshot).count,
+        );
       } else if (_statusFilter == 'Created in this Interval') {
-        // Use count() aggregation for interval filter too
+        // Use count() aggregation for interval filter too — include both created_by AND assigned_to
         final results = await Future.wait([
+          // In Progress — created by
           FirebaseFirestore.instance
               .collection('follow_ups')
               .where('created_by', isEqualTo: uid)
@@ -136,6 +176,19 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
                   isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
               .count()
               .get(),
+          // In Progress — assigned to
+          FirebaseFirestore.instance
+              .collection('follow_ups')
+              .where('assigned_to', isEqualTo: uid)
+              .where('branch', isEqualTo: _selectedBranch)
+              .where('status', isEqualTo: 'In Progress')
+              .where('created_at',
+                  isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
+              .where('created_at',
+                  isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
+              .count()
+              .get(),
+          // Sale — created by
           FirebaseFirestore.instance
               .collection('follow_ups')
               .where('created_by', isEqualTo: uid)
@@ -147,6 +200,19 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
                   isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
               .count()
               .get(),
+          // Sale — assigned to
+          FirebaseFirestore.instance
+              .collection('follow_ups')
+              .where('assigned_to', isEqualTo: uid)
+              .where('branch', isEqualTo: _selectedBranch)
+              .where('status', isEqualTo: 'Sale')
+              .where('created_at',
+                  isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
+              .where('created_at',
+                  isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
+              .count()
+              .get(),
+          // Cancelled — created by
           FirebaseFirestore.instance
               .collection('follow_ups')
               .where('created_by', isEqualTo: uid)
@@ -158,11 +224,32 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
                   isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
               .count()
               .get(),
+          // Cancelled — assigned to
+          FirebaseFirestore.instance
+              .collection('follow_ups')
+              .where('assigned_to', isEqualTo: uid)
+              .where('branch', isEqualTo: _selectedBranch)
+              .where('status', isEqualTo: 'Cancelled')
+              .where('created_at',
+                  isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
+              .where('created_at',
+                  isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd))
+              .count()
+              .get(),
         ]);
 
-        inProgressCount = (results[0] as AggregateQuerySnapshot).count ?? 0;
-        saleCount = (results[1] as AggregateQuerySnapshot).count ?? 0;
-        cancelledCount = (results[2] as AggregateQuerySnapshot).count ?? 0;
+        inProgressCount = mergeCount(
+          (results[0] as AggregateQuerySnapshot).count,
+          (results[1] as AggregateQuerySnapshot).count,
+        );
+        saleCount = mergeCount(
+          (results[2] as AggregateQuerySnapshot).count,
+          (results[3] as AggregateQuerySnapshot).count,
+        );
+        cancelledCount = mergeCount(
+          (results[4] as AggregateQuerySnapshot).count,
+          (results[5] as AggregateQuerySnapshot).count,
+        );
       }
 
       final totalCreated = inProgressCount + saleCount + cancelledCount;
