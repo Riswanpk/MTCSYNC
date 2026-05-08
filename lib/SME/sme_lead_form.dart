@@ -498,10 +498,20 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                         if (textEditingValue.text.isEmpty) {
                           return const Iterable<Map<String, dynamic>>.empty();
                         }
-                        return await fetchCustomersByName(textEditingValue.text);
+                        // Check if widget is still mounted before making async call
+                        if (!mounted) {
+                          return const Iterable<Map<String, dynamic>>.empty();
+                        }
+                        try {
+                          return await fetchCustomersByName(textEditingValue.text);
+                        } catch (e) {
+                          debugPrint('Error in autocomplete optionsBuilder: $e');
+                          return const Iterable<Map<String, dynamic>>.empty();
+                        }
                       },
                       displayStringForOption: (option) => option['name'] ?? '',
                       fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                        // Store context for later use if needed
                         return TextFormField(
                           controller: controller,
                           focusNode: focusNode,
@@ -514,6 +524,10 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                         );
                       },
                       optionsViewBuilder: (context, onSelected, options) {
+                        // Add null check and error handling
+                        if (options.isEmpty) {
+                          return const SizedBox.shrink();
+                        }
                         return Align(
                           alignment: Alignment.topLeft,
                           child: Material(

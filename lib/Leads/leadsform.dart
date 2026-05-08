@@ -417,8 +417,17 @@ class _FollowUpFormState extends State<FollowUpForm> {
                           if (textEditingValue.text.isEmpty) {
                             return const Iterable<Map<String, dynamic>>.empty();
                           }
-                          return await fetchCustomerSuggestions(
-                              textEditingValue.text, branch);
+                          // Check if widget is still mounted before making async call
+                          if (!mounted) {
+                            return const Iterable<Map<String, dynamic>>.empty();
+                          }
+                          try {
+                            return await fetchCustomerSuggestions(
+                                textEditingValue.text, branch);
+                          } catch (e) {
+                            debugPrint('Error in name autocomplete: $e');
+                            return const Iterable<Map<String, dynamic>>.empty();
+                          }
                         },
                         displayStringForOption: (option) => option['name'] ?? '',
                         fieldViewBuilder:
@@ -432,10 +441,18 @@ class _FollowUpFormState extends State<FollowUpForm> {
                             ),
                             validator: (value) =>
                                 value!.isEmpty ? 'Enter name' : null,
-                            onChanged: (_) => _saveDraft(),
+                            onChanged: (_) {
+                              // Only save draft if widget is still mounted
+                              if (mounted) {
+                                _saveDraft();
+                              }
+                            },
                           );
                         },
                         optionsViewBuilder: (context, onSelected, options) {
+                          if (options.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
                           return Align(
                             alignment: Alignment.topLeft,
                             child: Material(
@@ -459,14 +476,17 @@ class _FollowUpFormState extends State<FollowUpForm> {
                           );
                         },
                         onSelected: (selectedCustomer) {
-                          setState(() {
-                            _nameController.text =
-                                selectedCustomer['name'] ?? '';
-                            _addressController.text =
-                                selectedCustomer['address'] ?? '';
-                            _phoneController.text =
-                                formatIndianPhone(selectedCustomer['phone'] ?? '');
-                          });
+                          // Check if widget is still mounted before calling setState
+                          if (mounted) {
+                            setState(() {
+                              _nameController.text =
+                                  selectedCustomer['name'] ?? '';
+                              _addressController.text =
+                                  selectedCustomer['address'] ?? '';
+                              _phoneController.text =
+                                  formatIndianPhone(selectedCustomer['phone'] ?? '');
+                            });
+                          }
                         },
                       );
                     },
@@ -490,15 +510,24 @@ class _FollowUpFormState extends State<FollowUpForm> {
                       if (textEditingValue.text.isEmpty) {
                         return const Iterable<Map<String, dynamic>>.empty();
                       }
-                      final user = FirebaseAuth.instance.currentUser;
-                      if (user == null) return const Iterable<Map<String, dynamic>>.empty();
-                      final userDoc = await FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(user.uid)
-                          .get();
-                      final branch = userDoc.data()?['branch'] ?? '';
-                      return await fetchCustomerSuggestions(
-                          textEditingValue.text, branch);
+                      // Check if widget is still mounted before making async call
+                      if (!mounted) {
+                        return const Iterable<Map<String, dynamic>>.empty();
+                      }
+                      try {
+                        final user = FirebaseAuth.instance.currentUser;
+                        if (user == null) return const Iterable<Map<String, dynamic>>.empty();
+                        final userDoc = await FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(user.uid)
+                            .get();
+                        final branch = userDoc.data()?['branch'] ?? '';
+                        return await fetchCustomerSuggestions(
+                            textEditingValue.text, branch);
+                      } catch (e) {
+                        debugPrint('Error in phone autocomplete: $e');
+                        return const Iterable<Map<String, dynamic>>.empty();
+                      }
                     },
                     displayStringForOption: (option) => option['phone'] ?? '',
                     fieldViewBuilder:
@@ -535,10 +564,12 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                         TextPosition(offset: formatted.length),
                                       );
                                     } else {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(const SnackBar(
-                                              content: Text(
-                                                  'Clipboard does not contain 10 digits')));
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(const SnackBar(
+                                                content: Text(
+                                                    'Clipboard does not contain 10 digits')));
+                                      }
                                     }
                                   }
                                 },
@@ -556,56 +587,64 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                   if (!status.isGranted) {
                                     final granted = await FlutterContacts.requestPermission();
                                     if (!granted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Contact permission denied')),
-                                      );
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Contact permission denied')),
+                                        );
+                                      }
                                       return;
                                     }
                                   }
 
                                   // Open modal immediately with whatever we have in memory (may be cached)
-                                  showModalBottomSheet(
-                                    context: context,
-                                    isScrollControlled: true,
-                                    backgroundColor: Colors.transparent,
-                                    builder: (context) {
-                                      return DraggableScrollableSheet(
-                                        initialChildSize: 0.85,
-                                        minChildSize: 0.4,
-                                        maxChildSize: 0.95,
-                                        expand: false,
-                                        builder: (context, scrollController) {
-                                          return ContactPickerModal(
-                                            initialContacts: _deviceContacts,
-                                            initialLoading: _deviceContactsLoading,
-                                            scrollController: scrollController,
-                                            onSelect: (name, phone) {
-                                              final digits = RegExp(r'\d')
-                                                  .allMatches(phone)
-                                                  .map((m) => m.group(0))
-                                                  .join();
-                                              if (digits.length >= 10) {
-                                                final tenDigits = digits.substring(digits.length - 10);
-                                                final formatted =
-                                                    '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
-                                                setState(() {
-                                                  _phoneController.text = formatted;
-                                                  _phoneController.selection = TextSelection.fromPosition(
-                                                    TextPosition(offset: formatted.length),
-                                                  );
-                                                  if (name.isNotEmpty) _nameController.text = name;
-                                                });
-                                              } else {
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  const SnackBar(content: Text('Contact does not contain a valid 10-digit phone number')),
-                                                );
-                                              }
-                                            },
-                                          );
-                                        },
-                                      );
-                                    },
-                                  );
+                                  if (mounted) {
+                                    showModalBottomSheet(
+                                      context: context,
+                                      isScrollControlled: true,
+                                      backgroundColor: Colors.transparent,
+                                      builder: (context) {
+                                        return DraggableScrollableSheet(
+                                          initialChildSize: 0.85,
+                                          minChildSize: 0.4,
+                                          maxChildSize: 0.95,
+                                          expand: false,
+                                          builder: (context, scrollController) {
+                                            return ContactPickerModal(
+                                              initialContacts: _deviceContacts,
+                                              initialLoading: _deviceContactsLoading,
+                                              scrollController: scrollController,
+                                              onSelect: (name, phone) {
+                                                final digits = RegExp(r'\d')
+                                                    .allMatches(phone)
+                                                    .map((m) => m.group(0))
+                                                    .join();
+                                                if (digits.length >= 10) {
+                                                  final tenDigits = digits.substring(digits.length - 10);
+                                                  final formatted =
+                                                      '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
+                                                  if (mounted) {
+                                                    setState(() {
+                                                      _phoneController.text = formatted;
+                                                      _phoneController.selection = TextSelection.fromPosition(
+                                                        TextPosition(offset: formatted.length),
+                                                      );
+                                                      if (name.isNotEmpty) _nameController.text = name;
+                                                    });
+                                                  }
+                                                } else {
+                                                  if (mounted) {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(content: Text('Contact does not contain a valid 10-digit phone number')),
+                                                    );
+                                                  }
+                                                }
+                                              },
+                                            );
+                                          },
+                                        );
+                                      },
+                                    );
+                                  }
                                 },
                               ),
                             ],
@@ -626,7 +665,10 @@ class _FollowUpFormState extends State<FollowUpForm> {
                           return null;
                         },
                         onChanged: (val) {
-                          _saveDraft();
+                          // Only save draft if widget is still mounted
+                          if (mounted) {
+                            _saveDraft();
+                          }
                           if (!val.startsWith('+91 ')) {
                             controller.text = '+91 ';
                             controller.selection = TextSelection.fromPosition(
@@ -649,6 +691,9 @@ class _FollowUpFormState extends State<FollowUpForm> {
                       );
                     },
                     optionsViewBuilder: (context, onSelected, options) {
+                      if (options.isEmpty) {
+                        return const SizedBox.shrink();
+                      }
                       return Align(
                         alignment: Alignment.topLeft,
                         child: Material(
@@ -672,11 +717,14 @@ class _FollowUpFormState extends State<FollowUpForm> {
                       );
                     },
                     onSelected: (selectedCustomer) {
-                      setState(() {
-                        _nameController.text = selectedCustomer['name'] ?? '';
-                        _addressController.text = selectedCustomer['address'] ?? '';
-                        _phoneController.text = formatIndianPhone(selectedCustomer['phone'] ?? '');
-                      });
+                      // Check if widget is still mounted before calling setState
+                      if (mounted) {
+                        setState(() {
+                          _nameController.text = selectedCustomer['name'] ?? '';
+                          _addressController.text = selectedCustomer['address'] ?? '';
+                          _phoneController.text = formatIndianPhone(selectedCustomer['phone'] ?? '');
+                        });
+                      }
                     },
                   ),
                   const SizedBox(height: 16),
