@@ -803,38 +803,82 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                         const SizedBox(height: 16),
                         if (contact1 != null && contact1.isNotEmpty)
                           called
-                              // Call Completed: white background, swapped color text
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(25),
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                    ),
-                                    child: Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        onTap: null,
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(Icons.phone, color: primaryColor),
-                                              const SizedBox(width: 8),
-                                              Text(
-                                                'Call Completed',
-                                                style: TextStyle(
-                                                  color: primaryColor,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 16,
-                                                ),
+                              // Call Completed: white background with separate Call Again button
+                              ? Column(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(25),
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                        ),
+                                        child: Material(
+                                          color: Colors.transparent,
+                                          child: InkWell(
+                                            onTap: null,
+                                            child: Padding(
+                                              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(Icons.phone, color: primaryColor),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    'Call Completed',
+                                                    style: TextStyle(
+                                                      color: primaryColor,
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 16,
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
-                                            ],
+                                            ),
                                           ),
                                         ),
                                       ),
                                     ),
-                                  ),
+                                    const SizedBox(height: 12),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(25),
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [
+                                              primaryColor,
+                                              primaryColor.withValues(alpha: 0.8),
+                                            ],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          ),
+                                        ),
+                                        child: Material(
+                                          color: Colors.transparent,
+                                          child: InkWell(
+                                            onTap: () => _makeCall(context, contact1, contact2),
+                                            child: Padding(
+                                              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(Icons.phone, color: Colors.white),
+                                                  const SizedBox(width: 8),
+                                                  const Text(
+                                                    'Call Again',
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 16,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 )
                               // Make Call: gradient button
                               : ClipRRect(

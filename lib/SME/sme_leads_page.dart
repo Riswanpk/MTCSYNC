@@ -80,7 +80,8 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
     }
     Query query = FirebaseFirestore.instance
         .collection('follow_ups')
-        .where('assigned_by', isEqualTo: uid);
+        .where('source', whereIn: ['sme', 'SME']);
+    
     if (selectedBranch != 'All') {
       query = query.where('branch', isEqualTo: selectedBranch);
     }

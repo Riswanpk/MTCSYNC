@@ -215,7 +215,8 @@ class _LeadsPageState extends State<LeadsPage> {
       }
     }
     if (selectedPriority == 'SME Only') {
-      query = query.where('source', isEqualTo: 'sme');
+      // Include both 'sme' and 'SME' variants
+      query = query.where('source', whereIn: ['sme', 'SME']);
     } else if (selectedPriority != 'All') {
       query = query.where('priority', isEqualTo: selectedPriority);
     }
