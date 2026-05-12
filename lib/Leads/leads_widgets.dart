@@ -241,7 +241,7 @@ class LeadCard extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 16),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: source == 'sme'
+            color: (source == 'sme' || source == 'SME')
                 ? (isDark ? const Color(0xFF1A3333) : const Color(0xFFE0F2F1))
                 : getPriorityBackgroundColor(priority, isDark),
             borderRadius: BorderRadius.circular(20),
@@ -260,7 +260,7 @@ class LeadCard extends StatelessWidget {
                 width: 12,
                 height: 12,
                 decoration: BoxDecoration(
-                  color: source == 'sme' ? Colors.teal : getPriorityColor(priority),
+                  color: (source == 'sme' || source == 'SME') ? Colors.teal : getPriorityColor(priority),
                   shape: BoxShape.circle,
                 ),
               ),

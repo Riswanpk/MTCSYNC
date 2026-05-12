@@ -33,7 +33,7 @@ class _SmeUserStatsDashboardState extends State<SmeUserStatsDashboard> {
 
     final snapshot = await FirebaseFirestore.instance
         .collection('follow_ups')
-        .where('source', isEqualTo: 'sme')
+        .where('source', whereIn: ['sme', 'SME'])
         .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(_startDate))
         .where('created_at', isLessThan: Timestamp.fromDate(dayEnd))
         .get();
@@ -387,7 +387,7 @@ class _UserLeadsDetailPageState extends State<_UserLeadsDetailPage> {
 
     final snapshot = await FirebaseFirestore.instance
         .collection('follow_ups')
-        .where('source', isEqualTo: 'sme')
+        .where('source', whereIn: ['sme', 'SME'])
         .where('assigned_to', isEqualTo: widget.assignedToUid)
         .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(widget.startDate))
         .where('created_at', isLessThan: Timestamp.fromDate(dayEnd))

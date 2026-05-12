@@ -22,7 +22,7 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
 
   String selectedStatus = 'All';
   String selectedPriority = 'All';
-  String? selectedBranch;
+  String selectedBranch = 'All';
   String searchQuery = '';
   bool sortAscending = false;
   bool _isSearching = false;
@@ -53,7 +53,7 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
     final branches = await UserCacheService.instance.getBranches();
     setState(() {
       branchOptions = ['All', ...branches];
-      selectedBranch = null;
+      selectedBranch = 'All';
       _leads = [];
     });
   }
@@ -71,13 +71,6 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
       return;
     }
 
-    if (selectedBranch == null) {
-      setState(() {
-        _leads = [];
-        _isLoading = false;
-      });
-      return;
-    }
     Query query = FirebaseFirestore.instance
         .collection('follow_ups')
         .where('source', whereIn: ['sme', 'SME']);
@@ -226,7 +219,7 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                       branchOptions,
                       selectedBranch ?? 'All',
                       (val) {
-                        setState(() => selectedBranch = val == 'All' ? null : val);
+                        setState(() => selectedBranch = val);
                         _resetAndFetch();
                       },
                     ),
@@ -308,9 +301,7 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              selectedBranch == null
-                                  ? 'Select a branch to view leads'
-                                  : 'Try adjusting your filters',
+                              'Try adjusting your filters',
                               style: TextStyle(
                                 fontSize: 13,
                                 color: Colors.grey.shade500,

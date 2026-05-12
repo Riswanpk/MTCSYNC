@@ -60,7 +60,7 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
 
     final snapshot = await FirebaseFirestore.instance
         .collection('follow_ups')
-        .where('source', isEqualTo: 'sme')
+        .where('source', whereIn: ['sme', 'SME'])
         .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(_startDate))
         .where('created_at', isLessThan: Timestamp.fromDate(dayEnd))
         .orderBy('created_at', descending: true)

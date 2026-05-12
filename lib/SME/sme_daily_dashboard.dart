@@ -41,7 +41,7 @@ class _SmeDailyDashboardState extends State<SmeDailyDashboard> {
     // Fetch unique branches from Firestore
     final snapshot = await FirebaseFirestore.instance
         .collection('follow_ups')
-        .where('source', isEqualTo: 'sme')
+        .where('source', whereIn: ['sme', 'SME'])
         .get();
     final branches = <String>{};
     for (final doc in snapshot.docs) {
@@ -66,7 +66,7 @@ class _SmeDailyDashboardState extends State<SmeDailyDashboard> {
 
     Query query = FirebaseFirestore.instance
         .collection('follow_ups')
-        .where('source', isEqualTo: 'sme')
+        .where('source', whereIn: ['sme', 'SME'])
         .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(dayStart))
         .where('created_at', isLessThan: Timestamp.fromDate(dayEnd));
     if (_selectedBranch != null && _selectedBranch!.isNotEmpty) {
@@ -160,12 +160,12 @@ class _SmeDailyDashboardState extends State<SmeDailyDashboard> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: DropdownButton<String>(
-                            value: _selectedBranch,
+                            value: _selectedBranch ?? 'All',
                             isExpanded: true,
                             hint: const Text('Select branch'),
                             items: [
                               const DropdownMenuItem<String>(
-                                value: '',
+                                value: 'All',
                                 child: Text('All Branches'),
                               ),
                               ..._branches.map((b) => DropdownMenuItem<String>(
@@ -176,7 +176,7 @@ class _SmeDailyDashboardState extends State<SmeDailyDashboard> {
                             onChanged: (val) {
                               if (mounted) {
                                 setState(() {
-                                  _selectedBranch = (val != null && val.isNotEmpty) ? val : null;
+                                  _selectedBranch = (val != 'All') ? val : null;
                                 });
                                 _fetchDailyLeads();
                               }
@@ -186,14 +186,13 @@ class _SmeDailyDashboardState extends State<SmeDailyDashboard> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    // Only show summary and leads list if a branch is selected
-                    if (_selectedBranch == null || _selectedBranch!.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 48.0),
-                        child: Center(
-                          child: Text(
-                            'Please select a branch to view leads.',
-                            style: TextStyle(fontSize: 16, color: isDark ? Colors.white54 : Colors.black54),
+                    // Summary cards and leads list
+                    if (_isLoading)
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 48.0),
+                          child: CircularProgressIndicator(
+                            color: isDark ? Colors.white54 : Colors.black54,
                           ),
                         ),
                       )

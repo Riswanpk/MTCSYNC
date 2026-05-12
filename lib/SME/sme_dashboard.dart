@@ -59,10 +59,10 @@ class _SmeDashboardState extends State<SmeDashboard>
     final todayEnd = todayStart.add(const Duration(days: 1));
 
     try {
-      // Fetch all leads with source 'sme'
+      // Fetch all leads with source 'sme' or 'SME'
       final snapshot = await FirebaseFirestore.instance
           .collection('follow_ups')
-          .where('source', isEqualTo: 'sme')
+          .where('source', whereIn: ['sme', 'SME'])
           .get();
 
       int totalLeads = snapshot.docs.length;

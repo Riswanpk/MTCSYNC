@@ -410,7 +410,7 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
         // Check if the current user is the SME who assigned this lead (read-only for SME)
         final currentUid = FirebaseAuth.instance.currentUser?.uid;
         final assignedBy = _data?['assigned_by'] as String?;
-        final isSmeCreator = assignedBy != null && assignedBy == currentUid && _data?['source'] == 'sme';
+        final isSmeCreator = assignedBy != null && assignedBy == currentUid && (_data?['source'] == 'sme' || _data?['source'] == 'SME');
 
         // Build edit button only if NOT the SME creator
         final editAction = isSmeCreator
@@ -544,7 +544,7 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
             ],
           ),
           // --- SME Assignment Info ---
-          if (_data?['source'] == 'sme') ...[
+          if (_data?['source'] == 'sme' || _data?['source'] == 'SME') ...[
             const SizedBox(height: 32),
             Text(
               'SME Assignment',
