@@ -88,13 +88,17 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
   }
 
   Future<void> _loadReminders() async {
+    if (!mounted) return;
     setState(() => _loading = true);
     final now = DateTime.now();
     DateTime? from;
     DateTime? to;
 
     String? status = 'pending';
-    
+    List<String>? statuses;
+    DateTime? updatedFrom;
+    DateTime? updatedTo;
+
     switch (_filter) {
       case 'Today':
         from = DateTime(now.year, now.month, now.day);
@@ -113,7 +117,9 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
         to = DateTime(now.year, now.month, now.day);
         break;
       case 'Completed Today':
-        status = 'completed';
+        status = null;
+        statuses = ['completed', 'called'];
+        // Date filter will be by reminder_date once updated_at column exists in dme_reminders
         from = DateTime(now.year, now.month, now.day);
         to = DateTime(now.year, now.month, now.day, 23, 59, 59);
         break;
@@ -140,8 +146,11 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
     final reminders = await _svc.getReminders(
       branchIds: branchesToFetch,
       status: status,
+      statuses: statuses,
       from: from,
       to: to,
+      updatedFrom: updatedFrom,
+      updatedTo: updatedTo,
     );
     if (mounted) setState(() { _reminders = reminders; _loading = false; });
   }
@@ -150,12 +159,12 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
 
   Future<void> _markComplete(DmeReminder r) async {
     await _svc.updateReminderStatus(r.id!, 'completed');
-    _loadReminders();
+    if (mounted) _loadReminders();
   }
 
   Future<void> _dismiss(DmeReminder r) async {
     await _svc.updateReminderStatus(r.id!, 'dismissed');
-    _loadReminders();
+    if (mounted) _loadReminders();
   }
 
   // ── Call Detection Logic ──
@@ -200,7 +209,10 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
           entry.duration! > 15 &&
           _numberMatches(entry.number ?? '', _pendingCallPhone ?? '')) {
         found = true;
-        setState(() => _calledIds.add(_pendingCallCustomerId!));
+        if (mounted) setState(() => _calledIds.add(_pendingCallCustomerId!));
+        if (_pendingCallReminderId != null) {
+          await _svc.updateReminderStatus(_pendingCallReminderId!, 'called');
+        }
         break;
       }
     }
@@ -208,6 +220,7 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
     if (!found) {
       // Retry after 3s
       await Future.delayed(const Duration(seconds: 3));
+      if (!mounted) return;
       final retryEntries = await CallLog.query(
         dateFrom: _callStartTime!.millisecondsSinceEpoch,
         dateTo: DateTime.now().millisecondsSinceEpoch,
@@ -217,7 +230,10 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
             entry.duration! > 15 &&
             _numberMatches(entry.number ?? '', _pendingCallPhone ?? '')) {
           found = true;
-          setState(() => _calledIds.add(_pendingCallCustomerId!));
+          if (mounted) setState(() => _calledIds.add(_pendingCallCustomerId!));
+          if (_pendingCallReminderId != null) {
+            await _svc.updateReminderStatus(_pendingCallReminderId!, 'called');
+          }
           break;
         }
       }
@@ -257,6 +273,9 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
             entry.duration! > 15 &&
             _numberMatches(entry.number ?? '', phone)) {
           setState(() => _calledIds.add(r.customerId));
+          if (r.id != null) {
+            await _svc.updateReminderStatus(r.id!, 'called');
+          }
           break;
         }
       }
@@ -294,6 +313,9 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
             _numberMatches(entry.number ?? '', phone)) {
           matched.add(r);
           setState(() => _calledIds.add(r.customerId));
+          if (r.id != null) {
+            await _svc.updateReminderStatus(r.id!, 'called');
+          }
           break;
         }
       }
@@ -554,15 +576,20 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
                                     }
                                   }
                                 : null,
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => DmeCustomerTileViewer(
-                                  reminder: r,
-                                  dmeUser: widget.dmeUser,
+                            onTap: () async {
+                              final updated = await Navigator.push<bool>(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => DmeCustomerTileViewer(
+                                    reminder: r,
+                                    dmeUser: widget.dmeUser,
+                                  ),
                                 ),
-                              ),
-                            ),
+                              );
+                              if (updated == true && mounted) {
+                                _loadReminders();
+                              }
+                            },
                           );
                         },
                       ),
@@ -605,6 +632,10 @@ class _ReminderCard extends StatelessWidget {
     String statusLabel;
 
     if (called) {
+      statusColor = Colors.green;
+      statusIcon = Icons.phone_in_talk_rounded;
+      statusLabel = 'Called';
+    } else if (reminder.status == 'called') {
       statusColor = Colors.green;
       statusIcon = Icons.phone_in_talk_rounded;
       statusLabel = 'Called';
@@ -754,6 +785,42 @@ class _ReminderCard extends StatelessWidget {
                               fontSize: 12, color: Colors.grey[500]),
                         ),
                       const SizedBox(height: 6),
+                      // Remarks needed badge for called-but-no-notes
+                      if ((called || reminder.status == 'called') &&
+                          (reminder.notes == null || reminder.notes!.trim().isEmpty))
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                      color: Colors.orange.withValues(alpha: 0.5)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    Icon(Icons.edit_note_rounded,
+                                        size: 13, color: Colors.orange),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Remarks Needed',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.orange,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       Row(
                         children: [
                           Icon(Icons.calendar_today_rounded,

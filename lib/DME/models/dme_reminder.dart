@@ -12,6 +12,7 @@ class DmeReminder {
   final String? notes;
   final int purchasedForBranchId;
   final String purchasedForBranchName;
+  final DateTime? updatedAt;
 
   DmeReminder({
     this.id,
@@ -27,6 +28,7 @@ class DmeReminder {
     this.notes,
     this.purchasedForBranchId = 0,
     this.purchasedForBranchName = '',
+    this.updatedAt,
   });
 
   factory DmeReminder.fromMap(Map<String, dynamic> map) {
@@ -52,6 +54,9 @@ class DmeReminder {
       notes: map['notes'] as String?,
       purchasedForBranchId: map['purchased_for_branch_id'] as int? ?? 0,
       purchasedForBranchName: map['purchased_for_branch_name'] as String? ?? '',
+      updatedAt: map['updated_at'] != null
+          ? DateTime.tryParse(map['updated_at'].toString())
+          : null,
     );
   }
 
@@ -79,6 +84,7 @@ class DmeReminder {
     String? notes,
     int? purchasedForBranchId,
     String? purchasedForBranchName,
+    DateTime? updatedAt,
   }) {
     return DmeReminder(
       id: id ?? this.id,
@@ -94,6 +100,7 @@ class DmeReminder {
       notes: notes ?? this.notes,
       purchasedForBranchId: purchasedForBranchId ?? this.purchasedForBranchId,
       purchasedForBranchName: purchasedForBranchName ?? this.purchasedForBranchName,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 

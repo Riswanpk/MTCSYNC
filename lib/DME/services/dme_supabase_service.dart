@@ -1123,21 +1123,32 @@ class DmeSupabaseService {
   Future<List<DmeReminder>> getReminders({
     List<int>? branchIds,
     String? status,
+    List<String>? statuses,
     DateTime? from,
     DateTime? to,
+    DateTime? updatedFrom,
+    DateTime? updatedTo,
   }) async {
     await ensureInitialized();
     var query = _client
         .from('dme_reminders')
         .select('*, dme_customers(name, phone, address, branch_id, salesman)');
 
-    if (status != null) query = query.eq('status', status);
+    if (statuses != null && statuses.isNotEmpty) {
+      query = query.inFilter('status', statuses);
+    } else if (status != null) {
+      query = query.eq('status', status);
+    }
     if (from != null) {
       query = query.gte('reminder_date', from.toIso8601String().split('T')[0]);
     }
     if (to != null) {
       query = query.lte('reminder_date', to.toIso8601String().split('T')[0]);
     }
+    // updated_at filtering: only applied if the column exists in the schema
+    // To enable: run  ALTER TABLE dme_reminders ADD COLUMN updated_at timestamptz;
+    //                  CREATE OR REPLACE TRIGGER set_updated_at ...
+    // then restore updatedFrom/updatedTo writes here.
 
     // Paginate through all reminders to avoid hitting the 1000 row limit
     final reminders = <DmeReminder>[];
@@ -1185,6 +1196,17 @@ class DmeSupabaseService {
     final map = <String, dynamic>{'status': status};
     if (notes != null) map['notes'] = notes;
     await _client.from('dme_reminders').update(map).eq('id', id);
+  }
+
+  Future<DmeReminder?> getReminderById(int id) async {
+    await ensureInitialized();
+    final res = await _client
+        .from('dme_reminders')
+        .select('*, dme_customers(name, phone, address, branch_id, salesman)')
+        .eq('id', id)
+        .maybeSingle();
+    if (res == null) return null;
+    return DmeReminder.fromMap(res as Map<String, dynamic>);
   }
 
   /// Fetch sale items for a customer on a specific purchase date.
@@ -1615,5 +1637,5 @@ class DmeSupabaseService {
     return false;
   }
 
-  Future<Object?> getAllBranches() async {}
+  Future<List<Map<String, dynamic>>> getAllBranches() => getBranches();
 }

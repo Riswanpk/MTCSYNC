@@ -606,6 +606,7 @@ class _ComplaintFormDialogState extends State<_ComplaintFormDialog> {
 
     setState(() => _submitting = true);
 
+    final messenger = ScaffoldMessenger.of(context);
     try {
       await UserCacheService.instance.ensureLoaded();
       final userId = UserCacheService.instance.uid;
@@ -616,7 +617,7 @@ class _ComplaintFormDialogState extends State<_ComplaintFormDialog> {
 
       // For now, complaint creation requires a branchId which we don't have in this context
       // This should be called from the popup dialog instead with proper branch assignment
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(
           content: Text('Please use the complaint dialog during reminder calls'),
           backgroundColor: Colors.orange,
@@ -624,19 +625,9 @@ class _ComplaintFormDialogState extends State<_ComplaintFormDialog> {
       );
       if (mounted) Navigator.pop(context);
       return;
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Complaint raised successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pop(context);
-      }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: Text('Error raising complaint: $e'),
             backgroundColor: Colors.red,

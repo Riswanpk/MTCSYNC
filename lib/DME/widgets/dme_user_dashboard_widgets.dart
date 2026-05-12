@@ -211,32 +211,13 @@ class _PieCard extends StatefulWidget {
 class _PieCardState extends State<_PieCard> {
   int _touched = -1;
 
-  // Group slices with < 2 % of total into a single "Others" bucket
-  List<_PieStat> _mergeSmall(List<_PieStat> input, int total) {
-    if (total <= 0) return input;
-    const threshold = 2.0;
-    final List<_PieStat> main = [];
-    int othersCount = 0;
-    for (final s in input) {
-      if (s.count / total * 100 < threshold) {
-        othersCount += s.count;
-      } else {
-        main.add(s);
-      }
-    }
-    if (othersCount > 0) {
-      main.add(_PieStat(label: 'Others', count: othersCount));
-    }
-    return main;
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final rawTotal = widget.stats.fold(0, (s, e) => s + e.count);
     if (rawTotal == 0) return const SizedBox.shrink();
 
-    final sections = _mergeSmall(widget.stats, rawTotal);
+    final sections = widget.stats.toList();
     // Clamp touch index after merging (sections list may be shorter)
     if (_touched >= sections.length) _touched = -1;
 

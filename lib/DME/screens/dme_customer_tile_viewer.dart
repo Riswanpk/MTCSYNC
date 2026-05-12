@@ -129,17 +129,45 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
     // Load purchase history
     _loadSalesData();
 
-    // If reminder is already completed, load existing remarks and mark as called
+    // If reminder is already completed or called, load existing remarks
     if (widget.reminder.status == 'completed') {
       _called = true;
       _isPreexistinglyCompleted = true;
       if (widget.reminder.notes != null && widget.reminder.notes!.isNotEmpty) {
         _remarksCtrl.text = widget.reminder.notes!;
       }
+      // Fetch fresh data in case notes are newer than what was passed in
+      _loadLatestReminderData();
+    } else if (widget.reminder.status == 'called') {
+      _called = true;
+      if (widget.reminder.notes != null && widget.reminder.notes!.isNotEmpty) {
+        _remarksCtrl.text = widget.reminder.notes!;
+      }
+      // Fetch fresh notes from Supabase — widget.reminder may be stale
+      _loadLatestReminderData();
     } else {
       // For pending reminders, check for calls
       _restorePendingCallState();
       _checkForAnyRecentCall();
+    }
+  }
+
+  Future<void> _loadLatestReminderData() async {
+    if (widget.reminder.id == null) return;
+    try {
+      final latest = await _svc.getReminderById(widget.reminder.id!);
+      if (latest == null || !mounted) return;
+      if (latest.status == 'completed' || latest.status == 'called') {
+        setState(() {
+          _called = true;
+          if (latest.status == 'completed') _isPreexistinglyCompleted = true;
+          if (latest.notes != null && latest.notes!.isNotEmpty) {
+            _remarksCtrl.text = latest.notes!;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading latest reminder data: $e');
     }
   }
 
@@ -446,6 +474,10 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
         );
       }
       if (mounted) {
+        setState(() {
+          _saving = false;
+          _isPreexistinglyCompleted = true;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Remarks saved & reminder marked complete ✅'),
@@ -547,6 +579,7 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
       _editCustomerType = null;
     }
 
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(

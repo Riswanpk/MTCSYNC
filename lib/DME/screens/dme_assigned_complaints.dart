@@ -155,6 +155,8 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
 
                       setState(() => isSubmitting = true);
 
+                      final messenger = ScaffoldMessenger.of(context);
+                      final nav = Navigator.of(ctx);
                       try {
                         final uid = _auth.currentUser?.uid;
                         if (uid != null && complaint.id != null) {
@@ -165,8 +167,8 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                           );
 
                           if (mounted) {
-                            Navigator.pop(ctx);
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            nav.pop();
+                            messenger.showSnackBar(
                               const SnackBar(
                                 content: Text('Remarks added successfully'),
                                 backgroundColor: Colors.green,
@@ -176,7 +178,7 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                           }
                         }
                       } catch (e) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        messenger.showSnackBar(
                           SnackBar(content: Text('Error: $e')),
                         );
                       } finally {
