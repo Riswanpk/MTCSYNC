@@ -22,6 +22,7 @@ class PresentFollowUp extends StatefulWidget {
 
 class _PresentFollowUpState extends State<PresentFollowUp> {
     String? _originalUserName;
+  String? _transferredByName;
   bool _isEditing = false;
   bool _isSaving = false;
   Map<String, dynamic>? _data;
@@ -65,6 +66,10 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
     // Fetch original user name if needed
     if (data['original_created_user'] != null) {
       _fetchOriginalUserName(data['original_created_user']);
+    }
+    // Fetch the name of whoever performed the last transfer
+    if (data['transferred_by'] != null) {
+      _fetchTransferredByName(data['transferred_by']);
     }
 
     // Handle reminder
@@ -120,6 +125,25 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
     } catch (e) {
       setState(() {
         _originalUserName = uid;
+      });
+    }
+  }
+
+  Future<void> _fetchTransferredByName(String uid) async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (doc.exists) {
+        setState(() {
+          _transferredByName = doc.data()?['username'] ?? doc.data()?['email'] ?? uid;
+        });
+      } else {
+        setState(() {
+          _transferredByName = uid;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _transferredByName = uid;
       });
     }
   }
@@ -436,13 +460,13 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
               if (editAction != null) editAction,
             ],
           ),
-          body: _buildBody(context, data, isSmeCreator),
+          body: _buildBody(context, data, isSmeCreator, currentUid),
         );
       },
     );
   }
 
-  Widget _buildBody(BuildContext context, Map<String, dynamic> data, bool isSmeCreator) {
+  Widget _buildBody(BuildContext context, Map<String, dynamic> data, bool isSmeCreator, String? currentUid) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
@@ -646,8 +670,11 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
           leadInfoTile(Icons.comment, 'Comments', Text(_data?['comments'] ?? 'N/A', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
           leadInfoTile(Icons.location_city, 'Branch', Text(_data?['branch'] ?? 'N/A', style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)), isDark),
           
-          // Display original branch and creator if this is a transferred lead
-          if (_data?['original_branch'] != null) ...[
+          // Display transfer history — only visible to the SME who transferred
+          // and the latest user the lead was transferred to.
+          if (_data?['original_branch'] != null &&
+              (currentUid == _data?['transferred_by'] ||
+               currentUid == _data?['created_by'])) ...[
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(12),
@@ -655,41 +682,16 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
                 color: isDark ? const Color(0xFF23272F) : const Color(0xFFF0F2F5),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.1),
+                  color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.1),
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
+                  Icon(Icons.swap_horiz, size: 14, color: isDark ? Colors.white54 : Colors.black54),
+                  const SizedBox(width: 6),
                   Text(
-                    'Transfer History',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white70 : Colors.black54,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(Icons.location_city, size: 14, color: isDark ? Colors.white54 : Colors.black54),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Original Branch: ${_data?['original_branch'] ?? 'N/A'}',
-                        style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black87),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(Icons.person, size: 14, color: isDark ? Colors.white54 : Colors.black54),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Original User: ${_originalUserName ?? 'Loading...'}',
-                        style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black87),
-                      ),
-                    ],
+                    'Transferred by: ${_transferredByName ?? 'Loading...'}',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isDark ? Colors.white70 : Colors.black87),
                   ),
                 ],
               ),

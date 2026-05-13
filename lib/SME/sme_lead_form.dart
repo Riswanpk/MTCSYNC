@@ -210,7 +210,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
         reminderTimestamp = Timestamp.fromDate(scheduledDate);
       }
 
-      // Call Cloud Function to send FCM push notification to assigned user
+      // Call Cloud Function to send FCM push notification to assigned user (non-blocking)
       final notifPayload = <String, dynamic>{
         'recipientUid': _selectedUserId,
         'title': 'New Lead Assigned',
@@ -222,9 +222,15 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
       if (reminderTimestamp != null) {
         notifPayload['reminderAt'] = reminderTimestamp.millisecondsSinceEpoch;
       }
-      await FirebaseFunctions.instanceFor(region: 'asia-south1')
+      
+      // Non-blocking call to Cloud Function (fire and forget with error logging)
+      FirebaseFunctions.instanceFor(region: 'asia-south1')
           .httpsCallable('sendLeadAssignmentNotification')
-          .call(notifPayload);
+          .call(notifPayload)
+          .catchError((error) {
+        debugPrint('Warning: Failed to send lead assignment notification: $error');
+        // Non-critical failure, don't block the lead creation
+      });
 
       // Daily report tracking
       await createDailyReportIfNeededLeads(
@@ -234,6 +240,9 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
       );
 
       if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Lead created and assigned successfully!')),
+        );
         Navigator.of(context).pop(true); // Return true to indicate success
       }
     } catch (e) {

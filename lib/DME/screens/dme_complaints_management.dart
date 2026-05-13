@@ -32,6 +32,7 @@ class _DmeComplaintsManagementPageState
 
   String? _selectedStatus;
   String? _currentUserId;
+  int? _managerBranchId;
 
   @override
   void initState() {
@@ -59,9 +60,26 @@ class _DmeComplaintsManagementPageState
     try {
       await _cache.ensureLoaded();
       _currentUserId = FirebaseAuth.instance.currentUser?.uid;
+      final role = _cache.role;
 
-      // Load all complaints – Supabase init is handled inside the service.
-      final complaints = await _svc.getAllComplaints();
+      // Load complaints based on role
+      List<DmeComplaint> complaints = [];
+      if (role == 'manager' && _currentUserId != null) {
+        // Managers should only see complaints from their branch
+        try {
+          final dmeUser = await DmeSupabaseService.instance.getCurrentUser(_currentUserId!);
+          if (dmeUser != null) {
+            _managerBranchId = dmeUser.branchId;
+            complaints = await _svc.getComplaintsForBranch(branchId: dmeUser.branchId);
+          }
+        } catch (e) {
+          debugPrint('[Complaints Management] Error getting manager branch: $e');
+          complaints = [];
+        }
+      } else {
+        // Admin, asst_manager, and sales see all complaints (will be filtered by _applyFilter)
+        complaints = await _svc.getAllComplaints();
+      }
 
       // Pre-fetch usernames for all assigned_to users to avoid multiple queries
       final userIds = complaints.map((c) => c.assignedToId).toSet().cast<String>();
@@ -94,10 +112,19 @@ class _DmeComplaintsManagementPageState
     final role = _cache.role;
     final uid = _cache.uid;
     List<DmeComplaint> complaints = _all;
-    // For sales and asst_manager, only show complaints assigned to them
-    if (role == 'sales' || role == 'asst_manager') {
+    
+    // Apply role-based filtering
+    if (role == 'manager') {
+      // Managers see only complaints from their branch (already filtered in _load, but apply as safety)
+      if (_managerBranchId != null) {
+        complaints = complaints.where((c) => c.branchId == _managerBranchId).toList();
+      }
+    } else if (role == 'sales' || role == 'asst_manager') {
+      // Sales and asst_manager see only complaints assigned to them
       complaints = complaints.where((c) => c.assignedToId == uid).toList();
     }
+    
+    // Apply status filtering
     if (_selectedStatus == null || _selectedStatus == 'All') {
       _filtered = complaints;
     } else {

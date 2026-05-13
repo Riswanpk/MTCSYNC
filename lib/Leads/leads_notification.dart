@@ -49,8 +49,30 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
           'phone': data['phone'] ?? 'N/A',
           'originalBranch': data['original_branch'] ?? 'Unknown',
           'transferredAt': data['transferred_at'],
-          'transferredBy': data['transferred_by'] ?? 'Unknown',
+          'transferredByUid': data['transferred_by'] ?? '',
+          'transferredByName': null, // resolved below
         });
+      }
+
+      // Resolve transferred_by UIDs to usernames
+      final uniqueUids = leads
+          .map((l) => l['transferredByUid'] as String)
+          .where((uid) => uid.isNotEmpty)
+          .toSet();
+      final Map<String, String> uidToName = {};
+      for (final uid in uniqueUids) {
+        try {
+          final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+          if (userDoc.exists) {
+            uidToName[uid] = userDoc.data()?['username'] ?? userDoc.data()?['email'] ?? uid;
+          }
+        } catch (_) {
+          uidToName[uid] = uid;
+        }
+      }
+      for (final lead in leads) {
+        final uid = lead['transferredByUid'] as String;
+        lead['transferredByName'] = uid.isNotEmpty ? (uidToName[uid] ?? uid) : 'Unknown';
       }
 
       if (mounted) {
@@ -290,6 +312,18 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
                                             : Colors.black54,
                                       ),
                                     ),
+                                    if ((lead['transferredByName'] as String?)?.isNotEmpty == true &&
+                                        lead['transferredByName'] != 'Unknown') ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Transferred by: ${lead['transferredByName']}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: isDark ? Colors.blue[300] : Colors.blue[700],
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),
