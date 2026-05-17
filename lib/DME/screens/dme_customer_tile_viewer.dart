@@ -474,16 +474,13 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
         );
       }
       if (mounted) {
-        setState(() {
-          _saving = false;
-          _isPreexistinglyCompleted = true;
-        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Remarks saved & reminder marked complete ✅'),
             backgroundColor: Colors.green,
           ),
         );
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
@@ -903,8 +900,9 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
     }
   }
 
-  Future<void> _loadUsersForBranch(String branch) async {
-    setState(() {
+  Future<void> _loadUsersForBranch(String branch, {StateSetter? setDialogState}) async {
+    final updateState = setDialogState ?? setState;
+    updateState(() {
       _loadingUsers = true;
       _selectedUserId = null;
       _selectedUserName = null;
@@ -934,14 +932,14 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
           (a['username'] as String).compareTo(b['username'] as String));
 
       if (mounted) {
-        setState(() {
+        updateState(() {
           _branchUsers = users;
           _loadingUsers = false;
         });
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _loadingUsers = false);
+        updateState(() => _loadingUsers = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error loading users: $e')),
         );
@@ -1070,7 +1068,7 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                     onChanged: (val) {
                       if (val != null) {
                         setDialogState(() => _selectedBranch = val);
-                        _loadUsersForBranch(val);
+                        _loadUsersForBranch(val, setDialogState: setDialogState);
                       }
                     },
                     decoration: InputDecoration(

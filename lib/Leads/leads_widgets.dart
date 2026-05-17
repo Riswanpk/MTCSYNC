@@ -61,6 +61,50 @@ Future<String?> showCancellationReasonDialog(BuildContext context) async {
   );
 }
 
+/// Shows a dialog asking for a billed phone number when marking an SME/DME lead as Sale.
+/// Returns the phone number string, or null if the user dismissed/backed out.
+Future<String?> showBilledPhoneDialog(BuildContext context) async {
+  final controller = TextEditingController();
+  final formKey = GlobalKey<FormState>();
+  return showDialog<String>(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Billed Phone Number'),
+      content: Form(
+        key: formKey,
+        child: TextFormField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.phone,
+          decoration: const InputDecoration(
+            hintText: 'Enter billed phone number...',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.phone_rounded),
+          ),
+          validator: (v) =>
+              (v == null || v.trim().isEmpty) ? 'Phone number is required' : null,
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(null),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            if (formKey.currentState!.validate()) {
+              Navigator.of(ctx).pop(controller.text.trim());
+            }
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+          child: const Text('Confirm', style: TextStyle(color: Colors.white)),
+        ),
+      ],
+    ),
+  );
+}
+
 Color getPriorityBackgroundColor(String priority, bool isDark) {
   if (isDark) {
     switch (priority) {
@@ -174,13 +218,25 @@ class LeadCard extends StatelessWidget {
         children: [
           SlidableAction(
             onPressed: (context) async {
+              final isSmeDme = source != null &&
+                  (source!.toLowerCase() == 'sme' ||
+                      source!.toLowerCase() == 'dme');
+              String? billedPhone;
+              if (isSmeDme) {
+                billedPhone = await showBilledPhoneDialog(context);
+                if (billedPhone == null) return;
+              }
+              final updateData = <String, dynamic>{
+                'status': 'Sale',
+                'completed_at': FieldValue.serverTimestamp(),
+              };
+              if (billedPhone != null) {
+                updateData['billed_phone'] = billedPhone;
+              }
               await FirebaseFirestore.instance
                   .collection('follow_ups')
                   .doc(docId)
-                  .update({
-                'status': 'Sale',
-                'completed_at': FieldValue.serverTimestamp(),
-              });
+                  .update(updateData);
               onStatusChanged?.call();
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -291,10 +347,24 @@ class LeadCard extends StatelessWidget {
                       style: theme.textTheme.bodySmall?.copyWith(fontSize: 13, color: theme.hintColor),
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      'Created by: $createdBy',
-                      style: theme.textTheme.bodySmall?.copyWith(fontSize: 12, color: Colors.grey),
-                    ),
+                    if (source == 'sme' || source == 'SME')
+                      Container(
+                        margin: const EdgeInsets.only(top: 2, bottom: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.teal.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'Source: SME',
+                          style: TextStyle(fontSize: 11, color: Colors.teal, fontWeight: FontWeight.w600),
+                        ),
+                      )
+                    else
+                      Text(
+                        'Created by: $createdBy',
+                        style: theme.textTheme.bodySmall?.copyWith(fontSize: 12, color: Colors.grey),
+                      ),
                     const SizedBox(height: 2),
                     Text(
                       'Reminder: $formattedReminder',

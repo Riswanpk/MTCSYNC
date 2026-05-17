@@ -28,6 +28,7 @@ import '../DME/screens/dme_customer_db_upload.dart';
 import '../DME/screens/dme_user_management.dart';
 import '../DME/screens/dme_dashboard.dart';
 import '../DME/screens/dme_user_dashboard.dart';
+import '../DME/screens/dme_leads_page.dart';
 import '../DME/screens/dme_complaints_management.dart';
 
 /// App brand colors
@@ -111,6 +112,90 @@ class HomeMenuButton extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Notification bell button positioned top-left, opposite the menu button.
+class HomeNotificationButton extends StatelessWidget {
+  final bool isDark;
+  final int count;
+  final VoidCallback onTap;
+
+  const HomeNotificationButton({
+    super.key,
+    required this.isDark,
+    required this.count,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: 40,
+      left: 20,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: (isDark ? Colors.white : primaryBlue).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: (isDark ? Colors.white : primaryBlue).withValues(alpha: 0.2),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: primaryBlue.withValues(alpha: 0.1),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: onTap,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Icon(
+                    Icons.notifications_rounded,
+                    color: isDark ? Colors.white : primaryBlue,
+                    size: 26,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (count > 0)
+            Positioned(
+              right: 6,
+              top: 6,
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                constraints: const BoxConstraints(
+                  minWidth: 16,
+                  minHeight: 16,
+                ),
+                child: Text(
+                  count > 99 ? '99+' : '$count',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -547,6 +632,20 @@ class HomeButtonsContainer extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: NeumorphicButton(
+                onTap: () => _navigateToDmeLeads(context),
+                text: 'Leads',
+                color: const Color(0xFF00897B),
+                textColor: Colors.white,
+                icon: Icons.people_alt_rounded,
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -847,6 +946,16 @@ class HomeButtonsContainer extends StatelessWidget {
     if (dmeUser == null || !context.mounted) return;
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => DmeUserDashboardPage(dmeUser: dmeUser)),
+    );
+  }
+
+  Future<void> _navigateToDmeLeads(BuildContext context) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final dmeUser = await DmeSupabaseService.instance.getCurrentUser(uid);
+    if (dmeUser == null || !context.mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => DmeLeadsPage(isAdmin: dmeUser.isAdmin)),
     );
   }
 

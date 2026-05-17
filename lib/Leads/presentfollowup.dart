@@ -379,6 +379,48 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
     );
   }
 
+  Future<String?> _showBilledPhoneDialog() async {
+    final controller = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Billed Phone Number'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: controller,
+            autofocus: true,
+            keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(
+              hintText: 'Enter billed phone number...',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.phone_rounded),
+            ),
+            validator: (v) =>
+                (v == null || v.trim().isEmpty) ? 'Phone number is required' : null,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(null),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.of(ctx).pop(controller.text.trim());
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text('Confirm', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _showPhoneShowcaseIfNeeded() async {
     final prefs = await SharedPreferences.getInstance();
     final seen = prefs.getBool('seen_phone_showcase') ?? false;
@@ -636,9 +678,17 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
                           onChanged: (newStatus) async {
                             if (newStatus != null && newStatus != _data?['status']) {
                               String? cancellationReason;
+                              String? billedPhone;
                               if (newStatus == 'Cancelled') {
                                 cancellationReason = await _showCancellationReasonDialog();
                                 if (cancellationReason == null) return;
+                              }
+                              if (newStatus == 'Sale') {
+                                final src = (_data?['source'] as String? ?? '').toLowerCase().trim();
+                                if (src == 'sme' || src == 'dme') {
+                                  billedPhone = await _showBilledPhoneDialog();
+                                  if (billedPhone == null) return;
+                                }
                               }
                               final updateMap = <String, dynamic>{'status': newStatus};
                               if (newStatus == 'Sale' || newStatus == 'Cancelled') {
@@ -646,6 +696,9 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
                               }
                               if (cancellationReason != null) {
                                 updateMap['cancellation_reason'] = cancellationReason;
+                              }
+                              if (billedPhone != null) {
+                                updateMap['billed_phone'] = billedPhone;
                               }
                               await FirebaseFirestore.instance
                                   .collection('follow_ups')

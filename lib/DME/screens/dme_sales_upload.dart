@@ -643,15 +643,19 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
 
   /// Updates category / type on an existing customer record if the user
   /// chose to overwrite the DB value with the Excel value.
+  /// Also updates the branch if provided.
   Future<void> _applyExistingCustomerCategoryTypeUpdate({
     required _PreviewItem item,
     required int customerId,
     required String? effectiveCategory,
     required String? effectiveType,
+    required int? branchId,
   }) async {
     final updateCat = item.hasCategoryConflict && item.updateCategoryToExcel;
     final updateType = item.hasTypeConflict && item.updateTypeToExcel;
-    if (!updateCat && !updateType) return;
+    
+    // Update if there's a category/type conflict OR if branch needs updating
+    if (!updateCat && !updateType && branchId == null) return;
 
     final existing = item.existingCustomer!;
     final newCategory = updateCat ? effectiveCategory : existing.category;
@@ -674,6 +678,7 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
         categoryId: newCategoryId,
         customerTypeId: newTypeId,
         salesman: existing.salesman,
+        branchId: branchId,
       ),
     );
   }
@@ -723,7 +728,10 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
             ? record.category
             : item.resolvedCategory;
 
-        final effectiveBranch = record.branch ?? _selectedBranchName;
+        // Use record.branch if it exists and is not empty, otherwise use selected branch
+        final effectiveBranch = (record.branch?.trim().isNotEmpty == true)
+            ? record.branch
+            : _selectedBranchName;
         final branchId = effectiveBranch != null
             ? branchCache[effectiveBranch.toUpperCase()]
             : null;
@@ -735,12 +743,13 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
             operation: () =>
                 _svc.updateLastPurchaseDate(customerId!, record.date),
           );
-          // Update category / type if user chose the Excel value
+          // Update category / type and branch if needed
           await _applyExistingCustomerCategoryTypeUpdate(
             item: item,
             customerId: customerId!,
             effectiveCategory: effectiveCategory,
             effectiveType: effectiveType,
+            branchId: branchId,
           );
         } else if (item.status == _RecordStatus.conflict) {
           // Phone matches, name differs → keep existing, record alternate name
@@ -754,12 +763,13 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
                 _svc.appendPurchasedFor(customerId!, record.customerName),
           );
           alternateNamesRecorded++;
-          // Update category / type if user chose the Excel value
+          // Update category / type and branch if needed
           await _applyExistingCustomerCategoryTypeUpdate(
             item: item,
             customerId: customerId!,
             effectiveCategory: effectiveCategory,
             effectiveType: effectiveType,
+            branchId: branchId,
           );
         } else {
           // New customer
@@ -855,11 +865,14 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
         // Upsert reminder with purchase branch tracking (non-blocking)
         // Details are saved to dme_customers and purchases tables
         // Reminder update failure does not fail the sale record
-        if (customerId != null && branchId != null) {
+        // Use branchId if available, otherwise use a fallback from available branches
+        final reminderBranchId = branchId ?? 
+            (allBranches.isNotEmpty ? allBranches.first['id'] as int : 1);
+        if (customerId != null) {
           unawaited(_updateReminderAsync(
             customerId: customerId,
             record: record,
-            branchId: branchId,
+            branchId: reminderBranchId,
             dmeUser: dmeUser,
             effectiveCategory: effectiveCategory,
             effectiveType: effectiveType,

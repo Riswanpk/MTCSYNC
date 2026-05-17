@@ -157,16 +157,6 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
 
 
 
-  Future<void> _markComplete(DmeReminder r) async {
-    await _svc.updateReminderStatus(r.id!, 'completed');
-    if (mounted) _loadReminders();
-  }
-
-  Future<void> _dismiss(DmeReminder r) async {
-    await _svc.updateReminderStatus(r.id!, 'dismissed');
-    if (mounted) _loadReminders();
-  }
-
   // ── Call Detection Logic ──
 
   Future<void> _savePendingCallState() async {
@@ -559,8 +549,6 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
                             reminder: r,
                             dateFmt: dateFmt,
                             called: _calledIds.contains(r.customerId),
-                            onMarkComplete: () => _markComplete(r),
-                            onDismiss: () => _dismiss(r),
                             onCallTap: r.customerPhone != null
                                 ? () async {
                                     _pendingCallPhone = r.customerPhone;
@@ -606,8 +594,6 @@ class _ReminderCard extends StatelessWidget {
   final DmeReminder reminder;
   final DateFormat dateFmt;
   final bool called;
-  final VoidCallback onMarkComplete;
-  final VoidCallback onDismiss;
   final VoidCallback? onCallTap;
   final VoidCallback onTap;
 
@@ -615,8 +601,6 @@ class _ReminderCard extends StatelessWidget {
     required this.reminder,
     required this.dateFmt,
     required this.called,
-    required this.onMarkComplete,
-    required this.onDismiss,
     required this.onCallTap,
     required this.onTap,
   });
@@ -653,50 +637,7 @@ class _ReminderCard extends StatelessWidget {
       statusLabel = 'Pending';
     }
 
-    return Dismissible(
-      key: Key('reminder_${reminder.id}'),
-      background: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        decoration: BoxDecoration(
-          color: Colors.green,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        alignment: Alignment.centerLeft,
-        padding: const EdgeInsets.only(left: 24),
-        child: const Row(
-          children: [
-            Icon(Icons.check_rounded, color: Colors.white),
-            SizedBox(width: 8),
-            Text('Complete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ],
-        ),
-      ),
-      secondaryBackground: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        decoration: BoxDecoration(
-          color: Colors.orange,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 24),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Text('Dismiss', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            SizedBox(width: 8),
-            Icon(Icons.close_rounded, color: Colors.white),
-          ],
-        ),
-      ),
-      confirmDismiss: (direction) async {
-        if (direction == DismissDirection.startToEnd) {
-          onMarkComplete();
-        } else {
-          onDismiss();
-        }
-        return false;
-      },
-      child: GestureDetector(
+    return GestureDetector(
         onTap: onTap,
         child: Container(
           margin: const EdgeInsets.only(bottom: 10),
@@ -878,7 +819,6 @@ class _ReminderCard extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 }

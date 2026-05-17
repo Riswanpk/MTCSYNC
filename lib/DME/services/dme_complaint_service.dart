@@ -180,6 +180,7 @@ class DmeComplaintService {
     final response = await _supabase.from(_table).select(_selectClause).eq('id', complaintId).single();
 
     if (response.isEmpty) return null;
+    // ignore: unnecessary_cast
     return DmeComplaint.fromMap(response as Map<String, dynamic>);
   }
 
@@ -196,7 +197,25 @@ class DmeComplaintService {
 
     final response = await query;
     final data = response as List<dynamic>? ?? [];
+    // ignore: unnecessary_cast
     return data.map((doc) => DmeComplaint.fromMap(doc as Map<String, dynamic>)).toList();
+  }
+
+  /// Get branch ID by branch name
+  Future<int?> getBranchIdByName(String branchName) async {
+    _ensureSupabaseInitialized();
+    try {
+      final response = await _supabase
+          .from('dme_branches')
+          .select('id')
+          .eq('name', branchName)
+          .single();
+      
+      return response['id'] as int?;
+    } catch (e) {
+      debugPrint('Error getting branch ID for "$branchName": $e');
+      return null;
+    }
   }
 
   /// Get username for a given user ID by looking up in dme_users table

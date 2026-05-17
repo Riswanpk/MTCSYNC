@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'services/dme_supabase_service.dart';
 import 'models/dme_user.dart';
 import '../Misc/theme_notifier.dart';
+import 'screens/dme_leads_page.dart';
 import 'screens/dme_reminders_and_calls.dart';
 import 'screens/dme_customer_db_upload.dart';
 import 'screens/dme_user_management.dart';
@@ -224,6 +225,13 @@ class _DmeHomePageState extends State<DmeHomePage> {
               color: const Color(0xFFFFA500),
               onTap: () => _navigate(const DmeAssignedComplaintsPage()),
             ),
+          ),
+          const SizedBox(height: 14),
+          _DmeTile(
+            icon: Icons.people_alt_rounded,
+            label: 'Leads',
+            color: const Color(0xFF00897B),
+            onTap: () => _navigate(DmeLeadsPage(isAdmin: _user!.isAdmin)),
           ),
           // ── Admin-only tiles ──
           if (_user!.isAdmin) ...[

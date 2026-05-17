@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import '../../Navigation/user_cache_service.dart';
 import '../models/dme_complaint.dart';
 import '../services/dme_complaint_service.dart';
-import '../services/dme_supabase_service.dart';
 import 'dme_complaint_detail_page.dart';
 
 const Color _primary = Color(0xFF005BAC);
@@ -32,26 +31,12 @@ class _DmeComplaintsManagementPageState
 
   String? _selectedStatus;
   String? _currentUserId;
-  int? _managerBranchId;
+  String? _managerBranchName;
 
   @override
   void initState() {
     super.initState();
-    _initSupabaseAndLoad();
-  }
-
-  Future<void> _initSupabaseAndLoad() async {
-    try {
-      // Initialize Supabase before loading complaints
-      await DmeSupabaseService.instance.ensureInitialized();
-      await _load();
-    } catch (e) {
-      if (mounted) {
-        setState(() => _loading = false);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Init error: $e')));
-      }
-    }
+    _load();
   }
 
   Future<void> _load() async {
@@ -61,24 +46,33 @@ class _DmeComplaintsManagementPageState
       await _cache.ensureLoaded();
       _currentUserId = FirebaseAuth.instance.currentUser?.uid;
       final role = _cache.role;
+      final uid = _cache.uid;
 
-      // Load complaints based on role
+      // Fetch only relevant complaints based on role
       List<DmeComplaint> complaints = [];
-      if (role == 'manager' && _currentUserId != null) {
-        // Managers should only see complaints from their branch
-        try {
-          final dmeUser = await DmeSupabaseService.instance.getCurrentUser(_currentUserId!);
-          if (dmeUser != null) {
-            _managerBranchId = dmeUser.branchId;
-            complaints = await _svc.getComplaintsForBranch(branchId: dmeUser.branchId);
+      if (role == 'manager') {
+        // Managers: fetch only their branch's complaints
+        _managerBranchName = _cache.branch;
+        debugPrint('[Complaints Management] Manager branch: $_managerBranchName');
+        
+        if (_managerBranchName != null) {
+          // Get branch ID and fetch complaints for that branch at DB level
+          final branchId = await _svc.getBranchIdByName(_managerBranchName!);
+          if (branchId != null) {
+            complaints = await _svc.getComplaintsForBranch(branchId: branchId);
+            debugPrint('[Complaints Management] Manager: ${complaints.length} complaints for branch "$_managerBranchName" (ID: $branchId)');
+          } else {
+            debugPrint('[Complaints Management] Manager: Branch ID not found for "$_managerBranchName"');
           }
-        } catch (e) {
-          debugPrint('[Complaints Management] Error getting manager branch: $e');
-          complaints = [];
         }
+      } else if ((role == 'sales' || role == 'asst_manager') && uid != null && uid.isNotEmpty) {
+        // Sales/Asst Manager: fetch only assigned to them
+        complaints = await _svc.getAssignedComplaints(userId: uid);
+        debugPrint('[Complaints Management] $role $uid: ${complaints.length} complaints');
       } else {
-        // Admin, asst_manager, and sales see all complaints (will be filtered by _applyFilter)
+        // Admin: fetch all complaints
         complaints = await _svc.getAllComplaints();
+        debugPrint('[Complaints Management] Admin: ${complaints.length} complaints');
       }
 
       // Pre-fetch usernames for all assigned_to users to avoid multiple queries
@@ -109,22 +103,9 @@ class _DmeComplaintsManagementPageState
   }
 
   void _applyFilter() {
-    final role = _cache.role;
-    final uid = _cache.uid;
     List<DmeComplaint> complaints = _all;
     
-    // Apply role-based filtering
-    if (role == 'manager') {
-      // Managers see only complaints from their branch (already filtered in _load, but apply as safety)
-      if (_managerBranchId != null) {
-        complaints = complaints.where((c) => c.branchId == _managerBranchId).toList();
-      }
-    } else if (role == 'sales' || role == 'asst_manager') {
-      // Sales and asst_manager see only complaints assigned to them
-      complaints = complaints.where((c) => c.assignedToId == uid).toList();
-    }
-    
-    // Apply status filtering
+    // Apply status filtering only (role-based filtering already done in _load)
     if (_selectedStatus == null || _selectedStatus == 'All') {
       _filtered = complaints;
     } else {
@@ -145,16 +126,6 @@ class _DmeComplaintsManagementPageState
         ),
       ),
     );
-  }
-
-  /// Get username for a user ID, with caching
-  Future<String?> _getUsername(String userId) async {
-    if (_usernameCache.containsKey(userId)) {
-      return _usernameCache[userId];
-    }
-    final username = await _svc.getUsernameById(userId);
-    _usernameCache[userId] = username;
-    return username;
   }
 
   // ─── BUILD ────────────────────────────────────────────────────────────────
@@ -216,12 +187,13 @@ class _DmeComplaintsManagementPageState
         scrollDirection: Axis.horizontal,
         child: Row(
           children: statuses.map((s) {
+            // ignore: unnecessary_cast
             final val = s['value'] as String?;
             final isSelected = _selectedStatus == val;
             return Padding(
               padding: const EdgeInsets.only(right: 6),
               child: FilterChip(
-                label: Text(s['label'] as String),
+                label: Text(s['label'].toString()),
                 selected: isSelected,
                 onSelected: (_) {
                   setState(() {

@@ -711,6 +711,7 @@ class DmeSupabaseService {
     int? categoryId,
     int? customerTypeId,
     String? salesman,
+    int? branchId,
   }) async {
     await ensureInitialized();
     final map = <String, dynamic>{
@@ -725,6 +726,7 @@ class DmeSupabaseService {
     if (categoryId != null) map['category_id'] = categoryId;
     if (customerTypeId != null) map['customer_type_id'] = customerTypeId;
     if (salesman != null) map['salesman'] = salesman;
+    if (branchId != null) map['branch_id'] = branchId;
 
     try {
       await _client.from('dme_customers').update(map).eq('id', customerId);
@@ -1051,8 +1053,8 @@ class DmeSupabaseService {
         .eq('customer_id', customerId)
         .maybeSingle();
 
-    final reminderDate =
-        DateTime(purchaseDate.year, purchaseDate.month + 1, purchaseDate.day);
+    // Calculate reminder date as 30 days after purchase date
+    final reminderDate = purchaseDate.add(const Duration(days: 30));
     final purchaseDateStr = purchaseDate.toIso8601String().split('T')[0];
     final reminderDateStr = reminderDate.toIso8601String().split('T')[0];
 

@@ -25,6 +25,8 @@ import '../Homepage/home_body.dart';
 import '../Misc/battery_optimization_helper.dart';
 import '../Navigation/user_cache_service.dart';
 import '../SME/sme_notification_service.dart';
+import '../Leads/leads_notification.dart';
+import '../DME/services/dme_complaint_service.dart';
 
 // Top-level function for compute to decode contacts JSON
 List<dynamic> decodeContactsJson(String json) {
@@ -60,6 +62,10 @@ class _HomePageState extends State<HomePage>
   String? _username;
   String? _branch;
 
+  int _transferredCount = 0;
+  int _otherCount = 0;
+  StreamSubscription? _notificationListener;
+
   @override
   void initState() {
     super.initState();
@@ -71,6 +77,8 @@ class _HomePageState extends State<HomePage>
           _username = _userCache.username;
           _branch = _userCache.branch;
         });
+        _listenForTransferredLeads();
+        _refreshOtherCount();
       }
     });
     _checkForUpdate();
@@ -147,17 +155,76 @@ class _HomePageState extends State<HomePage>
   void dispose() {
     _authSubscription?.cancel();
     _fcmTokenSubscription?.cancel();
-    if (_widgetClickSub != null) {
-      try {
-        _widgetClickSub?.cancel();
-      } catch (_) {
-        // No active stream to cancel — safe to ignore
-      }
-    }
+    _widgetClickSub?.cancel().catchError((_) {});
+    _notificationListener?.cancel();
     SmeNotificationService.instance.stopListening();
     routeObserver.unsubscribe(this);
     _swingController.dispose();
     super.dispose();
+  }
+
+  void _listenForTransferredLeads() {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    final branch = _userCache.branch ?? '';
+    if (currentUserId == null || branch.isEmpty) return;
+
+    _notificationListener?.cancel();
+    _notificationListener = FirebaseFirestore.instance
+        .collection('follow_ups')
+        .where('branch', isEqualTo: branch)
+        .where('created_by', isEqualTo: currentUserId)
+        .where('transferred_at', isNull: false)
+        .where('notification_seen', isEqualTo: false)
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        setState(() {
+          _transferredCount = snapshot.docs.length;
+        });
+      }
+    });
+  }
+
+  Future<void> _refreshOtherCount() async {
+    if (!mounted) return;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    int count = 0;
+
+    // SME / DME leads assigned to this user that are still In Progress
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('follow_ups')
+          .where('assigned_to', isEqualTo: uid)
+          .get();
+      count += snap.docs.where((doc) {
+        final source =
+            (doc.data()['source'] as String? ?? '').toLowerCase().trim();
+        final status = doc.data()['status'] as String? ?? '';
+        return (source == 'sme' || source == 'dme') && status == 'In Progress';
+      }).length;
+    } catch (_) {}
+
+    // Complaints assigned to this user that are still raised
+    try {
+      final complaints = await DmeComplaintService.instance
+          .getAssignedComplaints(userId: uid, status: 'raised');
+      count += complaints.length;
+    } catch (_) {}
+
+    if (mounted) setState(() => _otherCount = count);
+  }
+
+  void _openNotifications() {
+    final branch = _userCache.branch ?? '';
+    if (branch.isEmpty) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LeadsNotificationPage(userBranch: branch),
+      ),
+    );
   }
 
   void _handleWidgetDeepLink(Uri? uri) {
@@ -218,12 +285,16 @@ class _HomePageState extends State<HomePage>
   }
 
   @override
-  void didPopNext() => _checkTodoWarning();
+  void didPopNext() {
+    _checkTodoWarning();
+    _refreshOtherCount();
+  }
 
   @override
   void didPush() {
     _fetchAndCacheContacts();
     _checkTodoWarning();
+    _refreshOtherCount();
   }
 
   // ==================== Helper Methods ====================
@@ -525,6 +596,11 @@ class _HomePageState extends State<HomePage>
           children: [
             HomeBackground(isDark: isDark),
             HomeMenuButton(isDark: isDark),
+            HomeNotificationButton(
+              isDark: isDark,
+              count: _transferredCount + _otherCount,
+              onTap: _openNotifications,
+            ),
             if (_showTodoWarning)
               TodoWarningBanner(onTap: _handleTodoWarningTap),
             Center(

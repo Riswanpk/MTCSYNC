@@ -8,7 +8,6 @@ import 'leadsform.dart';
 import 'leads_widgets.dart';
 import 'customer_list.dart'; 
 import '../Navigation/user_cache_service.dart';
-import 'leads_notification.dart';
 
 class LeadsPage extends StatefulWidget {
   final String branch;
@@ -29,10 +28,6 @@ class _LeadsPageState extends State<LeadsPage> {
   List<Map<String, dynamic>> availableUsers = []; // <-- NEW: list of users for dropdown
   final ValueNotifier<bool> _isHovering = ValueNotifier(false);
   
-  // --- NEW: Notification tracking ---
-  int _transferredLeadsCount = 0;
-  StreamSubscription? _notificationListener;
-
   final List<String> statusOptions = [
     'All',
     'In Progress',
@@ -75,12 +70,10 @@ class _LeadsPageState extends State<LeadsPage> {
       _currentUserData = Future.value(null);
     }
     _initialize();
-    _listenForTransferredLeads();
   }
 
   @override
   void dispose() {
-    _notificationListener?.cancel();
     super.dispose();
   }
 
@@ -367,29 +360,6 @@ class _LeadsPageState extends State<LeadsPage> {
     }
   }
 
-  // --- NEW: Listen for transferred leads ---
-  Future<void> _listenForTransferredLeads() async {
-    final userData = await _currentUserData;
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    final branch = userData?['branch'] ?? '';
-
-    if (currentUserId == null || branch.isEmpty) return;
-
-    _notificationListener = FirebaseFirestore.instance
-        .collection('follow_ups')
-        .where('branch', isEqualTo: branch)
-        .where('created_by', isEqualTo: currentUserId)
-        .where('transferred_at', isNull: false)
-        .where('notification_seen', isEqualTo: false)
-        .snapshots()
-        .listen((snapshot) {
-      if (mounted) {
-        setState(() {
-          _transferredLeadsCount = snapshot.docs.length;
-        });
-      }
-    });
-  }
   Widget build(BuildContext context) {
     return FutureBuilder<Map<String, dynamic>?>(
       future: _currentUserData,
@@ -442,52 +412,6 @@ class _LeadsPageState extends State<LeadsPage> {
                     }
                   });
                 },
-              ),
-              // --- NEW: Notification Icon with Badge ---
-              Stack(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.notifications),
-                    tooltip: 'Notifications',
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => LeadsNotificationPage(
-                            userBranch: widget.branch,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  if (_transferredLeadsCount > 0)
-                    Positioned(
-                      right: 8,
-                      top: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        constraints: const BoxConstraints(
-                          minWidth: 18,
-                          minHeight: 18,
-                        ),
-                        child: Text(
-                          _transferredLeadsCount > 99
-                              ? '99+'
-                              : '$_transferredLeadsCount',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                ],
               ),
               Builder(
                 builder: (context) => IconButton(

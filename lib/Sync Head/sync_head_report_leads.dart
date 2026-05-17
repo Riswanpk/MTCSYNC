@@ -25,8 +25,9 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
   DateTimeRange? _selectedRange;
   bool _branchesLoading = true;
   bool _isGenerating = false;
-  bool _detailedReport = false;
+  String _reportType = 'summary'; // 'summary', 'detailed', 'quick_close', 'postponed'
   String _statusFilter = 'All'; // Filter: 'All', 'In Progress', 'Sold or Cancelled'
+  Set<String> _selectedSources = {'All'}; // 'All', 'DME', 'SME', 'CC', 'SALES'
 
   @override
   void initState() {
@@ -87,6 +88,47 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
     setState(() => _isGenerating = true);
     // Capture messenger so snackbars work even if user navigates away
     final messenger = ScaffoldMessenger.of(context);
+    // Capture filter snapshots so they're stable across async gaps
+    final selectedSources = Set<String>.from(_selectedSources);
+    final reportType = _reportType;
+
+    // Filters a list of lead docs to only those matching the selected sources
+    List<DocumentSnapshot> filterBySource(List<DocumentSnapshot> docs) {
+      if (selectedSources.contains('All')) return docs;
+      return docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>?;
+        final src = (data?['source'] ?? '').toString().toUpperCase();
+        if (selectedSources.contains('SALES') && !['SME', 'DME', 'CC'].contains(src)) return true;
+        return selectedSources.contains(src);
+      }).toList();
+    }
+
+    // Returns the leads to display based on the selected report type
+    List<dynamic> filterLeadsByReportType(
+      List<dynamic> inProgress,
+      List<dynamic> sale,
+      List<dynamic> cancelled,
+    ) {
+      if (reportType == 'quick_close') {
+        return sale.where((doc) {
+          final d = (doc as QueryDocumentSnapshot).data() as Map<String, dynamic>;
+          final createdAt = d['created_at'];
+          final completedAt = d['completed_at'];
+          final src = (d['source'] ?? '').toString().toUpperCase();
+          return createdAt is Timestamp &&
+              completedAt is Timestamp &&
+              completedAt.toDate().difference(createdAt.toDate()).inDays.abs() <= 2 &&
+              !['CC', 'SME', 'DME'].contains(src);
+        }).toList();
+      } else if (reportType == 'postponed') {
+        return inProgress.where((doc) {
+          final d = (doc as QueryDocumentSnapshot).data() as Map<String, dynamic>;
+          return d['reminder_date_changed'] == true;
+        }).toList();
+      } else {
+        return [...inProgress, ...sale, ...cancelled];
+      }
+    }
 
     try {
       final rangeStart = _selectedRange!.start;
@@ -185,9 +227,9 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           _buildQuery('assigned_to', 'Cancelled').get(),
         ]);
 
-        inProgressLeads = mergeDocs(results[0] as QuerySnapshot, results[1] as QuerySnapshot);
-        saleLeads       = mergeDocs(results[2] as QuerySnapshot, results[3] as QuerySnapshot);
-        cancelledLeads  = mergeDocs(results[4] as QuerySnapshot, results[5] as QuerySnapshot);
+        inProgressLeads = filterBySource(mergeDocs(results[0] as QuerySnapshot, results[1] as QuerySnapshot));
+        saleLeads       = filterBySource(mergeDocs(results[2] as QuerySnapshot, results[3] as QuerySnapshot));
+        cancelledLeads  = filterBySource(mergeDocs(results[4] as QuerySnapshot, results[5] as QuerySnapshot));
         inProgressCount = inProgressLeads.length;
         saleCount       = saleLeads.length;
         cancelledCount  = cancelledLeads.length;
@@ -248,7 +290,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           titleRange.cellStyle.fontColor = '#FFFFFF';
           sheet.getRangeByName('A1').rowHeight = 30;
 
-          if (!_detailedReport) {
+          if (reportType == 'summary') {
             // Header row — unique style name per sheet to avoid collision
             const headers = ['User', 'Role', 'Created', 'In Progress', 'Sale', 'Cancelled'];
             final headerStyle = workbook.styles.add('header_$sheetIdx');
@@ -440,7 +482,8 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
               final inProgressLeadsDocs = userStat['inProgressLeads'] as List<dynamic>;
               final saleLeadsDocs = userStat['saleLeads'] as List<dynamic>;
               final cancelledLeadsDocs = userStat['cancelledLeads'] as List<dynamic>;
-              if (inProgressLeadsDocs.isEmpty && saleLeadsDocs.isEmpty && cancelledLeadsDocs.isEmpty) continue;
+              final displayLeads = filterLeadsByReportType(inProgressLeadsDocs, saleLeadsDocs, cancelledLeadsDocs);
+              if (displayLeads.isEmpty) continue;
 
               final userHdrRange = sheet.getRangeByIndex(detailRow, 1, detailRow, 7);
               userHdrRange.merge();
@@ -457,7 +500,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
               detailRow++;
 
               int leadIdx = 0;
-              for (final doc in [...inProgressLeadsDocs, ...saleLeadsDocs, ...cancelledLeadsDocs]) {
+              for (final doc in displayLeads) {
                 final d = (doc as QueryDocumentSnapshot).data() as Map<String, dynamic>;
                 final createdAt = d['created_at'];
                 final completedAt = d['completed_at'];
@@ -529,18 +572,20 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
 
         final directory = await getTemporaryDirectory();
         final statusFilterFileName = _statusFilter == 'All' ? 'All' : _statusFilter.replaceAll(' ', '_');
+        final reportTypeSuffix = reportType == 'summary' ? '' : '_$reportType';
         final String fileName =
-            '${directory.path}/Leads_Report_AllBranches_${statusFilterFileName}_${DateFormat('yyyyMMdd').format(rangeStart)}_${DateFormat('yyyyMMdd').format(rangeEnd)}.xlsx';
+            '${directory.path}/Leads_Report_AllBranches_$statusFilterFileName${reportTypeSuffix}_${DateFormat('yyyyMMdd').format(rangeStart)}_${DateFormat('yyyyMMdd').format(rangeEnd)}.xlsx';
         final File file = File(fileName);
         await file.writeAsBytes(bytes, flush: true);
 
         // --- Send email with attachment ---
         final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
         final allBranchesEmailText = _statusFilter == 'All' ? '' : ' — $_statusFilter';
+        final reportTypeLabel = reportType == 'summary' ? '' : ' [${_reportTypeLabel(reportType)}]';
         final message = Message()
           ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
           ..recipients.addAll(['crmmalabar@gmail.com','performancemtc@gmail.com'])
-          ..subject = 'Leads Report — All Branches$allBranchesEmailText'
+          ..subject = 'Leads Report — All Branches$allBranchesEmailText$reportTypeLabel'
           ..text = 'Please find attached the leads report for all branches.'
           ..attachments = [FileAttachment(file)];
 
@@ -575,7 +620,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
       titleRange.cellStyle.fontColor = '#FFFFFF';
       sheet.getRangeByName('A1').rowHeight = 30;
 
-      if (!_detailedReport) {
+      if (reportType == 'summary') {
         // Header row
         const headers = ['User', 'Role', 'Created', 'In Progress', 'Sale', 'Cancelled'];
         final headerStyle = workbook.styles.add('header');
@@ -767,7 +812,8 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           final inProgressLeadsDocs = userStat['inProgressLeads'] as List<dynamic>;
           final saleLeadsDocs = userStat['saleLeads'] as List<dynamic>;
           final cancelledLeadsDocs = userStat['cancelledLeads'] as List<dynamic>;
-          if (inProgressLeadsDocs.isEmpty && saleLeadsDocs.isEmpty && cancelledLeadsDocs.isEmpty) continue;
+          final displayLeads = filterLeadsByReportType(inProgressLeadsDocs, saleLeadsDocs, cancelledLeadsDocs);
+          if (displayLeads.isEmpty) continue;
 
           final userHdrRange = sheet.getRangeByIndex(detailRow, 1, detailRow, 7);
           userHdrRange.merge();
@@ -784,7 +830,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           detailRow++;
 
           int leadIdx = 0;
-          for (final doc in [...inProgressLeadsDocs, ...saleLeadsDocs, ...cancelledLeadsDocs]) {
+          for (final doc in displayLeads) {
             final d = (doc as QueryDocumentSnapshot).data() as Map<String, dynamic>;
             final createdAt = d['created_at'];
             final completedAt = d['completed_at'];
@@ -856,18 +902,20 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
 
       final directory = await getTemporaryDirectory();
       final statusFilterFileName = _statusFilter == 'All' ? 'All' : _statusFilter.replaceAll(' ', '_');
+      final reportTypeSuffix2 = reportType == 'summary' ? '' : '_$reportType';
       final String fileName =
-          '${directory.path}/Leads_Report_${_selectedBranch}_${statusFilterFileName}_${DateFormat('yyyyMMdd').format(rangeStart)}_${DateFormat('yyyyMMdd').format(rangeEnd)}.xlsx';
+          '${directory.path}/Leads_Report_${_selectedBranch}_$statusFilterFileName${reportTypeSuffix2}_${DateFormat('yyyyMMdd').format(rangeStart)}_${DateFormat('yyyyMMdd').format(rangeEnd)}.xlsx';
       final File file = File(fileName);
       await file.writeAsBytes(bytes, flush: true);
 
       // --- Send email with attachment ---
       final singleBranchEmailText = _statusFilter == 'All' ? '' : ' — $_statusFilter';
+      final reportTypeLabel2 = reportType == 'summary' ? '' : ' [${_reportTypeLabel(reportType)}]';
       final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
       final message = Message()
         ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
         ..recipients.addAll(['crmmalabar@gmail.com','performancemtc@gmail.com'])
-        ..subject = 'Leads Report — $_selectedBranch$singleBranchEmailText'
+        ..subject = 'Leads Report — $_selectedBranch$singleBranchEmailText$reportTypeLabel2'
         ..text = 'Please find attached the leads report for $_selectedBranch.'
         ..attachments = [FileAttachment(file)];
 
@@ -1051,21 +1099,13 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
             ),
 
             const SizedBox(height: 16),
-            // ── Detailed Report checkbox ──────────────────────────────
-            Row(
-              children: [
-                Checkbox(
-                  value: _detailedReport,
-                  activeColor: _primaryBlue,
-                  onChanged: (val) =>
-                      setState(() => _detailedReport = val ?? false),
-                ),
-                const Text(
-                  'Detailed Report',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
+            // ── Source filter ─────────────────────────────────────────
+            _buildSourceFilter(isDark),
+
+            const SizedBox(height: 4),
+            // ── Report type selector ──────────────────────────────────
+            _buildReportTypeSelector(isDark),
+
             const SizedBox(height: 16),
 
             // ── Generate button ────────────────────────────────────────
@@ -1110,6 +1150,127 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           ],
         ),
       ),
+    );
+  }
+
+  String _reportTypeLabel(String type) {
+    switch (type) {
+      case 'detailed':    return 'Detailed';
+      case 'quick_close': return 'Quick Close';
+      case 'postponed':   return 'Postponed';
+      default:            return 'Summary';
+    }
+  }
+
+  Widget _buildReportTypeSelector(bool isDark) {
+    const types = [
+      ('summary',     'Summary',     Icons.table_chart_outlined),
+      ('detailed',    'Detailed',    Icons.list_alt_rounded),
+      ('quick_close', 'Quick Close', Icons.flash_on_rounded),
+      ('postponed',   'Postponed',   Icons.schedule_rounded),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Report Type',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white60 : Colors.black54,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: types.map((t) {
+            final value = t.$1;
+            final label = t.$2;
+            final icon  = t.$3;
+            final isSelected = _reportType == value;
+            return ChoiceChip(
+              avatar: Icon(icon, size: 15,
+                  color: isSelected ? _primaryBlue : (isDark ? Colors.white54 : Colors.black45)),
+              label: Text(label),
+              selected: isSelected,
+              onSelected: (_) => setState(() => _reportType = value),
+              selectedColor: _primaryBlue.withValues(alpha: 0.15),
+              checkmarkColor: _primaryBlue,
+              labelStyle: TextStyle(
+                color: isSelected ? _primaryBlue : (isDark ? Colors.white70 : Colors.black87),
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                fontSize: 13,
+              ),
+              side: BorderSide(
+                color: isSelected ? _primaryBlue : (isDark ? Colors.white24 : Colors.black26),
+              ),
+              backgroundColor: isDark ? const Color(0xFF162236) : const Color(0xFFF0F5FF),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              showCheckmark: false,
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSourceFilter(bool isDark) {
+    const allSources = ['All', 'DME', 'SME', 'CC', 'SALES'];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Filter by Source',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white60 : Colors.black54,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: allSources.map((source) {
+            final isSelected = _selectedSources.contains(source);
+            return FilterChip(
+              label: Text(source),
+              selected: isSelected,
+              onSelected: (selected) {
+                setState(() {
+                  if (source == 'All') {
+                    _selectedSources = {'All'};
+                  } else {
+                    _selectedSources.remove('All');
+                    if (selected) {
+                      _selectedSources.add(source);
+                    } else {
+                      _selectedSources.remove(source);
+                      if (_selectedSources.isEmpty) _selectedSources = {'All'};
+                    }
+                  }
+                });
+              },
+              selectedColor: _primaryBlue.withValues(alpha: 0.15),
+              checkmarkColor: _primaryBlue,
+              labelStyle: TextStyle(
+                color: isSelected ? _primaryBlue : (isDark ? Colors.white70 : Colors.black87),
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                fontSize: 13,
+              ),
+              side: BorderSide(
+                color: isSelected ? _primaryBlue : (isDark ? Colors.white24 : Colors.black26),
+              ),
+              backgroundColor: isDark ? const Color(0xFF162236) : const Color(0xFFF0F5FF),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              showCheckmark: false,
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 

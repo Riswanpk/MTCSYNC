@@ -171,6 +171,57 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
     }
   }
 
+  Future<void> _reopenComplaint() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Re-open Complaint'),
+        content: Text(
+            'Re-open this complaint for ${_complaint.customerName}? It will be sent back to the assigned user to add more remarks.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Re-open',
+                style: TextStyle(color: Colors.orange)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _submitting = true);
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) throw Exception('Not authenticated');
+      await _svc.updateComplaintStatus(
+        complaintId: _complaint.id!,
+        newStatus: 'raised',
+        userId: uid,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Complaint re-opened successfully'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        widget.onUpdate();
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
   // ─── BUILD ───────────────────────────────────────────────────────────────────
 
   @override
@@ -282,11 +333,26 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
                 ),
                 if (isResolved && !isClosed) ...[
                   const SizedBox(height: 16),
-                  _buildActionButton(
-                    label: 'Close Complaint',
-                    icon: Icons.check_circle_outline,
-                    color: Colors.green,
-                    onPressed: _submitting ? null : _closeComplaint,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildActionButton(
+                          label: 'Re-open',
+                          icon: Icons.refresh,
+                          color: Colors.orange,
+                          onPressed: _submitting ? null : _reopenComplaint,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildActionButton(
+                          label: 'Close Complaint',
+                          icon: Icons.check_circle_outline,
+                          color: Colors.green,
+                          onPressed: _submitting ? null : _closeComplaint,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
                 if (isClosed) ...[

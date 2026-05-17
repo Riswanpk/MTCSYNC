@@ -129,6 +129,8 @@ class _TransferLeadDialogState extends State<TransferLeadDialog> {
       // Prepare update data
       final updateData = <String, dynamic>{
         'created_by': _selectedUserId,
+        'assigned_to': _selectedUserId,
+        'assigned_to_name': _selectedUserName,
         'branch': _selectedBranch,
         'transferred_at': FieldValue.serverTimestamp(),
         'transferred_by': currentUser.uid,

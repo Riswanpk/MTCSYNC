@@ -99,13 +99,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   void dispose() {
-    if (_widgetClickSub != null) {
-      try {
-        _widgetClickSub?.cancel();
-      } catch (_) {
-        // No active stream to cancel — safe to ignore
-      }
-    }
+    _widgetClickSub?.cancel().catchError((_) {});
     super.dispose();
   }
 
