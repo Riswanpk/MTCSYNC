@@ -210,6 +210,28 @@ class LeadCard extends StatelessWidget {
       // Keep original reminder string if parsing fails
     }
 
+    // Compute source display info
+    final srcLower = (source ?? '').toLowerCase();
+    final String displaySource;
+    final Color sourceColor;
+    switch (srcLower) {
+      case 'sme':
+        displaySource = 'SME';
+        sourceColor = Colors.teal;
+        break;
+      case 'dme':
+        displaySource = 'DME';
+        sourceColor = Colors.orange;
+        break;
+      case 'cc':
+        displaySource = 'CC';
+        sourceColor = Colors.indigo;
+        break;
+      default:
+        displaySource = 'Sales';
+        sourceColor = Colors.blueGrey;
+    }
+
     return Slidable(
       key: ValueKey(docId),
       startActionPane: ActionPane(
@@ -347,28 +369,19 @@ class LeadCard extends StatelessWidget {
                       style: theme.textTheme.bodySmall?.copyWith(fontSize: 13, color: theme.hintColor),
                     ),
                     const SizedBox(height: 2),
-                    if (source == 'sme' || source == 'SME')
-                      Container(
-                        margin: const EdgeInsets.only(top: 2, bottom: 2),
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.teal.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text(
-                          'Source: SME',
-                          style: TextStyle(fontSize: 11, color: Colors.teal, fontWeight: FontWeight.w600),
-                        ),
-                      )
-                    else
-                      Text(
-                        'Created by: $createdBy',
-                        style: theme.textTheme.bodySmall?.copyWith(fontSize: 12, color: Colors.grey),
-                      ),
+                    Text(
+                      'Created by: $createdBy',
+                      style: theme.textTheme.bodySmall?.copyWith(fontSize: 12, color: Colors.grey),
+                    ),
                     const SizedBox(height: 2),
                     Text(
                       'Reminder: $formattedReminder',
                       style: theme.textTheme.bodySmall?.copyWith(fontSize: 12, color: Colors.blueGrey),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Source: $displaySource',
+                      style: theme.textTheme.bodySmall?.copyWith(fontSize: 11, color: sourceColor, fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),

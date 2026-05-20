@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/dme_complaint.dart';
 import '../services/dme_complaint_service.dart';
+import '../services/dme_supabase_service.dart';
 import '../../Navigation/user_cache_service.dart';
 
 class DmeComplaintsViewPage extends StatefulWidget {
@@ -25,7 +26,21 @@ class _DmeComplaintsViewPageState extends State<DmeComplaintsViewPage> {
   @override
   void initState() {
     super.initState();
-    _loadUserInfo();
+    _initSupabaseAndLoadUserInfo();
+  }
+
+  Future<void> _initSupabaseAndLoadUserInfo() async {
+    try {
+      // Initialize Supabase before loading complaints
+      await DmeSupabaseService.instance.ensureInitialized();
+      await _loadUserInfo();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Init error: $e')));
+      }
+    }
   }
 
   Future<void> _loadUserInfo() async {

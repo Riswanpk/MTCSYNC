@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/dme_complaint.dart';
 import '../services/dme_complaint_service.dart';
+import '../services/dme_supabase_service.dart';
 
 const Color primaryColor = Color(0xFF005BAC);
 
@@ -21,11 +23,26 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
   List<DmeComplaint> _filteredComplaints = [];
   bool _loading = true;
   String? _selectedStatus;
+  String? _selectedBranch;
 
   @override
   void initState() {
     super.initState();
-    _loadComplaints();
+    _initSupabaseAndLoad();
+  }
+
+  Future<void> _initSupabaseAndLoad() async {
+    try {
+      // Initialize Supabase before loading complaints
+      await DmeSupabaseService.instance.ensureInitialized();
+      await _loadComplaints();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Init error: $e')));
+      }
+    }
   }
 
   Future<void> _loadComplaints() async {
@@ -54,11 +71,14 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
   }
 
   void _applyFilters() {
-    if (_selectedStatus == null || _selectedStatus == 'All') {
-      _filteredComplaints = _complaints;
-    } else {
-      _filteredComplaints = _complaints.where((c) => c.status == _selectedStatus).toList();
+    List<DmeComplaint> result = _complaints;
+    if (_selectedStatus != null && _selectedStatus != 'All') {
+      result = result.where((c) => c.status == _selectedStatus).toList();
     }
+    if (_selectedBranch != null && _selectedBranch != 'All') {
+      result = result.where((c) => c.branchName == _selectedBranch).toList();
+    }
+    _filteredComplaints = result;
   }
 
   void _onStatusChanged(String? status) {
@@ -155,7 +175,6 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
 
                       setState(() => isSubmitting = true);
 
-                      final messenger = ScaffoldMessenger.of(context);
                       final nav = Navigator.of(ctx);
                       try {
                         final uid = _auth.currentUser?.uid;
@@ -168,23 +187,19 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
 
                           if (mounted) {
                             nav.pop();
-                            messenger.showSnackBar(
-                              const SnackBar(
-                                content: Text('Remarks added successfully'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                            _loadComplaints();
+                            await _loadComplaints();
+                            // Now show the call & resolution dialog
+                            if (mounted) _showCallResolutionDialog(complaint);
                           }
                         }
                       } catch (e) {
-                        messenger.showSnackBar(
-                          SnackBar(content: Text('Error: $e')),
-                        );
-                      } finally {
-                        if (mounted) {
-                          setState(() => isSubmitting = false);
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(content: Text('Error: $e')),
+                          );
                         }
+                      } finally {
+                        if (mounted) setState(() => isSubmitting = false);
                       }
                     },
               child: isSubmitting
@@ -200,6 +215,209 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                       'Submit Remarks',
                       style: TextStyle(color: Colors.white),
                     ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCallResolutionDialog(DmeComplaint complaint) {
+    bool isSubmitting = false;
+    bool hasCalledCustomer = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.phone_in_talk, color: primaryColor, size: 22),
+              SizedBox(width: 8),
+              Text('Call Customer'),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Customer info card
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.blue[200]!),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        complaint.customerName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: Color(0xFF2C3E50),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.phone, size: 14, color: Colors.blue[600]),
+                          const SizedBox(width: 6),
+                          Text(
+                            complaint.customerPhone,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.blue[700],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Call button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green[600],
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onPressed: () async {
+                      final uri = Uri(scheme: 'tel', path: complaint.customerPhone);
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri);
+                        setDialogState(() => hasCalledCustomer = true);
+                      }
+                    },
+                    icon: const Icon(Icons.phone, color: Colors.white),
+                    label: const Text(
+                      'Call Customer',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+                const Divider(),
+                const SizedBox(height: 12),
+
+                Text(
+                  'After calling, mark the resolution:',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[700],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Resolved / Not Resolved buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: isSubmitting
+                            ? null
+                            : () {
+                                Navigator.pop(ctx);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Complaint marked as resolved ✓'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                                _loadComplaints();
+                              },
+                        icon: const Icon(Icons.check_circle, color: Colors.white, size: 18),
+                        label: const Text(
+                          'Resolved',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red[600],
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: isSubmitting
+                            ? null
+                            : () async {
+                                setDialogState(() => isSubmitting = true);
+                                try {
+                                  await _svc.returnToCreator(
+                                    complaintId: complaint.id!,
+                                    creatorId: complaint.createdById,
+                                  );
+                                  if (ctx.mounted) Navigator.pop(ctx);
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Complaint returned to sales user for follow-up'),
+                                        backgroundColor: Colors.orange,
+                                      ),
+                                    );
+                                    _loadComplaints();
+                                  }
+                                } catch (e) {
+                                  if (ctx.mounted) {
+                                    ScaffoldMessenger.of(ctx).showSnackBar(
+                                      SnackBar(content: Text('Error: $e')),
+                                    );
+                                  }
+                                  setDialogState(() => isSubmitting = false);
+                                }
+                              },
+                        icon: isSubmitting
+                            ? const SizedBox(
+                                height: 16,
+                                width: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation(Colors.white),
+                                ),
+                              )
+                            : const Icon(Icons.replay, color: Colors.white, size: 18),
+                        label: const Text(
+                          'Not Resolved',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+              child: const Text('Skip for Now'),
             ),
           ],
         ),
@@ -256,6 +474,40 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                             ],
                           ),
                         ),
+                        // Branch filter (shown only when there are multiple branches)
+                        Builder(builder: (context) {
+                          final branches = _complaints
+                              .map((c) => c.branchName)
+                              .toSet()
+                              .toList()
+                            ..sort();
+                          if (branches.length <= 1) return const SizedBox.shrink();
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 12),
+                              const Text(
+                                'Branch',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF2C3E50),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  children: [
+                                    _buildBranchFilterChip('All', null),
+                                    ...branches.map(
+                                        (b) => _buildBranchFilterChip(b, b)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+                        }),
                       ],
                     ),
                   ),
@@ -317,10 +569,38 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
     );
   }
 
+  Widget _buildBranchFilterChip(String label, String? value) {
+    final isSelected = _selectedBranch == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: FilterChip(
+        label: Text(label),
+        selected: isSelected,
+        onSelected: (_) {
+          setState(() {
+            _selectedBranch = value;
+            _applyFilters();
+          });
+        },
+        backgroundColor: Colors.white,
+        selectedColor: Colors.teal.withValues(alpha: 0.2),
+        labelStyle: TextStyle(
+          color: isSelected ? Colors.teal : Colors.grey[600],
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+        ),
+        side: BorderSide(
+          color: isSelected ? Colors.teal : Colors.grey[300]!,
+        ),
+      ),
+    );
+  }
+
   Widget _buildComplaintCard(DmeComplaint complaint) {
     final dateFormat = DateFormat('dd MMM yyyy, hh:mm a');
     final needsRemarks = complaint.status == 'raised';
     final hasRemarks = complaint.remarks != null && complaint.remarks!.isNotEmpty;
+    final awaitingCall = complaint.status == 'case_resolved';
+    final isClosed = complaint.status == 'verified_closed';
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -504,26 +784,46 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                 ),
               ],
 
-              // Action Button
+              // Action Buttons
               const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: needsRemarks ? const Color(0xFFFF6B6B) : primaryColor,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+              if (isClosed) ...[]
+              else if (awaitingCall) ...[  
+                // Show only: Call & Resolve (remarks are disabled when status is resolved)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange[700],
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () => _showCallResolutionDialog(complaint),
+                    icon: const Icon(Icons.phone_in_talk, color: Colors.white),
+                    label: const Text(
+                      'Call & Resolve',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
                     ),
                   ),
-                  onPressed: () => _showRemarksDialog(complaint),
-                  icon: const Icon(Icons.edit, color: Colors.white),
-                  label: Text(
-                    needsRemarks ? 'Add Remarks' : 'Edit Remarks',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                ),
+              ] else ...[  
+                // Needs remarks (raised status)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF6B6B),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () => _showRemarksDialog(complaint),
+                    icon: const Icon(Icons.edit, color: Colors.white),
+                    label: const Text(
+                      'Add Remarks',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         ),

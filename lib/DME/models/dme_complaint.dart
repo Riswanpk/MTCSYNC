@@ -22,6 +22,7 @@ class DmeComplaint {
   final String? remarkedByUsername;
   final DateTime? remarkedAt;
   final bool hasNewRemarks;
+  final String? voiceFileUrl; // Optional voice file URL
 
   DmeComplaint({
     this.id,
@@ -47,6 +48,7 @@ class DmeComplaint {
     this.remarkedByUsername,
     this.remarkedAt,
     this.hasNewRemarks = false,
+    this.voiceFileUrl,
   });
 
   factory DmeComplaint.fromMap(Map<String, dynamic> map) {
@@ -84,6 +86,7 @@ class DmeComplaint {
           ? DateTime.tryParse(map['remarked_at'].toString())
           : null,
       hasNewRemarks: map['has_new_remarks'] as bool? ?? false,
+      voiceFileUrl: map['voice_file_url'] as String?,
     );
   }
 
@@ -144,6 +147,7 @@ class DmeComplaint {
     String? remarkedByUsername,
     DateTime? remarkedAt,
     bool? hasNewRemarks,
+    String? voiceFileUrl,
   }) {
     return DmeComplaint(
       id: id ?? this.id,
@@ -169,6 +173,7 @@ class DmeComplaint {
       remarkedByUsername: remarkedByUsername ?? this.remarkedByUsername,
       remarkedAt: remarkedAt ?? this.remarkedAt,
       hasNewRemarks: hasNewRemarks ?? this.hasNewRemarks,
+      voiceFileUrl: voiceFileUrl ?? this.voiceFileUrl,
     );
   }
 }

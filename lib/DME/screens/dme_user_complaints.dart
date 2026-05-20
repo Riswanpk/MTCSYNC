@@ -9,6 +9,7 @@ import '../services/dme_complaint_service.dart';
 import '../services/dme_supabase_service.dart';
 import 'dme_complaint_detail_page.dart';
 
+
 const Color _primary = Color(0xFF005BAC);
 
 /// Shows complaints raised by the currently logged-in DME user.
@@ -215,6 +216,77 @@ class _DmeUserComplaintsPageState extends State<DmeUserComplaintsPage> {
     );
   }
 
+  void _showDeleteConfirmation(DmeComplaint complaint) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Complaint?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Are you sure you want to delete this complaint?',
+              style: const TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                complaint.complaintText,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Customer: ${complaint.customerName}',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await _svc.deleteComplaint(complaintId: complaint.id!);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Complaint deleted successfully'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  _load();
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error deleting: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCard(DmeComplaint c) {
     final hasRemarks = c.remarks != null && c.remarks!.isNotEmpty;
     final statusColor = _statusColor(c.status);
@@ -224,10 +296,12 @@ class _DmeUserComplaintsPageState extends State<DmeUserComplaintsPage> {
       margin: const EdgeInsets.only(bottom: 10),
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => _openDetail(c),
-        child: Container(
+      child: GestureDetector(
+        onLongPress: () => _showDeleteConfirmation(c),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _openDetail(c),
+          child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border(left: BorderSide(color: statusColor, width: 4)),
@@ -292,6 +366,7 @@ class _DmeUserComplaintsPageState extends State<DmeUserComplaintsPage> {
                 ),
             ],
           ),
+        ),
         ),
       ),
     );
@@ -517,7 +592,7 @@ class _RaiseComplaintSheetState extends State<_RaiseComplaintSheet> {
     setState(() => _submitting = true);
     try {
       final branchId = _selectedCustomer!.branchId ?? 0;
-      await _svc.createComplaint(
+      final complaintId = await _svc.createComplaint(
         customerName: _selectedCustomer!.name,
         customerPhone: _selectedCustomer!.phone,
         branchId: branchId,
@@ -525,6 +600,9 @@ class _RaiseComplaintSheetState extends State<_RaiseComplaintSheet> {
         createdById: widget.dmeUser.id,
         assignedToId: _selectedAssignee!.id,
       );
+
+      // Complaint saved to Supabase and will appear in notification page
+      // No local notifications needed
 
       if (mounted) {
         Navigator.pop(context);

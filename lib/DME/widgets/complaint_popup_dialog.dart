@@ -141,7 +141,7 @@ class _ComplaintPopupDialogState extends State<ComplaintPopupDialog> {
     setState(() => _submitting = true);
 
     try {
-      await _svc.createComplaint(
+      final complaintId = await _svc.createComplaint(
         customerName: widget.reminder.customerName ?? 'Unknown',
         customerPhone: widget.reminder.customerPhone ?? '',
         branchId: widget.reminder.purchasedForBranchId,
@@ -149,6 +149,9 @@ class _ComplaintPopupDialogState extends State<ComplaintPopupDialog> {
         createdById: widget.dmeUser.id,
         assignedToId: _selectedUser!.id,
       );
+
+      // Complaint saved to Supabase and will appear in notification page
+      // No local notifications needed
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

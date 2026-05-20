@@ -4,7 +4,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:mtcsync/Misc/notification_permission_service.dart';
+import 'package:mtcsync/Navigation/user_cache_service.dart';
 import '../DME/services/dme_complaint_service.dart';
+import '../DME/services/dme_supabase_service.dart';
 import '../DME/screens/dme_complaints_management.dart';
 import 'presentfollowup.dart';
 
@@ -46,7 +48,20 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
   @override
   void initState() {
     super.initState();
-    _fetchAll();
+    _initSupabaseAndFetchAll();
+  }
+
+  Future<void> _initSupabaseAndFetchAll() async {
+    try {
+      // Initialize Supabase before fetching complaints
+      await DmeSupabaseService.instance.ensureInitialized();
+      await _fetchAll();
+    } catch (e) {
+      debugPrint('Error initializing Supabase for notifications: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   // ─── Data Fetching ────────────────────────────────────────────────────────
@@ -64,14 +79,16 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
     final uid = currentUser.uid;
     final items = <_NotifItem>[];
 
-    // 1. Transferred leads (unseen by original owner)
-    await _fetchTransferredLeads(uid, items);
-
-    // 2. SME / DME leads assigned to current user (still In Progress)
-    await _fetchAssignedLeads(uid, items);
-
-    // 3. Complaints assigned to current user and still raised
-    await _fetchAssignedComplaints(uid, items);
+    // Run all three fetches in parallel for better performance
+    try {
+      await Future.wait<void>([
+        _fetchTransferredLeads(uid, items),
+        _fetchAssignedLeads(uid, items),
+        _fetchAssignedComplaints(uid, items),
+      ]);
+    } catch (e) {
+      debugPrint('Error fetching notifications: $e');
+    }
 
     // Sort newest first
     items.sort((a, b) {
@@ -96,10 +113,21 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
           .where('branch', isEqualTo: widget.userBranch)
           .where('created_by', isEqualTo: uid)
           .where('transferred_at', isNull: false)
-          .where('notification_seen', isEqualTo: false)
           .orderBy('transferred_at', descending: true)
-          .limit(50)
+          .limit(30)  // Limit to prevent loading too many items
           .get();
+
+      // Batch-check which transferred leads have been seen by this user
+      final seenLeadIds = <String>{};
+      try {
+        final seenSnapshot = await FirebaseFirestore.instance
+            .collection('user_seen_leads')
+            .where('user_id', isEqualTo: uid)
+            .get();
+        seenLeadIds.addAll(
+          seenSnapshot.docs.map((d) => d.data()['lead_id'] as String? ?? '').where((id) => id.isNotEmpty),
+        );
+      } catch (_) {}
 
       // Batch-resolve transferredBy UIDs
       final uniqueUids = snapshot.docs
@@ -122,7 +150,11 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
         }
       }
 
+      // Add transferred leads that haven't been seen yet
       for (final doc in snapshot.docs) {
+        // Skip if already seen by this user
+        if (seenLeadIds.contains(doc.id)) continue;
+        
         final data = doc.data();
         final byUid = data['transferred_by'] as String? ?? '';
         final byName = uidToName[byUid] ?? 'Unknown';
@@ -145,7 +177,20 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
       final snapshot = await FirebaseFirestore.instance
           .collection('follow_ups')
           .where('assigned_to', isEqualTo: uid)
+          .limit(50)  // Limit to prevent loading too many items
           .get();
+
+      // Batch-check which assigned leads have been seen by this user
+      final seenLeadIds = <String>{};
+      try {
+        final seenSnapshot = await FirebaseFirestore.instance
+            .collection('user_seen_leads')
+            .where('user_id', isEqualTo: uid)
+            .get();
+        seenLeadIds.addAll(
+          seenSnapshot.docs.map((d) => d.data()['lead_id'] as String? ?? '').where((id) => id.isNotEmpty),
+        );
+      } catch (_) {}
 
       // Batch-resolve assignedBy UIDs
       final uniqueUids = snapshot.docs
@@ -166,6 +211,9 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
       }
 
       for (final doc in snapshot.docs) {
+        // Skip if already seen by this user
+        if (seenLeadIds.contains(doc.id)) continue;
+        
         final data = doc.data();
         final source =
             (data['source'] as String? ?? '').toLowerCase().trim();
@@ -173,6 +221,7 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
         if ((source != 'sme' && source != 'dme') || status != 'In Progress') {
           continue;
         }
+        
         final sourceLabel = source == 'sme' ? 'SME' : 'DME';
         final assignedByUid = data['assigned_by'] as String? ?? '';
         final assignedByName = assignerNames[assignedByUid] ?? 'Unknown';
@@ -194,9 +243,14 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
   Future<void> _fetchAssignedComplaints(
       String uid, List<_NotifItem> items) async {
     try {
-      final complaints = await DmeComplaintService.instance
+      // Fetch complaints assigned to current user (limit to 30 for performance)
+      final assignedComplaints = await DmeComplaintService.instance
           .getAssignedComplaints(userId: uid, status: 'raised');
-      for (final c in complaints) {
+      
+      // Limit to first 30 items to prevent slow loading
+      final limitedAssigned = assignedComplaints.take(30);
+      
+      for (final c in limitedAssigned) {
         final text = c.complaintText;
         final subtitle =
             text.length > 70 ? '${text.substring(0, 70)}...' : text;
@@ -208,6 +262,42 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
           time: c.createdAt,
         ));
       }
+
+      // If user is a manager, also fetch all branch complaints (limit to 20 to avoid slow load)
+      final userCache = UserCacheService.instance;
+      await userCache.ensureLoaded();
+      final userRole = userCache.role;
+      final userBranch = userCache.branch;
+
+      if ((userRole == 'manager' || userRole == 'asst_manager') && userBranch != null) {
+        // Get branch ID from branch name
+        final branchId = await DmeComplaintService.instance
+            .getBranchIdByName(userBranch);
+        
+        if (branchId != null) {
+          // Fetch all complaints for this branch (limit to 20 for performance)
+          final branchComplaints = await DmeComplaintService.instance
+              .getComplaintsForBranch(branchId: branchId, status: 'raised');
+          
+          final limitedBranch = branchComplaints.take(20);
+          
+          for (final c in limitedBranch) {
+            // Only add if not already in list (avoid duplicates)
+            if (!items.any((item) => item.id == c.id)) {
+              final text = c.complaintText;
+              final subtitle =
+                  text.length > 70 ? '${text.substring(0, 70)}...' : text;
+              items.add(_NotifItem(
+                type: _NotifType.complaint,
+                id: c.id ?? '',
+                title: c.customerName,
+                subtitle: subtitle,
+                time: c.createdAt,
+              ));
+            }
+          }
+        }
+      }
     } catch (e) {
       debugPrint('Error fetching complaints: $e');
     }
@@ -217,77 +307,103 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
 
   Future<void> _handleTap(_NotifItem item) async {
     if (item.type == _NotifType.transfer) {
-      try {
-        await FirebaseFirestore.instance
-            .collection('follow_ups')
-            .doc(item.id)
-            .update({'notification_seen': true});
-      } catch (_) {}
-      await _scheduleTransferredLeadReminder(item.id);
+      // Mark transferred lead as seen by this user
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        try {
+          await FirebaseFirestore.instance
+              .collection('user_seen_leads')
+              .doc('${item.id}__${uid}')
+              .set({
+                'lead_id': item.id,
+                'user_id': uid,
+                'seen_at': DateTime.now().toIso8601String(),
+              }, SetOptions(merge: true));
+        } catch (_) {}
+      }
+      
+      // Remove from list immediately for responsive UI
+      if (mounted) {
+        setState(() {
+          _items.removeWhere((i) => i.id == item.id);
+        });
+      }
+      
       if (!mounted) return;
-      Navigator.of(context).pop();
-      Navigator.push(
+      // Navigate to lead details, then refresh notifications when returning
+      await Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => PresentFollowUp(docId: item.id)),
       );
+      
+      // Refresh the notification list when returning
+      if (mounted) {
+        await _fetchAll();
+      }
     } else if (item.type == _NotifType.leadAssignment) {
-      Navigator.push(
+      // Mark assigned lead as seen by this user
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        try {
+          await FirebaseFirestore.instance
+              .collection('user_seen_leads')
+              .doc('${item.id}__${uid}')
+              .set({
+                'lead_id': item.id,
+                'user_id': uid,
+                'seen_at': DateTime.now().toIso8601String(),
+              }, SetOptions(merge: true));
+        } catch (_) {}
+      }
+      
+      // Remove from list immediately for responsive UI
+      if (mounted) {
+        setState(() {
+          _items.removeWhere((i) => i.id == item.id);
+        });
+      }
+      
+      if (!mounted) return;
+      // Navigate to lead details, then refresh notifications when returning
+      await Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => PresentFollowUp(docId: item.id)),
       );
+      
+      // Refresh the notification list when returning
+      if (mounted) {
+        await _fetchAll();
+      }
     } else if (item.type == _NotifType.complaint) {
-      Navigator.push(
+      // Mark complaint as seen by this user before navigating
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        await DmeComplaintService.instance
+            .markComplaintNotificationAsSeen(complaintId: item.id, userId: uid);
+      }
+      
+      // Remove from list immediately for responsive UI
+      if (mounted) {
+        setState(() {
+          _items.removeWhere((i) => i.id == item.id);
+        });
+      }
+      
+      if (!mounted) return;
+      // Navigate to complaints page, then refresh notifications when returning
+      await Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const DmeComplaintsManagementPage()),
       );
+      
+      // Refresh the notification list when returning
+      if (mounted) {
+        await _fetchAll();
+      }
     }
   }
 
-  Future<void> _scheduleTransferredLeadReminder(String docId) async {
-    try {
-      final leadDoc = await FirebaseFirestore.instance
-          .collection('follow_ups')
-          .doc(docId)
-          .get();
-      final leadData = leadDoc.data();
-      if (leadData == null) return;
-      final reminderStr = leadData['reminder'];
-      if (reminderStr is! String || reminderStr.isEmpty) return;
-      final reminderDate =
-          DateFormat('dd-MM-yyyy hh:mm a').tryParse(reminderStr);
-      if (reminderDate == null || !reminderDate.isAfter(DateTime.now())) return;
-      final notifId =
-          int.tryParse(docId.hashCode.abs().toString().substring(0, 7)) ?? 0;
-      await AwesomeNotifications().cancelSchedule(notifId);
-      await NotificationPermissionService.instance.safeCreateNotification(
-        content: NotificationContent(
-          id: notifId,
-          channelKey: 'basic_channel',
-          title: 'Follow-Up Reminder',
-          body: 'Reminder for ${leadData['name'] ?? 'lead'}',
-          notificationLayout: NotificationLayout.Default,
-          payload: {
-            'docId': docId,
-            'type': 'lead',
-            'action': 'edit_followup',
-          },
-        ),
-        schedule: NotificationCalendar(
-          year: reminderDate.year,
-          month: reminderDate.month,
-          day: reminderDate.day,
-          hour: reminderDate.hour,
-          minute: reminderDate.minute,
-          second: 0,
-          millisecond: 0,
-          repeats: false,
-          preciseAlarm: true,
-        ),
-      );
-    } catch (e) {
-      debugPrint('Error scheduling reminder for transferred lead: $e');
-    }
-  }
+
 
   // ─── Build ────────────────────────────────────────────────────────────────
 

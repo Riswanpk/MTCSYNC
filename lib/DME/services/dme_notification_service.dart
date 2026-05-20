@@ -145,7 +145,8 @@ class DmeNotificationService {
     return 'Call $customerName - Last purchase: $dateStr';
   }
 
-  /// Send immediate notification when complaint is assigned to a user
+  /// Send immediate notification when complaint is raised
+  /// Sends to the assigned user with message "New complaint raised"
   Future<void> sendComplaintAssignmentNotification({
     required String complaintId,
     required String customerName,
@@ -156,8 +157,8 @@ class DmeNotificationService {
         content: NotificationContent(
           id: _generateComplaintNotificationId(complaintId),
           channelKey: _complaintChannelKey,
-          title: 'New Complaint Assignment',
-          body: 'You have been assigned a complaint from $customerName',
+          title: 'New complaint raised',
+          body: 'Complaint from $customerName is assigned to you',
           payload: {
             'type': 'complaint_assigned',
             'complaintId': complaintId,
@@ -170,6 +171,36 @@ class DmeNotificationService {
       );
     } catch (e) {
       debugPrint('Error sending complaint assignment notification: $e');
+    }
+  }
+
+  /// Send immediate notification when complaint is raised to manager
+  /// Sends to the branch manager with message "New complaint raised"
+  Future<void> sendComplaintRaisedToManagerNotification({
+    required String complaintId,
+    required String customerName,
+    required String branchName,
+  }) async {
+    try {
+      await NotificationPermissionService.instance.safeCreateNotification(
+        content: NotificationContent(
+          id: _generateComplaintNotificationId('$complaintId-manager'),
+          channelKey: _complaintChannelKey,
+          title: 'New complaint raised',
+          body: 'Complaint from $customerName in branch $branchName',
+          payload: {
+            'type': 'complaint_raised',
+            'complaintId': complaintId,
+            'customerName': customerName,
+            'branchName': branchName,
+            'page': 'complaints_management',
+          },
+          notificationLayout: NotificationLayout.Default,
+          actionType: ActionType.Default,
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error sending complaint raised to manager notification: $e');
     }
   }
 

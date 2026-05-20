@@ -119,9 +119,9 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
       case 'Completed Today':
         status = null;
         statuses = ['completed', 'called'];
-        // Date filter will be by reminder_date once updated_at column exists in dme_reminders
-        from = DateTime(now.year, now.month, now.day);
-        to = DateTime(now.year, now.month, now.day, 23, 59, 59);
+        // Filter by completion time (updated_at), not reminder date, so overdue reminders completed today show up
+        updatedFrom = DateTime(now.year, now.month, now.day);
+        updatedTo = DateTime(now.year, now.month, now.day, 23, 59, 59);
         break;
       case 'All':
         break;
@@ -329,6 +329,59 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
     final clean = contact.replaceAll(RegExp(r'\D'), '');
     final logClean = logNumber.replaceAll(RegExp(r'\D'), '');
     return logClean.endsWith(clean) || clean.endsWith(logClean);
+  }
+
+  Future<void> _deleteReminder(int reminderId) async {
+    try {
+      await _svc.deleteReminder(reminderId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Reminder deleted'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+        await _loadReminders();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting reminder: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showDeleteConfirmation(DmeReminder reminder) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Reminder?'),
+        content: Text(
+          'Remove reminder for ${reminder.customerName}?\n\nThis action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              if (reminder.id != null) {
+                _deleteReminder(reminder.id!);
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -549,21 +602,6 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
                             reminder: r,
                             dateFmt: dateFmt,
                             called: _calledIds.contains(r.customerId),
-                            onCallTap: r.customerPhone != null
-                                ? () async {
-                                    _pendingCallPhone = r.customerPhone;
-                                    _pendingCallCustomerId = r.customerId;
-                                    _pendingCallReminderId = r.id;
-                                    _callStartTime = DateTime.now();
-                                    await _savePendingCallState();
-                                    final uri = Uri(
-                                        scheme: 'tel',
-                                        path: r.customerPhone);
-                                    if (await canLaunchUrl(uri)) {
-                                      await launchUrl(uri);
-                                    }
-                                  }
-                                : null,
                             onTap: () async {
                               final updated = await Navigator.push<bool>(
                                 context,
@@ -578,6 +616,7 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
                                 _loadReminders();
                               }
                             },
+                            onLongPress: () => _showDeleteConfirmation(r),
                           );
                         },
                       ),
@@ -594,15 +633,15 @@ class _ReminderCard extends StatelessWidget {
   final DmeReminder reminder;
   final DateFormat dateFmt;
   final bool called;
-  final VoidCallback? onCallTap;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   const _ReminderCard({
     required this.reminder,
     required this.dateFmt,
     required this.called,
-    required this.onCallTap,
     required this.onTap,
+    this.onLongPress,
   });
 
   @override
@@ -639,6 +678,7 @@ class _ReminderCard extends StatelessWidget {
 
     return GestureDetector(
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Container(
           margin: const EdgeInsets.only(bottom: 10),
           decoration: BoxDecoration(
@@ -789,32 +829,6 @@ class _ReminderCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                // Call button
-                if (onCallTap != null)
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: onCallTap,
-                      borderRadius: BorderRadius.circular(24),
-                      child: Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: called
-                              ? Colors.green.withValues(alpha: 0.12)
-                              : _primaryBlue.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          called
-                              ? Icons.phone_in_talk_rounded
-                              : Icons.phone_rounded,
-                          color: called ? Colors.green : _primaryBlue,
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),

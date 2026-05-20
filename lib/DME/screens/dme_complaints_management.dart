@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../Navigation/user_cache_service.dart';
 import '../models/dme_complaint.dart';
 import '../services/dme_complaint_service.dart';
+import '../services/dme_supabase_service.dart';
 import 'dme_complaint_detail_page.dart';
 
 const Color _primary = Color(0xFF005BAC);
@@ -30,13 +31,28 @@ class _DmeComplaintsManagementPageState
   bool _loading = true;
 
   String? _selectedStatus;
+  String? _selectedAssignedTo; // user ID
   String? _currentUserId;
   String? _managerBranchName;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _initSupabaseAndLoad();
+  }
+
+  Future<void> _initSupabaseAndLoad() async {
+    try {
+      // Initialize Supabase before loading complaints
+      await DmeSupabaseService.instance.ensureInitialized();
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Init error: $e')));
+      }
+    }
   }
 
   Future<void> _load() async {
@@ -106,11 +122,13 @@ class _DmeComplaintsManagementPageState
     List<DmeComplaint> complaints = _all;
     
     // Apply status filtering only (role-based filtering already done in _load)
-    if (_selectedStatus == null || _selectedStatus == 'All') {
-      _filtered = complaints;
-    } else {
-      _filtered = complaints.where((c) => c.status == _selectedStatus).toList();
+    if (_selectedStatus != null && _selectedStatus != 'All') {
+      complaints = complaints.where((c) => c.status == _selectedStatus).toList();
     }
+    if (_selectedAssignedTo != null) {
+      complaints = complaints.where((c) => c.assignedToId == _selectedAssignedTo).toList();
+    }
+    _filtered = complaints;
   }
 
   void _openDetail(DmeComplaint complaint) {
@@ -151,24 +169,17 @@ class _DmeComplaintsManagementPageState
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _load,
-              child: Column(
-                children: [
-                  _buildFilterBar(),
-                  Expanded(
-                    child: _filtered.isEmpty
-                        ? _buildEmpty()
-                        : ListView.builder(
-                            padding: const EdgeInsets.all(12),
-                            itemCount: _filtered.length,
-                            itemBuilder: (_, i) {
-                              final complaint = _filtered[i];
-                              final username = _usernameCache[complaint.assignedToId] ?? complaint.assignedToId;
-                              return _buildCard(complaint, username);
-                            },
-                          ),
-                  ),
-                ],
-              ),
+              child: _filtered.isEmpty
+                  ? _buildEmpty()
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: _filtered.length,
+                      itemBuilder: (_, i) {
+                        final complaint = _filtered[i];
+                        final username = _usernameCache[complaint.assignedToId] ?? complaint.assignedToId;
+                        return _buildCard(complaint, username);
+                      },
+                    ),
             ),
     );
   }
@@ -180,40 +191,121 @@ class _DmeComplaintsManagementPageState
       {'label': 'Resolved', 'value': 'case_resolved'},
       {'label': 'Closed', 'value': 'verified_closed'},
     ];
+
+    // Build a sorted list of assignable users from the username cache
+    final assignedUsers = _usernameCache.entries
+        .where((e) => e.value != null)
+        .map((e) => MapEntry(e.key, e.value!))
+        .toList()
+      ..sort((a, b) => a.value.compareTo(b.value));
+
     return Container(
       color: Colors.grey[100],
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: statuses.map((s) {
-            // ignore: unnecessary_cast
-            final val = s['value'] as String?;
-            final isSelected = _selectedStatus == val;
-            return Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: FilterChip(
-                label: Text(s['label'].toString()),
-                selected: isSelected,
-                onSelected: (_) {
-                  setState(() {
-                    _selectedStatus = val;
-                    _applyFilter();
-                  });
-                },
-                backgroundColor: Colors.white,
-                selectedColor: _primary.withValues(alpha: 0.15),
-                labelStyle: TextStyle(
-                  color: isSelected ? _primary : Colors.grey[600],
-                  fontWeight:
-                      isSelected ? FontWeight.w600 : FontWeight.normal,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Status filter row
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: statuses.map((s) {
+                // ignore: unnecessary_cast
+                final val = s['value'] as String?;
+                final isSelected = _selectedStatus == val;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: FilterChip(
+                    label: Text(s['label'].toString()),
+                    selected: isSelected,
+                    onSelected: (_) {
+                      setState(() {
+                        _selectedStatus = val;
+                        _applyFilter();
+                      });
+                    },
+                    backgroundColor: Colors.white,
+                    selectedColor: _primary.withValues(alpha: 0.15),
+                    labelStyle: TextStyle(
+                      color: isSelected ? _primary : Colors.grey[600],
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                    side: BorderSide(
+                        color: isSelected ? _primary : Colors.grey[300]!),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          // Assigned To filter (only show when there are multiple assignees)
+          if (assignedUsers.isNotEmpty) ...
+            [
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    // "All users" chip
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: FilterChip(
+                        label: const Text('All Users'),
+                        selected: _selectedAssignedTo == null,
+                        onSelected: (_) {
+                          setState(() {
+                            _selectedAssignedTo = null;
+                            _applyFilter();
+                          });
+                        },
+                        backgroundColor: Colors.white,
+                        selectedColor: Colors.teal.withValues(alpha: 0.15),
+                        labelStyle: TextStyle(
+                          color: _selectedAssignedTo == null ? Colors.teal : Colors.grey[600],
+                          fontWeight: _selectedAssignedTo == null
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
+                        side: BorderSide(
+                            color: _selectedAssignedTo == null
+                                ? Colors.teal
+                                : Colors.grey[300]!),
+                      ),
+                    ),
+                    ...assignedUsers.map((entry) {
+                      final isSelected = _selectedAssignedTo == entry.key;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: FilterChip(
+                          label: Text(entry.value),
+                          selected: isSelected,
+                          onSelected: (_) {
+                            setState(() {
+                              _selectedAssignedTo =
+                                  isSelected ? null : entry.key;
+                              _applyFilter();
+                            });
+                          },
+                          backgroundColor: Colors.white,
+                          selectedColor: Colors.teal.withValues(alpha: 0.15),
+                          labelStyle: TextStyle(
+                            color: isSelected ? Colors.teal : Colors.grey[600],
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                          ),
+                          side: BorderSide(
+                              color: isSelected
+                                  ? Colors.teal
+                                  : Colors.grey[300]!),
+                        ),
+                      );
+                    }),
+                  ],
                 ),
-                side: BorderSide(
-                    color: isSelected ? _primary : Colors.grey[300]!),
               ),
-            );
-          }).toList(),
-        ),
+            ],
+        ],
       ),
     );
   }

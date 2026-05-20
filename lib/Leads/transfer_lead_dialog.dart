@@ -1,4 +1,5 @@
 import 'package:awesome_notifications/awesome_notifications.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -160,6 +161,23 @@ class _TransferLeadDialogState extends State<TransferLeadDialog> {
               widget.leadDocId.hashCode.abs().toString().substring(0, 7)) ??
           0;
       await AwesomeNotifications().cancelSchedule(notifId);
+
+      // Send push notification to the new lead recipient (non-blocking)
+      if (_selectedUserId != null) {
+        final leadName = widget.leadData['name'] as String? ?? 'A lead';
+        FirebaseFunctions.instanceFor(region: 'asia-south1')
+            .httpsCallable('sendLeadAssignmentNotification')
+            .call(<String, dynamic>{
+          'recipientUid': _selectedUserId,
+          'title': 'Lead Transferred to You',
+          'body': '"$leadName" has been transferred to you',
+          'leadDocId': widget.leadDocId,
+          'leadName': leadName,
+          'notifType': 'lead_transfer',
+        }).catchError((error) {
+          debugPrint('Warning: Failed to send transfer notification: $error');
+        });
+      }
 
       if (mounted) {
         Navigator.of(context).pop(true); // Return true to indicate success

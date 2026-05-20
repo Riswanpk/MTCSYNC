@@ -641,6 +641,45 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
               isDark,
             ),
           ],
+          // --- DME Assignment Info ---
+          if ((_data?['source'] == 'dme' || _data?['source'] == 'DME')) ...[
+            const SizedBox(height: 32),
+            Text(
+              'DME Assignment',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black,
+              ),
+            ),
+            const SizedBox(height: 20),
+            leadInfoTile(
+              Icons.campaign,
+              'Source',
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text('DME Lead', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+              ),
+              isDark,
+            ),
+            if ((_data?['dme_notes'] as String? ?? '').isNotEmpty)
+              leadInfoTile(
+                Icons.sticky_note_2_outlined,
+                'Notes from DME',
+                Text(
+                  _data!['dme_notes'] as String,
+                  style: TextStyle(
+                    color: isDark ? Colors.white70 : Colors.black87,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+                isDark,
+              ),
+          ],
           const SizedBox(height: 32),
           Text(
             'Follow-Up Info',

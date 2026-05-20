@@ -40,12 +40,20 @@ class _LeadsPageState extends State<LeadsPage> {
     'High',
     'Medium',
     'Low',
-    'SME Only',
+  ];
+
+  final List<String> sourceOptions = [
+    'All',
+    'Sales',
+    'SME',
+    'DME',
+    'CC',
   ];
 
   // Add this for sort order
   bool sortAscending = false;
   String selectedPriority = 'All';
+  String selectedSource = 'All';
 
   Timer? _searchDebounce;
   Map<String, String> _creatorUsernameCache = {};
@@ -207,11 +215,12 @@ class _LeadsPageState extends State<LeadsPage> {
         query = query.where('status', isEqualTo: 'In Progress');
       }
     }
-    if (selectedPriority == 'SME Only') {
-      // Include both 'sme' and 'SME' variants
-      query = query.where('source', whereIn: ['sme', 'SME']);
-    } else if (selectedPriority != 'All') {
+    if (selectedPriority != 'All') {
       query = query.where('priority', isEqualTo: selectedPriority);
+    }
+    if (selectedSource != 'All') {
+      // Include both title-case and lowercase variants stored in Firestore
+      query = query.where('source', whereIn: [selectedSource, selectedSource.toLowerCase()]);
     }
 
     // Apply sorting
@@ -696,6 +705,45 @@ class _LeadsPageState extends State<LeadsPage> {
                                       ),
                                     ),
                                   ),
+                                  const SizedBox(width: 2),
+                                  Flexible(
+                                    flex: 1,
+                                    child: SizedBox(
+                                      height: 36,
+                                      child: DropdownButtonFormField<String>(
+                                        value: selectedSource,
+                                        items: sourceOptions.map((s) {
+                                          return DropdownMenuItem<String>(
+                                            value: s,
+                                            child: Text(s, style: const TextStyle(fontSize: 10)),
+                                          );
+                                        }).toList(),
+                                        onChanged: (val) {
+                                          setState(() {
+                                            selectedSource = val!;
+                                            _pageStartCursors.clear();
+                                            _pageStartCursors[1] = null;
+                                            _currentPage = 1;
+                                          });
+                                          _fetchLeadsPage();
+                                        },
+                                        decoration: InputDecoration(
+                                          labelText: 'Source',
+                                          labelStyle: const TextStyle(fontSize: 9),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          filled: true,
+                                          fillColor: const Color.fromARGB(255, 229, 237, 229),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                        ),
+                                        style: const TextStyle(fontSize: 10, color: Colors.black),
+                                        dropdownColor: Colors.white,
+                                        icon: const Icon(Icons.arrow_drop_down, size: 14),
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
                             ],
@@ -881,6 +929,45 @@ class _LeadsPageState extends State<LeadsPage> {
                                           ),
                                         ),
                                       ),
+                                      const SizedBox(width: 2),
+                                      Flexible(
+                                        flex: 1,
+                                        child: SizedBox(
+                                          height: 36,
+                                          child: DropdownButtonFormField<String>(
+                                            value: selectedSource,
+                                            items: sourceOptions.map((s) {
+                                              return DropdownMenuItem<String>(
+                                                value: s,
+                                                child: Text(s, style: const TextStyle(fontSize: 10)),
+                                              );
+                                            }).toList(),
+                                            onChanged: (val) {
+                                              setState(() {
+                                                selectedSource = val!;
+                                                _pageStartCursors.clear();
+                                                _pageStartCursors[1] = null;
+                                                _currentPage = 1;
+                                              });
+                                              _fetchLeadsPage();
+                                            },
+                                            decoration: InputDecoration(
+                                              labelText: 'Source',
+                                              labelStyle: const TextStyle(fontSize: 9),
+                                              border: OutlineInputBorder(
+                                                borderRadius: BorderRadius.circular(8),
+                                                borderSide: BorderSide.none,
+                                              ),
+                                              filled: true,
+                                              fillColor: const Color.fromARGB(255, 229, 237, 229),
+                                              contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                            ),
+                                            style: const TextStyle(fontSize: 10, color: Colors.black),
+                                            dropdownColor: Colors.white,
+                                            icon: const Icon(Icons.arrow_drop_down, size: 14),
+                                          ),
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ],
@@ -1000,6 +1087,45 @@ class _LeadsPageState extends State<LeadsPage> {
                                         },
                                         decoration: InputDecoration(
                                           labelText: 'Sort',
+                                          labelStyle: const TextStyle(fontSize: 9),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          filled: true,
+                                          fillColor: const Color.fromARGB(255, 229, 237, 229),
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                        ),
+                                        style: const TextStyle(fontSize: 10, color: Colors.black),
+                                        dropdownColor: Colors.white,
+                                        icon: const Icon(Icons.arrow_drop_down, size: 14),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Flexible(
+                                    flex: 1,
+                                    child: SizedBox(
+                                      height: 36,
+                                      child: DropdownButtonFormField<String>(
+                                        value: selectedSource,
+                                        items: sourceOptions.map((s) {
+                                          return DropdownMenuItem<String>(
+                                            value: s,
+                                            child: Text(s, style: const TextStyle(fontSize: 10)),
+                                          );
+                                        }).toList(),
+                                        onChanged: (val) {
+                                          setState(() {
+                                            selectedSource = val!;
+                                            _pageStartCursors.clear();
+                                            _pageStartCursors[1] = null;
+                                            _currentPage = 1;
+                                          });
+                                          _fetchLeadsPage();
+                                        },
+                                        decoration: InputDecoration(
+                                          labelText: 'Source',
                                           labelStyle: const TextStyle(fontSize: 9),
                                           border: OutlineInputBorder(
                                             borderRadius: BorderRadius.circular(8),

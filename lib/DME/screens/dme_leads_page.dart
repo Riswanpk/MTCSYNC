@@ -23,6 +23,7 @@ class _DmeLeadsPageState extends State<DmeLeadsPage> {
 
   String _selectedStatus = 'All';
   String _selectedPriority = 'All';
+  String _selectedBranch = 'All';
   String _searchQuery = '';
   bool _isSearching = false;
   bool _isLoading = false;
@@ -36,11 +37,29 @@ class _DmeLeadsPageState extends State<DmeLeadsPage> {
 
   final _statusOptions = ['All', 'In Progress', 'Sold', 'Cancelled'];
   final _priorityOptions = ['All', 'High', 'Medium', 'Low'];
+  List<String> _branchOptions = ['All'];
 
   @override
   void initState() {
     super.initState();
+    _loadBranchOptions();
     _fetchLeads();
+  }
+
+  Future<void> _loadBranchOptions() async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection('branches').get();
+      final names = snap.docs
+          .map((d) => (d.data()['name'] as String?) ?? '')
+          .where((n) => n.isNotEmpty)
+          .toList()
+        ..sort();
+      if (mounted) {
+        setState(() => _branchOptions = ['All', ...names]);
+      }
+    } catch (_) {
+      // Fall back to just 'All'
+    }
   }
 
   Future<void> _fetchLeads({
@@ -74,6 +93,9 @@ class _DmeLeadsPageState extends State<DmeLeadsPage> {
       }
       if (_selectedPriority != 'All') {
         query = query.where('priority', isEqualTo: _selectedPriority);
+      }
+      if (_selectedBranch != 'All') {
+        query = query.where('branch', isEqualTo: _selectedBranch);
       }
     }
 
@@ -360,6 +382,22 @@ class _DmeLeadsPageState extends State<DmeLeadsPage> {
                     ),
                   ),
                   const SizedBox(width: 8),
+                  _buildFilterChip(
+                    label: 'Branch',
+                    value: _selectedBranch,
+                    icon: Icons.business_rounded,
+                    color: const Color(0xFF005BAC),
+                    onTap: () => _showFilterSheet(
+                      'Select Branch',
+                      _branchOptions,
+                      _selectedBranch,
+                      (val) {
+                        setState(() => _selectedBranch = val);
+                        _resetAndFetch();
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   _buildSortChip(),
                 ],
               ),
@@ -536,6 +574,29 @@ class _DmeLeadsPageState extends State<DmeLeadsPage> {
                             ],
                           ),
                         const SizedBox(height: 6),
+                        // Assigned to
+                        if (assignedToName.isNotEmpty)
+                          Row(
+                            children: [
+                              Icon(Icons.person_pin_rounded,
+                                  size: 13,
+                                  color: isDark
+                                      ? Colors.tealAccent.shade100
+                                      : Colors.teal.shade700),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Assigned to: $assignedToName',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark
+                                      ? Colors.tealAccent.shade100
+                                      : Colors.teal.shade700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        const SizedBox(height: 6),
                         // Comments
                         if (comments.isNotEmpty)
                           Text(
@@ -585,24 +646,6 @@ class _DmeLeadsPageState extends State<DmeLeadsPage> {
                                 ),
                               ),
                             ),
-                            if (assignedToName.isNotEmpty) ...[
-                              const SizedBox(width: 8),
-                              Icon(Icons.person_rounded,
-                                  size: 12,
-                                  color: isDark
-                                      ? Colors.white38
-                                      : Colors.grey.shade400),
-                              const SizedBox(width: 3),
-                              Text(
-                                assignedToName,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: isDark
-                                      ? Colors.white54
-                                      : Colors.grey.shade600,
-                                ),
-                              ),
-                            ],
                           ],
                         ),
                       ],

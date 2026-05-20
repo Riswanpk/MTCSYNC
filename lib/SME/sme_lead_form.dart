@@ -213,9 +213,10 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
       // Call Cloud Function to send FCM push notification to assigned user (non-blocking)
       final notifPayload = <String, dynamic>{
         'recipientUid': _selectedUserId,
-        'title': 'New Lead Assigned',
+        'title': 'New SME Lead Assigned',
         'body':
-            'A new lead "${_nameController.text.trim()}" has been assigned to you by SME.',
+            'You have been assigned an SME lead: "${_nameController.text.trim()}"',
+        'notifType': 'sme_lead_assignment',
         'leadDocId': followUpRef.id,
         'leadName': _nameController.text.trim(),
       };

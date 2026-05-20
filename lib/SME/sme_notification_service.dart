@@ -21,7 +21,8 @@ class SmeNotificationService {
 
     _subscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
       final data = message.data;
-      if (data['type'] != 'sme_lead_assignment') return;
+      const handled = {'sme_lead_assignment', 'dme_lead_assignment', 'lead_transfer'};
+      if (!handled.contains(data['type'])) return;
 
       final title = message.notification?.title ?? data['title'] ?? 'New Lead Assigned';
       final body = message.notification?.body ?? data['body'] ?? 'A new lead has been assigned to you.';

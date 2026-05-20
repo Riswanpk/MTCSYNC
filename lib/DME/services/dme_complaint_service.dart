@@ -66,16 +66,19 @@ class DmeComplaintService {
     required String complaintId,
     required String remarks,
     required String userId,
+    String? voiceFileUrl,
   }) async {
     _ensureSupabaseInitialized();
-    await _supabase.from(_table).update({
+    final updateData = {
       'remarks': remarks,
       'remarked_by': userId,
       'remarked_at': DateTime.now().toIso8601String(),
       'has_new_remarks': true,
       'status': 'case_resolved',
       'updated_at': DateTime.now().toIso8601String(),
-    }).eq('id', complaintId);
+    };
+    // Note: voiceFileUrl is stored in Firebase Storage, not in Supabase
+    await _supabase.from(_table).update(updateData).eq('id', complaintId);
   }
 
   /// Mark remarks as read by the complaint creator
@@ -234,5 +237,65 @@ class DmeComplaintService {
       debugPrint('Error fetching username for user $userId: $e');
       return null;
     }
+  }
+
+  /// Return complaint back to the original creator (sales user) when not resolved
+  Future<void> returnToCreator({
+    required String complaintId,
+    required String creatorId,
+  }) async {
+    _ensureSupabaseInitialized();
+    await _supabase.from(_table).update({
+      'status': 'raised',
+      'assigned_to': creatorId,
+      'has_new_remarks': true,
+      'resolved_by': null,
+      'resolved_at': null,
+      'updated_at': DateTime.now().toIso8601String(),
+    }).eq('id', complaintId);
+  }
+
+  /// Mark complaint notification as seen by a specific user
+  Future<void> markComplaintNotificationAsSeen({
+    required String complaintId,
+    required String userId,
+  }) async {
+    try {
+      final docId = '${complaintId}__${userId}';
+      await FirebaseFirestore.instance
+          .collection('user_seen_complaints')
+          .doc(docId)
+          .set({
+            'complaint_id': complaintId,
+            'user_id': userId,
+            'seen_at': DateTime.now().toIso8601String(),
+          }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Error marking complaint as seen: $e');
+    }
+  }
+
+  /// Check if a complaint has been marked as seen by a specific user
+  Future<bool> isComplaintSeen({
+    required String complaintId,
+    required String userId,
+  }) async {
+    try {
+      final docId = '${complaintId}__${userId}';
+      final doc = await FirebaseFirestore.instance
+          .collection('user_seen_complaints')
+          .doc(docId)
+          .get();
+      return doc.exists;
+    } catch (e) {
+      debugPrint('Error checking if complaint is seen: $e');
+      return false;
+    }
+  }
+
+  /// Delete a complaint from Supabase
+  Future<void> deleteComplaint({required String complaintId}) async {
+    _ensureSupabaseInitialized();
+    await _supabase.from(_table).delete().eq('id', complaintId);
   }
 }

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../models/dme_complaint.dart';
 import '../services/dme_complaint_service.dart';
 import '../services/dme_supabase_service.dart';
+import '../../Misc/voice_file_upload_widget.dart';
 
 const Color _primary = Color(0xFF005BAC);
 
@@ -35,6 +36,7 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
   bool _submitting = false;
   late DmeComplaint _complaint;
   String? _assignedToUsername;
+  String? _voiceFileUrl;
 
   @override
   void initState() {
@@ -98,6 +100,7 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
         complaintId: _complaint.id!,
         remarks: _remarksCtrl.text.trim(),
         userId: uid,
+        voiceFileUrl: _voiceFileUrl,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -387,7 +390,7 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
               ],
 
               // Add/update remarks — only assigned user, only if not closed
-              if (widget.isAssignedUser && !isClosed) ...[
+              if (widget.isAssignedUser && !isClosed && !isResolved) ...[
                 Text(
                   hasRemarks ? 'Update Remarks' : 'Add Remarks',
                   style: TextStyle(
@@ -406,6 +409,15 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
                         borderRadius: BorderRadius.circular(8)),
                     contentPadding: const EdgeInsets.all(12),
                   ),
+                ),
+                const SizedBox(height: 12),
+                // Voice File Upload Widget
+                VoiceFileUploadWidget(
+                  onFileUploaded: (fileUrl) {
+                    setState(() => _voiceFileUrl = fileUrl);
+                  },
+                  enabled: true,
+                  uploadPath: 'dme_complaints/${FirebaseAuth.instance.currentUser?.email ?? "unknown"}/${_complaint.id}',
                 ),
                 const SizedBox(height: 12),
                 _buildActionButton(

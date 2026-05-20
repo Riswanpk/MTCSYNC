@@ -27,6 +27,7 @@ import '../Navigation/user_cache_service.dart';
 import '../SME/sme_notification_service.dart';
 import '../Leads/leads_notification.dart';
 import '../DME/services/dme_complaint_service.dart';
+import '../DME/services/dme_supabase_service.dart';
 
 // Top-level function for compute to decode contacts JSON
 List<dynamic> decodeContactsJson(String json) {
@@ -65,11 +66,15 @@ class _HomePageState extends State<HomePage>
   int _transferredCount = 0;
   int _otherCount = 0;
   StreamSubscription? _notificationListener;
+  StreamSubscription? _assignedLeadsListener;
+  StreamSubscription? _complaintsListener;
 
   @override
   void initState() {
     super.initState();
     _initSwingAnimation();
+    // Initialize Supabase early so notification dot shows on app startup
+    DmeSupabaseService.instance.ensureInitialized().catchError((_) {});
     _userCache.ensureLoaded().then((_) {
       if (mounted) {
         setState(() {
@@ -78,7 +83,7 @@ class _HomePageState extends State<HomePage>
           _branch = _userCache.branch;
         });
         _listenForTransferredLeads();
-        _refreshOtherCount();
+        _listenForAssignedLeadsAndComplaints();
       }
     });
     _checkForUpdate();
@@ -157,6 +162,8 @@ class _HomePageState extends State<HomePage>
     _fcmTokenSubscription?.cancel();
     _widgetClickSub?.cancel().catchError((_) {});
     _notificationListener?.cancel();
+    _assignedLeadsListener?.cancel();
+    _complaintsListener?.cancel();
     SmeNotificationService.instance.stopListening();
     routeObserver.unsubscribe(this);
     _swingController.dispose();
@@ -174,57 +181,166 @@ class _HomePageState extends State<HomePage>
         .where('branch', isEqualTo: branch)
         .where('created_by', isEqualTo: currentUserId)
         .where('transferred_at', isNull: false)
-        .where('notification_seen', isEqualTo: false)
         .snapshots()
-        .listen((snapshot) {
+        .listen((snapshot) async {
+      if (!mounted) return;
+      
+      // Count only transferred leads that haven't been seen by this user
+      int unseenCount = 0;
+      for (final doc in snapshot.docs) {
+        try {
+          final userSeenDoc = await FirebaseFirestore.instance
+              .collection('user_seen_leads')
+              .doc('${doc.id}__${currentUserId}')
+              .get();
+          if (!userSeenDoc.exists) {
+            unseenCount++;
+          }
+        } catch (_) {
+          // If there's an error, assume it hasn't been seen
+          unseenCount++;
+        }
+      }
+      
       if (mounted) {
         setState(() {
-          _transferredCount = snapshot.docs.length;
+          _transferredCount = unseenCount;
         });
       }
     });
   }
 
-  Future<void> _refreshOtherCount() async {
+  void _listenForAssignedLeadsAndComplaints() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    // Listen for assigned SME/DME leads
+    _assignedLeadsListener?.cancel();
+    _assignedLeadsListener = FirebaseFirestore.instance
+        .collection('follow_ups')
+        .where('assigned_to', isEqualTo: uid)
+        .snapshots()
+        .listen((snapshot) async {
+      if (!mounted) return;
+      await _updateOtherCountFromListeners();
+    });
+
+    // Listen for complaints using Supabase
+    _listenForComplaintsRealtime(uid);
+  }
+
+  void _listenForComplaintsRealtime(String uid) {
+    _complaintsListener?.cancel();
+    // Set up a periodic check for complaints since Supabase doesn't have easy Dart listeners
+    // Check every 3 seconds for new/updated complaints
+    _complaintsListener = Stream.periodic(const Duration(seconds: 3)).listen((_) {
+      if (mounted) {
+        _updateOtherCountFromListeners();
+      }
+    });
+  }
+
+  Future<void> _updateOtherCountFromListeners() async {
     if (!mounted) return;
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
     int count = 0;
 
-    // SME / DME leads assigned to this user that are still In Progress
+    // Count SME / DME leads assigned to this user that are still In Progress (excluding seen ones)
     try {
       final snap = await FirebaseFirestore.instance
           .collection('follow_ups')
           .where('assigned_to', isEqualTo: uid)
           .get();
-      count += snap.docs.where((doc) {
+      
+      for (final doc in snap.docs) {
         final source =
             (doc.data()['source'] as String? ?? '').toLowerCase().trim();
         final status = doc.data()['status'] as String? ?? '';
-        return (source == 'sme' || source == 'dme') && status == 'In Progress';
-      }).length;
+        
+        if ((source != 'sme' && source != 'dme') || status != 'In Progress') {
+          continue;
+        }
+        
+        // Check if this user has seen this lead
+        try {
+          final userSeenDoc = await FirebaseFirestore.instance
+              .collection('user_seen_leads')
+              .doc('${doc.id}__${uid}')
+              .get();
+          if (!userSeenDoc.exists) {
+            count++;
+          }
+        } catch (_) {
+          // If there's an error, assume it hasn't been seen
+          count++;
+        }
+      }
     } catch (_) {}
 
-    // Complaints assigned to this user that are still raised
+    // Count complaints assigned to this user that are still raised (excluding seen ones)
+    List<String> countedComplaintIds = [];
     try {
       final complaints = await DmeComplaintService.instance
           .getAssignedComplaints(userId: uid, status: 'raised');
-      count += complaints.length;
+      
+      // Filter out complaints that have been marked as seen by this user
+      for (final complaint in complaints) {
+        final isSeen = await DmeComplaintService.instance
+            .isComplaintSeen(complaintId: complaint.id ?? '', userId: uid);
+        if (!isSeen) {
+          count++;
+          countedComplaintIds.add(complaint.id ?? '');
+        }
+      }
+    } catch (_) {}
+
+    // Also count branch complaints for managers (avoid duplicates)
+    try {
+      if (_role == 'manager' || _role == 'asst_manager') {
+        final branchName = _userCache.branch ?? '';
+        if (branchName.isNotEmpty) {
+          final branchId = await DmeComplaintService.instance
+              .getBranchIdByName(branchName);
+          
+          if (branchId != null) {
+            final branchComplaints = await DmeComplaintService.instance
+                .getComplaintsForBranch(branchId: branchId, status: 'raised');
+            
+            for (final complaint in branchComplaints) {
+              // Skip if already counted in assigned complaints
+              if (countedComplaintIds.contains(complaint.id)) continue;
+              
+              // Only count if not already in assigned complaints and not seen by this user
+              final isSeen = await DmeComplaintService.instance
+                  .isComplaintSeen(complaintId: complaint.id ?? '', userId: uid);
+              if (!isSeen) {
+                count++;
+              }
+            }
+          }
+        }
+      }
     } catch (_) {}
 
     if (mounted) setState(() => _otherCount = count);
   }
 
-  void _openNotifications() {
+  Future<void> _openNotifications() async {
     final branch = _userCache.branch ?? '';
     if (branch.isEmpty) return;
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => LeadsNotificationPage(userBranch: branch),
       ),
     );
+    // Refresh notification counts after returning from notifications page
+    if (mounted) {
+      _listenForTransferredLeads();
+      await _updateOtherCountFromListeners();
+    }
   }
 
   void _handleWidgetDeepLink(Uri? uri) {
@@ -287,14 +403,14 @@ class _HomePageState extends State<HomePage>
   @override
   void didPopNext() {
     _checkTodoWarning();
-    _refreshOtherCount();
+    _updateOtherCountFromListeners();
   }
 
   @override
   void didPush() {
     _fetchAndCacheContacts();
     _checkTodoWarning();
-    _refreshOtherCount();
+    _updateOtherCountFromListeners();
   }
 
   // ==================== Helper Methods ====================

@@ -1200,6 +1200,11 @@ class DmeSupabaseService {
     await _client.from('dme_reminders').update(map).eq('id', id);
   }
 
+  Future<void> deleteReminder(int id) async {
+    await ensureInitialized();
+    await _client.from('dme_reminders').delete().eq('id', id);
+  }
+
   Future<DmeReminder?> getReminderById(int id) async {
     await ensureInitialized();
     final res = await _client

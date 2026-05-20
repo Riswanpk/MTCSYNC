@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:getwidget/getwidget.dart';
 import '../models/dme_reminder.dart';
@@ -48,6 +49,9 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
   List<Map<String, dynamic>> _branchUsers = [];
   bool _loadingUsers = false;
   bool _assigningLead = false;
+  final TextEditingController _assignCommentsController = TextEditingController();
+  // Used to refresh the assign-lead dialog when branches finish loading
+  StateSetter? _dialogStateSetter;
 
   // colours
   static const _blue = Color(0xFF005BAC);
@@ -212,6 +216,7 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
     _editPhoneCtrl.dispose();
     _editAddressCtrl.dispose();
     _editSalesmanCtrl.dispose();
+    _assignCommentsController.dispose();
     super.dispose();
   }
 
@@ -890,10 +895,10 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
     try {
       final branches = await _svc.getBranches();
       if (mounted) {
-        setState(() {
-          _branches = branches.map((b) => b['name'] as String).toList();
-          _branches.sort();
-        });
+        final names = branches.map((b) => b['name'] as String).toList()..sort();
+        // Update both widget state and the open dialog (if any)
+        setState(() => _branches = names);
+        _dialogStateSetter?.call(() {});
       }
     } catch (e) {
       debugPrint('Error loading branches: $e');
@@ -967,21 +972,45 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
 
       final r = widget.reminder;
 
-      // Create lead in Firestore
-      await FirebaseFirestore.instance.collection('dme_leads').add({
+      // Create lead in follow_ups (main leads collection) so it appears in
+      // the Leads page (DME source filter) and the notification page.
+      final docRef = await FirebaseFirestore.instance.collection('follow_ups').add({
         'date': DateTime.now(),
         'name': r.customerName ?? 'Unknown',
         'address': r.customerAddress ?? '',
         'phone': r.customerPhone ?? '',
         'status': 'In Progress',
+        'priority': 'Medium',
+        'dme_notes': _assignCommentsController.text.trim(),
+        'comments': '',
+        'reminder': 'No Reminder',
+        'created_at': FieldValue.serverTimestamp(),
         'branch': _selectedBranch,
         'created_by': user.uid,
         'assigned_to': _selectedUserId,
         'assigned_to_name': _selectedUserName,
-        'source': 'dme_reminder',
+        'assigned_by': user.uid,
+        'source': 'DME',
         'reminder_id': r.id,
         'customer_id': r.customerId,
       });
+
+      // Send push notification to assigned user (non-blocking)
+      if (_selectedUserId != null) {
+        final customerName = r.customerName ?? 'Unknown';
+        FirebaseFunctions.instanceFor(region: 'asia-south1')
+            .httpsCallable('sendLeadAssignmentNotification')
+            .call(<String, dynamic>{
+          'recipientUid': _selectedUserId,
+          'title': 'New DME Lead Assigned',
+          'body': 'You have been assigned a DME lead: "$customerName"',
+          'leadDocId': docRef.id,
+          'leadName': customerName,
+          'notifType': 'dme_lead_assignment',
+        }).catchError((error) {
+          debugPrint('Warning: Failed to send DME lead notification: $error');
+        });
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1009,13 +1038,20 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
     _selectedUserId = null;
     _selectedUserName = null;
     _branchUsers = [];
+    _branches = [];
     _loadingUsers = false;
-    _loadBranches();
+    _dialogStateSetter = null;
+    _assignCommentsController.clear();
+
+    // Load branches AFTER the dialog's first frame so setDialogState is captured
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadBranches());
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) {
+          // Keep a reference so _loadBranches can refresh the dialog
+          _dialogStateSetter = setDialogState;
           return AlertDialog(
             title: const Text('Assign Lead'),
             content: SingleChildScrollView(
@@ -1060,26 +1096,32 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                           .bodySmall
                           ?.copyWith(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    value: _selectedBranch,
-                    items: _branches
-                        .map((b) => DropdownMenuItem(value: b, child: Text(b)))
-                        .toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setDialogState(() => _selectedBranch = val);
-                        _loadUsersForBranch(val, setDialogState: setDialogState);
-                      }
-                    },
-                    decoration: InputDecoration(
-                      hintText: 'Choose branch',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
+                  if (_branches.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                    )
+                  else
+                    DropdownButtonFormField<String>(
+                      value: _selectedBranch,
+                      items: _branches
+                          .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setDialogState(() => _selectedBranch = val);
+                          _loadUsersForBranch(val, setDialogState: setDialogState);
+                        }
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'Choose branch',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
                     ),
-                  ),
                   const SizedBox(height: 16),
                   // User selector
                   Text('Select User *',
@@ -1137,6 +1179,27 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                             horizontal: 12, vertical: 10),
                       ),
                     ),
+                  // Comments field
+                  const SizedBox(height: 16),
+                  Text('Notes for Sales User (optional)',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _assignCommentsController,
+                    maxLines: 3,
+                    minLines: 2,
+                    decoration: InputDecoration(
+                      hintText: 'Enter notes or instructions for the sales user (optional)',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1174,7 +1237,7 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
           );
         },
       ),
-    );
+    ).whenComplete(() => _dialogStateSetter = null);
   }
 
   Widget _infoRow(String label, String value) {
