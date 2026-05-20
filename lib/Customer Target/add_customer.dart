@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import '../Navigation/user_cache_service.dart';
 
 class AddCustomerPage extends StatefulWidget {
   @override
@@ -62,8 +63,10 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
         'callMade': false,
         'remarks': '',
       });
+      final branch = UserCacheService.instance.branch ?? '';
       await docRef.set({
         'user': user.email!.toLowerCase(),
+        'branch': branch,
         'customers': customers,
         'updated': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
