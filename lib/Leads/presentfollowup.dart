@@ -723,11 +723,8 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
                                 if (cancellationReason == null) return;
                               }
                               if (newStatus == 'Sale') {
-                                final src = (_data?['source'] as String? ?? '').toLowerCase().trim();
-                                if (src == 'sme' || src == 'dme') {
-                                  billedPhone = await _showBilledPhoneDialog();
-                                  if (billedPhone == null) return;
-                                }
+                                billedPhone = await _showBilledPhoneDialog();
+                                if (billedPhone == null) return;
                               }
                               final updateMap = <String, dynamic>{'status': newStatus};
                               if (newStatus == 'Sale' || newStatus == 'Cancelled') {

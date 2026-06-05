@@ -491,7 +491,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
               userHdrRange.cellStyle = detailUserHdrSt;
               detailRow++;
 
-              const detailHeaders = ['Customer Name', 'Status', 'Created Date', 'Completed Date', 'Comments', 'Cancellation Reason', 'Source'];
+              const detailHeaders = ['Customer Name', 'Status', 'Created Date', 'Completed Date', 'Comments', 'Billed Phone / Cancellation Reason', 'Source'];
               for (int c = 0; c < detailHeaders.length; c++) {
                 final cell = sheet.getRangeByIndex(detailRow, c + 1);
                 cell.setText(detailHeaders[c]);
@@ -554,7 +554,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
                 sheet.getRangeByIndex(detailRow, 5).setText(d['comments'] ?? '');
                 sheet.getRangeByIndex(detailRow, 5).cellStyle = rowStyle;
                 sheet.getRangeByIndex(detailRow, 6).setText(
-                    statusVal == 'Cancelled' ? (d['cancellation_reason'] ?? '') : '');
+                    statusVal == 'Sale' ? (d['billed_phone'] ?? '') : statusVal == 'Cancelled' ? (d['cancellation_reason'] ?? '') : '');
                 sheet.getRangeByIndex(detailRow, 6).cellStyle = rowStyle;
                 sheet.getRangeByIndex(detailRow, 7).setText(sourceUpper);
                 sheet.getRangeByIndex(detailRow, 7).cellStyle = rowStyle;
@@ -821,7 +821,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           userHdrRange.cellStyle = detailUserHdrSt;
           detailRow++;
 
-          const detailHeaders = ['Customer Name', 'Status', 'Created Date', 'Completed Date', 'Comments', 'Cancellation Reason', 'Source'];
+          const detailHeaders = ['Customer Name', 'Status', 'Created Date', 'Completed Date', 'Comments', 'Billed Phone / Cancellation Reason', 'Source'];
           for (int c = 0; c < detailHeaders.length; c++) {
             final cell = sheet.getRangeByIndex(detailRow, c + 1);
             cell.setText(detailHeaders[c]);
@@ -884,7 +884,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
             sheet.getRangeByIndex(detailRow, 5).setText(d['comments'] ?? '');
             sheet.getRangeByIndex(detailRow, 5).cellStyle = rowStyle;
             sheet.getRangeByIndex(detailRow, 6).setText(
-                statusVal == 'Cancelled' ? (d['cancellation_reason'] ?? '') : '');
+                statusVal == 'Sale' ? (d['billed_phone'] ?? '') : statusVal == 'Cancelled' ? (d['cancellation_reason'] ?? '') : '');
             sheet.getRangeByIndex(detailRow, 6).cellStyle = rowStyle;
             sheet.getRangeByIndex(detailRow, 7).setText(sourceUpper);
             sheet.getRangeByIndex(detailRow, 7).cellStyle = rowStyle;

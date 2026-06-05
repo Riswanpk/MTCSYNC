@@ -7,6 +7,7 @@ import '../models/dme_customer.dart';
 import '../models/dme_user.dart';
 import '../services/dme_complaint_service.dart';
 import '../services/dme_supabase_service.dart';
+import '../../Misc/voice_file_upload_widget.dart';
 import 'dme_complaint_detail_page.dart';
 
 
@@ -486,6 +487,8 @@ class _RaiseComplaintSheetState extends State<_RaiseComplaintSheet> {
 
   bool _submitting = false;
   List<int> _myBranchIds = [];
+  String? _voiceNoteUrl;
+  bool _voiceUploading = false;
 
   @override
   void initState() {
@@ -589,9 +592,11 @@ class _RaiseComplaintSheetState extends State<_RaiseComplaintSheet> {
       return;
     }
 
+    debugPrint('[RaiseComplaint] Submitting complaint with voiceNoteUrl: $_voiceNoteUrl');
     setState(() => _submitting = true);
     try {
       final branchId = _selectedCustomer!.branchId ?? 0;
+      debugPrint('[RaiseComplaint] Creating complaint for customer: ${_selectedCustomer!.name}');
       final complaintId = await _svc.createComplaint(
         customerName: _selectedCustomer!.name,
         customerPhone: _selectedCustomer!.phone,
@@ -599,25 +604,37 @@ class _RaiseComplaintSheetState extends State<_RaiseComplaintSheet> {
         complaintText: _complaintCtrl.text.trim(),
         createdById: widget.dmeUser.id,
         assignedToId: _selectedAssignee!.id,
+        voiceNoteUrl: _voiceNoteUrl,
       );
 
-      // Complaint saved to Supabase and will appear in notification page
-      // No local notifications needed
+      debugPrint('[RaiseComplaint] Complaint created successfully with ID: $complaintId');
 
+      // Complaint saved to Supabase and will appear in notification page
       if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Complaint raised successfully')),
-        );
+        // Call callback first to refresh parent data
         widget.onSubmitted();
+        // Show snackbar while context is still valid
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Complaint raised successfully')),
+          );
+        }
+        // Finally dismiss the modal - add a small delay to ensure everything settles
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (mounted && Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
       }
     } catch (e) {
+      debugPrint('[RaiseComplaint] Error submitting complaint: $e');
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (mounted) {
+        setState(() => _submitting = false);
+      }
     }
   }
 
@@ -805,7 +822,17 @@ class _RaiseComplaintSheetState extends State<_RaiseComplaintSheet> {
                 contentPadding: const EdgeInsets.all(12),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+
+            // ── Voice Note ───────────────────────────────────────
+            _sectionLabel('Voice Note (Optional)'),
+            const SizedBox(height: 6),
+            VoiceFileUploadWidget(
+              onFileUploaded: (url) => setState(() => _voiceNoteUrl = url),              onUploadStateChanged: (isUploading) =>
+                  setState(() => _voiceUploading = isUploading),              enabled: true,
+              uploadPath: 'dme_complaints/voice_notes/${widget.dmeUser.id}',
+            ),
+            const SizedBox(height: 8),
 
             // ── Assign To ────────────────────────────────────────
             _sectionLabel('Assign To'),
@@ -879,14 +906,14 @@ class _RaiseComplaintSheetState extends State<_RaiseComplaintSheet> {
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed: _submitting ? null : _submit,
+                onPressed: (_submitting || _voiceUploading) ? null : _submit,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                 ),
-                child: _submitting
+                child: (_submitting || _voiceUploading)
                     ? const SizedBox(
                         width: 22,
                         height: 22,

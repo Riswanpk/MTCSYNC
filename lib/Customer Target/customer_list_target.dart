@@ -281,13 +281,23 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
       });
 
       if (callMade && _pendingCallIndex != null) {
+        // Guard against RangeError on low-end phones: the customers list may
+        // have been refreshed (grown or shrunk) between when the call was
+        // initiated and when detection runs.
+        if (_customers == null || _pendingCallIndex! >= _customers!.length) {
+          _pendingCallNumber = null;
+          _pendingCallIndex = null;
+          return;
+        }
         setState(() {
           _customers![_pendingCallIndex!]['callMade'] = true;
         });
         await _updateFirestore();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Call detected!'), backgroundColor: Colors.green),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Call detected!'), backgroundColor: Colors.green),
+          );
+        }
       }
     } catch (e) {
       debugPrint('Error checking call log: $e');
@@ -1138,7 +1148,8 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                                     setState(() {
                                       _customers!.removeWhere((c) =>
                                         c['name'] == customer['name'] &&
-                                        c['contact'] == customer['contact']
+                                        (c['contact1'] ?? c['contact']) ==
+                                            (customer['contact1'] ?? customer['contact'])
                                       );
                                     });
                                     await _updateFirestore();

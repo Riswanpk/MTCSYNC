@@ -6,6 +6,7 @@ import 'dart:io';
 
 class VoiceFileUploadWidget extends StatefulWidget {
   final Function(String? fileUrl) onFileUploaded;
+  final Function(bool isUploading)? onUploadStateChanged;
   final bool enabled;
   final String? initialFileUrl;
   final String uploadPath; // Path in Firebase Storage (e.g., 'complaints/voice_notes')
@@ -13,6 +14,7 @@ class VoiceFileUploadWidget extends StatefulWidget {
   const VoiceFileUploadWidget({
     super.key,
     required this.onFileUploaded,
+    this.onUploadStateChanged,
     this.enabled = true,
     this.initialFileUrl,
     required this.uploadPath,
@@ -98,6 +100,7 @@ class _VoiceFileUploadWidgetState extends State<VoiceFileUploadWidget> {
     }
 
     setState(() => _isUploading = true);
+    widget.onUploadStateChanged?.call(true);
 
     try {
       final file = File(_selectedFilePath!);
@@ -134,6 +137,7 @@ class _VoiceFileUploadWidgetState extends State<VoiceFileUploadWidget> {
     } finally {
       if (mounted) {
         setState(() => _isUploading = false);
+        widget.onUploadStateChanged?.call(false);
       }
     }
   }

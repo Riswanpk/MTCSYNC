@@ -240,21 +240,13 @@ class LeadCard extends StatelessWidget {
         children: [
           SlidableAction(
             onPressed: (context) async {
-              final isSmeDme = source != null &&
-                  (source!.toLowerCase() == 'sme' ||
-                      source!.toLowerCase() == 'dme');
-              String? billedPhone;
-              if (isSmeDme) {
-                billedPhone = await showBilledPhoneDialog(context);
-                if (billedPhone == null) return;
-              }
+              final billedPhone = await showBilledPhoneDialog(context);
+              if (billedPhone == null) return;
               final updateData = <String, dynamic>{
                 'status': 'Sale',
                 'completed_at': FieldValue.serverTimestamp(),
+                'billed_phone': billedPhone,
               };
-              if (billedPhone != null) {
-                updateData['billed_phone'] = billedPhone;
-              }
               await FirebaseFirestore.instance
                   .collection('follow_ups')
                   .doc(docId)

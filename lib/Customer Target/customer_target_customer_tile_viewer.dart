@@ -7,7 +7,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:call_log/call_log.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../Leads/leadsform.dart';
-import '../Misc/voice_file_upload_widget.dart';
 
 class SalesCustomerTileViewer extends StatefulWidget {
   final Map<String, dynamic> customer;
@@ -27,7 +26,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
   List<Map<String, String>> _pastRemarks = [];
   bool _loadingLastRemarks = false;
   bool _remarksSaved = false; // Add this flag
-  String? _voiceFileUrl; // Track uploaded voice file URL
+  bool _checkingCall = false; // Prevents concurrent call-log reads on slow phones
 
   @override
   void initState() {
@@ -91,6 +90,20 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
   }
 
   Future<void> _makeCall(BuildContext context, String contact1, [String? contact2]) async {
+    // If contact1 is absent, promote contact2 or abort – prevents tel: with no number
+    if (contact1.trim().isEmpty) {
+      if (contact2 == null || contact2.trim().isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No contact number available')),
+          );
+        }
+        return;
+      }
+      // Only contact2 is present – call it directly, skip the picker dialog
+      contact1 = contact2;
+      contact2 = null;
+    }
     String? numberToCall = contact1;
     if (contact2 != null && contact2.isNotEmpty) {
       // Ask user which number to call
@@ -105,7 +118,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
             ),
             SimpleDialogOption(
               onPressed: () => Navigator.pop(ctx, contact2),
-              child: Text(contact2),
+              child: Text(contact2!),
             ),
             SimpleDialogOption(
               onPressed: () => Navigator.pop(ctx, null),
@@ -163,8 +176,14 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
 
   Future<void> _checkIfCallWasMade() async {
     if (_pendingCallNumber == null || _callStartTime == null) return;
+    // Prevent two simultaneous call-log reads (e.g. immediate check + 3s retry)
+    if (_checkingCall) return;
+    _checkingCall = true;
     final permStatus = await Permission.phone.status;
-    if (!permStatus.isGranted) return;
+    if (!permStatus.isGranted) {
+      _checkingCall = false;
+      return;
+    }
     try {
       final now = DateTime.now();
       final Iterable<CallLogEntry> entries = await CallLog.query(
@@ -208,12 +227,16 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
             ),
           );
           Future.delayed(const Duration(milliseconds: 300), () {
-            if (mounted) {
-              Scrollable.ensureVisible(
-                context,
-                alignment: 1.0,
-                duration: const Duration(milliseconds: 500),
-              );
+            try {
+              if (mounted) {
+                Scrollable.ensureVisible(
+                  context,
+                  alignment: 1.0,
+                  duration: const Duration(milliseconds: 500),
+                );
+              }
+            } catch (_) {
+              // Ignore if widget is no longer in the tree (low-end phone GC)
             }
           });
         }
@@ -223,6 +246,8 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     } catch (e) {
       debugPrint('Error checking call log: $e');
       // Don't clear pending state on error either — will retry on next resume.
+    } finally {
+      _checkingCall = false;
     }
   }
 
@@ -449,10 +474,6 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
         );
         if (idx != -1) {
           customers[idx]['remarks'] = remarks;
-          // Also save voice file URL if available
-          if (_voiceFileUrl != null && _voiceFileUrl!.isNotEmpty) {
-            customers[idx]['voiceFileUrl'] = _voiceFileUrl;
-          }
           await docRef.update({'customers': customers});
         }
       }
@@ -466,45 +487,6 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
           ),
         );
       }
-    }
-  }
-
-  Future<void> _updateVoiceFileInFirestore(String? voiceFileUrl) async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null || user.email == null) return;
-      final now = DateTime.now();
-      final months = [
-        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-      ];
-      final monthYear = "${months[now.month - 1]} ${now.year}";
-      final docRef = FirebaseFirestore.instance
-          .collection('customer_target')
-          .doc(monthYear)
-          .collection('users')
-          .doc(user.email!.toLowerCase());
-      final doc = await docRef.get();
-      if (doc.exists && doc.data()?['customers'] != null) {
-        List customers = List.from(doc.data()!['customers']);
-        // Find the customer by contact1/contact
-        String? c1 = customer['contact1'] ?? customer['contact'];
-        String? c2 = customer['contact2'];
-        int idx = customers.indexWhere((c) =>
-          (c['contact'] == c1 || c['contact1'] == c1) ||
-          (c2 != null && c2.isNotEmpty && (c['contact'] == c2 || c['contact2'] == c2))
-        );
-        if (idx != -1) {
-          if (voiceFileUrl != null && voiceFileUrl.isNotEmpty) {
-            customers[idx]['voiceFileUrl'] = voiceFileUrl;
-          } else {
-            customers[idx].remove('voiceFileUrl');
-          }
-          await docRef.update({'customers': customers});
-        }
-      }
-    } catch (e) {
-      debugPrint('Failed to update voice file URL in Firestore: $e');
     }
   }
 
@@ -1166,19 +1148,6 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                   ),
                 ),
               ),
-              // --- Voice File Upload Section ---
-              VoiceFileUploadWidget(
-                onFileUploaded: (fileUrl) {
-                  setState(() => _voiceFileUrl = fileUrl);
-                  if (fileUrl != null) {
-                    customer['voiceFileUrl'] = fileUrl;
-                  } else {
-                    customer.remove('voiceFileUrl');
-                  }
-                },
-                enabled: called,
-                uploadPath: 'sales_complaints/${FirebaseAuth.instance.currentUser?.email ?? "unknown"}',
-              ),
               // Save Button
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1209,11 +1178,6 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                                   
                                   // Save to Firestore
                                   await _updateRemarksInFirestore(remarks);
-                                  
-                                  // Also save voice file URL if exists
-                                  if (_voiceFileUrl != null) {
-                                    await _updateVoiceFileInFirestore(_voiceFileUrl);
-                                  }
                                   
                                   if (widget.onStatusChanged != null) {
                                     await widget.onStatusChanged!(remarks);

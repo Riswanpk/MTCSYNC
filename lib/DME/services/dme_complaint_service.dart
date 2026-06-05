@@ -34,6 +34,7 @@ class DmeComplaintService {
     required String complaintText,
     required String createdById,
     required String assignedToId,
+    String? voiceNoteUrl,
   }) async {
     _ensureSupabaseInitialized();
     
@@ -42,19 +43,22 @@ class DmeComplaintService {
       throw Exception('assignedToId is mandatory. Every complaint must be assigned to a user.');
     }
     
+    final row = <String, dynamic>{
+      'customer_name': customerName,
+      'customer_phone': customerPhone,
+      'branch_id': branchId,
+      'complaint_text': complaintText,
+      'created_by': createdById,
+      'assigned_to': assignedToId, // MANDATORY - included in initial insert
+      'status': 'raised',
+      'has_new_remarks': false,
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+    if (voiceNoteUrl != null) row['voice_file_url'] = voiceNoteUrl;
+
     final response = await _supabase
         .from(_table)
-        .insert({
-          'customer_name': customerName,
-          'customer_phone': customerPhone,
-          'branch_id': branchId,
-          'complaint_text': complaintText,
-          'created_by': createdById,
-          'assigned_to': assignedToId, // MANDATORY - included in initial insert
-          'status': 'raised',
-          'has_new_remarks': false,
-          'updated_at': DateTime.now().toIso8601String(),
-        })
+        .insert(row)
         .select('id')
         .single();
 

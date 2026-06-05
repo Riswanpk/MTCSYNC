@@ -13,6 +13,7 @@ import '../models/dme_user.dart';
 import '../models/dme_sale.dart';
 import '../services/dme_supabase_service.dart';
 import '../widgets/complaint_popup_dialog.dart';
+import 'dme_create_complaint_page.dart';
 
 class DmeCustomerTileViewer extends StatefulWidget {
   final DmeReminder reminder;
@@ -40,6 +41,10 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
   String? _pendingCallPhone;
   DateTime? _callStartTime;
   List<DmeSale> _sales = [];
+  
+  // Call attempt tracking for no-answer handling
+  bool _callAttempted = false;
+  bool _noAnswerDetected = false;
 
   // Assign Lead state
   String? _selectedBranch;
@@ -225,9 +230,16 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
     if (state == AppLifecycleState.resumed) {
       if (_pendingCallPhone != null) {
         _checkIfCallWasMade().then((_) {
-          if (!_called && _pendingCallPhone != null && mounted) {
+          // If call was not detected and dialog hasn't shown yet, show it now
+          if (!_called && _pendingCallPhone != null && mounted && _callAttempted && !_noAnswerDetected) {
+            setState(() => _noAnswerDetected = true);
+            _showNoAnswerOptions();
+          } else if (!_called && _pendingCallPhone != null && mounted) {
+            // Retry once more after 3 seconds
             Future.delayed(const Duration(seconds: 3), () {
-              if (mounted && !_called) _checkIfCallWasMade();
+              if (mounted && !_called) {
+                _checkIfCallWasMade();
+              }
             });
           }
         });
@@ -295,10 +307,250 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
     _callStartTime = DateTime.now();
     await _savePendingCallState();
 
+    if (mounted) {
+      setState(() => _callAttempted = true);
+    }
+
     final uri = Uri(scheme: 'tel', path: phone);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
+    
+    // Start timer to check for no-answer after 7 seconds
+    _startNoAnswerDetectionTimer();
+  }
+  
+  void _startNoAnswerDetectionTimer() {
+    // Just do periodic checks in the background
+    // The actual dialog will be shown when user returns to the app via didChangeAppLifecycleState
+    Future.delayed(const Duration(seconds: 3), () async {
+      if (!mounted || _called || !_callAttempted) return;
+      // Check call log silently
+      await _checkIfCallWasMade();
+    });
+    
+    Future.delayed(const Duration(seconds: 6), () async {
+      if (!mounted || _called || !_callAttempted) return;
+      // Check again after 6 seconds
+      await _checkIfCallWasMade();
+    });
+  }
+  
+  Future<void> _openWhatsApp() async {
+    final phone = widget.reminder.customerPhone;
+    if (phone == null || phone.isEmpty) return;
+    
+    // Remove any non-numeric characters
+    var cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+    
+    // Add country code if not present (assuming India +91)
+    if (!cleanPhone.startsWith('91') && cleanPhone.length == 10) {
+      cleanPhone = '91$cleanPhone';
+    }
+    
+    try {
+      // Try WhatsApp intent scheme first (works better on Android)
+      final whatsappIntentUrl = 'whatsapp://send?phone=$cleanPhone';
+      final whatsappIntentUri = Uri.parse(whatsappIntentUrl);
+      
+      if (await canLaunchUrl(whatsappIntentUri)) {
+        await launchUrl(whatsappIntentUri, mode: LaunchMode.externalApplication);
+        return;
+      }
+      
+      // Fallback to web URL if intent doesn't work
+      final whatsappWebUrl = 'https://wa.me/$cleanPhone';
+      final whatsappWebUri = Uri.parse(whatsappWebUrl);
+      
+      if (await canLaunchUrl(whatsappWebUri)) {
+        await launchUrl(whatsappWebUri, mode: LaunchMode.externalApplication);
+        return;
+      }
+      
+      // If both fail, show error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('WhatsApp not available. Please install WhatsApp.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error opening WhatsApp: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+  
+  Future<void> _markAsOverdue() async {
+    if (widget.reminder.id == null) return;
+    
+    setState(() => _saving = true);
+    try {
+      // Keep status as 'pending' - it will show as overdue since reminder date is in past
+      // Add a note explaining why it's marked as overdue
+      final existingNotes = widget.reminder.notes ?? '';
+      final updatedNotes = existingNotes.isEmpty
+          ? 'Called but customer did not answer - marked for follow-up'
+          : '$existingNotes\n\nMarked for follow-up: Called but customer did not answer';
+      
+      await _svc.updateReminderStatus(
+        widget.reminder.id!,
+        'pending',
+        notes: updatedNotes,
+      );
+      
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _callAttempted = false;
+          _noAnswerDetected = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Reminder marked for follow-up'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+  
+  void _showNoAnswerOptions() {
+    if (!mounted || _called) return;
+    
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Text(
+              'Customer Did Not Answer',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'What would you like to do?',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // WhatsApp Option
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _saving ? null : _openWhatsApp,
+                icon: const Icon(Icons.message, color: Colors.white),
+                label: const Text(
+                  'Message on WhatsApp',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF25D366), // WhatsApp green
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            
+            // Overdue Option
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _saving ? null : _markAsOverdue,
+                icon: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Icon(Icons.schedule, color: Colors.white),
+                label: const Text(
+                  'Mark as Overdue',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange[700],
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            
+            // Cancel
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: _saving
+                    ? null
+                    : () {
+                        Navigator.pop(context);
+                        setState(() {
+                          _callAttempted = false;
+                          _noAnswerDetected = false;
+                        });
+                      },
+                child: Text(
+                  'Try Again Later',
+                  style: TextStyle(
+                    color: _saving ? Colors.grey : _blue,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _checkIfCallWasMade() async {
@@ -317,6 +569,8 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
           if (mounted)
             setState(() {
               _called = true;
+              _callAttempted = false;
+              _noAnswerDetected = false;
             });
           await _clearPendingCallState();
           if (mounted) {
@@ -1350,14 +1604,20 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
               icon: const Icon(Icons.warning_rounded),
               tooltip: 'File Complaint',
               onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (_) => ComplaintPopupDialog(
-                    reminder: widget.reminder,
-                    dmeUser: widget.dmeUser,
-                    onComplaintSubmitted: () {
-                      // Complaint submitted callback
-                    },
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => DmeCreateComplaintPage(
+                      dmeUser: widget.dmeUser,
+                      onSubmitted: () {
+                        // Complaint submitted callback - refresh if needed
+                      },
+                      prefilledCustomerId: widget.reminder.customerId,
+                      prefilledCustomerName: widget.reminder.customerName,
+                      prefilledCustomerPhone: widget.reminder.customerPhone,
+                      prefilledBranchId: widget.reminder.purchasedForBranchId,
+                      prefilledBranchName: widget.reminder.purchasedForBranchName,
+                    ),
                   ),
                 );
               },
@@ -1552,18 +1812,32 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                 decoration: BoxDecoration(
                   color: _called
                       ? _green.withValues(alpha: 0.08)
-                      : Colors.orange.withValues(alpha: 0.08),
+                      : _noAnswerDetected
+                          ? Colors.red.withValues(alpha: 0.08)
+                          : Colors.orange.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: _called ? _green : Colors.orange,
+                    color: _called
+                        ? _green
+                        : _noAnswerDetected
+                            ? Colors.red
+                            : Colors.orange,
                     width: 1.5,
                   ),
                 ),
                 child: Row(
                   children: [
                     Icon(
-                      _called ? Icons.check_circle : Icons.pending,
-                      color: _called ? _green : Colors.orange,
+                      _called
+                          ? Icons.check_circle
+                          : _noAnswerDetected
+                              ? Icons.call_missed
+                              : Icons.pending,
+                      color: _called
+                          ? _green
+                          : _noAnswerDetected
+                              ? Colors.red
+                              : Colors.orange,
                       size: 26,
                     ),
                     const SizedBox(width: 12),
@@ -1572,20 +1846,34 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _called ? 'Call Completed' : 'Call Pending',
+                            _called
+                                ? 'Call Completed'
+                                : _noAnswerDetected
+                                    ? 'No Answer'
+                                    : 'Call Pending',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
-                              color: _called ? _green : Colors.orange[700],
+                              color: _called
+                                  ? _green
+                                  : _noAnswerDetected
+                                      ? Colors.red[700]
+                                      : Colors.orange[700],
                             ),
                           ),
                           Text(
                             _called
                                 ? 'Add remarks and save below'
-                                : 'Tap the button above to call',
+                                : _noAnswerDetected
+                                    ? 'Customer did not answer - message or mark overdue'
+                                    : 'Tap the button above to call',
                             style: TextStyle(
                               fontSize: 13,
-                              color: _called ? _green : Colors.orange[600],
+                              color: _called
+                                  ? _green
+                                  : _noAnswerDetected
+                                      ? Colors.red[600]
+                                      : Colors.orange[600],
                             ),
                           ),
                         ],

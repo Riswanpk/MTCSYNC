@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/dme_reminder.dart';
 import '../models/dme_sale.dart';
 import '../services/dme_supabase_service.dart';
 import '../services/dme_complaint_service.dart';
 import '../../Leads/leadsform.dart';
 import '../../Navigation/user_cache_service.dart';
+import 'dme_create_complaint_page.dart';
 
 class DmeReminderDetailPage extends StatefulWidget {
   final DmeReminder reminder;
@@ -181,15 +183,43 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> {
     );
   }
 
-  void _raiseComplaint() {
-    // Navigate to complaint form
-    showDialog(
-      context: context,
-      builder: (_) => _ComplaintFormDialog(
-        customerName: _currentReminder.customerName ?? 'Unknown',
-        customerPhone: _currentReminder.customerPhone ?? '',
-      ),
-    );
+  Future<void> _raiseComplaint() async {
+    try {
+      // Get current user
+      final firebaseUid = FirebaseAuth.instance.currentUser?.uid;
+      if (firebaseUid == null) throw Exception('User not authenticated');
+      
+      // Get DME user from Supabase
+      final dmeUser = await DmeSupabaseService.instance.getCurrentUser(firebaseUid);
+      if (dmeUser == null) throw Exception('DME user not found');
+      
+      // Navigate to complaint creation page with pre-filled reminder data
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => DmeCreateComplaintPage(
+              dmeUser: dmeUser,
+              onSubmitted: () {
+                // Refresh reminder details after complaint is submitted
+                setState(() {});
+              },
+              prefilledCustomerId: _currentReminder.customerId,
+              prefilledCustomerName: _currentReminder.customerName,
+              prefilledCustomerPhone: _currentReminder.customerPhone,
+              prefilledBranchId: _currentReminder.purchasedForBranchId,
+              prefilledBranchName: _currentReminder.purchasedForBranchName,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   @override
@@ -550,201 +580,4 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> {
   }
 }
 
-class _ComplaintFormDialog extends StatefulWidget {
-  final String customerName;
-  final String customerPhone;
 
-  const _ComplaintFormDialog({
-    required this.customerName,
-    required this.customerPhone,
-  });
-
-  @override
-  State<_ComplaintFormDialog> createState() => _ComplaintFormDialogState();
-}
-
-class _ComplaintFormDialogState extends State<_ComplaintFormDialog> {
-  final _complaintService = DmeComplaintService.instance;
-  
-  late TextEditingController _complaintController;
-  String _selectedCategory = 'Other';
-  bool _submitting = false;
-  String? _userBranch;
-
-  @override
-  void initState() {
-    super.initState();
-    _complaintController = TextEditingController();
-    _loadUserBranch();
-  }
-
-  Future<void> _loadUserBranch() async {
-    try {
-      await UserCacheService.instance.ensureLoaded();
-      final branch = UserCacheService.instance.branch;
-      setState(() => _userBranch = branch);
-    } catch (e) {
-      debugPrint('Error loading user branch: $e');
-    }
-  }
-
-  @override
-  void dispose() {
-    _complaintController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submitComplaint() async {
-    if (_complaintController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter complaint details'),
-        ),
-      );
-      return;
-    }
-
-    setState(() => _submitting = true);
-
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await UserCacheService.instance.ensureLoaded();
-      final userId = UserCacheService.instance.uid;
-      
-      if (userId == null) {
-        throw Exception('User not authenticated');
-      }
-
-      // For now, complaint creation requires a branchId which we don't have in this context
-      // This should be called from the popup dialog instead with proper branch assignment
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Please use the complaint dialog during reminder calls'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      if (mounted) Navigator.pop(context);
-      return;
-    } catch (e) {
-      if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('Error raising complaint: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        setState(() => _submitting = false);
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Raise Complaint',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              
-              // Customer Info (read-only)
-              Text(
-                'Customer: ${widget.customerName}',
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              Text(
-                'Contact: ${widget.customerPhone}',
-                style: const TextStyle(fontSize: 13, color: Colors.grey),
-              ),
-              const SizedBox(height: 16),
-              
-              // Category
-              const Text(
-                'Category',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-              ),
-              const SizedBox(height: 8),
-              DropdownButton<String>(
-                isExpanded: true,
-                value: _selectedCategory,
-                items: ['Quality', 'Delivery', 'Payment', 'Other']
-                    .map((cat) => DropdownMenuItem(
-                      value: cat,
-                      child: Text(cat),
-                    ))
-                    .toList(),
-                onChanged: (val) => setState(() => _selectedCategory = val ?? 'Other'),
-              ),
-              const SizedBox(height: 16),
-              
-              // Complaint Text
-              const Text(
-                'Complaint Details',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _complaintController,
-                maxLines: 4,
-                decoration: InputDecoration(
-                  hintText: 'Describe the complaint...',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              
-              // Buttons
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton.icon(
-                    onPressed: _submitting ? null : _submitComplaint,
-                    icon: _submitting
-                        ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation(Colors.white),
-                          ),
-                        )
-                        : const Icon(Icons.send),
-                    label: Text(_submitting ? 'Submitting...' : 'Submit'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red[600],
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

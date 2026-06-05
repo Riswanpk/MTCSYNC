@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:audioplayers/audioplayers.dart';
 import '../models/dme_complaint.dart';
 import '../services/dme_complaint_service.dart';
 import '../services/dme_supabase_service.dart';
@@ -38,6 +39,12 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
   String? _assignedToUsername;
   String? _voiceFileUrl;
 
+  // Audio player for the original complaint voice note
+  AudioPlayer? _complaintVoicePlayer;
+  bool _isPlayingComplaintVoice = false;
+  Duration _complaintVoiceDuration = Duration.zero;
+  Duration _complaintVoicePosition = Duration.zero;
+
   @override
   void initState() {
     super.initState();
@@ -46,6 +53,25 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
     // Pre-fill remarks field for assigned user so they can update
     if (widget.isAssignedUser) {
       _remarksCtrl.text = _complaint.remarks ?? '';
+    }
+    // Set up audio player for complaint's original voice note
+    if (_complaint.voiceFileUrl != null) {
+      _complaintVoicePlayer = AudioPlayer();
+      _complaintVoicePlayer!.onPlayerStateChanged.listen((state) {
+        if (mounted) {
+          setState(() => _isPlayingComplaintVoice = state == PlayerState.playing);
+        }
+      });
+      _complaintVoicePlayer!.onDurationChanged.listen((duration) {
+        if (mounted) {
+          setState(() => _complaintVoiceDuration = duration);
+        }
+      });
+      _complaintVoicePlayer!.onPositionChanged.listen((position) {
+        if (mounted) {
+          setState(() => _complaintVoicePosition = position);
+        }
+      });
     }
     // Ensure Supabase is initialized
     _initSupabase();
@@ -80,7 +106,54 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
   @override
   void dispose() {
     _remarksCtrl.dispose();
+    _complaintVoicePlayer?.dispose();
     super.dispose();
+  }
+
+  Future<void> _toggleComplaintVoice() async {
+    if (_complaintVoicePlayer == null || _complaint.voiceFileUrl == null) return;
+    try {
+      if (_isPlayingComplaintVoice) {
+        await _complaintVoicePlayer!.pause();
+      } else {
+        await _complaintVoicePlayer!.play(UrlSource(_complaint.voiceFileUrl!));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error playing voice note: $e')));
+      }
+    }
+  }
+
+  Future<void> _seekComplaintVoice(double seconds) async {
+    if (_complaintVoicePlayer == null) return;
+    try {
+      await _complaintVoicePlayer!.seek(Duration(seconds: seconds.toInt()));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error seeking: $e')));
+      }
+    }
+  }
+
+  Future<void> _skipBackward() async {
+    final newPosition = _complaintVoicePosition.inSeconds - 15;
+    await _seekComplaintVoice(newPosition < 0 ? 0 : newPosition.toDouble());
+  }
+
+  Future<void> _skipForward() async {
+    final newPosition = _complaintVoicePosition.inSeconds + 15;
+    final maxPosition = _complaintVoiceDuration.inSeconds;
+    await _seekComplaintVoice(
+        newPosition > maxPosition ? maxPosition.toDouble() : newPosition.toDouble());
+  }
+
+  String _formatDuration(Duration duration) {
+    final minutes = duration.inMinutes;
+    final seconds = duration.inSeconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
   // ─── ACTIONS ────────────────────────────────────────────────────────────────
@@ -270,13 +343,126 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
             ),
             const SizedBox(height: 12),
 
-            // Complaint text
+            // Complaint text 
             _buildSection(
               title: 'Complaint',
               child: Text(_complaint.complaintText,
                   style: const TextStyle(fontSize: 14, height: 1.5)),
             ),
             const SizedBox(height: 12),
+
+            // Original complaint voice note (visible to all viewers)
+            if (_complaint.voiceFileUrl != null) ...[
+              _buildSection(
+                title: 'Voice Note',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Play/Pause and Skip Controls
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          onPressed: _skipBackward,
+                          icon: const Icon(Icons.replay_10),
+                          tooltip: 'Skip 15s backward',
+                          color: Colors.blue[600],
+                          iconSize: 28,
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.blue[600],
+                            shape: BoxShape.circle,
+                          ),
+                          child: IconButton(
+                            onPressed: _toggleComplaintVoice,
+                            icon: Icon(
+                              _isPlayingComplaintVoice
+                                  ? Icons.pause
+                                  : Icons.play_arrow,
+                              color: Colors.white,
+                              size: 28,
+                            ),
+                            iconSize: 32,
+                            padding: const EdgeInsets.all(12),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          onPressed: _skipForward,
+                          icon: const Icon(Icons.fast_forward),
+                          tooltip: 'Skip 15s forward',
+                          color: Colors.blue[600],
+                          iconSize: 28,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    // Progress Slider
+                    Column(
+                      children: [
+                        SliderTheme(
+                          data: SliderThemeData(
+                            trackHeight: 4.0,
+                            thumbShape: const RoundSliderThumbShape(
+                              enabledThumbRadius: 6.0,
+                            ),
+                            overlayShape: const RoundSliderOverlayShape(
+                              overlayRadius: 12.0,
+                            ),
+                          ),
+                          child: Slider(
+                            value: _complaintVoiceDuration.inSeconds > 0
+                                ? _complaintVoicePosition.inSeconds
+                                    .toDouble()
+                                    .clamp(
+                                        0,
+                                        _complaintVoiceDuration.inSeconds
+                                            .toDouble())
+                                : 0,
+                            max: _complaintVoiceDuration.inSeconds
+                                .toDouble()
+                                .clamp(0, double.infinity),
+                            onChanged: _complaintVoiceDuration.inSeconds > 0
+                                ? (value) =>
+                                    _seekComplaintVoice(value)
+                                : null,
+                            activeColor: Colors.blue[600],
+                            inactiveColor: Colors.grey[300],
+                          ),
+                        ),
+                        // Time display
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Row(
+                            mainAxisAlignment:
+                                MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                _formatDuration(_complaintVoicePosition),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                              Text(
+                                _formatDuration(_complaintVoiceDuration),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
 
             // Branch + Assigned To
             Row(
