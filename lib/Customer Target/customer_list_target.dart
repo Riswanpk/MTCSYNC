@@ -812,6 +812,16 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
         // Sort customers based on called status
         List<Map<String, dynamic>> sortedCustomers = List<Map<String, dynamic>>.from(filteredCustomers);
         sortedCustomers.sort((a, b) {
+          final bool aNeedsRemarks =
+              a['callMade'] == true && (a['remarks'] ?? '').toString().trim().isEmpty;
+          final bool bNeedsRemarks =
+              b['callMade'] == true && (b['remarks'] ?? '').toString().trim().isEmpty;
+
+          // Always pin "called but no remarks" customers to the top.
+          if (aNeedsRemarks != bNeedsRemarks) {
+            return aNeedsRemarks ? -1 : 1;
+          }
+
           if (_sortCalledFirst) {
             return (b['callMade'] == true ? 1 : 0) - (a['callMade'] == true ? 1 : 0);
           } else {
