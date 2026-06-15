@@ -72,9 +72,13 @@ class _DmeComplaintsViewPageState extends State<DmeComplaintsViewPage> {
           userId: _userName!,
         );
       } else if (_userBranch != null) {
-        // Branch user sees complaints from their branch - requires branch ID
-        // For now, fetch all complaints and filter client-side
-        complaints = await _complaintService.getAllComplaints();
+        // Branch user: fetch only complaints for their branch (server-side)
+        final branchId = await DmeSupabaseService.instance
+            .getBranchIdByNameCached(_userBranch!);
+        if (branchId != null) {
+          complaints =
+              await _complaintService.getComplaintsForBranch(branchId: branchId);
+        }
       }
 
       if (mounted) {

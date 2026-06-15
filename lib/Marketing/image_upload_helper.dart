@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
+import '../Misc/firebase_storage_helper.dart';
 
 /// Manages background image pre-uploading so the upload happens while
 /// the user fills in the rest of the form, not at submit time.
@@ -20,17 +21,31 @@ class ImageUploadHelper {
 
   Future<String?> _doUpload(File imageFile) async {
     try {
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('marketing')
-          .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
+      Reference? ref;
+      Object? lastError;
 
-      _activeUploadTask = ref.putFile(
-        imageFile,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
+      for (final storage in FirebaseStorageHelper.storageCandidates()) {
+        final candidateRef = storage.ref().child('marketing').child(fileName);
+        try {
+          _activeUploadTask = candidateRef.putFile(
+            imageFile,
+            SettableMetadata(contentType: 'image/jpeg'),
+          );
+          await _activeUploadTask;
+          ref = candidateRef;
+          break;
+        } catch (e) {
+          lastError = e;
+          if (!FirebaseStorageHelper.isBucketNotFoundError(e)) {
+            rethrow;
+          }
+        }
+      }
 
-      await _activeUploadTask;
+      if (ref == null) {
+        throw lastError ?? Exception('Unable to upload image to any storage bucket');
+      }
 
       if (_cancelled) return null;
 

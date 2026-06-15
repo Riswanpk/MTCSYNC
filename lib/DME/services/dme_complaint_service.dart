@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/dme_complaint.dart';
+import 'dme_supabase_service.dart';
 
 class DmeComplaintService {
   DmeComplaintService._();
@@ -208,22 +209,9 @@ class DmeComplaintService {
     return data.map((doc) => DmeComplaint.fromMap(doc as Map<String, dynamic>)).toList();
   }
 
-  /// Get branch ID by branch name
-  Future<int?> getBranchIdByName(String branchName) async {
-    _ensureSupabaseInitialized();
-    try {
-      final response = await _supabase
-          .from('dme_branches')
-          .select('id')
-          .eq('name', branchName)
-          .single();
-      
-      return response['id'] as int?;
-    } catch (e) {
-      debugPrint('Error getting branch ID for "$branchName": $e');
-      return null;
-    }
-  }
+  /// Get branch ID by branch name — delegates to branch cache to avoid DB hits.
+  Future<int?> getBranchIdByName(String branchName) =>
+      DmeSupabaseService.instance.getBranchIdByNameCached(branchName);
 
   /// Get username for a given user ID by looking up in dme_users table
   Future<String?> getUsernameById(String userId) async {

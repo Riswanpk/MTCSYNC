@@ -34,6 +34,8 @@ class _DmeComplaintsManagementPageState
   String? _selectedAssignedTo; // user ID
   String? _currentUserId;
   String? _managerBranchName;
+  String? _currentRole;
+  bool _sortNewestFirst = true;
 
   @override
   void initState() {
@@ -62,6 +64,7 @@ class _DmeComplaintsManagementPageState
       await _cache.ensureLoaded();
       _currentUserId = FirebaseAuth.instance.currentUser?.uid;
       final role = _cache.role;
+      _currentRole = role;
       final uid = _cache.uid;
 
       // Fetch only relevant complaints based on role
@@ -128,6 +131,11 @@ class _DmeComplaintsManagementPageState
     if (_selectedAssignedTo != null) {
       complaints = complaints.where((c) => c.assignedToId == _selectedAssignedTo).toList();
     }
+    // Sort by date
+    complaints = List<DmeComplaint>.from(complaints);
+    complaints.sort((a, b) => _sortNewestFirst
+        ? b.createdAt.compareTo(a.createdAt)
+        : a.createdAt.compareTo(b.createdAt));
     _filtered = complaints;
   }
 
@@ -140,6 +148,7 @@ class _DmeComplaintsManagementPageState
           complaint: complaint,
           isDmeUser: false,
           isAssignedUser: isAssigned,
+          isManagerRole: _currentRole == 'manager',
           onUpdate: _load,
         ),
       ),
@@ -160,6 +169,18 @@ class _DmeComplaintsManagementPageState
         elevation: 0,
         actions: [
           IconButton(
+            icon: Icon(
+              _sortNewestFirst ? Icons.arrow_downward : Icons.arrow_upward,
+            ),
+            tooltip: _sortNewestFirst ? 'Newest first' : 'Oldest first',
+            onPressed: () {
+              setState(() {
+                _sortNewestFirst = !_sortNewestFirst;
+                _applyFilter();
+              });
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loading ? null : _load,
           ),
@@ -169,17 +190,24 @@ class _DmeComplaintsManagementPageState
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _load,
-              child: _filtered.isEmpty
-                  ? _buildEmpty()
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(12),
-                      itemCount: _filtered.length,
-                      itemBuilder: (_, i) {
-                        final complaint = _filtered[i];
-                        final username = _usernameCache[complaint.assignedToId] ?? complaint.assignedToId;
-                        return _buildCard(complaint, username);
-                      },
-                    ),
+              child: Column(
+                children: [
+                  _buildFilterBar(),
+                  Expanded(
+                    child: _filtered.isEmpty
+                        ? _buildEmpty()
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(12),
+                            itemCount: _filtered.length,
+                            itemBuilder: (_, i) {
+                              final complaint = _filtered[i];
+                              final username = _usernameCache[complaint.assignedToId] ?? complaint.assignedToId;
+                              return _buildCard(complaint, username);
+                            },
+                          ),
+                  ),
+                ],
+              ),
             ),
     );
   }
@@ -238,8 +266,8 @@ class _DmeComplaintsManagementPageState
               }).toList(),
             ),
           ),
-          // Assigned To filter (only show when there are multiple assignees)
-          if (assignedUsers.isNotEmpty) ...
+          // Assigned To filter – manager only, only when there are multiple assignees
+          if (_currentRole == 'manager' && assignedUsers.isNotEmpty) ...
             [
               const SizedBox(height: 8),
               SingleChildScrollView(

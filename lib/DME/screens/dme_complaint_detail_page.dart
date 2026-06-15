@@ -13,10 +13,12 @@ const Color _primary = Color(0xFF005BAC);
 ///
 /// [isDmeUser]      – true when opened by the user who raised the complaint.
 /// [isAssignedUser] – true when the current user is the one assigned to resolve it.
+/// [isManagerRole]  – true when opened by a manager (can resolve and close).
 class DmeComplaintDetailPage extends StatefulWidget {
   final DmeComplaint complaint;
   final bool isDmeUser;
   final bool isAssignedUser;
+  final bool isManagerRole;
   final VoidCallback onUpdate;
 
   const DmeComplaintDetailPage({
@@ -24,6 +26,7 @@ class DmeComplaintDetailPage extends StatefulWidget {
     required this.complaint,
     required this.isDmeUser,
     required this.isAssignedUser,
+    this.isManagerRole = false,
     required this.onUpdate,
   });
 
@@ -195,13 +198,15 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
     }
   }
 
-  Future<void> _closeComplaint() async {
+
+
+  Future<void> _resolveComplaint() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Close Complaint'),
-        content:
-            Text('Close this complaint for ${_complaint.customerName}?'),
+        title: const Text('Resolve Complaint'),
+        content: Text(
+            'Mark this complaint for ${_complaint.customerName} as resolved?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -209,8 +214,8 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Close',
-                style: TextStyle(color: Colors.red)),
+            child: const Text('Resolve',
+                style: TextStyle(color: Colors.orange)),
           ),
         ],
       ),
@@ -223,15 +228,14 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
       if (uid == null) throw Exception('Not authenticated');
       await _svc.updateComplaintStatus(
         complaintId: _complaint.id!,
-        newStatus: 'verified_closed',
+        newStatus: 'case_resolved',
         userId: uid,
       );
-      await _svc.markRemarksAsRead(complaintId: _complaint.id!);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Complaint closed successfully'),
-            backgroundColor: Colors.green,
+            content: Text('Complaint marked as resolved'),
+            backgroundColor: Colors.orange,
           ),
         );
         widget.onUpdate();
@@ -283,6 +287,58 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
           const SnackBar(
             content: Text('Complaint re-opened successfully'),
             backgroundColor: Colors.orange,
+          ),
+        );
+        widget.onUpdate();
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _closeComplaint() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Close Complaint'),
+        content:
+            Text('Close this complaint for ${_complaint.customerName}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Close',
+                style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _submitting = true);
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) throw Exception('Not authenticated');
+      await _svc.updateComplaintStatus(
+        complaintId: _complaint.id!,
+        newStatus: 'verified_closed',
+        userId: uid,
+      );
+      await _svc.markRemarksAsRead(complaintId: _complaint.id!);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Complaint closed successfully'),
+            backgroundColor: Colors.green,
           ),
         );
         widget.onUpdate();
@@ -625,6 +681,19 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
                   color: Colors.green,
                   label: 'Complaint Closed',
                   subtitle: null,
+                ),
+              ],
+
+              // ─── MANAGER ACTIONS ──────────────────────────────────
+              if (widget.isManagerRole && _complaint.status == 'raised') ...[
+                const SizedBox(height: 20),
+                _buildSectionHeader('Manager Actions'),
+                const SizedBox(height: 8),
+                _buildActionButton(
+                  label: 'Mark as Resolved',
+                  icon: Icons.check_circle_outline,
+                  color: Colors.orange,
+                  onPressed: _submitting ? null : _resolveComplaint,
                 ),
               ],
             ],

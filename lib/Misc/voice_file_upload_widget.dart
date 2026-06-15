@@ -3,6 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'dart:io';
+import 'firebase_storage_helper.dart';
 
 class VoiceFileUploadWidget extends StatefulWidget {
   final Function(String? fileUrl) onFileUploaded;
@@ -105,11 +106,27 @@ class _VoiceFileUploadWidgetState extends State<VoiceFileUploadWidget> {
     try {
       final file = File(_selectedFilePath!);
       final fileName = _fileName ?? DateTime.now().millisecondsSinceEpoch.toString();
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('${widget.uploadPath}/$fileName');
+      Reference? ref;
+      Object? lastError;
 
-      await ref.putFile(file);
+      for (final storage in FirebaseStorageHelper.storageCandidates()) {
+        final candidateRef = storage
+            .ref()
+            .child('${widget.uploadPath}/$fileName');
+        try {
+          await candidateRef.putFile(file);
+          ref = candidateRef;
+          break;
+        } catch (e) {
+          lastError = e;
+          if (!FirebaseStorageHelper.isBucketNotFoundError(e)) rethrow;
+        }
+      }
+
+      if (ref == null) {
+        throw lastError ?? Exception('Unable to upload voice file to any storage bucket');
+      }
+
       final downloadUrl = await ref.getDownloadURL();
 
       setState(() {

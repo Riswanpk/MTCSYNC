@@ -118,7 +118,7 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
         break;
       case 'Completed Today':
         status = null;
-        statuses = ['completed', 'called'];
+        statuses = ['completed'];
         // Filter by completion time (updated_at), not reminder date, so overdue reminders completed today show up
         updatedFrom = DateTime(now.year, now.month, now.day);
         updatedTo = DateTime(now.year, now.month, now.day, 23, 59, 59);
@@ -201,7 +201,7 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
         found = true;
         if (mounted) setState(() => _calledIds.add(_pendingCallCustomerId!));
         if (_pendingCallReminderId != null) {
-          await _svc.updateReminderStatus(_pendingCallReminderId!, 'called');
+          await _svc.updateReminderStatus(_pendingCallReminderId!, 'completed');
         }
         break;
       }
@@ -222,7 +222,7 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
           found = true;
           if (mounted) setState(() => _calledIds.add(_pendingCallCustomerId!));
           if (_pendingCallReminderId != null) {
-            await _svc.updateReminderStatus(_pendingCallReminderId!, 'called');
+            await _svc.updateReminderStatus(_pendingCallReminderId!, 'completed');
           }
           break;
         }
@@ -264,7 +264,7 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
             _numberMatches(entry.number ?? '', phone)) {
           setState(() => _calledIds.add(r.customerId));
           if (r.id != null) {
-            await _svc.updateReminderStatus(r.id!, 'called');
+            await _svc.updateReminderStatus(r.id!, 'completed');
           }
           break;
         }
@@ -304,7 +304,7 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
           matched.add(r);
           setState(() => _calledIds.add(r.customerId));
           if (r.id != null) {
-            await _svc.updateReminderStatus(r.id!, 'called');
+            await _svc.updateReminderStatus(r.id!, 'completed');
           }
           break;
         }
@@ -658,10 +658,6 @@ class _ReminderCard extends StatelessWidget {
       statusColor = Colors.green;
       statusIcon = Icons.phone_in_talk_rounded;
       statusLabel = 'Called';
-    } else if (reminder.status == 'called') {
-      statusColor = Colors.green;
-      statusIcon = Icons.phone_in_talk_rounded;
-      statusLabel = 'Called';
     } else if (isCompleted) {
       statusColor = Colors.purple;
       statusIcon = Icons.task_alt_rounded;
@@ -767,7 +763,7 @@ class _ReminderCard extends StatelessWidget {
                         ),
                       const SizedBox(height: 6),
                       // Remarks needed badge for called-but-no-notes
-                      if ((called || reminder.status == 'called') &&
+                      if (called &&
                           (reminder.notes == null || reminder.notes!.trim().isEmpty))
                         Padding(
                           padding: const EdgeInsets.only(bottom: 6),

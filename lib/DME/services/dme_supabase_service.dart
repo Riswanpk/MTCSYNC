@@ -1,6 +1,8 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import '../dme_config.dart';
 import '../models/dme_user.dart';
 import '../models/dme_customer.dart';
@@ -8,6 +10,7 @@ import '../models/dme_sale.dart';
 import '../models/dme_reminder.dart';
 import '../models/dme_complaint.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import '../../Misc/firebase_storage_helper.dart';
 
 class DmeSupabaseService {
   DmeSupabaseService._();
@@ -31,6 +34,22 @@ class DmeSupabaseService {
   // ── Cached current user ──────────────────────────────────────
   DmeUser? _currentUser;
   bool _branchesSynced = false;
+
+  // ── Branch cache (avoids repeated DB hits across screens) ────
+  List<Map<String, dynamic>>? _branchesCache;
+  DateTime? _branchesCacheTime;
+  static const _branchesCacheTtl = Duration(minutes: 5);
+
+  bool get _branchesCacheValid =>
+      _branchesCache != null &&
+      _branchesCacheTime != null &&
+      DateTime.now().difference(_branchesCacheTime!) < _branchesCacheTtl;
+
+  /// Invalidates the branch cache (call after any branch write).
+  void invalidateBranchCache() {
+    _branchesCache = null;
+    _branchesCacheTime = null;
+  }
 
   /// Verify Supabase connection and return detailed error info
   Future<Map<String, dynamic>> diagnoseConnection() async {
@@ -117,34 +136,36 @@ class DmeSupabaseService {
 
   Future<List<Map<String, dynamic>>> getBranches() async {
     await ensureInitialized();
+    if (_branchesCacheValid) return _branchesCache!;
     try {
       await _syncAppBranches();
       final res = await _client
           .from('dme_branches')
           .select()
           .order('name', ascending: true);
-      return List<Map<String, dynamic>>.from(res);
+      _branchesCache = List<Map<String, dynamic>>.from(res);
+      _branchesCacheTime = DateTime.now();
+      return _branchesCache!;
     } catch (e) {
       debugPrint('Network error fetching branches: $e');
-      // Return empty list on network error - graceful degradation
-      return [];
+      // Return stale cache if available, else empty
+      return _branchesCache ?? [];
     }
   }
 
-  /// Get branch name by ID
+  /// Get branch name by ID — uses branch cache to avoid extra DB round-trips.
   Future<String?> getBranchNameById(int branchId) async {
-    await ensureInitialized();
-    try {
-      final res = await _client
-          .from('dme_branches')
-          .select('name')
-          .eq('id', branchId)
-          .maybeSingle();
-      return res != null ? res['name'] as String? : null;
-    } catch (e) {
-      debugPrint('Error getting branch name for ID $branchId: $e');
-      return null;
-    }
+    final branches = await getBranches();
+    final match = branches.where((b) => b['id'] == branchId).firstOrNull;
+    return match?['name'] as String?;
+  }
+
+  /// Get branch ID by name — uses branch cache to avoid extra DB round-trips.
+  Future<int?> getBranchIdByNameCached(String branchName) async {
+    final branches = await getBranches();
+    final match =
+        branches.where((b) => b['name'] == branchName).firstOrNull;
+    return match?['id'] as int?;
   }
 
   /// Get customer's default branch name
@@ -205,13 +226,22 @@ class DmeSupabaseService {
   Future<List<DmeUser>> getAllDmeUsers() async {
     await ensureInitialized();
     try {
-      final res = await _client.from('dme_users').select().order('username');
-      final users = <DmeUser>[];
-      for (final row in res) {
-        final branches = await getUserBranchNames(row['id'] as String);
-        users.add(DmeUser.fromMap(row, branches: branches));
-      }
-      return users;
+      // Single query: fetch all users + their branch names via join (avoids N+1).
+      final res = await _client
+          .from('dme_users')
+          .select('*, dme_user_branches(branch_id, dme_branches(name))')
+          .order('username');
+
+      return List<Map<String, dynamic>>.from(res).map((row) {
+        final branchRows =
+            row['dme_user_branches'] as List<dynamic>? ?? [];
+        final branches = branchRows
+            .map((b) =>
+                ((b as Map)['dme_branches'] as Map?)?['name'] as String?)
+            .whereType<String>()
+            .toList();
+        return DmeUser.fromMap(row, branches: branches);
+      }).toList();
     } catch (e) {
       debugPrint('Network error fetching all DME users: $e');
       return [];
@@ -295,32 +325,27 @@ class DmeSupabaseService {
   Future<List<DmeUser>> getUsersByBranch(String branchName) async {
     await ensureInitialized();
     try {
-      // First get the branch ID from branch name
-      final branchRes = await _client
-          .from('dme_branches')
-          .select('id')
-          .eq('name', branchName)
-          .maybeSingle();
+      // Use cached branch lookup instead of a separate DB query
+      final branchId = await getBranchIdByNameCached(branchName);
+      if (branchId == null) return [];
 
-      if (branchRes == null) {
-        return [];
-      }
-
-      final branchId = branchRes['id'] as int;
-
-      // Now get all users assigned to this branch
+      // Single query: users + their branches via join (no N+1)
       final res = await _client
           .from('dme_user_branches')
-          .select('dme_users(*)')
+          .select('dme_users(*, dme_user_branches(branch_id, dme_branches(name)))')
           .eq('branch_id', branchId);
 
-      final users = <DmeUser>[];
-      for (final row in res) {
+      return List<Map<String, dynamic>>.from(res).map((row) {
         final userData = row['dme_users'] as Map<String, dynamic>;
-        final branches = await getUserBranchNames(userData['id'] as String);
-        users.add(DmeUser.fromMap(userData, branches: branches));
-      }
-      return users;
+        final branchRows =
+            userData['dme_user_branches'] as List<dynamic>? ?? [];
+        final branches = branchRows
+            .map((b) =>
+                ((b as Map)['dme_branches'] as Map?)?['name'] as String?)
+            .whereType<String>()
+            .toList();
+        return DmeUser.fromMap(userData, branches: branches);
+      }).toList();
     } catch (e) {
       debugPrint('Error getting users for branch: $e');
       return [];
@@ -1263,14 +1288,14 @@ class DmeSupabaseService {
     // No separate action needed here
   }
 
-  /// Get call logs for a customer (returns reminders with 'called' status)
+  /// Get call logs for a customer (returns reminders with 'completed' status)
   Future<List<Map<String, dynamic>>> getCallLogs(int customerId) async {
     await ensureInitialized();
     final res = await _client
         .from('dme_reminders')
         .select()
         .eq('customer_id', customerId)
-        .eq('status', 'called')
+        .eq('status', 'completed')
         .order('reminder_date', ascending: false);
     return List<Map<String, dynamic>>.from(res);
   }
@@ -1644,5 +1669,187 @@ class DmeSupabaseService {
     return false;
   }
 
+  /// Upload WhatsApp proof screenshot to Supabase storage and save reference
+  Future<String?> uploadWhatsAppProof({
+    required int reminderId,
+    required int customerId,
+    required Uint8List compressedImageBytes,
+    required String remarks,
+  }) async {
+    await ensureInitialized();
+    try {
+      // Generate unique filename
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final filename = 'whatsapp_proof_${customerId}_$timestamp.jpg';
+      final path = 'dme_reminders/$reminderId/$filename';
+
+      // Try Supabase buckets first, then Firebase Storage fallback if bucket is missing.
+      final uploadResult = await _uploadProofWithFallback(
+        path: path,
+        bytes: compressedImageBytes,
+      );
+
+      // Save proof reference to database
+      await _insertWhatsAppProofRecord(
+        reminderId: reminderId,
+        customerId: customerId,
+        uploadPath: uploadResult.path,
+        uploadUrl: uploadResult.publicUrl,
+        remarks: remarks,
+      );
+
+      return uploadResult.path;
+    } catch (e) {
+      debugPrint('Error uploading WhatsApp proof: $e');
+      rethrow;
+    }
+  }
+
+  Future<_ProofUploadResult> _uploadProofWithFallback({
+    required String path,
+    required Uint8List bytes,
+  }) async {
+    const supabaseBuckets = ['dme-proofs', 'dme_proofs', 'proofs'];
+    Object? lastBucketError;
+
+    for (final bucket in supabaseBuckets) {
+      try {
+        final uploadedPath = await _client.storage.from(bucket).uploadBinary(
+          path,
+          bytes,
+          fileOptions: const FileOptions(contentType: 'image/jpeg'),
+        );
+        if (uploadedPath.isEmpty) continue;
+        return _ProofUploadResult(
+          path: uploadedPath,
+          publicUrl: _client.storage.from(bucket).getPublicUrl(path),
+        );
+      } catch (e) {
+        final message = e.toString().toLowerCase();
+        final isBucketMissing =
+            message.contains('bucket not found') || message.contains('bucket_not_found');
+        if (!isBucketMissing) rethrow;
+        lastBucketError = e;
+      }
+    }
+
+    // Final fallback: Firebase Storage, so upload can still succeed even if
+    // Supabase storage bucket is not provisioned.
+    for (final storage in FirebaseStorageHelper.storageCandidates()) {
+      try {
+        final ref = storage.ref().child('dme_whatsapp_proofs').child(path);
+        await ref.putData(
+          bytes,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
+        final url = await ref.getDownloadURL();
+        return _ProofUploadResult(
+          path: ref.fullPath,
+          publicUrl: url,
+        );
+      } catch (e) {
+        lastBucketError = e;
+      }
+    }
+
+    throw Exception(
+      'Proof upload failed. Supabase proof bucket is missing and Firebase upload fallback also failed. '
+      'Original error: ${lastBucketError ?? 'unknown'}',
+    );
+  }
+
+  Future<void> _insertWhatsAppProofRecord({
+    required int reminderId,
+    required int customerId,
+    required String uploadPath,
+    required String uploadUrl,
+    required String remarks,
+  }) async {
+    final uploadedAt = DateTime.now().toUtc().toIso8601String();
+
+    final base = <String, dynamic>{
+      'reminder_id': reminderId,
+      'customer_id': customerId,
+    };
+
+    final metaVariants = <Map<String, dynamic>>[
+      {'remarks': remarks, 'uploaded_at': uploadedAt},
+      {'notes': remarks, 'uploaded_at': uploadedAt},
+      {'remarks': remarks},
+      {'notes': remarks},
+      {'uploaded_at': uploadedAt},
+      {},
+    ];
+
+    final locationVariants = <Map<String, dynamic>>[
+      {'image_path': uploadPath, 'image_url': uploadUrl},
+      {'proof_path': uploadPath, 'proof_url': uploadUrl},
+      {'file_path': uploadPath, 'file_url': uploadUrl},
+      {'path': uploadPath, 'url': uploadUrl},
+      {'image_url': uploadUrl},
+      {'proof_url': uploadUrl},
+      {'file_url': uploadUrl},
+      {'url': uploadUrl},
+      {'image_path': uploadPath},
+      {'proof_path': uploadPath},
+      {'file_path': uploadPath},
+      {'path': uploadPath},
+      {},
+    ];
+
+    Object? lastError;
+    for (final meta in metaVariants) {
+      for (final location in locationVariants) {
+        final payload = <String, dynamic>{
+          ...base,
+          ...meta,
+          ...location,
+        };
+        try {
+          await _client.from('dme_whatsapp_proofs').insert(payload);
+          return;
+        } catch (e) {
+          lastError = e;
+          if (_isSchemaMismatchError(e) || _isNotNullConstraintError(e)) {
+            continue;
+          }
+          rethrow;
+        }
+      }
+    }
+
+    throw Exception(
+      'Upload succeeded but saving proof record failed due to table schema mismatch in dme_whatsapp_proofs. '
+      'Last error: ${lastError ?? 'unknown'}',
+    );
+  }
+
+  bool _isSchemaMismatchError(Object error) {
+    final msg = error.toString().toLowerCase();
+    return msg.contains('pgrst204') ||
+        (msg.contains('could not find') && msg.contains('column')) ||
+        msg.contains('column of') && msg.contains('in the schema cache');
+  }
+
+  bool _isNotNullConstraintError(Object error) {
+    final msg = error.toString().toLowerCase();
+    return msg.contains("null value in column") ||
+        msg.contains('violates not-null constraint') ||
+        msg.contains("code: 23502");
+  }
+
+  /// Update reminder status to waiting for proof
+  Future<void> setReminderWaitingForProof(int reminderId) async {
+    // No status change needed — proof is tracked via dme_whatsapp_proofs table.
+    // 'waiting_for_proof' is not an allowed value in dme_reminders_status_check.
+  }
+
   Future<List<Map<String, dynamic>>> getAllBranches() => getBranches();
+}
+
+class _ProofUploadResult {
+  final String path;
+  final String publicUrl;
+
+  const _ProofUploadResult({required this.path, required this.publicUrl});
 }

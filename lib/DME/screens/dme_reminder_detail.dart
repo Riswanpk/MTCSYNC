@@ -1,12 +1,16 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/dme_reminder.dart';
+import '../models/dme_user.dart';
 import '../models/dme_sale.dart';
 import '../services/dme_supabase_service.dart';
-import '../services/dme_complaint_service.dart';
 import '../../Leads/leadsform.dart';
-import '../../Navigation/user_cache_service.dart';
 import 'dme_create_complaint_page.dart';
+import 'dme_customer_tile_viewer.dart';
 
 class DmeReminderDetailPage extends StatefulWidget {
   final DmeReminder reminder;
@@ -22,12 +26,12 @@ class DmeReminderDetailPage extends StatefulWidget {
 
 class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> {
   final _svc = DmeSupabaseService.instance;
+  final _imagePicker = ImagePicker();
 
   late DmeReminder _currentReminder;
   bool _marking = false;
-  // ignore: unused_field
-  bool _rescheduling = false;
-  // ignore: unused_field
+  bool _submittingProof = false;
+  final bool _rescheduling = false;
   DateTime? _newReminderDate;
   List<DmeSaleItem> _saleItems = [];
   bool _loadingItems = false;
@@ -222,12 +226,220 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> {
     }
   }
 
+  Future<void> _sendWhatsAppWithProof() async {
+    final phone = _currentReminder.customerPhone;
+    if (phone == null || phone.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Customer phone not available'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Show dialog to launch WhatsApp
+    final shouldContinue = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Send WhatsApp Message'),
+        content: Text(
+          'Ready to send a message to ${_currentReminder.customerName}?\n\n$phone\n\nThis will open WhatsApp. After sending the message, return to upload a screenshot as proof.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.message),
+            label: const Text('Open WhatsApp'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldContinue != true) return;
+
+    // Launch WhatsApp
+    try {
+      final whatsappUrl = 'https://wa.me/${phone.replaceAll(RegExp(r'[^0-9]'), '')}';
+      final uri = Uri.parse(whatsappUrl);
+      
+      if (!await canLaunchUrl(uri)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('WhatsApp not available on this device'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      setState(() => _submittingProof = true);
+      
+      // Launch WhatsApp - when user returns, show upload dialog
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+      
+      if (mounted && _submittingProof) {
+        // After brief delay to ensure app is in focus
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            _showProofUploadDialogAfterWhatsApp();
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _submittingProof = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _showProofUploadDialogAfterWhatsApp() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          title: const Text('Upload Chat Screenshot'),
+          content: const Text(
+            'Great! Now upload a screenshot of the WhatsApp chat to complete the proof.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                setState(() => _submittingProof = false);
+              },
+              child: const Text('Go Back'),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _pickAndUploadScreenshotWithStatus();
+              },
+              icon: const Icon(Icons.image),
+              label: const Text('Upload Screenshot'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndUploadScreenshotWithStatus() async {
+    if (_currentReminder.id == null) return;
+
+    try {
+      if (mounted) setState(() => _submittingProof = true);
+
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+
+      if (image == null) {
+        setState(() => _submittingProof = false);
+        return;
+      }
+
+      if (!mounted) return;
+
+      // Read image bytes
+      final bytes = await image.readAsBytes();
+
+      // Compress image
+      final compressedImage = await FlutterImageCompress.compressWithList(
+        bytes,
+        minHeight: 1024,
+        minWidth: 1024,
+        quality: 70,
+      );
+
+      if (compressedImage.isEmpty) throw Exception('Failed to compress image');
+
+      // Upload to Supabase
+      await _svc.uploadWhatsAppProof(
+        reminderId: _currentReminder.id!,
+        customerId: _currentReminder.customerId,
+        compressedImageBytes: Uint8List.fromList(compressedImage),
+        remarks: 'WhatsApp message sent - proof uploaded',
+      );
+
+      if (mounted) {
+        setState(() => _submittingProof = false);
+        
+        // Reload the reminder to get updated status
+        final updatedReminder = await _svc.getReminderById(_currentReminder.id!);
+        if (updatedReminder != null && mounted) {
+          // Navigate to tile viewer with updated reminder
+          final result = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(
+              builder: (_) => DmeCustomerTileViewer(
+                reminder: updatedReminder,
+                dmeUser: DmeUser(
+                  id: 'system',
+                  firebaseUid: 'system',
+                  email: 'system@mtc.com',
+                  username: 'system',
+                  role: 'user',
+                  branchNames: const [],
+                ),
+              ),
+            ),
+          );
+
+          if (result == true && mounted) {
+            Navigator.pop(context, 'completed');
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _submittingProof = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) Navigator.pop(context);
+        if (!didPop) {
+          if (_submittingProof) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Please wait, screenshot is still uploading.'),
+              ),
+            );
+            return;
+          }
+          Navigator.pop(context);
+        }
       },
       child: Scaffold(
         appBar: AppBar(
@@ -235,9 +447,13 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> {
           backgroundColor: const Color(0xFF005BAC),
           foregroundColor: Colors.white,
         ),
-        body: SingleChildScrollView(
-          child: Column(
-            children: [
+        body: Stack(
+          children: [
+            AbsorbPointer(
+              absorbing: _submittingProof,
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
               // Customer Info Card
               _buildCustomerCard(),
               
@@ -251,9 +467,35 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> {
               _buildReminderInfo(),
               
               // Action Buttons
-              _buildActionButtons(),
-            ],
-          ),
+                    _buildActionButtons(),
+                  ],
+                ),
+              ),
+            ),
+            if (_submittingProof)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.35),
+                  child: const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(color: Colors.white),
+                        SizedBox(height: 12),
+                        Text(
+                          'Uploading screenshot...',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -525,6 +767,23 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> {
             label: Text(_marking ? 'Marking...' : 'Mark as Complete'),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            onPressed: _submittingProof ? null : _sendWhatsAppWithProof,
+            icon: _submittingProof
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white)),
+                  )
+                : const Icon(Icons.message),
+            label: Text(_submittingProof ? 'Uploading...' : 'Send WhatsApp Message'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green.shade600,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
