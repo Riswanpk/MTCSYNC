@@ -6,6 +6,7 @@ import '../models/dme_complaint.dart';
 import '../services/dme_complaint_service.dart';
 import '../services/dme_supabase_service.dart';
 import 'dme_complaint_detail_page.dart';
+import 'dme_complaints_report_page.dart';
 
 const Color _primary = Color(0xFF005BAC);
 
@@ -28,7 +29,7 @@ class _DmeComplaintsManagementPageState
 
   List<DmeComplaint> _all = [];
   List<DmeComplaint> _filtered = [];
-  bool _loading = true;
+  bool _loading = false;
 
   String? _selectedStatus;
   String? _selectedAssignedTo; // user ID
@@ -36,6 +37,15 @@ class _DmeComplaintsManagementPageState
   String? _managerBranchName;
   String? _currentRole;
   bool _sortNewestFirst = true;
+
+  // ── Admin filter-first state ─────────────────────────────────
+  bool _isAdminRole = false;
+  bool _hasSearched = false;
+  DateTime _dateFrom = DateTime.now().subtract(const Duration(days: 29));
+  DateTime _dateTo = DateTime.now();
+  int? _filterBranchId;
+  String _filterBranchName = 'All Branches';
+  List<Map<String, dynamic>> _branchesForFilter = [];
 
   @override
   void initState() {
@@ -47,7 +57,22 @@ class _DmeComplaintsManagementPageState
     try {
       // Initialize Supabase before loading complaints
       await DmeSupabaseService.instance.ensureInitialized();
-      await _load();
+      await _cache.ensureLoaded();
+      _currentUserId = FirebaseAuth.instance.currentUser?.uid;
+      _currentRole = _cache.role;
+      _isAdminRole = (_currentRole == 'dme_admin' || _currentRole == 'admin');
+
+      if (_isAdminRole) {
+        // For admin: load branch list for filter, but do NOT fetch all complaints yet
+        final branches = await DmeSupabaseService.instance.getBranches();
+        if (mounted) {
+          setState(() {
+            _branchesForFilter = branches;
+          });
+        }
+      } else {
+        await _load();
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _loading = false);
@@ -89,8 +114,15 @@ class _DmeComplaintsManagementPageState
         complaints = await _svc.getAssignedComplaints(userId: uid);
         debugPrint('[Complaints Management] $role $uid: ${complaints.length} complaints');
       } else {
-        // Admin: fetch all complaints
-        complaints = await _svc.getAllComplaints();
+        // Admin: fetch with date range + optional branch filter
+        final endOfDay = DateTime(
+            _dateTo.year, _dateTo.month, _dateTo.day, 23, 59, 59, 999);
+        complaints = await _svc.getAllComplaints(
+          branchId: _filterBranchId,
+          dateFrom: _dateFrom,
+          dateTo: endOfDay,
+        );
+        _hasSearched = true;
         debugPrint('[Complaints Management] Admin: ${complaints.length} complaints');
       }
 
@@ -184,31 +216,49 @@ class _DmeComplaintsManagementPageState
             icon: const Icon(Icons.refresh),
             onPressed: _loading ? null : _load,
           ),
+          if (_isAdminRole)
+            IconButton(
+              icon: const Icon(Icons.assessment_outlined),
+              tooltip: 'Reports',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => DmeComplaintsReportPage(
+                      userRole: _currentRole ?? 'dme_admin',
+                      userId: _currentUserId,
+                    ),
+                  ),
+                );
+              },
+            ),
         ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: Column(
-                children: [
-                  _buildFilterBar(),
-                  Expanded(
-                    child: _filtered.isEmpty
-                        ? _buildEmpty()
-                        : ListView.builder(
+          : (!_isAdminRole || _hasSearched)
+              ? RefreshIndicator(
+                  onRefresh: _load,
+                  child: Column(
+                    children: [
+                      _buildFilterBar(),
+                      Expanded(
+                        child: _filtered.isEmpty
+                            ? _buildEmpty()
+                            : ListView.builder(
                             padding: const EdgeInsets.all(12),
                             itemCount: _filtered.length,
-                            itemBuilder: (_, i) {
-                              final complaint = _filtered[i];
-                              final username = _usernameCache[complaint.assignedToId] ?? complaint.assignedToId;
-                              return _buildCard(complaint, username);
-                            },
-                          ),
+                                itemBuilder: (_, i) {
+                                final complaint = _filtered[i];
+                                final username = _usernameCache[complaint.assignedToId] ?? complaint.assignedToId;
+                                return _buildCard(complaint, username);
+                              },
+                            ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                )
+              : _buildAdminFilterPrompt(),
     );
   }
 
@@ -233,6 +283,37 @@ class _DmeComplaintsManagementPageState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Admin: date range + branch summary row with change button
+          if (_isAdminRole) ...[            
+            Row(
+              children: [
+                const Icon(Icons.date_range, size: 14, color: _primary),
+                const SizedBox(width: 4),
+                Text(
+                  '${DateFormat('dd MMM yy').format(_dateFrom)} – ${DateFormat('dd MMM yy').format(_dateTo)}',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _primary),
+                ),
+                const SizedBox(width: 10),
+                const Icon(Icons.location_on, size: 14, color: Colors.teal),
+                const SizedBox(width: 2),
+                Text(
+                  _filterBranchName,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.teal),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => setState(() => _hasSearched = false),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text('Change', style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+          ],
           // Status filter row
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -336,6 +417,113 @@ class _DmeComplaintsManagementPageState
         ],
       ),
     );
+  }
+
+  Widget _buildAdminFilterPrompt() {
+    final dateFmt = DateFormat('dd MMM yyyy');
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 24),
+          const Icon(Icons.search, size: 52, color: _primary),
+          const SizedBox(height: 16),
+          const Text(
+            'Filter to Load Complaints',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Select a date range and optionally a branch, then tap Search.',
+            style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+          ),
+          const SizedBox(height: 24),
+          // Date range card
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: ListTile(
+              leading: const Icon(Icons.date_range, color: _primary),
+              title: const Text('Date Range',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: Text(
+                '${dateFmt.format(_dateFrom)}  →  ${dateFmt.format(_dateTo)}',
+              ),
+              trailing: TextButton(
+                onPressed: _pickDateRange,
+                child: const Text('Change'),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Branch filter card
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: DropdownButtonFormField<int?>(
+                value: _filterBranchId,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Branch',
+                  border: InputBorder.none,
+                ),
+                items: [
+                  const DropdownMenuItem<int?>(value: null, child: Text('All Branches')),
+                  ..._branchesForFilter.map((b) => DropdownMenuItem<int?>(
+                        value: b['id'] as int?,
+                        child: Text(b['name'] as String? ?? ''),
+                      )),
+                ],
+                onChanged: (val) {
+                  setState(() {
+                    _filterBranchId = val;
+                    _filterBranchName = val == null
+                        ? 'All Branches'
+                        : (_branchesForFilter.firstWhere(
+                                (b) => b['id'] == val,
+                                orElse: () => {'name': 'Unknown'})
+                            ['name'] as String? ?? 'Unknown');
+                  });
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 28),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _load,
+              icon: const Icon(Icons.search),
+              label: const Text('Search Complaints',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickDateRange() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2023, 1, 1),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+      initialDateRange: DateTimeRange(start: _dateFrom, end: _dateTo),
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _dateFrom = picked.start;
+        _dateTo = picked.end;
+      });
+    }
   }
 
   Widget _buildCard(DmeComplaint c, String assignedUsername) {

@@ -9,6 +9,7 @@ import '../services/dme_complaint_service.dart';
 import '../services/dme_supabase_service.dart';
 import '../../Misc/voice_file_upload_widget.dart';
 import 'dme_complaint_detail_page.dart';
+import 'dme_complaints_report_page.dart';
 
 
 const Color _primary = Color(0xFF005BAC);
@@ -126,6 +127,21 @@ class _DmeUserComplaintsPageState extends State<DmeUserComplaintsPage> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.assessment_outlined),
+            tooltip: 'Reports',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => DmeComplaintsReportPage(
+                    userRole: 'dme_user',
+                    userId: _dmeUser?.id,
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loading ? null : _load,

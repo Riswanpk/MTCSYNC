@@ -4,6 +4,7 @@ import '../models/dme_complaint.dart';
 import '../services/dme_complaint_service.dart';
 import '../services/dme_supabase_service.dart';
 import '../../Navigation/user_cache_service.dart';
+import 'dme_complaints_report_page.dart';
 
 class DmeComplaintsViewPage extends StatefulWidget {
   const DmeComplaintsViewPage({super.key});
@@ -117,6 +118,22 @@ class _DmeComplaintsViewPageState extends State<DmeComplaintsViewPage> {
             icon: const Icon(Icons.refresh),
             onPressed: _loading ? null : _loadComplaints,
           ),
+          if (_userRole == 'dme_user' || _userRole == 'dme_admin')
+            IconButton(
+              icon: const Icon(Icons.assessment_outlined),
+              tooltip: 'Reports',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => DmeComplaintsReportPage(
+                      userRole: _userRole!,
+                      userId: _auth.currentUser?.uid,
+                    ),
+                  ),
+                );
+              },
+            ),
         ],
       ),
       body: _loading

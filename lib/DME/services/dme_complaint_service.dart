@@ -116,7 +116,12 @@ class DmeComplaintService {
   }
 
   /// Get all complaints with explicit relationship selects
-  Future<List<DmeComplaint>> getAllComplaints({String? status, int? branchId}) async {
+  Future<List<DmeComplaint>> getAllComplaints({
+    String? status,
+    int? branchId,
+    DateTime? dateFrom,
+    DateTime? dateTo,
+  }) async {
     _ensureSupabaseInitialized();
     dynamic query = _supabase.from(_table).select(_selectClause);
 
@@ -125,6 +130,12 @@ class DmeComplaintService {
     }
     if (branchId != null) {
       query = query.eq('branch_id', branchId);
+    }
+    if (dateFrom != null) {
+      query = query.gte('created_at', dateFrom.toIso8601String());
+    }
+    if (dateTo != null) {
+      query = query.lte('created_at', dateTo.toIso8601String());
     }
 
     query = query.order('created_at', ascending: false);
