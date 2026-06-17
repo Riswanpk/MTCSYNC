@@ -267,6 +267,16 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                     ),
                   ] else if (_userRole == 'sync_head') ...[
                     IconButton(
+                      icon: const Icon(Icons.assignment_turned_in),
+                      tooltip: 'Assign Customer Target',
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const CustomerTargetAdminPage()),
+                        );
+                      },
+                    ),
+                    IconButton(
                       icon: const Icon(Icons.download),
                       tooltip: 'Export Customer Target',
                       onPressed: () {
