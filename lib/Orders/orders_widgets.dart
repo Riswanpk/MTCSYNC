@@ -48,6 +48,7 @@ class OrderCard extends StatelessWidget {
   final String priority;
   final dynamic deliveryDate;
   final VoidCallback? onStatusChanged;
+  final Future<void> Function()? onDelete;
 
   const OrderCard({
     super.key,
@@ -59,6 +60,7 @@ class OrderCard extends StatelessWidget {
     required this.priority,
     required this.deliveryDate,
     this.onStatusChanged,
+    this.onDelete,
   });
 
   Future<void> _markCompleted(BuildContext context) async {
@@ -70,6 +72,41 @@ class OrderCard extends StatelessWidget {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Order marked as Completed')),
+      );
+    }
+  }
+
+  Future<void> _deleteOrder(BuildContext context) async {
+    final shouldDelete = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Delete Completed Order'),
+            content: const Text('Are you sure you want to delete this completed order?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!shouldDelete) return;
+
+    if (onDelete != null) {
+      await onDelete!.call();
+    } else {
+      await FirebaseFirestore.instance.collection('follow_ups').doc(docId).delete();
+    }
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Order deleted')),
       );
     }
   }
@@ -98,6 +135,22 @@ class OrderCard extends StatelessWidget {
                 ),
               ],
             ),
+      endActionPane: isCompleted
+          ? ActionPane(
+              motion: const DrawerMotion(),
+              extentRatio: 0.28,
+              children: [
+                SlidableAction(
+                  onPressed: (_) => _deleteOrder(context),
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  icon: Icons.delete,
+                  label: 'Delete',
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ],
+            )
+          : null,
       child: GestureDetector(
         onTap: () {
           Navigator.push(

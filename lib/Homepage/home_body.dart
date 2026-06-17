@@ -369,14 +369,6 @@ class HomeButtonsContainer extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 14),
-        NeumorphicButton(
-          onTap: () => _navigateToOrders(context),
-          text: 'Orders',
-          color: const Color(0xFF0D8A74),
-          textColor: Colors.white,
-          icon: Icons.inventory_2_rounded,
-        ),
         // Sales-specific buttons
         if (role == 'sales') ...[
           const SizedBox(height: 14),
@@ -416,6 +408,14 @@ class HomeButtonsContainer extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 14),
+          NeumorphicButton(
+            onTap: () => _navigateToOrders(context),
+            text: 'Orders',
+            color: const Color(0xFF0D8A74),
+            textColor: Colors.white,
+            icon: Icons.inventory_2_rounded,
           ),
         ],
         // Admin/Manager buttons
@@ -464,6 +464,16 @@ class HomeButtonsContainer extends StatelessWidget {
             textColor: isDark ? Colors.white : primaryBlue,
             icon: Icons.assignment_ind_rounded,
           ),
+          if (role == 'manager') ...[
+            const SizedBox(height: 14),
+            NeumorphicButton(
+              onTap: () => _navigateToOrders(context),
+              text: 'Orders',
+              color: const Color(0xFF0D8A74),
+              textColor: Colors.white,
+              icon: Icons.inventory_2_rounded,
+            ),
+          ],
         ],
       ],
     );

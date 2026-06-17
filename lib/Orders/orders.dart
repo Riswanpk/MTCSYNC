@@ -401,6 +401,13 @@ class _OrdersPageState extends State<OrdersPage> {
                                     priority: (data['priority'] ?? 'High').toString(),
                                     deliveryDate: data['delivery_datetime'] ?? data['delivery_date'],
                                     onStatusChanged: _fetchOrders,
+                                    onDelete: () async {
+                                      await FirebaseFirestore.instance
+                                          .collection('follow_ups')
+                                          .doc(doc.id)
+                                          .delete();
+                                      await _fetchOrders();
+                                    },
                                   );
                                 },
                               ),
