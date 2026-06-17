@@ -8,6 +8,7 @@ import '../Navigation/user_cache_service.dart';
 import '../Customer Target/customer_manager_view.dart';
 import '../Todo/todo.dart';
 import '../Leads/leads.dart';
+import '../Orders/orders.dart';
 import '../Dashboard/dashboard.dart';
 import '../Marketing/marketing.dart';
 import '../Marketing/viewer_marketing.dart';
@@ -367,6 +368,14 @@ class HomeButtonsContainer extends StatelessWidget {
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 14),
+        NeumorphicButton(
+          onTap: () => _navigateToOrders(context),
+          text: 'Orders',
+          color: const Color(0xFF0D8A74),
+          textColor: Colors.white,
+          icon: Icons.inventory_2_rounded,
         ),
         // Sales-specific buttons
         if (role == 'sales') ...[
@@ -741,6 +750,38 @@ class HomeButtonsContainer extends StatelessWidget {
         MaterialPageRoute(
           builder: (_) => LoadingOverlayPage(
             child: LeadsPage(branch: branch!),
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Branch not found for user')),
+      );
+    }
+  }
+
+  Future<void> _navigateToOrders(BuildContext context) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      handleFirebaseAuthError(context, FirebaseException(plugin: 'firestore', code: 'unauthenticated'));
+      return;
+    }
+
+    String? branch;
+    try {
+      final cache = UserCacheService.instance;
+      await cache.ensureLoaded();
+      branch = cache.branch;
+    } catch (e) {
+      if (handleFirebaseAuthError(context, e)) return;
+      rethrow;
+    }
+
+    if (branch != null) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => LoadingOverlayPage(
+            child: OrdersPage(branch: branch!),
           ),
         ),
       );
