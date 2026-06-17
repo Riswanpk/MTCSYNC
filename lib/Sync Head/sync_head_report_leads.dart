@@ -629,7 +629,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         final reportTypeLabel = reportType == 'summary' ? '' : ' [${_reportTypeLabel(reportType)}]';
         final message = Message()
           ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
-          ..recipients.addAll(['crmmalabar@gmail.com'])
+          ..recipients.addAll(['crmmalabar@gmail.com','performancemtc@gmail.com'])
           ..subject = 'Leads Report — All Branches$allBranchesEmailText$reportTypeLabel'
           ..text = 'Please find attached the leads report for all branches.'
           ..attachments = [FileAttachment(file)];
@@ -968,7 +968,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
       final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
       final message = Message()
         ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
-        ..recipients.addAll(['crmmalabar@gmail.com'])
+        ..recipients.addAll(['crmmalabar@gmail.com','performancemtc@gmail.com'])
         ..subject = 'Leads Report — $_selectedBranch$singleBranchEmailText$reportTypeLabel2'
         ..text = 'Please find attached the leads report for $_selectedBranch.'
         ..attachments = [FileAttachment(file)];
