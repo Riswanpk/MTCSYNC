@@ -74,6 +74,38 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
 
   String _formatDate(DateTime d) => DateFormat('dd MMM yyyy').format(d);
 
+  bool _isTimestampWithinRange(dynamic value, DateTime start, DateTime end) {
+    if (value is! Timestamp) return false;
+    final date = value.toDate();
+    return !date.isBefore(start) && !date.isAfter(end);
+  }
+
+  String _selectedSourceLabel(Set<String> selectedSources) {
+    if (selectedSources.contains('All')) return 'All Leads';
+
+    final orderedSources = ['DME', 'SME', 'CC', 'SALES']
+        .where(selectedSources.contains)
+        .map((source) => source == 'SALES' ? 'Sales' : source)
+        .toList();
+
+    if (orderedSources.isEmpty) return 'All Leads';
+    if (orderedSources.length == 1) return '${orderedSources.first} Leads';
+    return '${orderedSources.join(' + ')} Leads';
+  }
+
+  String _buildReportFileName({
+    required String reportType,
+    required Set<String> selectedSources,
+    required DateTime start,
+    required DateTime end,
+  }) {
+    final typeLabel = _reportTypeLabel(reportType);
+    final sourceLabel = _selectedSourceLabel(selectedSources);
+    final dateLabel =
+        '${DateFormat('dd-MM').format(start)} to ${DateFormat('dd-MM').format(end)}';
+    return '$typeLabel - $sourceLabel - $dateLabel.xlsx';
+  }
+
   /// Fetches lead stats for all users in the selected branch & date range,
   /// then generates and shares an Excel report.
   Future<void> _generateReport() async {
@@ -108,6 +140,8 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
       List<dynamic> inProgress,
       List<dynamic> sale,
       List<dynamic> cancelled,
+      DateTime rangeStart,
+      DateTime rangeEnd,
     ) {
       if (reportType == 'quick_close') {
         return sale.where((doc) {
@@ -117,13 +151,15 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           final src = (d['source'] ?? '').toString().toUpperCase();
           return createdAt is Timestamp &&
               completedAt is Timestamp &&
+              _isTimestampWithinRange(completedAt, rangeStart, rangeEnd) &&
               completedAt.toDate().difference(createdAt.toDate()).inDays.abs() <= 2 &&
               !['CC', 'SME', 'DME'].contains(src);
         }).toList();
       } else if (reportType == 'postponed') {
         return inProgress.where((doc) {
           final d = (doc as QueryDocumentSnapshot).data() as Map<String, dynamic>;
-          return d['reminder_date_changed'] == true;
+          return d['reminder_date_changed'] == true &&
+              _isTimestampWithinRange(d['created_at'], rangeStart, rangeEnd);
         }).toList();
       } else {
         return [...inProgress, ...sale, ...cancelled];
@@ -482,7 +518,13 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
               final inProgressLeadsDocs = userStat['inProgressLeads'] as List<dynamic>;
               final saleLeadsDocs = userStat['saleLeads'] as List<dynamic>;
               final cancelledLeadsDocs = userStat['cancelledLeads'] as List<dynamic>;
-              final displayLeads = filterLeadsByReportType(inProgressLeadsDocs, saleLeadsDocs, cancelledLeadsDocs);
+              final displayLeads = filterLeadsByReportType(
+                inProgressLeadsDocs,
+                saleLeadsDocs,
+                cancelledLeadsDocs,
+                rangeStart,
+                rangeEnd,
+              );
               if (displayLeads.isEmpty) continue;
 
               final userHdrRange = sheet.getRangeByIndex(detailRow, 1, detailRow, 7);
@@ -571,10 +613,13 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         workbook.dispose();
 
         final directory = await getTemporaryDirectory();
-        final statusFilterFileName = _statusFilter == 'All' ? 'All' : _statusFilter.replaceAll(' ', '_');
-        final reportTypeSuffix = reportType == 'summary' ? '' : '_$reportType';
         final String fileName =
-            '${directory.path}/Leads_Report_AllBranches_$statusFilterFileName${reportTypeSuffix}_${DateFormat('yyyyMMdd').format(rangeStart)}_${DateFormat('yyyyMMdd').format(rangeEnd)}.xlsx';
+            '${directory.path}/${_buildReportFileName(
+              reportType: reportType,
+              selectedSources: selectedSources,
+              start: rangeStart,
+              end: rangeEnd,
+            )}';
         final File file = File(fileName);
         await file.writeAsBytes(bytes, flush: true);
 
@@ -584,7 +629,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         final reportTypeLabel = reportType == 'summary' ? '' : ' [${_reportTypeLabel(reportType)}]';
         final message = Message()
           ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
-          ..recipients.addAll(['crmmalabar@gmail.com','performancemtc@gmail.com'])
+          ..recipients.addAll(['crmmalabar@gmail.com'])
           ..subject = 'Leads Report — All Branches$allBranchesEmailText$reportTypeLabel'
           ..text = 'Please find attached the leads report for all branches.'
           ..attachments = [FileAttachment(file)];
@@ -812,7 +857,13 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           final inProgressLeadsDocs = userStat['inProgressLeads'] as List<dynamic>;
           final saleLeadsDocs = userStat['saleLeads'] as List<dynamic>;
           final cancelledLeadsDocs = userStat['cancelledLeads'] as List<dynamic>;
-          final displayLeads = filterLeadsByReportType(inProgressLeadsDocs, saleLeadsDocs, cancelledLeadsDocs);
+          final displayLeads = filterLeadsByReportType(
+            inProgressLeadsDocs,
+            saleLeadsDocs,
+            cancelledLeadsDocs,
+            rangeStart,
+            rangeEnd,
+          );
           if (displayLeads.isEmpty) continue;
 
           final userHdrRange = sheet.getRangeByIndex(detailRow, 1, detailRow, 7);
@@ -901,10 +952,13 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
       workbook.dispose();
 
       final directory = await getTemporaryDirectory();
-      final statusFilterFileName = _statusFilter == 'All' ? 'All' : _statusFilter.replaceAll(' ', '_');
-      final reportTypeSuffix2 = reportType == 'summary' ? '' : '_$reportType';
       final String fileName =
-          '${directory.path}/Leads_Report_${_selectedBranch}_$statusFilterFileName${reportTypeSuffix2}_${DateFormat('yyyyMMdd').format(rangeStart)}_${DateFormat('yyyyMMdd').format(rangeEnd)}.xlsx';
+          '${directory.path}/${_buildReportFileName(
+            reportType: reportType,
+            selectedSources: selectedSources,
+            start: rangeStart,
+            end: rangeEnd,
+          )}';
       final File file = File(fileName);
       await file.writeAsBytes(bytes, flush: true);
 
@@ -914,7 +968,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
       final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
       final message = Message()
         ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
-        ..recipients.addAll(['crmmalabar@gmail.com','performancemtc@gmail.com'])
+        ..recipients.addAll(['crmmalabar@gmail.com'])
         ..subject = 'Leads Report — $_selectedBranch$singleBranchEmailText$reportTypeLabel2'
         ..text = 'Please find attached the leads report for $_selectedBranch.'
         ..attachments = [FileAttachment(file)];
