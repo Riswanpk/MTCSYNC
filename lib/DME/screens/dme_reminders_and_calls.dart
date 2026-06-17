@@ -123,8 +123,6 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
         updatedFrom = DateTime(now.year, now.month, now.day);
         updatedTo = DateTime(now.year, now.month, now.day, 23, 59, 59);
         break;
-      case 'All':
-        break;
     }
 
     // Determine which branch IDs to fetch based on selection
@@ -497,7 +495,6 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
                 'This Month',
                 'Overdue',
                 'Completed Today',
-                'All'
               ].map((f) {
                 final selected = _filter == f;
                 return Padding(

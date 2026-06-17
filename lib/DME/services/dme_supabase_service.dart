@@ -1172,49 +1172,21 @@ class DmeSupabaseService {
     if (to != null) {
       query = query.lte('reminder_date', to.toIso8601String().split('T')[0]);
     }
-    // updated_at filtering: only applied if the column exists in the schema
-    // To enable: run  ALTER TABLE dme_reminders ADD COLUMN updated_at timestamptz;
-    //                  CREATE OR REPLACE TRIGGER set_updated_at ...
-    // then restore updatedFrom/updatedTo writes here.
 
-    // Paginate through all reminders to avoid hitting the 1000 row limit
-    final reminders = <DmeReminder>[];
-    final rawRows = <Map<String, dynamic>>[];
-    const pageSize = 1000;
-    int offset = 0;
-    bool hasMore = true;
-
-    while (hasMore) {
-      final res = await query
-          .order('reminder_date', ascending: true)
-          .range(offset, offset + pageSize - 1);
-
-      if ((res as List).isEmpty) {
-        hasMore = false;
-      } else {
-        for (var row in res) {
-          reminders.add(DmeReminder.fromMap(row as Map<String, dynamic>));
-          rawRows.add(row as Map<String, dynamic>);
-        }
-        offset += pageSize;
-        hasMore = (res as List).length == pageSize;
-      }
-    }
-
-    // Filter by branch if needed
+    // Filter by branch directly on purchased_for_branch_id (DB-level, avoids full table scan)
     if (branchIds != null && branchIds.isNotEmpty) {
-      return reminders.where((r) {
-        try {
-          final raw = rawRows.firstWhere((row) => row['id'] == r.id);
-          final custBranch =
-              (raw['dme_customers'] as Map?)?['branch_id'] as int?;
-          return custBranch != null && branchIds.contains(custBranch);
-        } catch (e) {
-          return false;
-        }
-      }).toList();
+      query = query.inFilter('purchased_for_branch_id', branchIds);
     }
-    return reminders;
+
+    // Cap at 500 rows per request to protect Supabase RAM
+    const rowLimit = 500;
+    final res = await query
+        .order('reminder_date', ascending: true)
+        .limit(rowLimit);
+
+    return (res as List)
+        .map((row) => DmeReminder.fromMap(row as Map<String, dynamic>))
+        .toList();
   }
 
   Future<void> updateReminderStatus(int id, String status,
@@ -1578,18 +1550,14 @@ class DmeSupabaseService {
         .eq('reminder_date', todayStr)
         .eq('status', 'pending');
 
-    final res = await query.order('reminder_date', ascending: true);
-    var reminders = (res as List).map((e) => DmeReminder.fromMap(e)).toList();
-
     if (branchIds.isNotEmpty) {
-      reminders = reminders.where((r) {
-        final raw = res.firstWhere((row) => row['id'] == r.id);
-        final custBranch = (raw['dme_customers'] as Map?)?['branch_id'] as int?;
-        return custBranch != null && branchIds.contains(custBranch);
-      }).toList();
+      query = query.inFilter('purchased_for_branch_id', branchIds);
     }
 
-    return reminders;
+    final res = await query
+        .order('reminder_date', ascending: true)
+        .limit(500);
+    return (res as List).map((e) => DmeReminder.fromMap(e)).toList();
   }
 
   /// Get pending reminders from previous days for given branches
@@ -1604,18 +1572,14 @@ class DmeSupabaseService {
         .lt('reminder_date', todayStr)
         .eq('status', 'pending');
 
-    final res = await query.order('reminder_date', ascending: true);
-    var reminders = (res as List).map((e) => DmeReminder.fromMap(e)).toList();
-
     if (branchIds.isNotEmpty) {
-      reminders = reminders.where((r) {
-        final raw = res.firstWhere((row) => row['id'] == r.id);
-        final custBranch = (raw['dme_customers'] as Map?)?['branch_id'] as int?;
-        return custBranch != null && branchIds.contains(custBranch);
-      }).toList();
+      query = query.inFilter('purchased_for_branch_id', branchIds);
     }
 
-    return reminders;
+    final res = await query
+        .order('reminder_date', ascending: true)
+        .limit(500);
+    return (res as List).map((e) => DmeReminder.fromMap(e)).toList();
   }
 
   /// Get reminder detail with customer info
