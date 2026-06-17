@@ -31,6 +31,7 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
 
   // Reminders tab state
   String _filter = 'Today';
+  String _overdueRange = 'Last Week';
   String? _selectedBranch;
   List<Map<String, dynamic>> _availableBranches = [];
 
@@ -114,7 +115,19 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
         to = DateTime(now.year, now.month + 1, 0);
         break;
       case 'Overdue':
-        to = DateTime(now.year, now.month, now.day);
+        final todayStart = DateTime(now.year, now.month, now.day);
+        to = todayStart.subtract(const Duration(days: 1));
+        switch (_overdueRange) {
+          case 'Last Week':
+            from = todayStart.subtract(const Duration(days: 7));
+            break;
+          case 'Last Month':
+            from = DateTime(todayStart.year, todayStart.month - 1, todayStart.day);
+            break;
+          case 'All Overdue':
+            from = null;
+            break;
+        }
         break;
       case 'Completed Today':
         status = null;
@@ -534,6 +547,52 @@ class _DmeRemindersAndCallsPageState extends State<DmeRemindersAndCallsPage>
             ),
           ),
         ),
+
+        if (_filter == 'Overdue')
+          Container(
+            color: _primaryBlue,
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: ['Last Week', 'Last Month', 'All Overdue'].map((range) {
+                  final selected = _overdueRange == range;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() => _overdueRange = range);
+                        _loadReminders();
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? Colors.white
+                              : Colors.white.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: selected
+                                ? Colors.white
+                                : Colors.white.withValues(alpha: 0.28),
+                          ),
+                        ),
+                        child: Text(
+                          range,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: selected ? _primaryBlue : Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
 
         // ── Count bar ─────────────────────────────────────────────
         Container(
