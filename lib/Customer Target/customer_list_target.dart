@@ -39,6 +39,11 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
   bool _highlightNoRemarks = false;
   final TextEditingController _searchController = TextEditingController();
 
+  bool _hasPendingRemarks(List<Map<String, dynamic>> customers) {
+    return customers.any((c) =>
+        c['callMade'] == true && (c['remarks'] ?? '').toString().trim().isEmpty);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -71,6 +76,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
         if (cached != null) {
           setState(() {
             _customers = cached;
+            _highlightNoRemarks = _hasPendingRemarks(cached);
             _loading = false;
           });
         } else {
@@ -109,8 +115,10 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
       if (!mounted) return;
       if (doc.exists && doc.data()?['customers'] != null) {
         final List<dynamic> data = doc.data()!['customers'];
+        final customers = data.map((e) => Map<String, dynamic>.from(e)).toList();
         setState(() {
-          _customers = data.map((e) => Map<String, dynamic>.from(e)).toList();
+          _customers = customers;
+          _highlightNoRemarks = _hasPendingRemarks(customers);
           _loading = false;
         });
         _firestoreConfirmed = true;
@@ -132,6 +140,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
           
           setState(() {
             _customers = newData;
+            _highlightNoRemarks = _hasPendingRemarks(newData);
             _loading = false;
           });
           _firestoreConfirmed = true;
@@ -150,6 +159,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
           // No previous month data either – keep cached data for display only
           _firestoreConfirmed = false;
           setState(() {
+            _highlightNoRemarks = _customers != null && _hasPendingRemarks(_customers!);
             _loading = false;
           });
         }
