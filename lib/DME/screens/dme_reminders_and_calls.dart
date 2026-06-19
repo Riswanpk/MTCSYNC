@@ -702,7 +702,10 @@ class _ReminderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isOverdue = reminder.reminderDate.isBefore(DateTime.now()) &&
+    final _now = DateTime.now();
+    final _today = DateTime(_now.year, _now.month, _now.day);
+    final _reminderDay = DateTime(reminder.reminderDate.year, reminder.reminderDate.month, reminder.reminderDate.day);
+    final isOverdue = _reminderDay.isBefore(_today) &&
         reminder.status == 'pending';
     final isCompleted = reminder.status == 'completed';
 
