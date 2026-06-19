@@ -464,7 +464,7 @@ class HomeButtonsContainer extends StatelessWidget {
             textColor: isDark ? Colors.white : primaryBlue,
             icon: Icons.assignment_ind_rounded,
           ),
-          if (role == 'manager') ...[
+          if (role == 'manager' || role == 'asst_manager') ...[
             const SizedBox(height: 14),
             NeumorphicButton(
               onTap: () => _navigateToOrders(context),

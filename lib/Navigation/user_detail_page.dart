@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../DME/services/dme_supabase_service.dart';
@@ -338,11 +339,26 @@ class _UserDetailPageState extends State<UserDetailPage> {
           ),
         ),
         const SizedBox(height: 4),
-        Text(
-          email,
-          style: TextStyle(
-            fontSize: 14,
-            color: isDark ? Colors.white60 : Colors.grey[600],
+        GestureDetector(
+          onTap: email.isEmpty
+              ? null
+              : () async {
+                  await Clipboard.setData(ClipboardData(text: email));
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Email copied to clipboard'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+          child: Text(
+            email,
+            style: TextStyle(
+              fontSize: 14,
+              color: isDark ? Colors.white60 : Colors.grey[600],
+              decoration: TextDecoration.underline,
+            ),
           ),
         ),
       ],
