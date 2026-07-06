@@ -15,8 +15,17 @@ class ManageUsersPage extends StatefulWidget {
 }
 
 class _ManageUsersPageState extends State<ManageUsersPage> {
-    bool _filterByVersion = false;
-  final List<String> _roles = ['sales', 'manager', 'asst_manager', 'admin', 'sync_head', 'sme', 'dme_admin', 'dme_user'];
+  bool _filterByVersion = false;
+  final List<String> _roles = [
+    'sales',
+    'manager',
+    'asst_manager',
+    'admin',
+    'sync_head',
+    'sme',
+    'dme_admin',
+    'dme_user'
+  ];
   String? _currentUserId;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
@@ -46,7 +55,10 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
   }
 
   Future<void> _updateUserRole(String uid, String newRole) async {
-    await FirebaseFirestore.instance.collection('users').doc(uid).update({'role': newRole});
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .update({'role': newRole});
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Role updated to $newRole'),
@@ -62,7 +74,8 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete User'),
-        content: Text('Are you sure you want to delete user "$email"? This action cannot be undone.'),
+        content: Text(
+            'Are you sure you want to delete user "$email"? This action cannot be undone.'),
         actions: [
           TextButton(
             child: const Text('Cancel'),
@@ -88,7 +101,8 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
       }
 
       // Fetch the user document to get the UID (should be same as docId)
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(docId).get();
+      final userDoc =
+          await FirebaseFirestore.instance.collection('users').doc(docId).get();
       final uid = userDoc.id; // Firestore doc ID is the Auth UID
 
       // Prevent deleting yourself
@@ -118,7 +132,10 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
       final result = await callable.call({'uid': uid});
 
       // Delete from user_version collection
-      await FirebaseFirestore.instance.collection('user_version').doc(uid).delete();
+      await FirebaseFirestore.instance
+          .collection('user_version')
+          .doc(uid)
+          .delete();
 
       // Close loading dialog
       if (mounted) Navigator.of(context).pop();
@@ -138,7 +155,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
     } on FirebaseFunctionsException catch (e) {
       debugPrint('Firebase Functions Error: ${e.code} - ${e.message}');
       debugPrint('Details: ${e.details}');
-      
+
       // Close loading dialog if open
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
@@ -147,10 +164,12 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
       String errorMessage = 'Failed to delete user';
       switch (e.code) {
         case 'unauthenticated':
-          errorMessage = 'Authentication failed. Please sign out and sign in again.';
+          errorMessage =
+              'Authentication failed. Please sign out and sign in again.';
           break;
         case 'permission-denied':
-          errorMessage = e.message ?? 'You do not have permission to delete this user.';
+          errorMessage =
+              e.message ?? 'You do not have permission to delete this user.';
           break;
         case 'invalid-argument':
           errorMessage = 'Invalid user ID provided.';
@@ -159,7 +178,8 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
           errorMessage = 'User not found.';
           break;
         default:
-          errorMessage = e.message ?? 'An error occurred while deleting the user.';
+          errorMessage =
+              e.message ?? 'An error occurred while deleting the user.';
       }
 
       if (mounted) {
@@ -173,7 +193,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
       }
     } catch (e) {
       debugPrint('General Error: $e');
-      
+
       // Close loading dialog if open
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
@@ -191,9 +211,11 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
     }
   }
 
-  Future<Map<String, List<Map<String, dynamic>>>> _fetchUserVersionsByBranch() async {
+  Future<Map<String, List<Map<String, dynamic>>>>
+      _fetchUserVersionsByBranch() async {
     final allUsers = await UserCacheService.instance.getAllUsers();
-    final versionsSnapshot = await FirebaseFirestore.instance.collection('user_version').get();
+    final versionsSnapshot =
+        await FirebaseFirestore.instance.collection('user_version').get();
 
     // Map user uid to version info
     final versionMap = {
@@ -206,7 +228,9 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
       return {
         'username': u['username'] ?? '',
         'email': u['email'] ?? '',
-        'branch': (u['branch'] as String?)?.isNotEmpty == true ? u['branch'] : 'Unknown',
+        'branch': (u['branch'] as String?)?.isNotEmpty == true
+            ? u['branch']
+            : 'Unknown',
         'version': versionMap[uid]?['appVersion'] ?? 'N/A',
       };
     }).toList();
@@ -227,7 +251,9 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                 if (!snapshot.hasData) {
                   return const AlertDialog(
                     title: Text('User Versions'),
-                    content: SizedBox(height: 100, child: Center(child: CircularProgressIndicator())),
+                    content: SizedBox(
+                        height: 100,
+                        child: Center(child: CircularProgressIndicator())),
                   );
                 }
                 final branchMap = snapshot.data!;
@@ -238,7 +264,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                   ..sort((a, b) => a.key.compareTo(b.key));
 
                 // Get latest version from app_constants.dart
-                const String latestVersion = '1.2.166';
+                const String latestVersion = '1.2.167';
 
                 return AlertDialog(
                   title: Row(
@@ -246,8 +272,14 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                     children: [
                       const Text('User Versions'),
                       IconButton(
-                        icon: Icon(_filterByVersion ? Icons.filter_alt : Icons.filter_alt_outlined, color: Colors.blue),
-                        tooltip: _filterByVersion ? 'Show Unsorted' : 'Sort by Version',
+                        icon: Icon(
+                            _filterByVersion
+                                ? Icons.filter_alt
+                                : Icons.filter_alt_outlined,
+                            color: Colors.blue),
+                        tooltip: _filterByVersion
+                            ? 'Show Unsorted'
+                            : 'Sort by Version',
                         onPressed: () {
                           setStateDialog(() {
                             _filterByVersion = !_filterByVersion;
@@ -263,24 +295,30 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: sortedBranchEntries.map((entry) {
                           final branch = entry.key;
-                          List<Map<String, dynamic>> users = List<Map<String, dynamic>>.from(entry.value);
+                          List<Map<String, dynamic>> users =
+                              List<Map<String, dynamic>>.from(entry.value);
                           if (_filterByVersion) {
                             users.sort((a, b) {
                               String vA = a['version'] ?? '';
                               String vB = b['version'] ?? '';
                               // Place latest version at the end (ascending order)
                               int parseVersion(String v) {
-                                
-                                return int.tryParse(v.replaceAll('.', '').padLeft(8, '0')) ?? 0;
+                                return int.tryParse(v
+                                        .replaceAll('.', '')
+                                        .padLeft(8, '0')) ??
+                                    0;
                               }
-                              return parseVersion(vA).compareTo(parseVersion(vB));
+
+                              return parseVersion(vA)
+                                  .compareTo(parseVersion(vB));
                             });
                           }
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 8.0),
                                 child: Text(
                                   branch,
                                   style: const TextStyle(
@@ -302,7 +340,8 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                           user['version'] ?? 'N/A',
                                           style: TextStyle(
                                             fontWeight: FontWeight.bold,
-                                            color: (user['version'] == latestVersion)
+                                            color: (user['version'] ==
+                                                    latestVersion)
                                                 ? Colors.green
                                                 : null,
                                           ),
@@ -310,7 +349,8 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                         if (user['version'] == latestVersion)
                                           const Padding(
                                             padding: EdgeInsets.only(left: 4.0),
-                                            child: Icon(Icons.check_circle, color: Colors.green, size: 18),
+                                            child: Icon(Icons.check_circle,
+                                                color: Colors.green, size: 18),
                                           ),
                                       ],
                                     ),
@@ -383,7 +423,8 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
           ),
         ],
       ),
-      backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
+      backgroundColor:
+          isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -400,7 +441,8 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
                 ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
               ),
               onChanged: (value) {
                 setState(() {
@@ -422,19 +464,21 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                   final users = _userDocs!
                       .where((doc) => doc.id != _currentUserId)
                       .where((doc) {
-                        final username = (doc['username'] ?? '').toString().toLowerCase();
-                        final email = (doc['email'] ?? '').toString().toLowerCase();
-                        return _searchQuery.isEmpty ||
-                            username.contains(_searchQuery) ||
-                            email.contains(_searchQuery);
-                      })
-                      .toList();
+                    final username =
+                        (doc['username'] ?? '').toString().toLowerCase();
+                    final email = (doc['email'] ?? '').toString().toLowerCase();
+                    return _searchQuery.isEmpty ||
+                        username.contains(_searchQuery) ||
+                        email.contains(_searchQuery);
+                  }).toList();
                   if (users.isEmpty) {
-                    return const Center(child: Text('No users match your search.'));
+                    return const Center(
+                        child: Text('No users match your search.'));
                   }
                   return Card(
                     elevation: 4,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
                     child: ListView.separated(
                       padding: const EdgeInsets.all(16),
                       itemCount: users.length,
@@ -462,13 +506,18 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                           leading: CircleAvatar(
                             backgroundColor: const Color(0xFF005BAC),
                             child: Text(
-                              username.isNotEmpty ? username[0].toUpperCase() : '?',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                              username.isNotEmpty
+                                  ? username[0].toUpperCase()
+                                  : '?',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold),
                             ),
                           ),
                           title: Text(
                             username,
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 13),
                           ),
                           subtitle: Text(
                             email,
@@ -480,7 +529,9 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                               DropdownButton<String>(
                                 value: role,
                                 borderRadius: BorderRadius.circular(12),
-                                dropdownColor: isDark ? const Color(0xFF23272F) : Colors.white,
+                                dropdownColor: isDark
+                                    ? const Color(0xFF23272F)
+                                    : Colors.white,
                                 style: TextStyle(
                                   color: isDark ? Colors.white : Colors.black,
                                   fontWeight: FontWeight.w500,
@@ -494,35 +545,48 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                             children: [
                                               Icon(
                                                 r == 'admin'
-                                                  ? Icons.security
-                                                  : r == 'manager'
-                                                    ? Icons.supervisor_account
-                                                    : r == 'asst_manager'
-                                                      ? Icons.manage_accounts
-                                                      : r == 'sync_head'
-                                                        ? Icons.hub
-                                                        : r == 'dme_admin'
-                                                          ? Icons.admin_panel_settings
-                                                          : r == 'dme_user'
-                                                            ? Icons.person_outline
-                                                            : Icons.person,
+                                                    ? Icons.security
+                                                    : r == 'manager'
+                                                        ? Icons
+                                                            .supervisor_account
+                                                        : r == 'asst_manager'
+                                                            ? Icons
+                                                                .manage_accounts
+                                                            : r == 'sync_head'
+                                                                ? Icons.hub
+                                                                : r ==
+                                                                        'dme_admin'
+                                                                    ? Icons
+                                                                        .admin_panel_settings
+                                                                    : r ==
+                                                                            'dme_user'
+                                                                        ? Icons
+                                                                            .person_outline
+                                                                        : Icons
+                                                                            .person,
                                                 color: r == 'admin'
-                                                  ? Colors.deepPurple
-                                                  : r == 'manager'
-                                                    ? Colors.orange
-                                                    : r == 'asst_manager'
-                                                      ? Colors.deepOrange
-                                                      : r == 'sync_head'
-                                                        ? Colors.blue
-                                                        : r == 'dme_admin'
-                                                          ? Colors.indigo
-                                                          : r == 'dme_user'
-                                                            ? Colors.teal
-                                                            : Colors.green,
+                                                    ? Colors.deepPurple
+                                                    : r == 'manager'
+                                                        ? Colors.orange
+                                                        : r == 'asst_manager'
+                                                            ? Colors.deepOrange
+                                                            : r == 'sync_head'
+                                                                ? Colors.blue
+                                                                : r ==
+                                                                        'dme_admin'
+                                                                    ? Colors
+                                                                        .indigo
+                                                                    : r ==
+                                                                            'dme_user'
+                                                                        ? Colors
+                                                                            .teal
+                                                                        : Colors
+                                                                            .green,
                                                 size: 20,
                                               ),
                                               const SizedBox(width: 8),
-                                              Text(r[0].toUpperCase() + r.substring(1)),
+                                              Text(r[0].toUpperCase() +
+                                                  r.substring(1)),
                                             ],
                                           ),
                                         ))
@@ -534,15 +598,21 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                 },
                               ),
                               IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.red),
+                                icon:
+                                    const Icon(Icons.delete, color: Colors.red),
                                 tooltip: 'Delete User',
-                                onPressed: () => _confirmDeleteUser(docId, email), // <-- Pass document ID
+                                onPressed: () => _confirmDeleteUser(
+                                    docId, email), // <-- Pass document ID
                               ),
                             ],
                           ),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          tileColor: isDark ? const Color(0xFF23272F) : Colors.grey[100],
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          tileColor: isDark
+                              ? const Color(0xFF23272F)
+                              : Colors.grey[100],
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
                         );
                       },
                     ),

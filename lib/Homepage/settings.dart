@@ -10,7 +10,6 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../Performance/excel_performance_report.dart'; // <-- Import here
 
-
 class SettingsPage extends StatelessWidget {
   Future<void> _triggerDeleteOldLeads(BuildContext context) async {
     try {
@@ -20,7 +19,9 @@ class SettingsPage extends StatelessWidget {
       final deleted = result.data['deleted'] ?? 0;
       final before = result.data['before'] ?? '';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Deleted $deleted old leads (created before $before)')),
+        SnackBar(
+            content:
+                Text('Deleted $deleted old leads (created before $before)')),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -28,10 +29,12 @@ class SettingsPage extends StatelessWidget {
       );
     }
   }
+
   final String userRole;
   final ThemeProvider themeProvider;
 
-  const SettingsPage({super.key, required this.userRole, required this.themeProvider});
+  const SettingsPage(
+      {super.key, required this.userRole, required this.themeProvider});
 
   void _openNotificationToneSettings(BuildContext context) async {
     if (Platform.isAndroid) {
@@ -46,14 +49,19 @@ class SettingsPage extends StatelessWidget {
       await intent.launch();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please change notification sound from iOS Settings.')),
+        const SnackBar(
+            content:
+                Text('Please change notification sound from iOS Settings.')),
       );
     }
   }
 
   Future<void> _generateRegistrationCode(BuildContext context) async {
     final code = (Random().nextInt(9000) + 1000).toString();
-    await FirebaseFirestore.instance.collection('registration_codes').doc('active').set({
+    await FirebaseFirestore.instance
+        .collection('registration_codes')
+        .doc('active')
+        .set({
       'code': code,
       'createdAt': FieldValue.serverTimestamp(),
     });
@@ -100,7 +108,7 @@ class SettingsPage extends StatelessWidget {
               decoration: const InputDecoration(
                 labelText: 'Minimum Build Number (versionCode)',
                 border: OutlineInputBorder(),
-                hintText: 'e.g. 166',
+                hintText: 'e.g. 167',
               ),
             ),
           ],
@@ -115,7 +123,8 @@ class SettingsPage extends StatelessWidget {
               final value = int.tryParse(controller.text.trim());
               if (value == null) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please enter a valid build number.')),
+                  const SnackBar(
+                      content: Text('Please enter a valid build number.')),
                 );
                 return;
               }
@@ -127,7 +136,8 @@ class SettingsPage extends StatelessWidget {
                 if (ctx.mounted) Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Force update threshold set to build $value.'),
+                    content:
+                        Text('Force update threshold set to build $value.'),
                     backgroundColor: Colors.green,
                   ),
                 );
@@ -149,7 +159,10 @@ class SettingsPage extends StatelessWidget {
   Future<String?> getUserRole() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return null;
-    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
     final roleRaw = doc.data()?['role'];
     if (roleRaw == null) return null;
     return roleRaw.toString().toLowerCase().replaceAll('_', ' ').trim();
@@ -204,7 +217,8 @@ class SettingsPage extends StatelessWidget {
             ),
             ElevatedButton(
               onPressed: () {
-                Navigator.pop(ctx, {'year': selectedYear, 'month': selectedMonth});
+                Navigator.pop(
+                    ctx, {'year': selectedYear, 'month': selectedMonth});
               },
               child: Text('Send'),
             ),
@@ -213,7 +227,9 @@ class SettingsPage extends StatelessWidget {
       },
     ).then((result) {
       if (result != null && result is Map) {
-        exportAndSendExcel(context, year: result['year'], month: result['month']); // <-- Call from imported file
+        exportAndSendExcel(context,
+            year: result['year'],
+            month: result['month']); // <-- Call from imported file
       }
     });
   }
@@ -244,7 +260,8 @@ class SettingsPage extends StatelessWidget {
                     children: [
                       const Text(
                         'Appearance',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.bold),
                       ),
                       ListTile(
                         title: const Text('Theme'),
@@ -282,7 +299,8 @@ class SettingsPage extends StatelessWidget {
                       const SizedBox(height: 32),
                       const Text(
                         'Notifications',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.bold),
                       ),
                       ListTile(
                         leading: const Icon(Icons.music_note),
@@ -298,30 +316,39 @@ class SettingsPage extends StatelessWidget {
                           final role = snapshot.data;
                           if (role == null) return const SizedBox.shrink();
                           final isAdmin = role == 'admin';
-                          final isSyncHead = role == 'sync head' || role == 'synchead' || role == 'sync-head';
+                          final isSyncHead = role == 'sync head' ||
+                              role == 'synchead' ||
+                              role == 'sync-head';
                           if (isAdmin || isSyncHead) {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 ElevatedButton(
-                                  onPressed: () => _generateRegistrationCode(context),
-                                  child: const Text('Generate Registration Code'),
+                                  onPressed: () =>
+                                      _generateRegistrationCode(context),
+                                  child:
+                                      const Text('Generate Registration Code'),
                                 ),
                                 const SizedBox(height: 16),
                                 ElevatedButton(
-                                  onPressed: () => _pickMonthAndSendExcel(context),
-                                  child: const Text('Send Monthly Excel Report'),
+                                  onPressed: () =>
+                                      _pickMonthAndSendExcel(context),
+                                  child:
+                                      const Text('Send Monthly Excel Report'),
                                 ),
                                 if (isAdmin) ...[
                                   const SizedBox(height: 16),
                                   ElevatedButton(
-                                    onPressed: () => _triggerDeleteOldLeads(context),
+                                    onPressed: () =>
+                                        _triggerDeleteOldLeads(context),
                                     child: const Text('Delete Old Leads Now'),
                                   ),
                                   const SizedBox(height: 16),
                                   ElevatedButton.icon(
-                                    onPressed: () => _showForceUpdateDialog(context),
-                                    icon: const Icon(Icons.system_update_alt_rounded),
+                                    onPressed: () =>
+                                        _showForceUpdateDialog(context),
+                                    icon: const Icon(
+                                        Icons.system_update_alt_rounded),
                                     label: const Text('Force Update Config'),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: const Color(0xFF005BAC),
@@ -341,7 +368,6 @@ class SettingsPage extends StatelessWidget {
                 ),
               ),
             ),
-            
           ],
         ),
       ),
