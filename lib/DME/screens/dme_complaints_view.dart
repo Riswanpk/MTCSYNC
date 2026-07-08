@@ -77,8 +77,8 @@ class _DmeComplaintsViewPageState extends State<DmeComplaintsViewPage> {
         final branchId = await DmeSupabaseService.instance
             .getBranchIdByNameCached(_userBranch!);
         if (branchId != null) {
-          complaints =
-              await _complaintService.getComplaintsForBranch(branchId: branchId);
+          complaints = await _complaintService.getComplaintsForBranch(
+              branchId: branchId);
         }
       }
 
@@ -160,21 +160,21 @@ class _DmeComplaintsViewPageState extends State<DmeComplaintsViewPage> {
                 'verified_closed',
               ]
                   .map((status) => Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: FilterChip(
-                      label: Text(status == 'All'
-                          ? 'All (${_complaints.length})'
-                          : status == 'raised'
-                              ? 'Raised (${_complaints.where((c) => c.status == 'raised').length})'
-                              : status == 'case_resolved'
-                                  ? 'Resolved (${_complaints.where((c) => c.status == 'case_resolved').length})'
-                                  : 'Closed (${_complaints.where((c) => c.status == 'verified_closed').length})'),
-                      selected: _selectedStatus == status,
-                      onSelected: (_) {
-                        setState(() => _selectedStatus = status);
-                      },
-                    ),
-                  ))
+                        padding: const EdgeInsets.only(right: 8),
+                        child: FilterChip(
+                          label: Text(status == 'All'
+                              ? 'All (${_complaints.length})'
+                              : status == 'raised'
+                                  ? 'Raised (${_complaints.where((c) => c.status == 'raised').length})'
+                                  : status == 'case_resolved'
+                                      ? 'Resolved (${_complaints.where((c) => c.status == 'case_resolved').length})'
+                                      : 'Closed (${_complaints.where((c) => c.status == 'verified_closed').length})'),
+                          selected: _selectedStatus == status,
+                          onSelected: (_) {
+                            setState(() => _selectedStatus = status);
+                          },
+                        ),
+                      ))
                   .toList(),
             ),
           ),
@@ -217,6 +217,8 @@ class _DmeComplaintsViewPageState extends State<DmeComplaintsViewPage> {
 
   Widget _buildComplaintTile(DmeComplaint complaint) {
     final statusColor = _getStatusColorAndIcon(complaint.status);
+    final complaintTypeLabel =
+        complaint.complaintTypes.isEmpty ? null : complaint.complaintTypeLabel;
 
     return InkWell(
       onTap: () => _showComplaintDetail(complaint),
@@ -257,23 +259,48 @@ class _DmeComplaintsViewPageState extends State<DmeComplaintsViewPage> {
                     ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: (statusColor['color'] as Color?)?.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    _formatStatusLabel(complaint.status),
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: statusColor['color'] as Color?,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (complaintTypeLabel != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          complaintTypeLabel,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.red,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: (statusColor['color'] as Color?)
+                            ?.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        _formatStatusLabel(complaint.status),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: statusColor['color'] as Color?,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ),
@@ -472,9 +499,8 @@ class _ComplaintDetailSheetState extends State<_ComplaintDetailSheet> {
             // Action buttons (based on role and status)
             if (widget.userRole != 'dme_user' && widget.complaint.isRaised)
               ElevatedButton.icon(
-                onPressed: _updating
-                    ? null
-                    : () => _updateStatus('case_resolved'),
+                onPressed:
+                    _updating ? null : () => _updateStatus('case_resolved'),
                 icon: _updating
                     ? const SizedBox(
                         width: 18,
@@ -489,7 +515,8 @@ class _ComplaintDetailSheetState extends State<_ComplaintDetailSheet> {
                 ),
               ),
 
-            if ((widget.userRole == 'dme_admin' || widget.userRole == 'dme_user') &&
+            if ((widget.userRole == 'dme_admin' ||
+                    widget.userRole == 'dme_user') &&
                 widget.complaint.isCaseResolved)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -565,7 +592,10 @@ class _ComplaintDetailSheetState extends State<_ComplaintDetailSheet> {
             const SizedBox(width: 12),
             _buildStatusStep('Resolved', widget.complaint.isClosed),
             const SizedBox(width: 12),
-            _buildStatusStep('Closed', widget.complaint.isClosed && widget.complaint.closedByUsername != null),
+            _buildStatusStep(
+                'Closed',
+                widget.complaint.isClosed &&
+                    widget.complaint.closedByUsername != null),
           ],
         ),
         if (widget.complaint.closedAt != null)

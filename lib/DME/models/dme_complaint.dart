@@ -5,6 +5,7 @@ class DmeComplaint {
   final int branchId;
   final String branchName; // Display name, fetched from branches table
   final String complaintText;
+  final List<String> complaintTypes;
   final String status; // 'raised', 'case_resolved', 'verified_closed'
   final String createdById;
   final String? createdByUsername;
@@ -31,6 +32,7 @@ class DmeComplaint {
     required this.branchId,
     required this.branchName,
     required this.complaintText,
+    this.complaintTypes = const <String>[],
     required this.status,
     required this.createdById,
     this.createdByUsername,
@@ -59,6 +61,7 @@ class DmeComplaint {
       branchId: map['branch_id'] as int? ?? 0,
       branchName: _extractBranchName(map['dme_branches']) ?? 'Unknown Branch',
       complaintText: map['complaint_text'] as String? ?? '',
+      complaintTypes: _parseComplaintTypes(map['complaint_type']),
       status: map['status'] as String? ?? 'raised',
       createdById: map['created_by'] as String? ?? '',
       createdByUsername: _extractUsername(map['created_by_user']),
@@ -104,11 +107,27 @@ class DmeComplaint {
     return null;
   }
 
+  static List<String> _parseComplaintTypes(dynamic value) {
+    if (value == null) return const <String>[];
+    if (value is List) {
+      return value.whereType<String>().map((e) => e.trim().toLowerCase()).where((e) => e.isNotEmpty).toSet().toList();
+    }
+    final raw = value.toString().trim();
+    if (raw.isEmpty) return const <String>[];
+    return raw
+        .split(',')
+        .map((e) => e.trim().toLowerCase())
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList();
+  }
+
   Map<String, dynamic> toMap() => {
         'customer_name': customerName,
         'customer_phone': customerPhone,
         'branch_id': branchId,
         'complaint_text': complaintText,
+        'complaint_type': complaintTypes.isEmpty ? '' : complaintTypes.join(','),
         'created_by': createdById,
         'assigned_to': assignedToId, // MANDATORY
         'remarks': remarks,
@@ -122,6 +141,13 @@ class DmeComplaint {
   bool get isCaseResolved => status == 'case_resolved';
   bool get isClosed => status == 'verified_closed';
 
+  String get complaintTypeLabel {
+    if (complaintTypes.isEmpty) {
+      return 'Not specified';
+    }
+    return complaintTypes.map((type) => type.toUpperCase()).join(' + ');
+  }
+
   /// Create a copy with updated fields
   DmeComplaint copyWith({
     String? id,
@@ -130,6 +156,7 @@ class DmeComplaint {
     int? branchId,
     String? branchName,
     String? complaintText,
+    List<String>? complaintTypes,
     String? status,
     String? createdById,
     String? createdByUsername,
@@ -156,6 +183,7 @@ class DmeComplaint {
       branchId: branchId ?? this.branchId,
       branchName: branchName ?? this.branchName,
       complaintText: complaintText ?? this.complaintText,
+      complaintTypes: complaintTypes ?? this.complaintTypes,
       status: status ?? this.status,
       createdById: createdById ?? this.createdById,
       createdByUsername: createdByUsername ?? this.createdByUsername,

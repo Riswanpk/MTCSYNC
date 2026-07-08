@@ -35,6 +35,7 @@ class DmeComplaintService {
     required String complaintText,
     required String createdById,
     required String assignedToId,
+    List<String> complaintTypes = const <String>[],
     String? voiceNoteUrl,
   }) async {
     _ensureSupabaseInitialized();
@@ -49,6 +50,7 @@ class DmeComplaintService {
       'customer_phone': customerPhone,
       'branch_id': branchId,
       'complaint_text': complaintText,
+      'complaint_type': complaintTypes.isEmpty ? '' : complaintTypes.join(','),
       'created_by': createdById,
       'assigned_to': assignedToId, // MANDATORY - included in initial insert
       'status': 'raised',
@@ -57,13 +59,46 @@ class DmeComplaintService {
     };
     if (voiceNoteUrl != null) row['voice_file_url'] = voiceNoteUrl;
 
-    final response = await _supabase
-        .from(_table)
-        .insert(row)
-        .select('id')
-        .single();
+    String complaintId;
+    try {
+      final response = await _supabase
+          .from(_table)
+          .insert(row)
+          .select('id')
+          .single();
+      complaintId = response['id'] as String;
+    } catch (e) {
+      debugPrint('Warning: could not save complaint_type via Supabase insert: $e');
+      final fallbackRow = Map<String, dynamic>.from(row)
+        ..remove('complaint_type');
+      final response = await _supabase
+          .from(_table)
+          .insert(fallbackRow)
+          .select('id')
+          .single();
+      complaintId = response['id'] as String;
+    }
 
-    return response['id'] as String;
+    try {
+      await FirebaseFirestore.instance
+          .collection('dme_complaints')
+          .doc(complaintId)
+          .set({
+            'id': complaintId,
+            'complaint_type': complaintTypes.isEmpty ? '' : complaintTypes.join(','),
+            'customer_name': customerName,
+            'customer_phone': customerPhone,
+            'branch_id': branchId,
+            'complaint_text': complaintText,
+            'created_by': createdById,
+            'assigned_to': assignedToId,
+            'created_at': DateTime.now().toIso8601String(),
+          }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Warning: could not mirror complaint to Firestore: $e');
+    }
+
+    return complaintId;
   }
 
   /// Add remarks to a complaint

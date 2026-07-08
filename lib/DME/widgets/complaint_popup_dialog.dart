@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/dme_reminder.dart';
 import '../models/dme_user.dart';
-import '../models/dme_complaint.dart';
 import '../services/dme_complaint_service.dart';
 import '../services/dme_supabase_service.dart';
 
@@ -31,6 +30,7 @@ class _ComplaintPopupDialogState extends State<ComplaintPopupDialog> {
   bool _loadingUsers = false;
   List<DmeUser> _branchUsers = [];
   DmeUser? _selectedUser;
+  Set<String> _selectedComplaintTypes = <String>{};
   String? _branchName; // Store branch name
 
   @override
@@ -123,6 +123,16 @@ class _ComplaintPopupDialogState extends State<ComplaintPopupDialog> {
     super.dispose();
   }
 
+  void _toggleComplaintType(String type) {
+    setState(() {
+      if (_selectedComplaintTypes.contains(type)) {
+        _selectedComplaintTypes.remove(type);
+      } else {
+        _selectedComplaintTypes.add(type);
+      }
+    });
+  }
+
   Future<void> _submitComplaint() async {
     if (_complaintCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -141,13 +151,14 @@ class _ComplaintPopupDialogState extends State<ComplaintPopupDialog> {
     setState(() => _submitting = true);
 
     try {
-      final complaintId = await _svc.createComplaint(
+      await _svc.createComplaint(
         customerName: widget.reminder.customerName ?? 'Unknown',
         customerPhone: widget.reminder.customerPhone ?? '',
         branchId: widget.reminder.purchasedForBranchId,
         complaintText: _complaintCtrl.text.trim(),
         createdById: widget.dmeUser.id,
         assignedToId: _selectedUser!.id,
+        complaintTypes: _selectedComplaintTypes.toList(),
       );
 
       // Complaint saved to Supabase and will appear in notification page
@@ -306,6 +317,37 @@ class _ComplaintPopupDialogState extends State<ComplaintPopupDialog> {
                 ),
               const SizedBox(height: 20),
 
+              // Complaint Type
+              Text(
+                'Complaint Type',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[700],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildComplaintTypeTile(
+                      type: 'product',
+                      label: 'Product',
+                      icon: Icons.inventory_2_outlined,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildComplaintTypeTile(
+                      type: 'service',
+                      label: 'Service',
+                      icon: Icons.support_agent_outlined,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
               // Complaint Text Field
               Text(
                 'Complaint Details',
@@ -404,6 +446,47 @@ class _ComplaintPopupDialogState extends State<ComplaintPopupDialog> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildComplaintTypeTile({
+    required String type,
+    required String label,
+    required IconData icon,
+  }) {
+    final selected = _selectedComplaintTypes.contains(type);
+    return InkWell(
+      onTap: () => _toggleComplaintType(type),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFFF6B6B).withValues(alpha: 0.08) : Colors.white,
+          border: Border.all(
+            color: selected ? const Color(0xFFFF6B6B) : Colors.grey[300]!,
+            width: selected ? 1.6 : 1,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: selected ? const Color(0xFFFF6B6B) : Colors.grey[600]),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: selected ? const Color(0xFFFF6B6B) : Colors.grey[700],
+                ),
+              ),
+            ),
+            if (selected)
+              const Icon(Icons.check_circle, size: 18, color: Color(0xFFFF6B6B)),
+          ],
         ),
       ),
     );

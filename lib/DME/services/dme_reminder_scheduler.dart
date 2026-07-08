@@ -9,10 +9,10 @@ class DmeReminderScheduler {
 
   static final _svc = DmeSupabaseService.instance;
 
-  /// Calculate reminder date: 30 days after purchase date
-  /// Example: Purchase on 27 Mar 2026 → Reminder on 26 Apr 2026
+  /// Calculate reminder date: 28 days after purchase date
+  /// Example: Purchase on 27 Mar 2026 → Reminder on 24 Apr 2026
   static DateTime calculateReminderDate(DateTime purchaseDate) {
-    return purchaseDate.add(const Duration(days: 30));
+    return purchaseDate.add(const Duration(days: 28));
   }
 
   /// Get all reminders that are due on a specific date

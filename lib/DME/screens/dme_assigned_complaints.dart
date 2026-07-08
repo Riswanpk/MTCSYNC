@@ -12,7 +12,8 @@ class DmeAssignedComplaintsPage extends StatefulWidget {
   const DmeAssignedComplaintsPage({super.key});
 
   @override
-  State<DmeAssignedComplaintsPage> createState() => _DmeAssignedComplaintsPageState();
+  State<DmeAssignedComplaintsPage> createState() =>
+      _DmeAssignedComplaintsPageState();
 }
 
 class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
@@ -89,7 +90,8 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
   }
 
   void _showRemarksDialog(DmeComplaint complaint) {
-    final remarksController = TextEditingController(text: complaint.remarks ?? '');
+    final remarksController =
+        TextEditingController(text: complaint.remarks ?? '');
     bool isSubmitting = false;
 
     showDialog(
@@ -231,7 +233,8 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Row(
             children: [
               Icon(Icons.phone_in_talk, color: primaryColor, size: 22),
@@ -296,7 +299,8 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                       ),
                     ),
                     onPressed: () async {
-                      final uri = Uri(scheme: 'tel', path: complaint.customerPhone);
+                      final uri =
+                          Uri(scheme: 'tel', path: complaint.customerPhone);
                       if (await canLaunchUrl(uri)) {
                         await launchUrl(uri);
                         setDialogState(() => hasCalledCustomer = true);
@@ -305,7 +309,10 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                     icon: const Icon(Icons.phone, color: Colors.white),
                     label: const Text(
                       'Call Customer',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15),
                     ),
                   ),
                 ),
@@ -342,16 +349,19 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                                 Navigator.pop(ctx);
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Complaint marked as resolved ✓'),
+                                    content:
+                                        Text('Complaint marked as resolved ✓'),
                                     backgroundColor: Colors.green,
                                   ),
                                 );
                                 _loadComplaints();
                               },
-                        icon: const Icon(Icons.check_circle, color: Colors.white, size: 18),
+                        icon: const Icon(Icons.check_circle,
+                            color: Colors.white, size: 18),
                         label: const Text(
                           'Resolved',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.w600),
                         ),
                       ),
                     ),
@@ -378,7 +388,8 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                                   if (mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
-                                        content: Text('Complaint returned to sales user for follow-up'),
+                                        content: Text(
+                                            'Complaint returned to sales user for follow-up'),
                                         backgroundColor: Colors.orange,
                                       ),
                                     );
@@ -399,13 +410,16 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                                 width: 16,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation(Colors.white),
+                                  valueColor:
+                                      AlwaysStoppedAnimation(Colors.white),
                                 ),
                               )
-                            : const Icon(Icons.replay, color: Colors.white, size: 18),
+                            : const Icon(Icons.replay,
+                                color: Colors.white, size: 18),
                         label: const Text(
                           'Not Resolved',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.w600),
                         ),
                       ),
                     ),
@@ -481,7 +495,8 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                               .toSet()
                               .toList()
                             ..sort();
-                          if (branches.length <= 1) return const SizedBox.shrink();
+                          if (branches.length <= 1)
+                            return const SizedBox.shrink();
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -538,7 +553,8 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                             padding: const EdgeInsets.all(12),
                             itemCount: _filteredComplaints.length,
                             itemBuilder: (ctx, index) {
-                              return _buildComplaintCard(_filteredComplaints[index]);
+                              return _buildComplaintCard(
+                                  _filteredComplaints[index]);
                             },
                           ),
                   ),
@@ -598,9 +614,12 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
   Widget _buildComplaintCard(DmeComplaint complaint) {
     final dateFormat = DateFormat('dd MMM yyyy, hh:mm a');
     final needsRemarks = complaint.status == 'raised';
-    final hasRemarks = complaint.remarks != null && complaint.remarks!.isNotEmpty;
+    final hasRemarks =
+        complaint.remarks != null && complaint.remarks!.isNotEmpty;
     final awaitingCall = complaint.status == 'case_resolved';
     final isClosed = complaint.status == 'verified_closed';
+    final complaintTypeLabel =
+        complaint.complaintTypes.isEmpty ? null : complaint.complaintTypeLabel;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -611,7 +630,9 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
           borderRadius: BorderRadius.circular(12),
           border: Border(
             left: BorderSide(
-              color: needsRemarks ? const Color(0xFFFF6B6B) : const Color(0xFF8CC63F),
+              color: needsRemarks
+                  ? const Color(0xFFFF6B6B)
+                  : const Color(0xFF8CC63F),
               width: 4,
             ),
           ),
@@ -647,22 +668,55 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: needsRemarks
-                          ? const Color(0xFFFF6B6B).withValues(alpha: 0.1)
-                          : Colors.green.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      _formatStatus(complaint.status),
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: needsRemarks ? const Color(0xFFFF6B6B) : Colors.green,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (complaintTypeLabel != null) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                complaintTypeLabel,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.red,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: needsRemarks
+                                  ? const Color(0xFFFF6B6B)
+                                      .withValues(alpha: 0.1)
+                                  : Colors.green.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              _formatStatus(complaint.status),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: needsRemarks
+                                    ? const Color(0xFFFF6B6B)
+                                    : Colors.green,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
+                    ],
                   ),
                 ],
               ),
@@ -746,7 +800,8 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Colors.green.withValues(alpha: 0.05),
-                    border: Border.all(color: Colors.green.withValues(alpha: 0.2)),
+                    border:
+                        Border.all(color: Colors.green.withValues(alpha: 0.2)),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Column(
@@ -786,8 +841,9 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
 
               // Action Buttons
               const SizedBox(height: 12),
-              if (isClosed) ...[]
-              else if (awaitingCall) ...[  
+              if (isClosed)
+                ...[]
+              else if (awaitingCall) ...[
                 // Show only: Call & Resolve (remarks are disabled when status is resolved)
                 SizedBox(
                   width: double.infinity,
@@ -795,17 +851,19 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.orange[700],
                       padding: const EdgeInsets.symmetric(vertical: 11),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
                     ),
                     onPressed: () => _showCallResolutionDialog(complaint),
                     icon: const Icon(Icons.phone_in_talk, color: Colors.white),
                     label: const Text(
                       'Call & Resolve',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
-              ] else ...[  
+              ] else ...[
                 // Needs remarks (raised status)
                 SizedBox(
                   width: double.infinity,
@@ -813,13 +871,15 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFFF6B6B),
                       padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
                     ),
                     onPressed: () => _showRemarksDialog(complaint),
                     icon: const Icon(Icons.edit, color: Colors.white),
                     label: const Text(
                       'Add Remarks',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),

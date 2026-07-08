@@ -531,6 +531,7 @@ class _DmeComplaintsManagementPageState
     final isAssigned = c.assignedToId == _currentUserId;
     final statusColor = _statusColor(c.status);
     final dateFormat = DateFormat('dd MMM yyyy');
+    final complaintTypeLabel = c.complaintTypes.isEmpty ? null : c.complaintTypeLabel;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -570,7 +571,30 @@ class _DmeComplaintsManagementPageState
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      _buildStatusBadge(c.status),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (complaintTypeLabel != null) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                complaintTypeLabel,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.red,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          _buildStatusBadge(c.status),
+                        ],
+                      ),
                       if (isAssigned) ...[
                         const SizedBox(height: 4),
                         Container(

@@ -732,28 +732,50 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
         label = _complaint.status;
         icon = Icons.help_outline;
     }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(width: 8),
+
+    final complaintTypeLabel = _complaint.complaintTypes.isEmpty
+        ? null
+        : _complaint.complaintTypeLabel;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (complaintTypeLabel != null) ...[
+          const SizedBox(height: 8),
           Text(
-            label,
+            'Complaint Type: $complaintTypeLabel',
             style: TextStyle(
-              color: color,
+              color: Colors.red.shade700,
               fontWeight: FontWeight.w700,
-              fontSize: 14,
+              fontSize: 13,
             ),
           ),
         ],
-      ),
+      ],
     );
   }
 

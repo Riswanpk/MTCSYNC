@@ -503,6 +503,7 @@ class _RaiseComplaintSheetState extends State<_RaiseComplaintSheet> {
 
   bool _submitting = false;
   List<int> _myBranchIds = [];
+  Set<String> _selectedComplaintTypes = <String>{};
   String? _voiceNoteUrl;
   bool _voiceUploading = false;
 
@@ -591,6 +592,16 @@ class _RaiseComplaintSheetState extends State<_RaiseComplaintSheet> {
     }
   }
 
+  void _toggleComplaintType(String type) {
+    setState(() {
+      if (_selectedComplaintTypes.contains(type)) {
+        _selectedComplaintTypes.remove(type);
+      } else {
+        _selectedComplaintTypes.add(type);
+      }
+    });
+  }
+
   Future<void> _submit() async {
     if (_selectedCustomer == null) {
       ScaffoldMessenger.of(context)
@@ -620,6 +631,7 @@ class _RaiseComplaintSheetState extends State<_RaiseComplaintSheet> {
         complaintText: _complaintCtrl.text.trim(),
         createdById: widget.dmeUser.id,
         assignedToId: _selectedAssignee!.id,
+        complaintTypes: _selectedComplaintTypes.toList(),
         voiceNoteUrl: _voiceNoteUrl,
       );
 
@@ -825,6 +837,30 @@ class _RaiseComplaintSheetState extends State<_RaiseComplaintSheet> {
             ],
             const SizedBox(height: 20),
 
+            // ── Complaint Type ──────────────────────────────────
+            _sectionLabel('Complaint Type'),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildComplaintTypeTile(
+                    type: 'product',
+                    label: 'Product',
+                    icon: Icons.inventory_2_outlined,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildComplaintTypeTile(
+                    type: 'service',
+                    label: 'Service',
+                    icon: Icons.support_agent_outlined,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
             // ── Complaint Text ───────────────────────────────────
             _sectionLabel('Complaint Details'),
             const SizedBox(height: 6),
@@ -952,6 +988,47 @@ class _RaiseComplaintSheetState extends State<_RaiseComplaintSheet> {
             fontSize: 13,
             fontWeight: FontWeight.w600,
             color: Colors.grey[700]));
+  }
+
+  Widget _buildComplaintTypeTile({
+    required String type,
+    required String label,
+    required IconData icon,
+  }) {
+    final selected = _selectedComplaintTypes.contains(type);
+    return InkWell(
+      onTap: () => _toggleComplaintType(type),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? _primary.withValues(alpha: 0.08) : Colors.white,
+          border: Border.all(
+            color: selected ? _primary : Colors.grey[300]!,
+            width: selected ? 1.6 : 1,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: selected ? _primary : Colors.grey[600]),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: selected ? _primary : Colors.grey[700],
+                ),
+              ),
+            ),
+            if (selected)
+              const Icon(Icons.check_circle, size: 18, color: _primary),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _infoRow(IconData icon, String text) {
