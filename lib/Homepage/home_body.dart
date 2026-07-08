@@ -5,15 +5,15 @@ import 'dart:math';
 import '../Login/auth_wrapper.dart';
 import '../Navigation/navigation_state.dart';
 import '../Navigation/user_cache_service.dart';
-import '../Customer Target/customer_manager_view.dart';
+import '../Customer Calling/customer_manager_view.dart';
 import '../Todo/todo.dart';
 import '../Leads/leads.dart';
 import '../Orders/orders.dart';
 import '../Dashboard/dashboard.dart';
 import '../Marketing/marketing.dart';
 import '../Marketing/viewer_marketing.dart';
-import '../Customer Target/customer_list_target.dart';
-import '../Customer Target/customer_admin_viewer.dart';
+import '../Customer Calling/customer_list_target.dart';
+import '../Customer Calling/customer_admin_viewer.dart';
 import '../Navigation/loading_page.dart';
 import '../Todo/todo_widget_updater.dart';
 import 'home_widgets.dart';
@@ -84,7 +84,8 @@ class HomeMenuButton extends StatelessWidget {
             color: (isDark ? Colors.white : primaryBlue).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: (isDark ? Colors.white : primaryBlue).withValues(alpha: 0.2),
+              color:
+                  (isDark ? Colors.white : primaryBlue).withValues(alpha: 0.2),
               width: 1.5,
             ),
             boxShadow: [
@@ -141,10 +142,12 @@ class HomeNotificationButton extends StatelessWidget {
         children: [
           Container(
             decoration: BoxDecoration(
-              color: (isDark ? Colors.white : primaryBlue).withValues(alpha: 0.1),
+              color:
+                  (isDark ? Colors.white : primaryBlue).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: (isDark ? Colors.white : primaryBlue).withValues(alpha: 0.2),
+                color: (isDark ? Colors.white : primaryBlue)
+                    .withValues(alpha: 0.2),
                 width: 1.5,
               ),
               boxShadow: [
@@ -358,13 +361,13 @@ class HomeButtonsContainer extends StatelessWidget {
             Expanded(
               child: NeumorphicButton(
                 onTap: () => _navigateToTodo(context),
-                  onLongPress: role == 'admin'
-                      ? () => _navigateToSyncHeadTodos(context)
-                      : null,
-                  text: 'ToDo List',
-                  color: primaryGreen,
-                  textColor: Colors.white,
-                  icon: Icons.check_circle_outline_rounded,
+                onLongPress: role == 'admin'
+                    ? () => _navigateToSyncHeadTodos(context)
+                    : null,
+                text: 'ToDo List',
+                color: primaryGreen,
+                textColor: Colors.white,
+                icon: Icons.check_circle_outline_rounded,
               ),
             ),
           ],
@@ -741,10 +744,11 @@ class HomeButtonsContainer extends StatelessWidget {
   Future<void> _navigateToLeads(BuildContext context) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      handleFirebaseAuthError(context, FirebaseException(plugin: 'firestore', code: 'unauthenticated'));
+      handleFirebaseAuthError(context,
+          FirebaseException(plugin: 'firestore', code: 'unauthenticated'));
       return;
     }
-    
+
     String? branch;
     try {
       final cache = UserCacheService.instance;
@@ -773,7 +777,8 @@ class HomeButtonsContainer extends StatelessWidget {
   Future<void> _navigateToOrders(BuildContext context) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      handleFirebaseAuthError(context, FirebaseException(plugin: 'firestore', code: 'unauthenticated'));
+      handleFirebaseAuthError(context,
+          FirebaseException(plugin: 'firestore', code: 'unauthenticated'));
       return;
     }
 
@@ -816,10 +821,11 @@ class HomeButtonsContainer extends StatelessWidget {
   Future<void> _navigateToMarketing(BuildContext context) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      handleFirebaseAuthError(context, FirebaseException(plugin: 'firestore', code: 'unauthenticated'));
+      handleFirebaseAuthError(context,
+          FirebaseException(plugin: 'firestore', code: 'unauthenticated'));
       return;
     }
-    
+
     String? branch, username, userid, role;
     try {
       final cache = UserCacheService.instance;
@@ -848,7 +854,8 @@ class HomeButtonsContainer extends StatelessWidget {
         'userid': userid ?? '',
         'branch': branch ?? '',
       });
-      Navigator.of(context).push(
+      Navigator.of(context)
+          .push(
         MaterialPageRoute(
           builder: (_) => LoadingOverlayPage(
             child: MarketingFormPage(
@@ -858,7 +865,8 @@ class HomeButtonsContainer extends StatelessWidget {
             ),
           ),
         ),
-      ).then((_) {
+      )
+          .then((_) {
         // Clear navigation state when user returns from marketing
         NavigationState.clearState();
       });
@@ -872,10 +880,11 @@ class HomeButtonsContainer extends StatelessWidget {
   Future<void> _navigateToCustomerList(BuildContext context) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      handleFirebaseAuthError(context, FirebaseException(plugin: 'firestore', code: 'unauthenticated'));
+      handleFirebaseAuthError(context,
+          FirebaseException(plugin: 'firestore', code: 'unauthenticated'));
       return;
     }
-    
+
     String? role;
     try {
       final cache = UserCacheService.instance;
@@ -935,22 +944,24 @@ class HomeButtonsContainer extends StatelessWidget {
 
     try {
       var dmeUser = await DmeSupabaseService.instance.getCurrentUser(uid);
-      
+
       // For dme_admin users not yet synced, sync them first
       if (dmeUser == null) {
         await DmeSupabaseService.instance.syncDmeAdminUsers();
         dmeUser = await DmeSupabaseService.instance.getCurrentUser(uid);
       }
-      
+
       if (dmeUser == null || !context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('User profile not found. Please contact admin.')),
+          const SnackBar(
+              content: Text('User profile not found. Please contact admin.')),
         );
         return;
       }
-      
+
       Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => DmeCustomerListPage(dmeUser: dmeUser!)),
+        MaterialPageRoute(
+            builder: (_) => DmeCustomerListPage(dmeUser: dmeUser!)),
       );
     } catch (e) {
       debugPrint('Error navigating to customer list: $e');
@@ -968,7 +979,8 @@ class HomeButtonsContainer extends StatelessWidget {
     final dmeUser = await DmeSupabaseService.instance.getCurrentUser(uid);
     if (dmeUser == null || !context.mounted) return;
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => DmeRemindersAndCallsPage(dmeUser: dmeUser)),
+      MaterialPageRoute(
+          builder: (_) => DmeRemindersAndCallsPage(dmeUser: dmeUser)),
     );
   }
 
