@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:mtcsync/Customer%20Target/customer_individual_export.dart';
+import 'package:mtcsync/Customer%20Calling/customer_individual_export.dart';
 import '../Navigation/user_cache_service.dart';
 import 'package:share_plus/share_plus.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as syncfusion;
 import 'package:cloud_functions/cloud_functions.dart';
-
 
 const Color _primaryBlue = Color(0xFF005BAC);
 const Color _primaryGreen = Color(0xFF8CC63F);
@@ -16,7 +15,8 @@ class CustomerTargetExportPage extends StatefulWidget {
   const CustomerTargetExportPage({super.key});
 
   @override
-  State<CustomerTargetExportPage> createState() => _CustomerTargetExportPageState();
+  State<CustomerTargetExportPage> createState() =>
+      _CustomerTargetExportPageState();
 }
 
 class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
@@ -33,8 +33,18 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
       final now = DateTime.now();
       final date = DateTime(now.year, now.month - i, 1);
       const months = [
-        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec'
       ];
       return "${months[date.month - 1]} ${date.year}";
     },
@@ -79,7 +89,8 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
           .get();
 
       // Group users by branch and then by user email, keeping customers per user
-      final Map<String, Map<String, List<Map<String, dynamic>>>> branchUserMap = {};
+      final Map<String, Map<String, List<Map<String, dynamic>>>> branchUserMap =
+          {};
       for (final doc in usersSnapshot.docs) {
         final data = doc.data();
         final branch = data['branch'] ?? 'Unknown';
@@ -93,7 +104,8 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
       }
 
       // Filter branches if a single branch is selected
-      Map<String, Map<String, List<Map<String, dynamic>>>> filteredBranchUserMap = branchUserMap;
+      Map<String, Map<String, List<Map<String, dynamic>>>>
+          filteredBranchUserMap = branchUserMap;
       if (_selectedBranch != null && _selectedBranch != 'All Branches') {
         filteredBranchUserMap = {
           _selectedBranch!: branchUserMap[_selectedBranch!] ?? {}
@@ -110,13 +122,16 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
           sheet.name = branch;
           int row = 1;
           for (final userEmail in filteredBranchUserMap[branch]!.keys) {
-            final customers = List<Map<String, dynamic>>.from(filteredBranchUserMap[branch]![userEmail]!);
+            final customers = List<Map<String, dynamic>>.from(
+                filteredBranchUserMap[branch]![userEmail]!);
             // Sort: Called first, Not Called second
             customers.sort((a, b) =>
-                (b['callMade'] == true ? 1 : 0) - (a['callMade'] == true ? 1 : 0));
+                (b['callMade'] == true ? 1 : 0) -
+                (a['callMade'] == true ? 1 : 0));
 
             final username = emailToUsername[userEmail] ?? userEmail;
-            final calledCount = customers.where((c) => c['callMade'] == true).length;
+            final calledCount =
+                customers.where((c) => c['callMade'] == true).length;
             final totalCount = customers.length;
 
             // --- Username header row ---
@@ -127,18 +142,21 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
             userRange.cellStyle.backColor = '#005BAC';
             userRange.cellStyle.fontColor = '#FFFFFF';
             userRange.cellStyle.fontSize = 12;
-            userRange.cellStyle.borders.all.lineStyle = syncfusion.LineStyle.thin;
+            userRange.cellStyle.borders.all.lineStyle =
+                syncfusion.LineStyle.thin;
             userRange.cellStyle.borders.all.color = '#CCCCCC';
             row++;
 
             // --- Called progress row ---
             final progressRange = sheet.getRangeByName('A$row:C$row');
             progressRange.merge();
-            progressRange.setText('Customers Called: $calledCount / $totalCount');
+            progressRange
+                .setText('Customers Called: $calledCount / $totalCount');
             progressRange.cellStyle.bold = true;
             progressRange.cellStyle.backColor = '#E8F5E9';
             progressRange.cellStyle.fontColor = '#1B5E20';
-            progressRange.cellStyle.borders.all.lineStyle = syncfusion.LineStyle.thin;
+            progressRange.cellStyle.borders.all.lineStyle =
+                syncfusion.LineStyle.thin;
             progressRange.cellStyle.borders.all.color = '#CCCCCC';
             row++;
 
@@ -150,6 +168,7 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
               r.cellStyle.borders.all.lineStyle = syncfusion.LineStyle.thin;
               r.cellStyle.borders.all.color = '#CCCCCC';
             }
+
             final hA = sheet.getRangeByName('A$row');
             final hB = sheet.getRangeByName('B$row');
             final hC = sheet.getRangeByName('C$row');
@@ -174,7 +193,8 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
 
               // Cell borders
               for (final cell in [cellA, cellB, cellC]) {
-                cell.cellStyle.borders.all.lineStyle = syncfusion.LineStyle.thin;
+                cell.cellStyle.borders.all.lineStyle =
+                    syncfusion.LineStyle.thin;
                 cell.cellStyle.borders.all.color = '#CCCCCC';
               }
 
@@ -226,6 +246,7 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
             r.cellStyle.borders.all.color = '#CCCCCC';
             r.cellStyle.hAlign = syncfusion.HAlignType.center;
           }
+
           final hA = sheet.getRangeByName('A2');
           final hB = sheet.getRangeByName('B2');
           final hC = sheet.getRangeByName('C2');
@@ -278,9 +299,11 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
       workbook.dispose();
 
       final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/CustomerTarget_${_selectedMonthYear!.replaceAll(' ', '_')}.xlsx');
+      final file = File(
+          '${dir.path}/CustomerTarget_${_selectedMonthYear!.replaceAll(' ', '_')}.xlsx');
       await file.writeAsBytes(bytes, flush: true);
-      await Share.shareXFiles([XFile(file.path)], text: 'Customer Target $_selectedMonthYear');
+      await Share.shareXFiles([XFile(file.path)],
+          text: 'Customer Target $_selectedMonthYear');
     } catch (e) {
       setState(() {
         _error = 'Export failed: $e';
@@ -292,9 +315,12 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
     }
   }
 
-  Future<void> triggerCustomerTargetExport(String monthYear, String fileMonth) async {
-    final HttpsCallable callable = FirebaseFunctions.instance.httpsCallable('exportCustomerTargetIndividualReport');
-    final result = await callable.call({'monthYear': monthYear, 'fileMonth': fileMonth});
+  Future<void> triggerCustomerTargetExport(
+      String monthYear, String fileMonth) async {
+    final HttpsCallable callable = FirebaseFunctions.instance
+        .httpsCallable('exportCustomerTargetIndividualReport');
+    final result =
+        await callable.call({'monthYear': monthYear, 'fileMonth': fileMonth});
     // Handle result (e.g., show a dialog with the download link)
   }
 
@@ -335,25 +361,31 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
               decoration: InputDecoration(
                 labelText: 'Month',
                 labelStyle: const TextStyle(color: _primaryBlue),
-                prefixIcon: const Icon(Icons.calendar_today_rounded, color: _primaryBlue, size: 20),
+                prefixIcon: const Icon(Icons.calendar_today_rounded,
+                    color: _primaryBlue, size: 20),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: _primaryBlue.withValues(alpha: 0.4)),
+                  borderSide:
+                      BorderSide(color: _primaryBlue.withValues(alpha: 0.4)),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: _primaryBlue.withValues(alpha: 0.4)),
+                  borderSide:
+                      BorderSide(color: _primaryBlue.withValues(alpha: 0.4)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: const BorderSide(color: _primaryBlue, width: 1.5),
                 ),
                 filled: true,
-                fillColor: isDark ? const Color(0xFF162236) : const Color(0xFFF0F5FF),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                fillColor:
+                    isDark ? const Color(0xFF162236) : const Color(0xFFF0F5FF),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               ),
               dropdownColor: isDark ? const Color(0xFF162236) : Colors.white,
-              style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14),
+              style: TextStyle(
+                  color: isDark ? Colors.white : Colors.black87, fontSize: 14),
               items: _monthYears
                   .map((m) => DropdownMenuItem(value: m, child: Text(m)))
                   .toList(),
@@ -367,26 +399,34 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
               decoration: InputDecoration(
                 labelText: 'Branch',
                 labelStyle: const TextStyle(color: _primaryBlue),
-                prefixIcon: const Icon(Icons.location_city_rounded, color: _primaryBlue, size: 20),
+                prefixIcon: const Icon(Icons.location_city_rounded,
+                    color: _primaryBlue, size: 20),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: _primaryBlue.withValues(alpha: 0.4)),
+                  borderSide:
+                      BorderSide(color: _primaryBlue.withValues(alpha: 0.4)),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: _primaryBlue.withValues(alpha: 0.4)),
+                  borderSide:
+                      BorderSide(color: _primaryBlue.withValues(alpha: 0.4)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: const BorderSide(color: _primaryBlue, width: 1.5),
                 ),
                 filled: true,
-                fillColor: isDark ? const Color(0xFF162236) : const Color(0xFFF0F5FF),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                fillColor:
+                    isDark ? const Color(0xFF162236) : const Color(0xFFF0F5FF),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               ),
               dropdownColor: isDark ? const Color(0xFF162236) : Colors.white,
-              style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14),
-              items: _branches.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+              style: TextStyle(
+                  color: isDark ? Colors.white : Colors.black87, fontSize: 14),
+              items: _branches
+                  .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                  .toList(),
               onChanged: (val) => setState(() => _selectedBranch = val),
             ),
 
@@ -397,7 +437,8 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
                 Checkbox(
                   value: _detailedReport,
                   activeColor: _primaryBlue,
-                  onChanged: (val) => setState(() => _detailedReport = val ?? false),
+                  onChanged: (val) =>
+                      setState(() => _detailedReport = val ?? false),
                 ),
                 const Text(
                   'Detailed Report',
@@ -414,7 +455,8 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
                   ? const SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
                     )
                   : const Icon(Icons.download_rounded),
               label: Text(_loading ? 'Exporting...' : 'Export as Excel'),
@@ -422,8 +464,10 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
                 backgroundColor: _primaryGreen,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                textStyle:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
             ),
 
@@ -453,7 +497,8 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
           const SizedBox(width: 8),
           Text(
             text,
-            style: TextStyle(fontSize: 13, color: isDark ? Colors.white60 : Colors.black54),
+            style: TextStyle(
+                fontSize: 13, color: isDark ? Colors.white60 : Colors.black54),
           ),
         ],
       ),

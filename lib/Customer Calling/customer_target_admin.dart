@@ -22,10 +22,26 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
   String? _error;
   String? _success;
   List<Map<String, dynamic>>? _customers; // Store imported customers
+  String? _selectedMonthYear;
+
+  final List<String> _monthYears = List.generate(
+    6,
+    (i) {
+      final now = DateTime.now();
+      // i=0 -> next month, i=1 -> current month, i=2 -> prev month, etc.
+      final date = DateTime(now.year, now.month - i + 1, 1);
+      const months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      ];
+      return "${months[date.month - 1]} ${date.year}";
+    },
+  );
 
   @override
   void initState() {
     super.initState();
+    _selectedMonthYear = _monthYears[1]; // default to current month
     _fetchUsersAndBranches();
   }
 
@@ -176,9 +192,9 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
   }
 
   Future<void> _assignToFirestore() async {
-    if (_customers == null || _selectedBranch == null || _selectedUserEmail == null) {
+    if (_customers == null || _selectedBranch == null || _selectedUserEmail == null || _selectedMonthYear == null) {
       setState(() {
-        _error = "Please import Excel and select branch/user.";
+        _error = "Please import Excel and select month/branch/user.";
       });
       return;
     }
@@ -188,8 +204,7 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
       _success = null;
     });
     try {
-      final now = DateTime.now();
-      final monthYear = "${_monthName(now.month)} ${now.year}";
+      final monthYear = _selectedMonthYear!;
       final docRef = FirebaseFirestore.instance
           .collection('customer_target')
           .doc(monthYear)
@@ -298,6 +313,20 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
+                  // Month Dropdown
+                  DropdownButtonFormField<String>(
+                    value: _selectedMonthYear,
+                    hint: const Text('Select Target Month'),
+                    items: _monthYears
+                        .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                        .toList(),
+                    onChanged: (val) {
+                      setState(() {
+                        _selectedMonthYear = val;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
                   // Branch Dropdown
                   DropdownButtonFormField<String>(
                     value: _branches.contains(_selectedBranch) ? _selectedBranch : null,
