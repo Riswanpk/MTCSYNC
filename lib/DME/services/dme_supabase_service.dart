@@ -1078,8 +1078,8 @@ class DmeSupabaseService {
         .eq('customer_id', customerId)
         .maybeSingle();
 
-    // Calculate reminder date as 30 days after purchase date
-    final reminderDate = purchaseDate.add(const Duration(days: 30));
+    // Calculate reminder date as 28 days after purchase date
+    final reminderDate = purchaseDate.add(const Duration(days: 28));
     final purchaseDateStr = purchaseDate.toIso8601String().split('T')[0];
     final reminderDateStr = reminderDate.toIso8601String().split('T')[0];
 
@@ -1513,7 +1513,7 @@ class DmeSupabaseService {
         // Create reminder if last_purchase_date provided
         if (customer.lastPurchaseDate != null) {
           final reminderDate =
-              customer.lastPurchaseDate!.add(const Duration(days: 30));
+              customer.lastPurchaseDate!.add(const Duration(days: 28));
           await _client.from('dme_reminders').upsert({
             'customer_id': customerId,
             'reminder_date': reminderDate.toIso8601String().split('T')[0],
@@ -1620,7 +1620,7 @@ class DmeSupabaseService {
     final currentReminderDate =
         DateTime.parse(existing['reminder_date'] as String);
     if (newPurchaseDate.isAfter(currentReminderDate)) {
-      final newReminderDate = newPurchaseDate.add(Duration(days: 30));
+      final newReminderDate = newPurchaseDate.add(const Duration(days: 28));
       await _client.from('dme_reminders').update({
         'reminder_date': newReminderDate.toIso8601String().split('T')[0],
         'last_purchase_date': newPurchaseDate.toIso8601String().split('T')[0],
