@@ -35,6 +35,18 @@ const Map<String, int> _customerTypeNameToId = {
   'GENERAL': 6,
 };
 
+bool shouldCreateReminderForCategory(String? category) {
+  if (category == null || category.trim().isEmpty) return true;
+
+  final normalizedCategory = category.trim().toUpperCase();
+  return !{
+    'TRUST',
+    'INSTITUTION',
+    'VEHICLE SHOWROOM',
+    'GENERAL & OTHERS',
+  }.contains(normalizedCategory);
+}
+
 // ── Preview item status ───────────────────────────────────────────
 enum _RecordStatus { pending, checking, matchFound, newCustomer, conflict }
 
@@ -133,6 +145,10 @@ class _DmeSalesUploadPageState extends State<DmeSalesUploadPage> {
     required String? effectiveCategory,
     required String? effectiveType,
   }) async {
+    if (!shouldCreateReminderForCategory(effectiveCategory)) {
+      return;
+    }
+
     try {
       final branches = await _svc.getBranches();
       final branchName = branches.firstWhere(
