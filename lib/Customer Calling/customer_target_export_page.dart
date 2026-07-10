@@ -24,6 +24,7 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
   bool _loading = false;
   String? _error;
   bool _detailedReport = false;
+  bool _datewiseReport = false;
   List<String> _branches = [];
   String? _selectedBranch = 'All Branches';
 
@@ -216,6 +217,144 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
           sheet.autoFitColumn(1);
           sheet.autoFitColumn(2);
           sheet.autoFitColumn(3);
+          sheetIndex++;
+        }
+      } else if (_datewiseReport) {
+        // ── Datewise report ─────────────────────────────────────────────
+        for (final branch in filteredBranchUserMap.keys) {
+          final sheet = sheetIndex == 0
+              ? workbook.worksheets[0]
+              : workbook.worksheets.addWithName(branch);
+          sheet.name = branch;
+
+          // Parse month and year
+          final parts = _selectedMonthYear!.split(' ');
+          final monthStr = parts[0];
+          final year = int.parse(parts[1]);
+          const months = [
+            'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+          ];
+          final month = months.indexOf(monthStr) + 1;
+          final daysInMonth = DateTime(year, month + 1, 0).day;
+
+          // Title row
+          final titleRange = sheet.getRangeByIndex(1, 1, 1, 1 + daysInMonth + 1);
+          titleRange.merge();
+          titleRange.setText('Customer Target Datewise Report — $branch ($_selectedMonthYear)');
+          titleRange.cellStyle.bold = true;
+          titleRange.cellStyle.fontSize = 13;
+          titleRange.cellStyle.backColor = '#005BAC';
+          titleRange.cellStyle.fontColor = '#FFFFFF';
+          titleRange.cellStyle.hAlign = syncfusion.HAlignType.center;
+          titleRange.cellStyle.vAlign = syncfusion.VAlignType.center;
+          sheet.getRangeByIndex(1, 1).rowHeight = 28;
+
+          // Headers: A2 is "Username", B2 to ... are dates (1, 2, ..., daysInMonth), last is "Total Calls"
+          void applyHeaderStyle(syncfusion.Range r) {
+            r.cellStyle.bold = true;
+            r.cellStyle.backColor = '#8CC63F';
+            r.cellStyle.fontColor = '#FFFFFF';
+            r.cellStyle.borders.all.lineStyle = syncfusion.LineStyle.thin;
+            r.cellStyle.borders.all.color = '#CCCCCC';
+            r.cellStyle.hAlign = syncfusion.HAlignType.center;
+            r.cellStyle.vAlign = syncfusion.VAlignType.center;
+          }
+
+          final hUsername = sheet.getRangeByIndex(2, 1);
+          hUsername.setText('Username');
+          applyHeaderStyle(hUsername);
+
+          for (int day = 1; day <= daysInMonth; day++) {
+            final hDay = sheet.getRangeByIndex(2, 1 + day);
+            hDay.setNumber(day.toDouble());
+            applyHeaderStyle(hDay);
+          }
+
+          final hTotal = sheet.getRangeByIndex(2, 1 + daysInMonth + 1);
+          hTotal.setText('Total Calls');
+          applyHeaderStyle(hTotal);
+
+          int dataRow = 3;
+          int rowIdx = 0;
+          for (final userEmail in filteredBranchUserMap[branch]!.keys) {
+            final customers = filteredBranchUserMap[branch]![userEmail]!;
+            final username = emailToUsername[userEmail] ?? userEmail;
+
+            // Count calls for each day
+            final Map<int, int> dayCallCounts = {};
+            for (int day = 1; day <= daysInMonth; day++) {
+              dayCallCounts[day] = 0;
+            }
+            int totalCallsForUser = 0;
+
+            for (final customer in customers) {
+              if (customer['callMade'] == true) {
+                final rawDate = customer['callDate'];
+                DateTime? callDate;
+                if (rawDate != null) {
+                  if (rawDate is String) {
+                    callDate = DateTime.tryParse(rawDate);
+                  } else if (rawDate is Timestamp) {
+                    callDate = rawDate.toDate();
+                  } else if (rawDate is DateTime) {
+                    callDate = rawDate;
+                  }
+                }
+                if (callDate != null) {
+                  final day = callDate.day;
+                  if (day >= 1 && day <= daysInMonth) {
+                    dayCallCounts[day] = (dayCallCounts[day] ?? 0) + 1;
+                  }
+                }
+                totalCallsForUser++;
+              }
+            }
+
+            final bgColor = rowIdx % 2 == 1 ? '#F0F5FF' : '#FFFFFF';
+
+            // Username cell
+            final cellUsername = sheet.getRangeByIndex(dataRow, 1);
+            cellUsername.setText(username);
+            cellUsername.cellStyle.borders.all.lineStyle = syncfusion.LineStyle.thin;
+            cellUsername.cellStyle.borders.all.color = '#CCCCCC';
+            cellUsername.cellStyle.backColor = bgColor;
+            cellUsername.cellStyle.hAlign = syncfusion.HAlignType.left;
+            cellUsername.cellStyle.vAlign = syncfusion.VAlignType.center;
+
+            // Day count cells
+            for (int day = 1; day <= daysInMonth; day++) {
+              final cellDay = sheet.getRangeByIndex(dataRow, 1 + day);
+              final count = dayCallCounts[day] ?? 0;
+              cellDay.setNumber(count.toDouble());
+              cellDay.cellStyle.borders.all.lineStyle = syncfusion.LineStyle.thin;
+              cellDay.cellStyle.borders.all.color = '#CCCCCC';
+              cellDay.cellStyle.backColor = bgColor;
+              cellDay.cellStyle.hAlign = syncfusion.HAlignType.center;
+              cellDay.cellStyle.vAlign = syncfusion.VAlignType.center;
+            }
+
+            // Total Calls cell
+            final cellTotal = sheet.getRangeByIndex(dataRow, 1 + daysInMonth + 1);
+            cellTotal.setNumber(totalCallsForUser.toDouble());
+            cellTotal.cellStyle.borders.all.lineStyle = syncfusion.LineStyle.thin;
+            cellTotal.cellStyle.borders.all.color = '#CCCCCC';
+            cellTotal.cellStyle.backColor = bgColor;
+            cellTotal.cellStyle.hAlign = syncfusion.HAlignType.center;
+            cellTotal.cellStyle.vAlign = syncfusion.VAlignType.center;
+            cellTotal.cellStyle.bold = true;
+
+            dataRow++;
+            rowIdx++;
+          }
+
+          sheet.autoFitColumn(1);
+          // Set column width for dates to be compact
+          for (int day = 1; day <= daysInMonth; day++) {
+            sheet.getRangeByIndex(1, 1 + day).columnWidth = 4.5;
+          }
+          sheet.getRangeByIndex(1, 1 + daysInMonth + 1).columnWidth = 12;
+
           sheetIndex++;
         }
       } else {
@@ -437,11 +576,26 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
                 Checkbox(
                   value: _detailedReport,
                   activeColor: _primaryBlue,
-                  onChanged: (val) =>
-                      setState(() => _detailedReport = val ?? false),
+                  onChanged: (val) => setState(() {
+                    _detailedReport = val ?? false;
+                    if (_detailedReport) _datewiseReport = false;
+                  }),
                 ),
                 const Text(
                   'Detailed Report',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(width: 20),
+                Checkbox(
+                  value: _datewiseReport,
+                  activeColor: _primaryBlue,
+                  onChanged: (val) => setState(() {
+                    _datewiseReport = val ?? false;
+                    if (_datewiseReport) _detailedReport = false;
+                  }),
+                ),
+                const Text(
+                  'Datewise Report',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
               ],

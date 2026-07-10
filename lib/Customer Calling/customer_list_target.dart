@@ -237,7 +237,13 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
   Future<void> _saveToLocalCache() async {
     if (_customers == null || _docId == null) return;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_cacheKey(), jsonEncode(_customers));
+    final customersJson = jsonEncode(_customers, toEncodable: (nonEncodable) {
+      if (nonEncodable is Timestamp) {
+        return nonEncodable.toDate().toIso8601String();
+      }
+      return nonEncodable.toString();
+    });
+    await prefs.setString(_cacheKey(), customersJson);
   }
 
   Future<List<Map<String, dynamic>>?> _loadFromLocalCache() async {
@@ -246,7 +252,17 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
     final cached = prefs.getString(_cacheKey());
     if (cached != null) {
       final List<dynamic> data = jsonDecode(cached);
-      return data.map((e) => Map<String, dynamic>.from(e)).toList();
+      final list = data.map((e) => Map<String, dynamic>.from(e)).toList();
+      for (final customer in list) {
+        final rawDate = customer['callDate'];
+        if (rawDate != null && rawDate is String) {
+          final date = DateTime.tryParse(rawDate);
+          if (date != null) {
+            customer['callDate'] = Timestamp.fromDate(date);
+          }
+        }
+      }
+      return list;
     }
     return null;
   }
@@ -301,6 +317,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
         }
         setState(() {
           _customers![_pendingCallIndex!]['callMade'] = true;
+          _customers![_pendingCallIndex!]['callDate'] = Timestamp.now();
         });
         await _updateFirestore();
         if (mounted) {
@@ -374,6 +391,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
 
         if (hasLongCallAfter) {
           customer['callMade'] = true;
+          customer['callDate'] = Timestamp.now();
           anyChanged = true;
           newlyCalled.add(customer);
         }
@@ -663,6 +681,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                             // Mark as called
                             setState(() {
                               c['callMade'] = true;
+                              c['callDate'] = Timestamp.now();
                             });
                             _updateFirestore();
                             Navigator.of(ctx).pop();
@@ -675,6 +694,9 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                                   onStatusChanged: (remarks) async {
                                     setState(() {
                                       c['callMade'] = true;
+                                      if (c['callDate'] == null) {
+                                        c['callDate'] = Timestamp.now();
+                                      }
                                       c['remarks'] = remarks;
                                     });
                                     await _updateFirestore();
@@ -1081,6 +1103,9 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                                     if (mounted && customer.isNotEmpty) {
                                       setState(() {
                                         customer['callMade'] = true;
+                                        if (customer['callDate'] == null) {
+                                          customer['callDate'] = Timestamp.now();
+                                        }
                                         customer['remarks'] = remarks;
                                       });
                                       await _updateFirestore();
@@ -1137,6 +1162,9 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                                         onStatusChanged: (remarks) async {
                                           setState(() {
                                             customer['callMade'] = true;
+                                            if (customer['callDate'] == null) {
+                                              customer['callDate'] = Timestamp.now();
+                                            }
                                             customer['remarks'] = remarks;
                                           });
                                           await _updateFirestore();

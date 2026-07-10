@@ -203,6 +203,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
       if (callMade) {
         // Always update local map (used by _updateCallStatusInFirestore).
         customer['callMade'] = true;
+        customer['callDate'] = Timestamp.now();
         // Update UI only if still mounted; don't let a thrown setState
         // exception block the Firestore write below.
         if (mounted) {
@@ -300,6 +301,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
       });
       if (hasLongCallAfter) {
         customer['callMade'] = true;
+        customer['callDate'] = Timestamp.now();
         if (mounted) {
           setState(() {
             called = true;
@@ -364,6 +366,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
 
       if (hasOutgoingLongCall) {
         customer['callMade'] = true;
+        customer['callDate'] = Timestamp.now();
         if (mounted) {
           setState(() {
             called = true;
@@ -431,6 +434,9 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
         );
         if (idx != -1) {
           customers[idx]['callMade'] = true;
+          if (customers[idx]['callDate'] == null) {
+            customers[idx]['callDate'] = Timestamp.now();
+          }
           await docRef.update({'customers': customers});
         }
       }
@@ -474,6 +480,9 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
         );
         if (idx != -1) {
           customers[idx]['remarks'] = remarks;
+          if (customers[idx]['callDate'] == null) {
+            customers[idx]['callDate'] = Timestamp.now();
+          }
           await docRef.update({'customers': customers});
         }
       }
