@@ -174,12 +174,14 @@ class _LeadsPageState extends State<LeadsPage> {
   }
 
   // --- NEW: Pagination Logic ---
-  Future<void> _fetchLeadsPage({bool nextPage = false, bool prevPage = false, bool isSearch = false}) async {
+  Future<void> _fetchLeadsPage({bool nextPage = false, bool prevPage = false, bool isSearch = false, bool isRefresh = false}) async {
     if (!mounted) return;
     if (_isLoading) return;
-    setState(() {
-      _isLoading = true;
-    });
+    if (!isRefresh) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
 
     final userData = await _currentUserData;
     final role = userData?['role'] ?? 'sales';
@@ -299,6 +301,16 @@ class _LeadsPageState extends State<LeadsPage> {
         setState(() => _creatorUsernameCache.addAll(map));
       }
     }
+  }
+
+  Future<void> _handleRefresh() async {
+    setState(() {
+      _pageStartCursors.clear();
+      _pageStartCursors[1] = null;
+      _currentPage = 1;
+      _lastDocument = null;
+    });
+    await _fetchLeadsPage(isRefresh: true);
   }
 
   Future<void> autoRescheduleLeads(String? currentUserId, String? branch) async {
@@ -1148,47 +1160,57 @@ class _LeadsPageState extends State<LeadsPage> {
                   ),
                   // --- LEADS LIST ---
                   Expanded(
-                    child: _isLoading
-                        ? const Center(child: CircularProgressIndicator())
-                        : _leads.isEmpty
-                            ? const Center(child: Text("No leads match your criteria."))
-                            : ListView.builder(
-                                padding: const EdgeInsets.all(16),
-                                itemCount: _leads.length,
-                                itemBuilder: (context, index) {
-                                  final doc = _leads[index];
-                                  final data = doc.data() as Map<String, dynamic>;
-                                  final name = data['name'] ?? 'No Name';
-                                  final status = data['status'] ?? 'Unknown';
-                                  final date = data['date'] ?? 'No Date';
-                                  final docId = doc.id;
-                                  final reminder = data['reminder'] ?? 'No Reminder';
-                                  final createdById = data['created_by'] ?? '';
-                                  final priority = data['priority'] ?? 'High';
-                                  final source = data['source'] as String?;
+                    child: RefreshIndicator(
+                      onRefresh: _handleRefresh,
+                      child: _isLoading
+                          ? const Center(child: CircularProgressIndicator())
+                          : _leads.isEmpty
+                              ? ListView(
+                                  physics: const AlwaysScrollableScrollPhysics(),
+                                  children: const [
+                                    SizedBox(height: 100),
+                                    Center(child: Text("No leads match your criteria.")),
+                                  ],
+                                )
+                              : ListView.builder(
+                                  physics: const AlwaysScrollableScrollPhysics(),
+                                  padding: const EdgeInsets.all(16),
+                                  itemCount: _leads.length,
+                                  itemBuilder: (context, index) {
+                                    final doc = _leads[index];
+                                    final data = doc.data() as Map<String, dynamic>;
+                                    final name = data['name'] ?? 'No Name';
+                                    final status = data['status'] ?? 'Unknown';
+                                    final date = data['date'] ?? 'No Date';
+                                    final docId = doc.id;
+                                    final reminder = data['reminder'] ?? 'No Reminder';
+                                    final createdById = data['created_by'] ?? '';
+                                    final priority = data['priority'] ?? 'High';
+                                    final source = data['source'] as String?;
 
-                                  // Client-side search filtering
-                                  if (searchQuery.isNotEmpty &&
-                                      !name.toLowerCase().contains(searchQuery)) {
-                                    return const SizedBox.shrink();
-                                  }
+                                    // Client-side search filtering
+                                    if (searchQuery.isNotEmpty &&
+                                        !name.toLowerCase().contains(searchQuery)) {
+                                      return const SizedBox.shrink();
+                                    }
 
-                                  final creatorUsername =
-                                      _creatorUsernameCache[createdById] ?? '';
+                                    final creatorUsername =
+                                        _creatorUsernameCache[createdById] ?? '';
 
-                                  return LeadCard(
-                                    name: name,
-                                    status: status,
-                                    date: date,
-                                    docId: docId,
-                                    createdBy: creatorUsername,
-                                    reminder: reminder,
-                                    priority: priority,
-                                    source: source,
-                                    onStatusChanged: () => _fetchLeadsPage(),
-                                  );
-                                },
-                              ),
+                                    return LeadCard(
+                                      name: name,
+                                      status: status,
+                                      date: date,
+                                      docId: docId,
+                                      createdBy: creatorUsername,
+                                      reminder: reminder,
+                                      priority: priority,
+                                      source: source,
+                                      onStatusChanged: () => _fetchLeadsPage(),
+                                    );
+                                  },
+                                ),
+                    ),
                   ),
                   // --- SEARCH BAR AT BOTTOM ---
                   // --- NEW: Pagination Controls ---
