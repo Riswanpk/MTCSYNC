@@ -31,6 +31,8 @@ import '../DME/screens/dme_dashboard.dart';
 import '../DME/screens/dme_user_dashboard.dart';
 import '../DME/screens/dme_leads_page.dart';
 import '../DME/screens/dme_complaints_management.dart';
+import '../Supersale/supersale_admin.dart';
+import '../Supersale/supersale_user_mainpage.dart';
 
 /// App brand colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -313,7 +315,7 @@ class SwingingLogo extends StatelessWidget {
 }
 
 /// Container holding the main action buttons with neumorphic style.
-class HomeButtonsContainer extends StatelessWidget {
+class HomeButtonsContainer extends StatefulWidget {
   final String? role;
   final bool isDark;
 
@@ -324,18 +326,198 @@ class HomeButtonsContainer extends StatelessWidget {
   });
 
   @override
+  State<HomeButtonsContainer> createState() => _HomeButtonsContainerState();
+}
+
+class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
+  late PageController _pageController;
+  int _currentPageIndex = 1000; // Initialize to a large value for infinite sliding
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(initialPage: _currentPageIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _navigateToSupersale(BuildContext context) async {
+    final cache = UserCacheService.instance;
+    await cache.ensureLoaded();
+    final role = cache.role;
+
+    if (role == 'supersale_admin') {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const LoadingOverlayPage(
+            child: SupersalePage(),
+          ),
+        ),
+      );
+    } else {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const LoadingOverlayPage(
+            child: SupersaleUserMainPage(),
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Sync Head has a completely different homepage
+    final role = widget.role;
+    final isDark = widget.isDark;
+
+    if (role == 'supersale_admin') {
+      return _buildSupersaleAdminTiles(context);
+    }
+
+    // Dynamic height calculation to avoid empty space or clipping
+    double pageViewHeight = 250.0;
+    if (role == 'admin' || role == 'manager' || role == 'asst_manager') {
+      pageViewHeight = 310.0;
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: pageViewHeight,
+          child: PageView.builder(
+            controller: _pageController,
+            onPageChanged: (index) {
+              setState(() {
+                _currentPageIndex = index;
+              });
+            },
+            itemBuilder: (context, index) {
+              final pageNum = index % 2;
+              if (pageNum == 0) {
+                return _buildOriginalHomePage(context);
+              } else {
+                return _buildSupersalePage(context);
+              }
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Swipe Page Indicator Dots
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(2, (index) {
+            final active = (_currentPageIndex % 2) == index;
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              height: 8,
+              width: active ? 22 : 8,
+              decoration: BoxDecoration(
+                color: active
+                    ? primaryBlue
+                    : (isDark ? Colors.white30 : Colors.black26),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            );
+          }),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSupersaleAdminTiles(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        NeumorphicButton(
+          onTap: () => _navigateToSupersale(context),
+          text: 'Supersale',
+          color: const Color(0xFFFF5722), // Vibrant deep orange
+          textColor: Colors.white,
+          icon: Icons.flash_on_rounded,
+        ),
+        const SizedBox(height: 14),
+        NeumorphicButton(
+          onTap: () => _navigateToMarketing(context),
+          text: 'Marketing',
+          color: primaryBlue.withBlue(180),
+          textColor: Colors.white,
+          icon: Icons.campaign_rounded,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSupersalePage(BuildContext context) {
+    final isDark = widget.isDark;
+    return Column(
+      children: [
+        NeumorphicButton(
+          onTap: () => _navigateToSupersale(context),
+          text: 'Supersale',
+          color: const Color(0xFFFF5722),
+          textColor: Colors.white,
+          icon: Icons.flash_on_rounded,
+        ),
+        const SizedBox(height: 14),
+        Expanded(
+          child: Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 4),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withOpacity(0.04)
+                  : Colors.grey.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white10
+                    : Colors.black.withOpacity(0.05),
+                width: 1.5,
+              ),
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.add_circle_outline_rounded,
+                    size: 32,
+                    color: isDark ? Colors.white30 : Colors.black26,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'More actions coming soon',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white30 : Colors.black38,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOriginalHomePage(BuildContext context) {
+    final role = widget.role;
+    final isDark = widget.isDark;
+
     if (role == 'sync_head') {
       return _buildSyncHeadTiles(context);
     }
-
-    // SME has a dedicated homepage with Leads + Dashboard only
     if (role == 'sme') {
       return _buildSmeTiles(context);
     }
-
-    // DME has a dedicated homepage with DME-only buttons
     if (role == 'dme_admin' || role == 'dme_user') {
       return _buildDmeTiles(context);
     }
@@ -394,7 +576,7 @@ class HomeButtonsContainer extends StatelessWidget {
                   color: primaryGreen.withGreen(220), // Lighter green variant
                   textColor: Colors.white,
                   icon: Icons.assignment_ind_rounded,
-                  textStyle: TextStyle(
+                  textStyle: const TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 12,
                     letterSpacing: 0.6,
@@ -402,8 +584,8 @@ class HomeButtonsContainer extends StatelessWidget {
                     fontFamily: 'Montserrat',
                     shadows: [
                       Shadow(
-                        color: Colors.black.withValues(alpha: 0.25),
-                        offset: const Offset(0, 1),
+                        color: Colors.black26,
+                        offset: Offset(0, 1),
                         blurRadius: 3,
                       ),
                     ],
@@ -484,6 +666,7 @@ class HomeButtonsContainer extends StatelessWidget {
 
   /// Builds the Sync Head-specific home tiles.
   Widget _buildSyncHeadTiles(BuildContext context) {
+    final isDark = widget.isDark;
     return Column(
       children: [
         Row(
@@ -549,6 +732,7 @@ class HomeButtonsContainer extends StatelessWidget {
 
   /// Builds the DME-specific home tiles.
   Widget _buildDmeTiles(BuildContext context) {
+    final role = widget.role;
     // dme_admin sees Dashboard, Customer DB Upload, and Complaints
     if (role == 'dme_admin') {
       return Column(
@@ -850,9 +1034,9 @@ class HomeButtonsContainer extends StatelessWidget {
     } else if (branch != null && username != null && userid != null) {
       // Save navigation state for activity recreation recovery
       await NavigationState.saveState('marketing', userData: {
-        'username': username ?? '',
-        'userid': userid ?? '',
-        'branch': branch ?? '',
+        'username': username,
+        'userid': userid,
+        'branch': branch,
       });
       Navigator.of(context)
           .push(

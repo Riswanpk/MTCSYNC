@@ -24,7 +24,8 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
     'sync_head',
     'sme',
     'dme_admin',
-    'dme_user'
+    'dme_user',
+    'supersale_admin'
   ];
   String? _currentUserId;
   String _searchQuery = '';
