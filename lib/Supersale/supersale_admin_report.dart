@@ -1,10 +1,7 @@
-import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
-import 'package:intl/intl.dart';
+import 'supersale_admin_booking_report.dart';
+import 'supersale_admin_delivery_report.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -19,104 +16,102 @@ class SupersaleAdminReportPage extends StatefulWidget {
 class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   bool _isGenerating = false;
+  bool _isLoadingItems = true;
 
-  Future<void> _generateExcelReport() async {
+  List<String> _supersaleItems = [];
+  String? _selectedItem;
+  String _selectedReportType = 'Booking Report'; // 'Booking Report' or 'Delivery Report'
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSupersaleItems();
+  }
+
+  Future<void> _loadSupersaleItems() async {
+    try {
+      final snapshot = await _firestore.collection('supersales').get();
+      final items = snapshot.docs
+          .map((doc) => doc.data()['item'] as String? ?? '')
+          .where((item) => item.isNotEmpty)
+          .toSet()
+          .toList();
+      
+      items.sort();
+
+      setState(() {
+        _supersaleItems = items;
+        if (items.isNotEmpty) {
+          _selectedItem = items.first;
+        }
+        _isLoadingItems = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading supersale items: $e');
+      setState(() {
+        _isLoadingItems = false;
+      });
+    }
+  }
+
+  Future<void> _generateReport() async {
+    if (_selectedItem == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a supersale item first'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isGenerating = true);
     
     try {
-      // 1. Fetch active admin postings to know the active items and branches
-      final postingsSnapshot = await _firestore.collection('supersales').get();
-      
-      final xlsio.Workbook workbook = xlsio.Workbook();
-      final xlsio.Worksheet sheet = workbook.worksheets[0];
-      sheet.name = 'Supersale Report';
+      // Find the selected supersale doc to get its branches
+      final postingSnap = await _firestore
+          .collection('supersales')
+          .where('item', isEqualTo: _selectedItem)
+          .limit(1)
+          .get();
 
-      // Define header
-      final List<String> headers = [
-        'Item',
-        'Branch',
-        'Customer Name',
-        'Phone',
-        'Quantity',
-        'Rate',
-        'Advance',
-        'Status',
-        'Sales Exec',
-        'Booking Date'
+      List<String> branches = [];
+      if (postingSnap.docs.isNotEmpty) {
+        branches = List<String>.from(postingSnap.docs.first.data()['branches'] ?? []);
+      }
+
+      final List<String> fallbackBranches = [
+        'BGR', 'CBE', 'CHN', 'CLT', 'EKM', 'JBL', 'KKM', 'KSD',
+        'KTM', 'PKD', 'PKT', 'PMN', 'TRR', 'TSR', 'TLY', 'TVM',
+        'UDP', 'VDK', 'WND', 'PKTR', 'PLA', 'PMNA'
       ];
-
-      for (int i = 0; i < headers.length; i++) {
-        sheet.getRangeByIndex(1, i + 1).setText(headers[i]);
-        sheet.getRangeByIndex(1, i + 1).cellStyle.bold = true;
-        sheet.getRangeByIndex(1, i + 1).cellStyle.backColor = '#D9E1F2';
+      List<String> activeBranches = List<String>.from(branches);
+      if (activeBranches.isEmpty || activeBranches.contains('all')) {
+        activeBranches = fallbackBranches;
       }
 
-      int rowIndex = 2;
-
-      // 2. Iterate through postings to get all entries
-      for (var posting in postingsSnapshot.docs) {
-        final data = posting.data();
-        final itemName = data['item'] as String? ?? 'Unknown';
-        final branches = List<String>.from(data['branches'] ?? []);
-
-        for (var branch in branches) {
-          final entriesSnapshot = await _firestore
-              .collection('supersale_user_entries')
-              .doc(branch)
-              .collection(itemName)
-              .get();
-
-          for (var entryDoc in entriesSnapshot.docs) {
-            final entry = entryDoc.data();
-            sheet.getRangeByIndex(rowIndex, 1).setText(itemName);
-            sheet.getRangeByIndex(rowIndex, 2).setText(branch);
-            sheet.getRangeByIndex(rowIndex, 3).setText(entry['customerName']?.toString() ?? '');
-            sheet.getRangeByIndex(rowIndex, 4).setText(entry['phone']?.toString() ?? '');
-            sheet.getRangeByIndex(rowIndex, 5).setNumber((entry['quantity'] ?? 0).toDouble());
-            sheet.getRangeByIndex(rowIndex, 6).setNumber((entry['rate'] ?? 0).toDouble());
-            sheet.getRangeByIndex(rowIndex, 7).setNumber((entry['advance'] ?? 0).toDouble());
-            sheet.getRangeByIndex(rowIndex, 8).setText(entry['status']?.toString() ?? 'pending');
-            sheet.getRangeByIndex(rowIndex, 9).setText(entry['username']?.toString() ?? '');
-            
-            final createdAt = entry['created_at'];
-            if (createdAt is Timestamp) {
-              final dateStr = DateFormat('dd-MM-yyyy HH:mm').format(createdAt.toDate());
-              sheet.getRangeByIndex(rowIndex, 10).setText(dateStr);
-            } else {
-              sheet.getRangeByIndex(rowIndex, 10).setText('');
-            }
-            
-            rowIndex++;
-          }
-        }
+      if (_selectedReportType == 'Booking Report') {
+        await generateBookingReport(
+          selectedItem: _selectedItem!,
+          activeBranches: activeBranches,
+        );
+      } else {
+        await generateDeliveryReport(
+          selectedItem: _selectedItem!,
+          activeBranches: activeBranches,
+        );
       }
-
-      // Auto-fit columns
-      for (int i = 1; i <= headers.length; i++) {
-        sheet.autoFitColumn(i);
-      }
-
-      final List<int> bytes = workbook.saveAsStream();
-      workbook.dispose();
-
-      // Save and share
-      final Directory directory = await getTemporaryDirectory();
-      final String path = '${directory.path}/Supersale_Report_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
-      final File file = File(path);
-      await file.writeAsBytes(bytes, flush: true);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Report generated successfully! Opening...'),
+          SnackBar(
+            content: Text('${_selectedReportType} generated successfully! Opening...'),
             backgroundColor: Colors.green,
           ),
         );
       }
-      
-      await Share.shareXFiles([XFile(path)], text: 'Supersale Report');
-
     } catch (e) {
+      debugPrint('Error generating report: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -148,65 +143,157 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
         foregroundColor: Colors.white,
         centerTitle: true,
       ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.analytics_rounded,
-                size: 80,
-                color: primaryGreen.withOpacity(0.8),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Generate Excel Report',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Download a complete report of all supersale bookings across all branches. The data will be exported as an Excel (.xlsx) file.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: isDark ? Colors.white70 : Colors.black54,
-                ),
-              ),
-              const SizedBox(height: 48),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton.icon(
-                  onPressed: _isGenerating ? null : _generateExcelReport,
-                  icon: _isGenerating 
-                      ? const SizedBox(
-                          width: 20, 
-                          height: 20, 
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-                        )
-                      : const Icon(Icons.download_rounded),
-                  label: Text(
-                    _isGenerating ? 'Generating...' : 'Download Report',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryGreen,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+      body: _isLoadingItems
+          ? const Center(child: CircularProgressIndicator(color: primaryBlue))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Icon(
+                      Icons.analytics_rounded,
+                      size: 80,
+                      color: primaryGreen.withOpacity(0.8),
                     ),
                   ),
-                ),
+                  const SizedBox(height: 24),
+                  Center(
+                    child: Text(
+                      'Generate Excel Report',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Download detailed bookings or delivery reports summary by branch.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isDark ? Colors.white70 : Colors.black54,
+                    ),
+                  ),
+                  const SizedBox(height: 36),
+
+                  // Supersale Dropdown
+                  Text(
+                    'Select Supersale',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: isDark ? Colors.white12 : Colors.grey[300]!),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedItem,
+                        hint: const Text('Select a Supersale'),
+                        isExpanded: true,
+                        dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+                        items: _supersaleItems.map((item) {
+                          return DropdownMenuItem<String>(
+                            value: item,
+                            child: Text(
+                              item,
+                              style: TextStyle(
+                                color: isDark ? Colors.white : Colors.black87,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedItem = val;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Report Type Dropdown
+                  Text(
+                    'Report Type',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: isDark ? Colors.white12 : Colors.grey[300]!),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedReportType,
+                        isExpanded: true,
+                        dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+                        items: const [
+                          DropdownMenuItem<String>(
+                            value: 'Booking Report',
+                            child: Text('Booking Report'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'Delivery Report',
+                            child: Text('Delivery Report'),
+                          ),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() {
+                              _selectedReportType = val;
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 48),
+
+                  SizedBox(
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      onPressed: _isGenerating ? null : _generateReport,
+                      icon: _isGenerating
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            )
+                          : const Icon(Icons.download_rounded),
+                      label: Text(
+                        _isGenerating ? 'Generating...' : 'Download Report',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryGreen,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
-      ),
+            ),
     );
   }
 }
