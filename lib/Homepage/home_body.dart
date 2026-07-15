@@ -34,6 +34,7 @@ import '../DME/screens/dme_complaints_management.dart';
 import '../Supersale/supersale_admin.dart';
 import '../Supersale/supersale_admin_dashboard.dart';
 import '../Supersale/supersale_user_mainpage.dart';
+import '../Leads/sme_assigned_leads_page.dart';
 
 /// App brand colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -392,8 +393,10 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     // Dynamic height calculation to avoid empty space or clipping
     double pageViewHeight = 250.0;
     if (role == 'admin' || role == 'manager' || role == 'asst_manager') {
-      pageViewHeight = 310.0;
+      pageViewHeight = 340.0;
     }
+    // Since page 2 has more buttons (Supersale + Orders + SME Leads), ensure the page height fits them.
+    pageViewHeight = 340.0;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -481,8 +484,9 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   }
 
   Widget _buildSupersalePage(BuildContext context) {
-    final isDark = widget.isDark;
+    final role = widget.role;
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Row(
           children: [
@@ -495,58 +499,46 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
                 icon: Icons.flash_on_rounded,
               ),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: NeumorphicButton(
-                onTap: () => _navigateToSupersaleDashboard(context),
-                text: 'Dashboard',
-                color: primaryGreen,
-                textColor: Colors.white,
-                icon: Icons.dashboard_rounded,
+            if (role == 'supersale_admin') ...[
+              const SizedBox(width: 14),
+              Expanded(
+                child: NeumorphicButton(
+                  onTap: () => _navigateToSupersaleDashboard(context),
+                  text: 'Dashboard',
+                  color: primaryGreen,
+                  textColor: Colors.white,
+                  icon: Icons.dashboard_rounded,
+                ),
               ),
-            ),
+            ],
           ],
         ),
-        const SizedBox(height: 14),
-        Expanded(
-          child: Container(
-            width: double.infinity,
-            margin: const EdgeInsets.only(bottom: 4),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withOpacity(0.04)
-                  : Colors.grey.withOpacity(0.04),
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white10
-                    : Colors.black.withOpacity(0.05),
-                width: 1.5,
+        if (role == 'sales' || role == 'manager' || role == 'asst_manager' || role == 'admin') ...[
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: NeumorphicButton(
+                  onTap: () => _navigateToOrders(context),
+                  text: 'Orders',
+                  color: const Color(0xFF0D8A74),
+                  textColor: Colors.white,
+                  icon: Icons.inventory_2_rounded,
+                ),
               ),
-            ),
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.add_circle_outline_rounded,
-                    size: 32,
-                    color: isDark ? Colors.white30 : Colors.black26,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'More actions coming soon',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white30 : Colors.black38,
-                    ),
-                  ),
-                ],
+              const SizedBox(width: 14),
+              Expanded(
+                child: NeumorphicButton(
+                  onTap: () => _navigateToSmeAssignedLeads(context),
+                  text: 'SME Leads',
+                  color: const Color(0xFF00838F),
+                  textColor: Colors.white,
+                  icon: Icons.support_agent_rounded,
+                ),
               ),
-            ),
+            ],
           ),
-        ),
+        ],
       ],
     );
   }
@@ -637,14 +629,6 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          NeumorphicButton(
-            onTap: () => _navigateToOrders(context),
-            text: 'Orders',
-            color: const Color(0xFF0D8A74),
-            textColor: Colors.white,
-            icon: Icons.inventory_2_rounded,
-          ),
         ],
         // Admin/Manager buttons
         if (role == 'admin' || role == 'manager' || role == 'asst_manager') ...[
@@ -692,16 +676,6 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
             textColor: isDark ? Colors.white : primaryBlue,
             icon: Icons.assignment_ind_rounded,
           ),
-          if (role == 'manager' || role == 'asst_manager') ...[
-            const SizedBox(height: 14),
-            NeumorphicButton(
-              onTap: () => _navigateToOrders(context),
-              text: 'Orders',
-              color: const Color(0xFF0D8A74),
-              textColor: Colors.white,
-              icon: Icons.inventory_2_rounded,
-            ),
-          ],
         ],
       ],
     );
@@ -1252,6 +1226,16 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   Future<void> _navigateToDmeComplaints(BuildContext context) async {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const DmeComplaintsManagementPage()),
+    );
+  }
+
+  Future<void> _navigateToSmeAssignedLeads(BuildContext context) async {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const LoadingOverlayPage(
+          child: SmeAssignedLeadsPage(),
+        ),
+      ),
     );
   }
 }

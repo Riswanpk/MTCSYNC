@@ -181,6 +181,8 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
         'assigned_to_name': _selectedUserName,
         'assigned_by': user.uid,
         'source': widget.source,
+        'screening_status': 'pending',
+        'screening_notes': '',
       });
 
       // Upsert customer profile

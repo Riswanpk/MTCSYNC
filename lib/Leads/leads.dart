@@ -45,7 +45,6 @@ class _LeadsPageState extends State<LeadsPage> {
   final List<String> sourceOptions = [
     'All',
     'Sales',
-    'SME',
     'DME',
     'CC',
   ];
@@ -197,6 +196,9 @@ class _LeadsPageState extends State<LeadsPage> {
     }
 
     Query query = FirebaseFirestore.instance.collection('follow_ups').where('branch', isEqualTo: branch);
+
+    // Exclude SME-sourced leads — they are managed in the SME screening page
+    query = query.where('source', whereNotIn: ['SME', 'sme']);
 
     // Apply filters — always applied, including during search
     if (selectedUser != null) {
