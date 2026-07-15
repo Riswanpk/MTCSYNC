@@ -8,7 +8,20 @@ const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
 
 class SupersaleFormPage extends StatefulWidget {
-  const SupersaleFormPage({Key? key}) : super(key: key);
+  final String? docId;
+  final String? item;
+  final DateTimeRange? bookingRange;
+  final DateTimeRange? deliveryRange;
+  final List<String>? branches;
+
+  const SupersaleFormPage({
+    Key? key,
+    this.docId,
+    this.item,
+    this.bookingRange,
+    this.deliveryRange,
+    this.branches,
+  }) : super(key: key);
 
   @override
   State<SupersaleFormPage> createState() => _SupersaleFormPageState();
@@ -34,6 +47,14 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
   void initState() {
     super.initState();
     _loadBranches();
+    if (widget.docId != null) {
+      _itemController.text = widget.item ?? '';
+      _bookingRange = widget.bookingRange;
+      _deliveryRange = widget.deliveryRange;
+      if (widget.branches != null) {
+        _selectedBranches.addAll(widget.branches!);
+      }
+    }
   }
 
   Future<void> _loadBranches() async {
@@ -154,24 +175,28 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('No authenticated user found');
 
-      final newDoc = {
+      final data = {
         'item': _itemController.text.trim(),
         'bookingStart': Timestamp.fromDate(_bookingRange!.start),
         'bookingEnd': Timestamp.fromDate(_bookingRange!.end),
         'deliveryStart': Timestamp.fromDate(_deliveryRange!.start),
         'deliveryEnd': Timestamp.fromDate(_deliveryRange!.end),
         'branches': _selectedBranches,
-        'created_by': user.uid,
-        'created_at': FieldValue.serverTimestamp(),
-        'status': 'active',
       };
 
-      await FirebaseFirestore.instance.collection('supersales').add(newDoc);
+      if (widget.docId == null) {
+        data['created_by'] = user.uid;
+        data['created_at'] = FieldValue.serverTimestamp();
+        data['status'] = 'active';
+        await FirebaseFirestore.instance.collection('supersales').add(data);
+      } else {
+        await FirebaseFirestore.instance.collection('supersales').doc(widget.docId).update(data);
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Supersale created successfully'),
+          SnackBar(
+            content: Text(widget.docId == null ? 'Supersale created successfully' : 'Supersale updated successfully'),
             backgroundColor: Colors.green,
           ),
         );
@@ -209,9 +234,9 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0A1628) : Colors.grey[50],
       appBar: AppBar(
-        title: const Text(
-          'Create Supersale',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+        title: Text(
+          widget.docId == null ? 'Create Supersale' : 'Edit Supersale',
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
         ),
         elevation: 0,
         backgroundColor: primaryBlue,
@@ -238,12 +263,13 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _itemController,
+                      readOnly: widget.docId != null,
                       style: TextStyle(color: isDark ? Colors.white : Colors.black87),
                       decoration: InputDecoration(
                         hintText: 'Enter item or product name',
                         hintStyle: const TextStyle(color: Colors.grey),
                         filled: true,
-                        fillColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+                        fillColor: widget.docId != null ? (isDark ? Colors.grey[800] : Colors.grey[200]) : (isDark ? const Color(0xFF1E293B) : Colors.white),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide(
@@ -330,7 +356,7 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
                             Checkbox(
                               value: allSelected,
                               activeColor: primaryBlue,
-                              onChanged: _toggleSelectAllBranches,
+                              onChanged: widget.docId != null ? null : _toggleSelectAllBranches,
                             ),
                           ],
                         ),
@@ -366,7 +392,7 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
                                     fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                                   ),
                                   backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.grey[200],
-                                  onSelected: (selected) {
+                                  onSelected: widget.docId != null ? null : (selected) {
                                     setState(() {
                                       if (selected) {
                                         _selectedBranches.add(branch);
@@ -437,9 +463,9 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
                           ),
                           elevation: 2,
                         ),
-                        child: const Text(
-                          'Submit Schedule',
-                          style: TextStyle(
+                        child: Text(
+                          widget.docId == null ? 'Submit Schedule' : 'Update Schedule',
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 0.5,

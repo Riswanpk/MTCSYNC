@@ -32,6 +32,7 @@ import '../DME/screens/dme_user_dashboard.dart';
 import '../DME/screens/dme_leads_page.dart';
 import '../DME/screens/dme_complaints_management.dart';
 import '../Supersale/supersale_admin.dart';
+import '../Supersale/supersale_admin_dashboard.dart';
 import '../Supersale/supersale_user_mainpage.dart';
 
 /// App brand colors
@@ -369,6 +370,16 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     }
   }
 
+  Future<void> _navigateToSupersaleDashboard(BuildContext context) async {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const LoadingOverlayPage(
+          child: SupersaleAdminDashboard(),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final role = widget.role;
@@ -434,12 +445,28 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        NeumorphicButton(
-          onTap: () => _navigateToSupersale(context),
-          text: 'Supersale',
-          color: const Color(0xFFFF5722), // Vibrant deep orange
-          textColor: Colors.white,
-          icon: Icons.flash_on_rounded,
+        Row(
+          children: [
+            Expanded(
+              child: NeumorphicButton(
+                onTap: () => _navigateToSupersale(context),
+                text: 'Supersale',
+                color: const Color(0xFFFF5722), // Vibrant deep orange
+                textColor: Colors.white,
+                icon: Icons.flash_on_rounded,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: NeumorphicButton(
+                onTap: () => _navigateToSupersaleDashboard(context),
+                text: 'Dashboard',
+                color: primaryGreen,
+                textColor: Colors.white,
+                icon: Icons.dashboard_rounded,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 14),
         NeumorphicButton(
@@ -457,12 +484,28 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     final isDark = widget.isDark;
     return Column(
       children: [
-        NeumorphicButton(
-          onTap: () => _navigateToSupersale(context),
-          text: 'Supersale',
-          color: const Color(0xFFFF5722),
-          textColor: Colors.white,
-          icon: Icons.flash_on_rounded,
+        Row(
+          children: [
+            Expanded(
+              child: NeumorphicButton(
+                onTap: () => _navigateToSupersale(context),
+                text: 'Supersale',
+                color: const Color(0xFFFF5722),
+                textColor: Colors.white,
+                icon: Icons.flash_on_rounded,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: NeumorphicButton(
+                onTap: () => _navigateToSupersaleDashboard(context),
+                text: 'Dashboard',
+                color: primaryGreen,
+                textColor: Colors.white,
+                icon: Icons.dashboard_rounded,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 14),
         Expanded(

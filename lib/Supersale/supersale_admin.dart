@@ -16,16 +16,18 @@ class SupersalePage extends StatefulWidget {
 class _SupersalePageState extends State<SupersalePage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  DateTime _parseDate(dynamic dateField) {
+    if (dateField is Timestamp) {
+      return dateField.toDate();
+    } else if (dateField is String) {
+      return DateTime.tryParse(dateField) ?? DateTime.now();
+    }
+    return DateTime.now();
+  }
+
   String _formatDate(dynamic dateField) {
     if (dateField == null) return 'N/A';
-    DateTime dt;
-    if (dateField is Timestamp) {
-      dt = dateField.toDate();
-    } else if (dateField is String) {
-      dt = DateTime.tryParse(dateField) ?? DateTime.now();
-    } else {
-      return 'N/A';
-    }
+    DateTime dt = _parseDate(dateField);
     return DateFormat('dd MMM yyyy').format(dt.toLocal());
   }
 
@@ -177,23 +179,45 @@ class _SupersalePageState extends State<SupersalePage> {
                     ),
                   );
                 },
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: isDark ? Colors.white12 : Colors.grey[200]!,
-                      width: 1,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
+                child: InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => SupersaleFormPage(
+                          docId: docId,
+                          item: item,
+                          bookingRange: DateTimeRange(
+                            start: _parseDate(bookingStart),
+                            end: _parseDate(bookingEnd),
+                          ),
+                          deliveryRange: DateTimeRange(
+                            start: _parseDate(deliveryStart),
+                            end: _parseDate(deliveryEnd),
+                          ),
+                          branches: branches.map((e) => e.toString()).toList(),
+                        ),
                       ),
-                    ],
-                  ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark ? Colors.white12 : Colors.grey[200]!,
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
                     child: IntrinsicHeight(
@@ -325,6 +349,7 @@ class _SupersalePageState extends State<SupersalePage> {
                         ],
                       ),
                     ),
+                  ),
                   ),
                 ),
               );
