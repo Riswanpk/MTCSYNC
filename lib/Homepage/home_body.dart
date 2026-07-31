@@ -34,7 +34,7 @@ import '../DME/screens/dme_complaints_management.dart';
 import '../Supersale/supersale_admin.dart';
 import '../Supersale/supersale_admin_dashboard.dart';
 import '../Supersale/supersale_user_mainpage.dart';
-import '../Leads/sme_assigned_leads_page.dart';
+import '../SME/sme_assigned_leads_page.dart';
 
 /// App brand colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -333,7 +333,8 @@ class HomeButtonsContainer extends StatefulWidget {
 
 class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   late PageController _pageController;
-  int _currentPageIndex = 1000; // Initialize to a large value for infinite sliding
+  int _currentPageIndex =
+      1000; // Initialize to a large value for infinite sliding
 
   @override
   void initState() {
@@ -513,7 +514,10 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
             ],
           ],
         ),
-        if (role == 'sales' || role == 'manager' || role == 'asst_manager' || role == 'admin') ...[
+        if (role == 'sales' ||
+            role == 'manager' ||
+            role == 'asst_manager' ||
+            role == 'admin') ...[
           const SizedBox(height: 14),
           Row(
             children: [
