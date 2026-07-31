@@ -1139,51 +1139,54 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
               ),
               padding:
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              child: Row(
-                children: [
-                  // Call button
-                  _actionButton(
-                    icon: Icons.phone_rounded,
-                    label: 'Call',
-                    color: _teal,
-                    onTap: () => _makeCall(phone, doc.id),
-                  ),
-                  const SizedBox(width: 6),
-                  // WhatsApp button
-                  _actionButton(
-                    icon: Icons.chat_rounded,
-                    label: 'WhatsApp',
-                    color: const Color(0xFF25D366),
-                    onTap: () => _openWhatsApp(phone),
-                  ),
-                  const SizedBox(width: 6),
-                  // Notes button
-                  _actionButton(
-                    icon: Icons.edit_note_rounded,
-                    label: 'Notes',
-                    color: _brandPrimary,
-                    onTap: () => _addScreeningNotes(doc),
-                  ),
-                  const Spacer(),
-                  // Promote / Reject buttons (only for non-final states)
-                  if (screeningStatus == 'pending' ||
-                      screeningStatus == 'called') ...[
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    // Call button
                     _actionButton(
-                      icon: Icons.check_circle_rounded,
-                      label: 'Promote',
-                      color: const Color(0xFF4CAF50),
-                      filled: true,
-                      onTap: () => _promoteToLead(doc),
+                      icon: Icons.phone_rounded,
+                      label: 'Call',
+                      color: _teal,
+                      onTap: () => _makeCall(phone, doc.id),
                     ),
                     const SizedBox(width: 6),
+                    // WhatsApp button
                     _actionButton(
-                      icon: Icons.cancel_rounded,
-                      label: 'Reject',
-                      color: const Color(0xFFF44336),
-                      onTap: () => _rejectLead(doc),
+                      icon: Icons.chat_rounded,
+                      label: 'WhatsApp',
+                      color: const Color(0xFF25D366),
+                      onTap: () => _openWhatsApp(phone),
                     ),
+                    const SizedBox(width: 6),
+                    // Notes button
+                    _actionButton(
+                      icon: Icons.edit_note_rounded,
+                      label: 'Notes',
+                      color: _brandPrimary,
+                      onTap: () => _addScreeningNotes(doc),
+                    ),
+                    // Promote / Reject buttons (only for non-final states)
+                    if (screeningStatus == 'pending' ||
+                        screeningStatus == 'called') ...[
+                      const SizedBox(width: 6),
+                      _actionButton(
+                        icon: Icons.check_circle_rounded,
+                        label: 'Promote',
+                        color: const Color(0xFF4CAF50),
+                        filled: true,
+                        onTap: () => _promoteToLead(doc),
+                      ),
+                      const SizedBox(width: 6),
+                      _actionButton(
+                        icon: Icons.cancel_rounded,
+                        label: 'Reject',
+                        color: const Color(0xFFF44336),
+                        onTap: () => _rejectLead(doc),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ],

@@ -28,7 +28,7 @@ class _SupersalePageState extends State<SupersalePage> {
   String _formatDate(dynamic dateField) {
     if (dateField == null) return 'N/A';
     DateTime dt = _parseDate(dateField);
-    return DateFormat('dd MMM yyyy').format(dt.toLocal());
+    return DateFormat('dd MMM yyyy, hh:mm a').format(dt.toLocal());
   }
 
   Future<void> _deleteSupersale(String docId) async {

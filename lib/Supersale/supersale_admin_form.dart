@@ -33,6 +33,10 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
 
   DateTimeRange? _bookingRange;
   DateTimeRange? _deliveryRange;
+  TimeOfDay? _bookingStartTime;
+  TimeOfDay? _bookingEndTime;
+  TimeOfDay? _deliveryStartTime;
+  TimeOfDay? _deliveryEndTime;
 
   List<String> _allBranches = [
     'BGR', 'CBE', 'CHN', 'CLT', 'EKM', 'JBL', 'KKM', 'KSD',
@@ -51,6 +55,14 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
       _itemController.text = widget.item ?? '';
       _bookingRange = widget.bookingRange;
       _deliveryRange = widget.deliveryRange;
+      if (widget.bookingRange != null) {
+        _bookingStartTime = TimeOfDay.fromDateTime(widget.bookingRange!.start);
+        _bookingEndTime = TimeOfDay.fromDateTime(widget.bookingRange!.end);
+      }
+      if (widget.deliveryRange != null) {
+        _deliveryStartTime = TimeOfDay.fromDateTime(widget.deliveryRange!.start);
+        _deliveryEndTime = TimeOfDay.fromDateTime(widget.deliveryRange!.end);
+      }
       if (widget.branches != null) {
         _selectedBranches.addAll(widget.branches!);
       }
@@ -104,6 +116,60 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
     if (picked != null) {
       setState(() {
         _bookingRange = picked;
+        _bookingStartTime ??= const TimeOfDay(hour: 0, minute: 0);
+        _bookingEndTime ??= const TimeOfDay(hour: 23, minute: 59);
+      });
+
+      if (mounted) {
+        final TimeOfDay? start = await showTimePicker(
+          context: context,
+          initialTime: _bookingStartTime!,
+          helpText: 'SELECT BOOKING START TIME',
+        );
+        if (start != null) {
+          setState(() {
+            _bookingStartTime = start;
+          });
+        }
+      }
+
+      if (mounted) {
+        final TimeOfDay? end = await showTimePicker(
+          context: context,
+          initialTime: _bookingEndTime!,
+          helpText: 'SELECT BOOKING END TIME',
+        );
+        if (end != null) {
+          setState(() {
+            _bookingEndTime = end;
+          });
+        }
+      }
+    }
+  }
+
+  Future<void> _selectBookingStartTime() async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _bookingStartTime ?? const TimeOfDay(hour: 0, minute: 0),
+      helpText: 'SELECT BOOKING START TIME',
+    );
+    if (picked != null) {
+      setState(() {
+        _bookingStartTime = picked;
+      });
+    }
+  }
+
+  Future<void> _selectBookingEndTime() async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _bookingEndTime ?? const TimeOfDay(hour: 23, minute: 59),
+      helpText: 'SELECT BOOKING END TIME',
+    );
+    if (picked != null) {
+      setState(() {
+        _bookingEndTime = picked;
       });
     }
   }
@@ -132,6 +198,60 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
     if (picked != null) {
       setState(() {
         _deliveryRange = picked;
+        _deliveryStartTime ??= const TimeOfDay(hour: 0, minute: 0);
+        _deliveryEndTime ??= const TimeOfDay(hour: 23, minute: 59);
+      });
+
+      if (mounted) {
+        final TimeOfDay? start = await showTimePicker(
+          context: context,
+          initialTime: _deliveryStartTime!,
+          helpText: 'SELECT DELIVERY START TIME',
+        );
+        if (start != null) {
+          setState(() {
+            _deliveryStartTime = start;
+          });
+        }
+      }
+
+      if (mounted) {
+        final TimeOfDay? end = await showTimePicker(
+          context: context,
+          initialTime: _deliveryEndTime!,
+          helpText: 'SELECT DELIVERY END TIME',
+        );
+        if (end != null) {
+          setState(() {
+            _deliveryEndTime = end;
+          });
+        }
+      }
+    }
+  }
+
+  Future<void> _selectDeliveryStartTime() async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _deliveryStartTime ?? const TimeOfDay(hour: 0, minute: 0),
+      helpText: 'SELECT DELIVERY START TIME',
+    );
+    if (picked != null) {
+      setState(() {
+        _deliveryStartTime = picked;
+      });
+    }
+  }
+
+  Future<void> _selectDeliveryEndTime() async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _deliveryEndTime ?? const TimeOfDay(hour: 23, minute: 59),
+      helpText: 'SELECT DELIVERY END TIME',
+    );
+    if (picked != null) {
+      setState(() {
+        _deliveryEndTime = picked;
       });
     }
   }
@@ -175,12 +295,44 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('No authenticated user found');
 
+      final bookingStart = DateTime(
+        _bookingRange!.start.year,
+        _bookingRange!.start.month,
+        _bookingRange!.start.day,
+        (_bookingStartTime ?? const TimeOfDay(hour: 0, minute: 0)).hour,
+        (_bookingStartTime ?? const TimeOfDay(hour: 0, minute: 0)).minute,
+      );
+
+      final bookingEnd = DateTime(
+        _bookingRange!.end.year,
+        _bookingRange!.end.month,
+        _bookingRange!.end.day,
+        (_bookingEndTime ?? const TimeOfDay(hour: 23, minute: 59)).hour,
+        (_bookingEndTime ?? const TimeOfDay(hour: 23, minute: 59)).minute,
+      );
+
+      final deliveryStart = DateTime(
+        _deliveryRange!.start.year,
+        _deliveryRange!.start.month,
+        _deliveryRange!.start.day,
+        (_deliveryStartTime ?? const TimeOfDay(hour: 0, minute: 0)).hour,
+        (_deliveryStartTime ?? const TimeOfDay(hour: 0, minute: 0)).minute,
+      );
+
+      final deliveryEnd = DateTime(
+        _deliveryRange!.end.year,
+        _deliveryRange!.end.month,
+        _deliveryRange!.end.day,
+        (_deliveryEndTime ?? const TimeOfDay(hour: 23, minute: 59)).hour,
+        (_deliveryEndTime ?? const TimeOfDay(hour: 23, minute: 59)).minute,
+      );
+
       final data = {
         'item': _itemController.text.trim(),
-        'bookingStart': Timestamp.fromDate(_bookingRange!.start),
-        'bookingEnd': Timestamp.fromDate(_bookingRange!.end),
-        'deliveryStart': Timestamp.fromDate(_deliveryRange!.start),
-        'deliveryEnd': Timestamp.fromDate(_deliveryRange!.end),
+        'bookingStart': Timestamp.fromDate(bookingStart),
+        'bookingEnd': Timestamp.fromDate(bookingEnd),
+        'deliveryStart': Timestamp.fromDate(deliveryStart),
+        'deliveryEnd': Timestamp.fromDate(deliveryEnd),
         'branches': _selectedBranches,
       };
 
@@ -218,10 +370,19 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
     }
   }
 
-  String _formatDateRange(DateTimeRange? range) {
+  String _formatTime(TimeOfDay? time) {
+    if (time == null) return '--:--';
+    final now = DateTime.now();
+    final dt = DateTime(now.year, now.month, now.day, time.hour, time.minute);
+    return DateFormat('hh:mm a').format(dt);
+  }
+
+  String _formatDateTimeRange(DateTimeRange? range, TimeOfDay? startTime, TimeOfDay? endTime) {
     if (range == null) return 'Select Date Range';
     final DateFormat formatter = DateFormat('dd MMM yyyy');
-    return '${formatter.format(range.start)} - ${formatter.format(range.end)}';
+    final sTime = _formatTime(startTime ?? const TimeOfDay(hour: 0, minute: 0));
+    final eTime = _formatTime(endTime ?? const TimeOfDay(hour: 23, minute: 59));
+    return '${formatter.format(range.start)}, $sTime - ${formatter.format(range.end)}, $eTime';
   }
 
   @override
@@ -318,12 +479,12 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                _formatDateRange(_bookingRange),
+                                _formatDateTimeRange(_bookingRange, _bookingStartTime, _bookingEndTime),
                                 style: TextStyle(
                                   color: _bookingRange == null
                                       ? Colors.grey
                                       : (isDark ? Colors.white : Colors.black87),
-                                  fontSize: 15,
+                                  fontSize: 14,
                                 ),
                               ),
                             ),
@@ -331,6 +492,102 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
                         ),
                       ),
                     ),
+                    if (_bookingRange != null) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: _selectBookingStartTime,
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: isDark ? const Color(0xFF0F172A) : Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: isDark ? Colors.white12 : Colors.grey[300]!,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.access_time_rounded, size: 18, color: primaryBlue),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Start Time',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: isDark ? Colors.white54 : Colors.black54,
+                                            ),
+                                          ),
+                                          Text(
+                                            _formatTime(_bookingStartTime),
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold,
+                                              color: isDark ? Colors.white : Colors.black87,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: InkWell(
+                              onTap: _selectBookingEndTime,
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: isDark ? const Color(0xFF0F172A) : Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: isDark ? Colors.white12 : Colors.grey[300]!,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.access_time_filled_rounded, size: 18, color: primaryBlue),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'End Time',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: isDark ? Colors.white54 : Colors.black54,
+                                            ),
+                                          ),
+                                          Text(
+                                            _formatTime(_bookingEndTime),
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold,
+                                              color: isDark ? Colors.white : Colors.black87,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 24),
 
                     // Branch Selection
@@ -434,12 +691,12 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                _formatDateRange(_deliveryRange),
+                                _formatDateTimeRange(_deliveryRange, _deliveryStartTime, _deliveryEndTime),
                                 style: TextStyle(
                                   color: _deliveryRange == null
                                       ? Colors.grey
                                       : (isDark ? Colors.white : Colors.black87),
-                                  fontSize: 15,
+                                  fontSize: 14,
                                 ),
                               ),
                             ),
@@ -447,6 +704,102 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
                         ),
                       ),
                     ),
+                    if (_deliveryRange != null) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: _selectDeliveryStartTime,
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: isDark ? const Color(0xFF0F172A) : Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: isDark ? Colors.white12 : Colors.grey[300]!,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.access_time_rounded, size: 18, color: primaryGreen),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Start Time',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: isDark ? Colors.white54 : Colors.black54,
+                                            ),
+                                          ),
+                                          Text(
+                                            _formatTime(_deliveryStartTime),
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold,
+                                              color: isDark ? Colors.white : Colors.black87,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: InkWell(
+                              onTap: _selectDeliveryEndTime,
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: isDark ? const Color(0xFF0F172A) : Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: isDark ? Colors.white12 : Colors.grey[300]!,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.access_time_filled_rounded, size: 18, color: primaryGreen),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'End Time',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: isDark ? Colors.white54 : Colors.black54,
+                                            ),
+                                          ),
+                                          Text(
+                                            _formatTime(_deliveryEndTime),
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold,
+                                              color: isDark ? Colors.white : Colors.black87,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 40),
 
                     // Submit Button
