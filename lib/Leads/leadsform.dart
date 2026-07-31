@@ -19,6 +19,10 @@ class FollowUpForm extends StatefulWidget {
   final String? initialName;
   final String? initialPhone;
   final String? initialAddress;
+  final String? initialComments;
+  final String? initialPlatform;
+  final String? initialPriority;
+  final String? initialAdName;
   final String source;
 
   const FollowUpForm({
@@ -26,6 +30,10 @@ class FollowUpForm extends StatefulWidget {
     this.initialName,
     this.initialPhone,
     this.initialAddress,
+    this.initialComments,
+    this.initialPlatform,
+    this.initialPriority,
+    this.initialAdName,
     this.source = 'Sales',
   });
 
@@ -43,6 +51,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
   final TextEditingController _phoneController = TextEditingController(text: '+91 ');
   final TextEditingController _commentsController = TextEditingController();
   final TextEditingController _reminderController = TextEditingController();
+  final TextEditingController _adNameController = TextEditingController();
 
   // FocusNodes for RawAutocomplete widgets
   late FocusNode _nameFieldFocusNode;
@@ -124,6 +133,8 @@ class _FollowUpFormState extends State<FollowUpForm> {
         'created_by': user.uid,
         'created_at': FieldValue.serverTimestamp(),
         'source': widget.source,
+        if (widget.initialPlatform != null && widget.initialPlatform!.isNotEmpty) 'platform': widget.initialPlatform,
+        if (_adNameController.text.trim().isNotEmpty) 'ad_name': _adNameController.text.trim(),
         // Track original reminder date for auto-reschedule logic
         if (parsedReminderDate != null) 'original_reminder_date': Timestamp.fromDate(parsedReminderDate),
         'reminder_date_changed': false, // Flag for manual reschedule
@@ -316,6 +327,15 @@ class _FollowUpFormState extends State<FollowUpForm> {
     if (widget.initialAddress != null && widget.initialAddress!.isNotEmpty) {
       _addressController.text = widget.initialAddress!;
     }
+    if (widget.initialComments != null && widget.initialComments!.isNotEmpty) {
+      _commentsController.text = widget.initialComments!;
+    }
+    if (widget.initialPriority != null && widget.initialPriority!.isNotEmpty) {
+      _priority = widget.initialPriority!;
+    }
+    if (widget.initialAdName != null && widget.initialAdName!.isNotEmpty) {
+      _adNameController.text = widget.initialAdName!;
+    }
   }
 
   @override
@@ -501,6 +521,17 @@ class _FollowUpFormState extends State<FollowUpForm> {
                     validator: (value) => value!.isEmpty ? 'Enter address' : null,
                     onChanged: (_) => _saveDraft(),
                   ),
+                  if (widget.source == 'SME' || widget.source == 'DME') ...[
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _adNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Ad Name',
+                        prefixIcon: Icon(Icons.campaign),
+                      ),
+                      onChanged: (_) => _saveDraft(),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   RawAutocomplete<Map<String, dynamic>>(
                     textEditingController: _phoneController,

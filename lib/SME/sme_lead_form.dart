@@ -33,6 +33,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _commentsController = TextEditingController();
   final TextEditingController _reminderController = TextEditingController();
+  final TextEditingController _adNameController = TextEditingController();
 
   // FocusNode for RawAutocomplete widget
   late FocusNode _nameFieldFocusNode;
@@ -71,6 +72,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
     _commentsController.dispose();
     _reminderController.dispose();
     _otherPlatformController.dispose();
+    _adNameController.dispose();
     super.dispose();
   }
 
@@ -174,6 +176,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
         'priority': _priority,
         'comments': _commentsController.text.trim(),
         'reminder': _reminderController.text.trim(),
+        'ad_name': _adNameController.text.trim(),
         'branch': _selectedBranch,
         'created_by': user.uid,
         'created_at': FieldValue.serverTimestamp(),
@@ -733,6 +736,15 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                                   : null,
                         ),
                       ],
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _adNameController,
+                      decoration: _inputDecoration(
+                        label: 'Ad Name',
+                        icon: Icons.campaign,
+                        hint: 'Enter ad name',
+                      ),
+                    ),
                     const SizedBox(height: 14),
                     TextFormField(
                       controller: _commentsController,

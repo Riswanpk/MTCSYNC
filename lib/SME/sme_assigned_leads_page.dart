@@ -561,6 +561,55 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage> {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// Lead Detail Page From Doc ID (For Notification Deep-Linking)
+// ════════════════════════════════════════════════════════════════════════════
+
+class SmeLeadDetailPageFromId extends StatelessWidget {
+  final String docId;
+  const SmeLeadDetailPageFromId({super.key, required this.docId});
+
+  @override
+  Widget build(BuildContext context) {
+    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance.collection('follow_ups').doc(docId).get(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        final doc = snapshot.data;
+        if (doc == null || !doc.exists) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Lead Not Found')),
+            body: const Center(child: Text('Lead document does not exist.')),
+          );
+        }
+        final data = doc.data() as Map<String, dynamic>;
+        final assignedByUid = data['assigned_by'] as String? ?? '';
+
+        return FutureBuilder<DocumentSnapshot>(
+          future: assignedByUid.isNotEmpty
+              ? FirebaseFirestore.instance.collection('users').doc(assignedByUid).get()
+              : null,
+          builder: (context, userSnap) {
+            String assignerName = 'System';
+            if (userSnap.hasData && userSnap.data != null && userSnap.data!.exists) {
+              assignerName = (userSnap.data!.data() as Map<String, dynamic>?)?['username'] ?? 'Unknown';
+            }
+            return SmeLeadDetailPage(
+              doc: doc,
+              data: data,
+              assignerName: assignerName,
+              currentUid: currentUid,
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // Lead Detail Page
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -601,13 +650,6 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
     if (snap.exists && mounted) setState(() => _data = snap.data() as Map<String, dynamic>);
   }
 
-  Future<void> _openWhatsApp(String phone) async {
-    final cleaned = phone.replaceAll(RegExp(r'[^\d+]'), '');
-    String number = cleaned;
-    if (!number.startsWith('+')) number = '+91$number';
-    final uri = Uri.parse('https://wa.me/$number');
-    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
 
   Future<void> _addScreeningNotes() async {
     final existingNotes = _data['screening_notes'] ?? '';
@@ -684,6 +726,10 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
           initialName: _data['name'] ?? '',
           initialPhone: _data['phone'] ?? '',
           initialAddress: _data['address'] ?? '',
+          initialPlatform: _data['platform'] ?? '',
+          initialPriority: _data['priority'] ?? 'High',
+          initialComments: _data['comments'] ?? '',
+          initialAdName: _data['ad_name'] ?? '',
           source: 'SME',
         ),
       ),
@@ -793,8 +839,19 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
     final priorityColor = _getPriorityColor(priority);
     final isFinalised = screeningStatus == 'promoted' || screeningStatus == 'rejected';
 
+    final mustAct = screeningStatus == 'called';
+
     return PopScope(
-      onPopInvokedWithResult: (didPop, result) {},
+      canPop: !mustAct,
+      onPopInvokedWithResult: (didPop, result) {
+        if (mustAct && !didPop) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Please select Promote or Reject for the called lead.'), backgroundColor: Color(0xFFFFA500)),
+            );
+          }
+        }
+      },
       child: Scaffold(
         backgroundColor: isDark ? const Color(0xFF0F1C2A) : const Color(0xFFF2F6FA),
         appBar: AppBar(
@@ -806,7 +863,7 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
           ),
           foregroundColor: Colors.white,
           elevation: 0,
-          leading: IconButton(
+          leading: mustAct ? const SizedBox() : IconButton(
             icon: const Icon(Icons.arrow_back_ios_new_rounded),
             onPressed: () => Navigator.of(context).pop(_needRefresh),
           ),
@@ -918,11 +975,8 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
             boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 16, offset: const Offset(0, -4))],
           ),
           child: Row(children: [
-            if (phone.isNotEmpty) ...[
-              _bottomBtn(icon: Icons.chat_rounded, label: 'WhatsApp', color: const Color(0xFF25D366), onTap: () => _openWhatsApp(phone)),
-              const SizedBox(width: 10),
-            ],
-            if (!isFinalised)
+
+            if (!isFinalised && screeningStatus != 'called')
               Expanded(
                 child: GestureDetector(
                   onTap: _onCallPressed,
@@ -941,6 +995,45 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
                   ),
                 ),
               ),
+            if (screeningStatus == 'called') ...[
+              Expanded(
+                child: GestureDetector(
+                  onTap: _promoteToLead,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4CAF50),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [BoxShadow(color: const Color(0xFF4CAF50).withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4))],
+                    ),
+                    child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Icon(Icons.thumb_up_rounded, color: Colors.white, size: 20),
+                      SizedBox(width: 8),
+                      Text('Promote', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                    ]),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: GestureDetector(
+                  onTap: _rejectLead,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF44336),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [BoxShadow(color: const Color(0xFFF44336).withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4))],
+                    ),
+                    child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Icon(Icons.thumb_down_rounded, color: Colors.white, size: 20),
+                      SizedBox(width: 8),
+                      Text('Reject', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                    ]),
+                  ),
+                ),
+              ),
+            ],
             if (isFinalised)
               Expanded(
                 child: Container(
@@ -964,22 +1057,6 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
     );
   }
 
-  Widget _bottomBtn({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: color.withValues(alpha: 0.3))),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 6),
-          Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
-        ]),
-      ),
-    );
-  }
 
   Widget _sectionCard({required Widget child, required bool isDark, Color? accentColor}) {
     return Container(

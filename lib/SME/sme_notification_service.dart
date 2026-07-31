@@ -38,7 +38,7 @@ class SmeNotificationService {
           notificationLayout: NotificationLayout.Default,
           payload: {
             'docId': leadDocId,
-            'type': 'lead',
+            'type': 'sme_lead',
           },
         ),
       );
@@ -70,7 +70,7 @@ class SmeNotificationService {
         notificationLayout: NotificationLayout.Default,
         payload: {
           'docId': leadDocId,
-          'type': 'lead',
+          'type': 'sme_lead',
         },
       ),
       schedule: NotificationCalendar(

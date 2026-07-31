@@ -22,6 +22,7 @@ import 'Misc/theme_notifier.dart'; // Now imports ThemeProvider
 import 'Login/auth_wrapper.dart';
 import 'Leads/presentfollowup.dart';
 import 'Todo/todo.dart'; // <-- Already present
+import 'SME/sme_assigned_leads_page.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'Version/user_version_helper.dart'; // <-- Add this import
 import 'DME/screens/dme_customer_tile_viewer.dart';
@@ -347,11 +348,17 @@ class NotificationController {
           final docId = receivedAction.payload!['docId']!;
           final isEdit = receivedAction.buttonKeyPressed == 'EDIT_FOLLOWUP';
           final channelKey = receivedAction.channelKey;
-          final isTodo = receivedAction.payload?['type'] == 'todo';
+          final notifType = receivedAction.payload?['type'];
+          final isTodo = notifType == 'todo';
+          final isSmeLead = notifType == 'sme_lead' || notifType == 'sme_lead_assignment';
 
           // Use same logic as edit followup for todo: open in view for normal, edit for edit button
           // Simple push ensures the back button works correctly.
-          if (isEdit) {
+          if (isSmeLead) {
+            navigator.push(
+              MaterialPageRoute(builder: (_) => SmeLeadDetailPageFromId(docId: docId)),
+            );
+          } else if (isEdit) {
             navigator.push(
               MaterialPageRoute(builder: (_) => PresentFollowUp(docId: docId, editMode: true)),
             );
