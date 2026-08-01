@@ -295,37 +295,40 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('No authenticated user found');
 
-      final bookingStart = DateTime(
+      // Indian Standard Time offset (+05:30)
+      const istOffset = Duration(hours: 5, minutes: 30);
+
+      final bookingStart = DateTime.utc(
         _bookingRange!.start.year,
         _bookingRange!.start.month,
         _bookingRange!.start.day,
         (_bookingStartTime ?? const TimeOfDay(hour: 0, minute: 0)).hour,
         (_bookingStartTime ?? const TimeOfDay(hour: 0, minute: 0)).minute,
-      );
+      ).subtract(istOffset);
 
-      final bookingEnd = DateTime(
+      final bookingEnd = DateTime.utc(
         _bookingRange!.end.year,
         _bookingRange!.end.month,
         _bookingRange!.end.day,
         (_bookingEndTime ?? const TimeOfDay(hour: 23, minute: 59)).hour,
         (_bookingEndTime ?? const TimeOfDay(hour: 23, minute: 59)).minute,
-      );
+      ).subtract(istOffset);
 
-      final deliveryStart = DateTime(
+      final deliveryStart = DateTime.utc(
         _deliveryRange!.start.year,
         _deliveryRange!.start.month,
         _deliveryRange!.start.day,
         (_deliveryStartTime ?? const TimeOfDay(hour: 0, minute: 0)).hour,
         (_deliveryStartTime ?? const TimeOfDay(hour: 0, minute: 0)).minute,
-      );
+      ).subtract(istOffset);
 
-      final deliveryEnd = DateTime(
+      final deliveryEnd = DateTime.utc(
         _deliveryRange!.end.year,
         _deliveryRange!.end.month,
         _deliveryRange!.end.day,
         (_deliveryEndTime ?? const TimeOfDay(hour: 23, minute: 59)).hour,
         (_deliveryEndTime ?? const TimeOfDay(hour: 23, minute: 59)).minute,
-      );
+      ).subtract(istOffset);
 
       final data = {
         'item': _itemController.text.trim(),
