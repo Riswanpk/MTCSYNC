@@ -19,6 +19,7 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
   final _auth = FirebaseAuth.instance;
 
   // Form State
+  String? _selectedBranch;
   Map<String, dynamic>? _selectedUser;
   final TextEditingController _taskController = TextEditingController();
   bool _isAssigning = false;
@@ -28,6 +29,12 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
   List<Map<String, dynamic>> _filteredUsers = [];
   String _userSearchQuery = '';
   bool _isLoadingUsers = true;
+
+  final List<String> _branches = [
+    'BGR', 'CBE', 'CHN', 'CLT', 'EKM', 'JBL', 'KKM', 'KSD',
+    'KTM', 'PKD', 'PKT', 'PMN', 'TRR', 'TSR', 'TLY', 'TVM',
+    'UDP', 'VDK', 'WND',
+  ];
 
   @override
   void initState() {
@@ -77,11 +84,16 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
   void _filterUsers(String query) {
     setState(() {
       _userSearchQuery = query;
+      final branchFiltered = _eligibleUsers.where((u) {
+        final uBranch = (u['branch'] as String? ?? '').toUpperCase().trim();
+        return _selectedBranch == null || uBranch == _selectedBranch;
+      }).toList();
+
       if (query.isEmpty) {
-        _filteredUsers = _eligibleUsers;
+        _filteredUsers = branchFiltered;
       } else {
         final lower = query.toLowerCase();
-        _filteredUsers = _eligibleUsers.where((u) {
+        _filteredUsers = branchFiltered.where((u) {
           final name = (u['username'] as String? ?? '').toLowerCase();
           final email = (u['email'] as String? ?? '').toLowerCase();
           final branch = (u['branch'] as String? ?? '').toLowerCase();
@@ -163,6 +175,7 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
         );
         _taskController.clear();
         setState(() {
+          _selectedBranch = null;
           _selectedUser = null;
           _userSearchQuery = '';
           _filteredUsers = _eligibleUsers;
@@ -298,7 +311,18 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '1. Select Recipient',
+                    '1. Select Branch',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white70 : Colors.black54,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildBranchDropdown(isDark),
+                  const SizedBox(height: 20),
+                  Text(
+                    '2. Select Recipient',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -396,6 +420,41 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
     );
   }
 
+  Widget _buildBranchDropdown(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F1A2B) : const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedBranch,
+          hint: Text(
+            'Select a branch...',
+            style: TextStyle(color: isDark ? Colors.white54 : Colors.black45),
+          ),
+          isExpanded: true,
+          dropdownColor: isDark ? const Color(0xFF0F1A2B) : Colors.white,
+          style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+          items: _branches.map((branch) {
+            return DropdownMenuItem<String>(
+              value: branch,
+              child: Text(branch),
+            );
+          }).toList(),
+          onChanged: (val) {
+            setState(() {
+              _selectedBranch = val;
+              _selectedUser = null; // Clear selected user when branch changes
+              _filterUsers('');
+            });
+          },
+        ),
+      ),
+    );
+  }
+
   Widget _buildUserSelector(bool isDark) {
     if (_isLoadingUsers) {
       return const Center(
@@ -461,7 +520,13 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
           )
         else
           GestureDetector(
-            onTap: _showUserSelectionSheet,
+            onTap: _selectedBranch == null
+                ? () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please select a branch first')),
+                    );
+                  }
+                : _showUserSelectionSheet,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
@@ -474,7 +539,9 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Select a user...',
+                    _selectedBranch == null
+                        ? 'Select a branch first...'
+                        : 'Select a user...',
                     style: TextStyle(
                       color: isDark ? Colors.white54 : Colors.black45,
                     ),
