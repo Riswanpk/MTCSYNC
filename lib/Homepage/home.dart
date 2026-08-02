@@ -690,6 +690,8 @@ class _HomePageState extends State<HomePage>
 
   // ==================== Build ====================
 
+  int _currentPageIndex = 0;
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -719,21 +721,53 @@ class _HomePageState extends State<HomePage>
             ),
             if (_showTodoWarning)
               TodoWarningBanner(onTap: _handleTodoWarningTap),
+            // Page scroll indicator dots kept near the bottom just above the todo warning banner
+            Positioned(
+              bottom: _showTodoWarning ? 54 : 16,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(2, (index) {
+                  final active = (_currentPageIndex % 2) == index;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    height: 8,
+                    width: active ? 22 : 8,
+                    decoration: BoxDecoration(
+                      color: active
+                          ? const Color(0xFF005BAC)
+                          : (isDark ? Colors.white30 : Colors.black26),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  );
+                }),
+              ),
+            ),
             Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SwingingLogo(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: SwingingLogo(
                       swingAnimation: _swingAnimation,
                       onTap: _handleLogoTap,
                       isDark: isDark,
                     ),
-                    const SizedBox(height: 8),
-                    HomeButtonsContainer(role: role, isDark: isDark),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 8),
+                  HomeButtonsContainer(
+                    role: role,
+                    isDark: isDark,
+                    onPageChanged: (index) {
+                      setState(() {
+                        _currentPageIndex = index;
+                      });
+                    },
+                  ),
+                ],
               ),
             ),
           ],

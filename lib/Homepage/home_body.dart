@@ -320,11 +320,13 @@ class SwingingLogo extends StatelessWidget {
 class HomeButtonsContainer extends StatefulWidget {
   final String? role;
   final bool isDark;
+  final ValueChanged<int>? onPageChanged;
 
   const HomeButtonsContainer({
     super.key,
     required this.role,
     required this.isDark,
+    this.onPageChanged,
   });
 
   @override
@@ -385,63 +387,64 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   @override
   Widget build(BuildContext context) {
     final role = widget.role;
-    final isDark = widget.isDark;
 
     if (role == 'supersale_admin') {
       return _buildSupersaleAdminTiles(context);
     }
 
-    // Dynamic height calculation to avoid empty space or clipping
-    double pageViewHeight = 250.0;
-    if (role == 'admin' || role == 'manager' || role == 'asst_manager') {
-      pageViewHeight = 340.0;
-    }
-    // Since page 2 has more buttons (Supersale + Orders + SME Leads), ensure the page height fits them.
-    pageViewHeight = 340.0;
+    // Height to accommodate 3 rows of buttons + spacing + shadows
+    const double pageViewHeight = 280.0;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          height: pageViewHeight,
-          child: PageView.builder(
-            controller: _pageController,
-            onPageChanged: (index) {
-              setState(() {
-                _currentPageIndex = index;
-              });
-            },
-            itemBuilder: (context, index) {
-              final pageNum = index % 2;
-              if (pageNum == 0) {
-                return _buildOriginalHomePage(context);
-              } else {
-                return _buildSupersalePage(context);
-              }
-            },
-          ),
-        ),
-        const SizedBox(height: 12),
-        // Swipe Page Indicator Dots
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(2, (index) {
-            final active = (_currentPageIndex % 2) == index;
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              height: 8,
-              width: active ? 22 : 8,
-              decoration: BoxDecoration(
-                color: active
-                    ? primaryBlue
-                    : (isDark ? Colors.white30 : Colors.black26),
-                borderRadius: BorderRadius.circular(4),
-              ),
-            );
-          }),
-        ),
-      ],
+    return SizedBox(
+      height: pageViewHeight,
+      child: PageView.builder(
+        controller: _pageController,
+        clipBehavior: Clip.none,
+        onPageChanged: (index) {
+          setState(() {
+            _currentPageIndex = index;
+          });
+          if (widget.onPageChanged != null) {
+            widget.onPageChanged!(index);
+          }
+        },
+        itemBuilder: (context, index) {
+          final pageNum = index % 2;
+          if (pageNum == 0) {
+            return _buildOriginalHomePage(context);
+          } else {
+            return _buildSupersalePage(context);
+          }
+        },
+      ),
+    );
+  }
+
+  /// Lays out a list of button widgets in a 2-column grid.
+  /// If the last row has only 1 button it takes the full width.
+  Widget _buildButtonGrid(List<Widget> buttons) {
+    final List<Widget> rows = [];
+    for (int i = 0; i < buttons.length; i += 2) {
+      final bool isLastOdd = i + 1 >= buttons.length;
+      if (isLastOdd) {
+        // Single button: expand full width
+        rows.add(buttons[i]);
+      } else {
+        rows.add(Row(
+          children: [
+            Expanded(child: buttons[i]),
+            const SizedBox(width: 14),
+            Expanded(child: buttons[i + 1]),
+          ],
+        ));
+      }
+      if (i + 2 < buttons.length) {
+        rows.add(const SizedBox(height: 14));
+      }
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(mainAxisSize: MainAxisSize.min, children: rows),
     );
   }
 
@@ -486,70 +489,31 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
 
   Widget _buildSupersalePage(BuildContext context) {
     final role = widget.role;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: NeumorphicButton(
-                onTap: () => _navigateToSupersale(context),
-                text: 'Supersale',
-                color: const Color(0xFFFF5722),
-                textColor: Colors.white,
-                icon: Icons.flash_on_rounded,
-              ),
-            ),
-            if (role == 'supersale_admin') ...[
-              const SizedBox(width: 14),
-              Expanded(
-                child: NeumorphicButton(
-                  onTap: () => _navigateToSupersaleDashboard(context),
-                  text: 'Dashboard',
-                  color: primaryGreen,
-                  textColor: Colors.white,
-                  icon: Icons.dashboard_rounded,
-                ),
-              ),
-            ],
-          ],
+
+    final List<Widget> buttons = [
+      // Button 1 (Row 1 Left): Marketing
+      NeumorphicButton(
+        onTap: () => _navigateToMarketing(context),
+        text: 'Marketing',
+        color: const Color(0xFFFF5722),
+        textColor: Colors.white,
+        icon: Icons.campaign_rounded,
+      ),
+      if (role == 'supersale_admin')
+        NeumorphicButton(
+          onTap: () => _navigateToSupersaleDashboard(context),
+          text: 'Dashboard',
+          color: primaryGreen,
+          textColor: Colors.white,
+          icon: Icons.dashboard_rounded,
         ),
-        if (role == 'sales' ||
-            role == 'manager' ||
-            role == 'asst_manager' ||
-            role == 'admin') ...[
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: NeumorphicButton(
-                  onTap: () => _navigateToOrders(context),
-                  text: 'Orders',
-                  color: const Color(0xFF0D8A74),
-                  textColor: Colors.white,
-                  icon: Icons.inventory_2_rounded,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: NeumorphicButton(
-                  onTap: () => _navigateToSmeAssignedLeads(context),
-                  text: 'SME Leads',
-                  color: const Color(0xFF00838F),
-                  textColor: Colors.white,
-                  icon: Icons.support_agent_rounded,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ],
-    );
+    ];
+
+    return _buildButtonGrid(buttons);
   }
 
   Widget _buildOriginalHomePage(BuildContext context) {
     final role = widget.role;
-    final isDark = widget.isDark;
 
     if (role == 'sync_head') {
       return _buildSyncHeadTiles(context);
@@ -561,128 +525,97 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       return _buildDmeTiles(context);
     }
 
-    return Column(
-      children: [
-        // Row 1: Leads & ToDo (logo colors)
-        Row(
-          children: [
-            Expanded(
-              child: NeumorphicButton(
-                onTap: () => _navigateToLeads(context),
-                onLongPress: role == 'admin'
-                    ? () => _navigateToSyncHeadLeads(context)
-                    : null,
-                text: 'Leads',
-                color: primaryBlue,
-                textColor: Colors.white,
-                icon: Icons.people_alt_rounded,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: NeumorphicButton(
-                onTap: () => _navigateToTodo(context),
-                onLongPress: role == 'admin'
-                    ? () => _navigateToSyncHeadTodos(context)
-                    : null,
-                text: 'ToDo List',
-                color: primaryGreen,
-                textColor: Colors.white,
-                icon: Icons.check_circle_outline_rounded,
-              ),
-            ),
-          ],
-        ),
-        // Sales-specific buttons
-        if (role == 'sales') ...[
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: NeumorphicButton(
-                  onTap: () => _navigateToMarketing(context),
-                  text: 'Marketing',
-                  color: primaryBlue.withBlue(180), // Lighter blue variant
-                  textColor: Colors.white,
-                  icon: Icons.campaign_rounded,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: NeumorphicButton(
-                  onTap: () => _navigateToCustomerList(context),
-                  text: 'Customer List',
-                  color: primaryGreen.withGreen(220), // Lighter green variant
-                  textColor: Colors.white,
-                  icon: Icons.assignment_ind_rounded,
-                  textStyle: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                    letterSpacing: 0.6,
-                    color: Colors.white,
-                    fontFamily: 'Montserrat',
-                    shadows: [
-                      Shadow(
-                        color: Colors.black26,
-                        offset: Offset(0, 1),
-                        blurRadius: 3,
-                      ),
-                    ],
+    // Build button list based on role — always show 6 buttons
+    // Left buttons (even indices: 0, 2, 4) will be primaryBlue
+    // Right buttons (odd indices: 1, 3, 5) will be primaryGreen
+    final List<Widget> buttons = [
+      // Button 1 (Row 1 Left): Leads
+      NeumorphicButton(
+        onTap: () => _navigateToLeads(context),
+        onLongPress: role == 'admin'
+            ? () => _navigateToSyncHeadLeads(context)
+            : null,
+        text: 'Leads',
+        color: primaryBlue,
+        textColor: Colors.white,
+        icon: Icons.people_alt_rounded,
+      ),
+      // Button 2 (Row 1 Right): ToDo List
+      NeumorphicButton(
+        onTap: () => _navigateToTodo(context),
+        onLongPress: role == 'admin'
+            ? () => _navigateToSyncHeadTodos(context)
+            : null,
+        text: 'ToDo List',
+        color: primaryGreen,
+        textColor: Colors.white,
+        icon: Icons.check_circle_outline_rounded,
+      ),
+      // Button 3 (Row 2 Left): Supersale
+      NeumorphicButton(
+        onTap: () => _navigateToSupersale(context),
+        text: 'Supersale',
+        color: primaryBlue,
+        textColor: Colors.white,
+        icon: Icons.flash_on_rounded,
+      ),
+      // Button 4 (Row 2 Right): Customer List
+      NeumorphicButton(
+        onTap: () => _navigateToCustomerList(context),
+        onLongPress: role == 'manager' || role == 'asst_manager'
+            ? () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const LoadingOverlayPage(
+                      child: CustomerManagerViewerPage(),
+                    ),
                   ),
-                ),
-              ),
-            ],
-          ),
-        ],
-        // Admin/Manager buttons
-        if (role == 'admin' || role == 'manager' || role == 'asst_manager') ...[
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: NeumorphicButton(
-                  onTap: () => _navigateToDashboard(context),
-                  text: 'Dashboard',
-                  color: primaryGreen, // Green like ToDo List
-                  textColor: Colors.white,
-                  icon: Icons.dashboard_rounded,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: NeumorphicButton(
-                  onTap: () => _navigateToMarketing(context),
-                  text: 'Marketing',
-                  color: primaryBlue.withBlue(180),
-                  textColor: Colors.white,
-                  icon: Icons.campaign_rounded,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          NeumorphicButton(
-            onTap: () => _navigateToCustomerList(context),
-            onLongPress: role == 'manager' || role == 'asst_manager'
-                ? () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const LoadingOverlayPage(
-                          child: CustomerManagerViewerPage(),
-                        ),
-                      ),
-                    );
-                  }
-                : null,
-            text: 'Customer List',
-            color: isDark ? const Color(0xFF23272A) : Colors.white,
-            textColor: isDark ? Colors.white : primaryBlue,
-            icon: Icons.assignment_ind_rounded,
-          ),
-        ],
-      ],
-    );
+                );
+              }
+            : null,
+        text: 'Customer List',
+        color: primaryGreen,
+        textColor: Colors.white,
+        icon: Icons.assignment_ind_rounded,
+      ),
+      // Button 5 (Row 3 Left): Dashboard (admin/manager) or Orders (sales)
+      if (role == 'admin' || role == 'manager' || role == 'asst_manager')
+        NeumorphicButton(
+          onTap: () => _navigateToDashboard(context),
+          text: 'Dashboard',
+          color: primaryBlue,
+          textColor: Colors.white,
+          icon: Icons.dashboard_rounded,
+        )
+      else if (role == 'sales')
+        NeumorphicButton(
+          onTap: () => _navigateToOrders(context),
+          text: 'Orders',
+          color: primaryBlue,
+          textColor: Colors.white,
+          icon: Icons.inventory_2_rounded,
+        ),
+      // Button 6 (Row 3 Right): Orders (admin/manager) or SME Leads (sales)
+      if (role == 'admin' || role == 'manager' || role == 'asst_manager')
+        NeumorphicButton(
+          onTap: () => _navigateToOrders(context),
+          text: 'Orders',
+          color: primaryGreen,
+          textColor: Colors.white,
+          icon: Icons.inventory_2_rounded,
+        )
+      else if (role == 'sales')
+        NeumorphicButton(
+          onTap: () => _navigateToSmeAssignedLeads(context),
+          text: 'SME Leads',
+          color: primaryGreen,
+          textColor: Colors.white,
+          icon: Icons.support_agent_rounded,
+        ),
+    ];
+
+    return _buildButtonGrid(buttons);
   }
 
   /// Builds the Sync Head-specific home tiles.
