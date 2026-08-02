@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:mtcsync/Misc/notification_permission_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../Task/task_sales.dart' show syncTaskReminders;
 
 /// Listens for SME lead assignment FCM messages and triggers local push
 /// notifications (foreground) for the assigned user.
@@ -21,12 +23,21 @@ class SmeNotificationService {
 
     _subscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
       final data = message.data;
-      const handled = {'sme_lead_assignment', 'dme_lead_assignment', 'lead_transfer'};
+      const handled = {
+        'sme_lead_assignment',
+        'dme_lead_assignment',
+        'lead_transfer',
+        'core_task_assignment',
+        'core_task_completion'
+      };
       if (!handled.contains(data['type'])) return;
 
-      final title = message.notification?.title ?? data['title'] ?? 'New Lead Assigned';
-      final body = message.notification?.body ?? data['body'] ?? 'A new lead has been assigned to you.';
+      final title = message.notification?.title ?? data['title'] ?? 'New Notification';
+      final body = message.notification?.body ?? data['body'] ?? '';
       final leadDocId = data['leadDocId'] ?? '';
+
+      final isCoreTaskAssigned = data['type'] == 'core_task_assignment';
+      final isCoreTaskCompleted = data['type'] == 'core_task_completion';
 
       // Show local notification so AwesomeNotifications action buttons work
       await NotificationPermissionService.instance.safeCreateNotification(
@@ -38,10 +49,21 @@ class SmeNotificationService {
           notificationLayout: NotificationLayout.Default,
           payload: {
             'docId': leadDocId,
-            'type': 'sme_lead',
+            'type': isCoreTaskAssigned
+                ? 'core_task'
+                : isCoreTaskCompleted
+                    ? 'core_task_complete'
+                    : 'sme_lead',
           },
         ),
       );
+
+      if (isCoreTaskAssigned) {
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid != null) {
+          await syncTaskReminders(uid);
+        }
+      }
 
       // Schedule device-side reminder if the Cloud Function forwarded one
       final reminderAtStr = data['reminderAt'];

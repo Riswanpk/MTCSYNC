@@ -35,6 +35,8 @@ import '../Supersale/supersale_admin.dart';
 import '../Supersale/supersale_admin_dashboard.dart';
 import '../Supersale/supersale_user_mainpage.dart';
 import '../SME/sme_assigned_leads_page.dart';
+import '../Task/task_admin.dart';
+import '../Task/task_sales.dart';
 
 /// App brand colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -391,6 +393,9 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     if (role == 'supersale_admin') {
       return _buildSupersaleAdminTiles(context);
     }
+    if (role == 'core_team') {
+      return _buildCoreTeamTiles(context);
+    }
 
     // Height to accommodate 3 rows of buttons + spacing + shadows
     const double pageViewHeight = 280.0;
@@ -448,6 +453,45 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     );
   }
 
+  Widget _buildCoreTeamTiles(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        children: [
+          Expanded(
+            child: NeumorphicButton(
+              onTap: () => _navigateToTodo(context),
+              text: 'Todo List',
+              color: primaryBlue,
+              textColor: Colors.white,
+              icon: Icons.check_circle_outline_rounded,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: NeumorphicButton(
+              onTap: () => _navigateToCoreTeamTasks(context),
+              text: 'Tasks',
+              color: primaryGreen,
+              textColor: Colors.white,
+              icon: Icons.assignment_rounded,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _navigateToCoreTeamTasks(BuildContext context) async {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const LoadingOverlayPage(
+          child: CoreTeamTaskPage(),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSupersaleAdminTiles(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -499,13 +543,13 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
         textColor: Colors.white,
         icon: Icons.campaign_rounded,
       ),
-      if (role == 'supersale_admin')
+      if (role == 'sales' || role == 'manager' || role == 'asst_manager')
         NeumorphicButton(
-          onTap: () => _navigateToSupersaleDashboard(context),
-          text: 'Dashboard',
+          onTap: () => _navigateToUserTasks(context),
+          text: 'Tasks',
           color: primaryGreen,
           textColor: Colors.white,
-          icon: Icons.dashboard_rounded,
+          icon: Icons.assignment_rounded,
         ),
     ];
 
@@ -951,6 +995,16 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       MaterialPageRoute(
         builder: (_) => const LoadingOverlayPage(
           child: TodoPage(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _navigateToUserTasks(BuildContext context) async {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const LoadingOverlayPage(
+          child: UserTaskPage(),
         ),
       ),
     );

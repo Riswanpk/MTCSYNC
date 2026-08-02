@@ -28,6 +28,7 @@ import '../SME/sme_notification_service.dart';
 import '../Leads/leads_notification.dart';
 import '../DME/services/dme_complaint_service.dart';
 import '../DME/services/dme_supabase_service.dart';
+import '../Task/task_sales.dart' show syncTaskReminders;
 
 // Top-level function for compute to decode contacts JSON
 List<dynamic> decodeContactsJson(String json) {
@@ -68,6 +69,7 @@ class _HomePageState extends State<HomePage>
   StreamSubscription? _notificationListener;
   StreamSubscription? _assignedLeadsListener;
   StreamSubscription? _complaintsListener;
+  StreamSubscription? _coreTasksListener;
 
   @override
   void initState() {
@@ -82,6 +84,12 @@ class _HomePageState extends State<HomePage>
           _username = _userCache.username;
           _branch = _userCache.branch;
         });
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid != null && (_role == 'sales' || _role == 'manager' || _role == 'asst_manager')) {
+          syncTaskReminders(uid).catchError((e) {
+            debugPrint('Failed to sync tasks reminders: $e');
+          });
+        }
         _listenForTransferredLeads();
         _listenForAssignedLeadsAndComplaints();
       }
@@ -164,6 +172,7 @@ class _HomePageState extends State<HomePage>
     _notificationListener?.cancel();
     _assignedLeadsListener?.cancel();
     _complaintsListener?.cancel();
+    _coreTasksListener?.cancel();
     SmeNotificationService.instance.stopListening();
     routeObserver.unsubscribe(this);
     _swingController.dispose();
@@ -224,6 +233,26 @@ class _HomePageState extends State<HomePage>
       if (!mounted) return;
       await _updateOtherCountFromListeners();
     });
+
+    // Listen for Core Tasks in realtime
+    _coreTasksListener?.cancel();
+    if (_role == 'sales' || _role == 'manager' || _role == 'asst_manager') {
+      _coreTasksListener = FirebaseFirestore.instance
+          .collection('core_tasks')
+          .where('assigned_to', isEqualTo: uid)
+          .snapshots()
+          .listen((_) {
+        if (mounted) _updateOtherCountFromListeners();
+      });
+    } else if (_role == 'core_team') {
+      _coreTasksListener = FirebaseFirestore.instance
+          .collection('core_tasks')
+          .where('assigned_by', isEqualTo: uid)
+          .snapshots()
+          .listen((_) {
+        if (mounted) _updateOtherCountFromListeners();
+      });
+    }
 
     // Listen for complaints using Supabase
     _listenForComplaintsRealtime(uid);
@@ -319,6 +348,38 @@ class _HomePageState extends State<HomePage>
                 count++;
               }
             }
+          }
+        }
+      }
+    } catch (_) {}
+
+    // Count core tasks (pending for assigned users, completed-unseen for core team)
+    try {
+      if (_role == 'sales' || _role == 'manager' || _role == 'asst_manager') {
+        final tasksSnap = await FirebaseFirestore.instance
+            .collection('core_tasks')
+            .where('assigned_to', isEqualTo: uid)
+            .where('status', isEqualTo: 'pending')
+            .get();
+        count += tasksSnap.docs.length;
+      } else if (_role == 'core_team') {
+        final tasksSnap = await FirebaseFirestore.instance
+            .collection('core_tasks')
+            .where('assigned_by', isEqualTo: uid)
+            .where('status', isEqualTo: 'completed')
+            .get();
+
+        for (final doc in tasksSnap.docs) {
+          try {
+            final userSeenDoc = await FirebaseFirestore.instance
+                .collection('user_seen_leads')
+                .doc('${doc.id}__${uid}')
+                .get();
+            if (!userSeenDoc.exists) {
+              count++;
+            }
+          } catch (_) {
+            count++;
           }
         }
       }

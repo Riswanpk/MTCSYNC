@@ -1,4 +1,4 @@
-﻿import 'package:awesome_notifications/awesome_notifications.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -9,10 +9,12 @@ import '../DME/services/dme_complaint_service.dart';
 import '../DME/services/dme_supabase_service.dart';
 import '../DME/screens/dme_complaints_management.dart';
 import 'presentfollowup.dart';
+import '../Task/task_sales.dart';
+import '../Task/task_admin.dart';
 
 // ─── Notification Types ────────────────────────────────────────────────────
 
-enum _NotifType { transfer, leadAssignment, complaint }
+enum _NotifType { transfer, leadAssignment, complaint, coreTask }
 
 class _NotifItem {
   final _NotifType type;
@@ -85,6 +87,7 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
         _fetchTransferredLeads(uid, items),
         _fetchAssignedLeads(uid, items),
         _fetchAssignedComplaints(uid, items),
+        _fetchCoreTasks(uid, items),
       ]);
     } catch (e) {
       debugPrint('Error fetching notifications: $e');
@@ -303,6 +306,77 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
     }
   }
 
+  Future<void> _fetchCoreTasks(String uid, List<_NotifItem> items) async {
+    try {
+      final userCache = UserCacheService.instance;
+      await userCache.ensureLoaded();
+      final role = userCache.role;
+
+      if (role == 'sales' || role == 'manager' || role == 'asst_manager') {
+        // Fetch pending tasks assigned to current user
+        final snapshot = await FirebaseFirestore.instance
+            .collection('core_tasks')
+            .where('assigned_to', isEqualTo: uid)
+            .where('status', isEqualTo: 'pending')
+            .get();
+
+        for (final doc in snapshot.docs) {
+          final data = doc.data();
+          final title = data['title'] ?? 'Task Assigned';
+          final assignedBy = data['assigned_by_name'] ?? 'Core Team';
+          final ts = (data['timestamp'] as Timestamp?)?.toDate();
+
+          items.add(_NotifItem(
+            type: _NotifType.coreTask,
+            id: doc.id,
+            title: title,
+            subtitle: 'Task assigned by $assignedBy',
+            time: ts,
+          ));
+        }
+      } else if (role == 'core_team') {
+        // Fetch completed tasks assigned by this core team member
+        final snapshot = await FirebaseFirestore.instance
+            .collection('core_tasks')
+            .where('assigned_by', isEqualTo: uid)
+            .where('status', isEqualTo: 'completed')
+            .get();
+
+        // Filter out seen ones using user_seen_leads
+        final seenLeadIds = <String>{};
+        try {
+          final seenSnapshot = await FirebaseFirestore.instance
+              .collection('user_seen_leads')
+              .where('user_id', isEqualTo: uid)
+              .get();
+          seenLeadIds.addAll(
+            seenSnapshot.docs.map((d) => d.data()['lead_id'] as String? ?? '').where((id) => id.isNotEmpty),
+          );
+        } catch (_) {}
+
+        for (final doc in snapshot.docs) {
+          if (seenLeadIds.contains(doc.id)) continue;
+
+          final data = doc.data();
+          final title = data['title'] ?? 'Task Completed';
+          final assignedTo = data['assigned_to_name'] ?? 'User';
+          final note = data['note'] ?? '';
+          final ts = (data['completed_at'] as Timestamp?)?.toDate() ?? (data['timestamp'] as Timestamp?)?.toDate();
+
+          items.add(_NotifItem(
+            type: _NotifType.coreTask,
+            id: doc.id,
+            title: title,
+            subtitle: 'Completed by $assignedTo${note.isNotEmpty ? ": $note" : ""}',
+            time: ts,
+          ));
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching core tasks: $e');
+    }
+  }
+
   // ─── Tap Handlers ─────────────────────────────────────────────────────────
 
   Future<void> _handleTap(_NotifItem item) async {
@@ -400,6 +474,50 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
       if (mounted) {
         await _fetchAll();
       }
+    } else if (item.type == _NotifType.coreTask) {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      final userCache = UserCacheService.instance;
+      await userCache.ensureLoaded();
+      final role = userCache.role;
+
+      if (role == 'core_team') {
+        // Mark task completion notification as seen for Core Team member
+        if (uid != null) {
+          try {
+            await FirebaseFirestore.instance
+                .collection('user_seen_leads')
+                .doc('${item.id}__${uid}')
+                .set({
+                  'lead_id': item.id,
+                  'user_id': uid,
+                  'seen_at': DateTime.now().toIso8601String(),
+                }, SetOptions(merge: true));
+          } catch (_) {}
+        }
+        
+        if (mounted) {
+          setState(() {
+            _items.removeWhere((i) => i.id == item.id);
+          });
+        }
+
+        if (!mounted) return;
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const CoreTeamTaskPage()),
+        );
+      } else {
+        // Navigate to UserTaskPage for assigned user
+        if (!mounted) return;
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const UserTaskPage()),
+        );
+      }
+
+      if (mounted) {
+        await _fetchAll();
+      }
     }
   }
 
@@ -487,6 +605,10 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
         accentColor = const Color(0xFFC62828);
         iconData = Icons.assignment_rounded;
         typeLabel = 'Complaint Assigned';
+      case _NotifType.coreTask:
+        accentColor = const Color(0xFFE65100);
+        iconData = Icons.assignment_late_rounded;
+        typeLabel = 'Core Task';
     }
 
     return Card(

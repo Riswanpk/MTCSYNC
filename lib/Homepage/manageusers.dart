@@ -25,7 +25,8 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
     'sme',
     'dme_admin',
     'dme_user',
-    'supersale_admin'
+    'supersale_admin',
+    'core_team'
   ];
   String? _currentUserId;
   String _searchQuery = '';
@@ -539,7 +540,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                   fontSize: 13,
                                 ),
                                 underline: Container(),
-                                items: _roles
+                                 items: _roles
                                     .map((r) => DropdownMenuItem(
                                           value: r,
                                           child: Row(
@@ -548,23 +549,18 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                                 r == 'admin'
                                                     ? Icons.security
                                                     : r == 'manager'
-                                                        ? Icons
-                                                            .supervisor_account
+                                                        ? Icons.supervisor_account
                                                         : r == 'asst_manager'
-                                                            ? Icons
-                                                                .manage_accounts
+                                                            ? Icons.manage_accounts
                                                             : r == 'sync_head'
                                                                 ? Icons.hub
-                                                                : r ==
-                                                                        'dme_admin'
-                                                                    ? Icons
-                                                                        .admin_panel_settings
-                                                                    : r ==
-                                                                            'dme_user'
-                                                                        ? Icons
-                                                                            .person_outline
-                                                                        : Icons
-                                                                            .person,
+                                                                : r == 'core_team'
+                                                                    ? Icons.group_work_rounded
+                                                                    : r == 'dme_admin'
+                                                                        ? Icons.admin_panel_settings
+                                                                        : r == 'dme_user'
+                                                                            ? Icons.person_outline
+                                                                            : Icons.person,
                                                 color: r == 'admin'
                                                     ? Colors.deepPurple
                                                     : r == 'manager'
@@ -573,21 +569,29 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                                             ? Colors.deepOrange
                                                             : r == 'sync_head'
                                                                 ? Colors.blue
-                                                                : r ==
-                                                                        'dme_admin'
-                                                                    ? Colors
-                                                                        .indigo
-                                                                    : r ==
-                                                                            'dme_user'
-                                                                        ? Colors
-                                                                            .teal
-                                                                        : Colors
-                                                                            .green,
+                                                                : r == 'core_team'
+                                                                    ? Colors.pink
+                                                                    : r == 'dme_admin'
+                                                                        ? Colors.indigo
+                                                                        : r == 'dme_user'
+                                                                            ? Colors.teal
+                                                                            : Colors.green,
                                                 size: 20,
                                               ),
                                               const SizedBox(width: 8),
-                                              Text(r[0].toUpperCase() +
-                                                  r.substring(1)),
+                                              Text(r == 'core_team'
+                                                  ? 'Core Team'
+                                                  : r == 'asst_manager'
+                                                      ? 'Asst Manager'
+                                                      : r == 'sync_head'
+                                                          ? 'Sync Head'
+                                                          : r == 'dme_admin'
+                                                              ? 'DME Admin'
+                                                              : r == 'dme_user'
+                                                                  ? 'DME User'
+                                                                  : r == 'supersale_admin'
+                                                                      ? 'Supersale Admin'
+                                                                      : r[0].toUpperCase() + r.substring(1)),
                                             ],
                                           ),
                                         ))

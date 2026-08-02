@@ -21,7 +21,7 @@ class UserDetailPage extends StatefulWidget {
 class _UserDetailPageState extends State<UserDetailPage> {
   static const Color _primaryBlue = Color(0xFF005BAC);
 
-  final List<String> _roles = ['sales', 'manager', 'asst_manager', 'admin', 'sync_head', 'sme', 'dme_admin', 'dme_user', 'supersale_admin'];
+  final List<String> _roles = ['sales', 'manager', 'asst_manager', 'admin', 'sync_head', 'sme', 'dme_admin', 'dme_user', 'supersale_admin', 'core_team'];
   final List<String> _branches = [
     'BGR', 'CBE', 'CHN', 'CLT', 'EKM', 'JBL', 'KKM', 'KSD',
     'KTM', 'PKD', 'PKT', 'PMN', 'TRR', 'TSR', 'TLY', 'TVM',
@@ -383,7 +383,19 @@ class _UserDetailPageState extends State<UserDetailPage> {
             _infoRow(
               Icons.security,
               'Current Role',
-              role[0].toUpperCase() + role.substring(1),
+              role == 'core_team'
+                  ? 'Core Team'
+                  : role == 'asst_manager'
+                      ? 'Asst Manager'
+                      : role == 'sync_head'
+                          ? 'Sync Head'
+                          : role == 'dme_admin'
+                              ? 'DME Admin'
+                              : role == 'dme_user'
+                                  ? 'DME User'
+                                  : role == 'supersale_admin'
+                                      ? 'Supersale Admin'
+                                      : role[0].toUpperCase() + role.substring(1),
               isDark,
               valueColor: role == 'admin'
                   ? Colors.deepPurple
@@ -393,7 +405,9 @@ class _UserDetailPageState extends State<UserDetailPage> {
                           ? Colors.deepOrange
                           : role == 'sync_head'
                               ? Colors.blue
-                              : Colors.green,
+                              : role == 'core_team'
+                                  ? Colors.pink
+                                  : Colors.green,
             ),
             const Divider(height: 20),
             _infoRow(Icons.business, 'Branch', branch, isDark),
@@ -496,7 +510,9 @@ class _UserDetailPageState extends State<UserDetailPage> {
                                           ? Icons.manage_accounts
                                           : r == 'sync_head'
                                               ? Icons.hub
-                                              : Icons.person,
+                                              : r == 'core_team'
+                                                  ? Icons.group_work_rounded
+                                                  : Icons.person,
                               color: r == 'admin'
                                   ? Colors.deepPurple
                                   : r == 'manager'
@@ -505,11 +521,25 @@ class _UserDetailPageState extends State<UserDetailPage> {
                                           ? Colors.deepOrange
                                           : r == 'sync_head'
                                               ? Colors.blue
-                                              : Colors.green,
+                                              : r == 'core_team'
+                                                  ? Colors.pink
+                                                  : Colors.green,
                               size: 20,
                             ),
                             const SizedBox(width: 10),
-                            Text(r[0].toUpperCase() + r.substring(1)),
+                            Text(r == 'core_team'
+                                ? 'Core Team'
+                                : r == 'asst_manager'
+                                    ? 'Asst Manager'
+                                    : r == 'sync_head'
+                                        ? 'Sync Head'
+                                        : r == 'dme_admin'
+                                            ? 'DME Admin'
+                                            : r == 'dme_user'
+                                                ? 'DME User'
+                                                : r == 'supersale_admin'
+                                                    ? 'Supersale Admin'
+                                                    : r[0].toUpperCase() + r.substring(1)),
                           ],
                         ),
                       ))

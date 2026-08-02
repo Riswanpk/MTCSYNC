@@ -28,6 +28,8 @@ import 'Version/user_version_helper.dart'; // <-- Add this import
 import 'DME/screens/dme_customer_tile_viewer.dart';
 import 'DME/models/dme_reminder.dart';
 import 'DME/services/dme_supabase_service.dart';
+import 'Task/task_sales.dart';
+import 'Task/task_admin.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -263,6 +265,26 @@ Future<void> clearNotificationOpened(String docId) async {
 class NotificationController {
   @pragma("vm:entry-point")
   static Future<void> onActionReceivedMethod(ReceivedAction receivedAction) async {
+    // Handle core tasks notifications navigation
+    if (receivedAction.payload?['type'] == 'core_task') {
+      final navigator = navigatorKey.currentState;
+      if (navigator != null) {
+        navigator.push(
+          MaterialPageRoute(builder: (_) => const UserTaskPage()),
+        );
+      }
+      return;
+    }
+    if (receivedAction.payload?['type'] == 'core_task_complete') {
+      final navigator = navigatorKey.currentState;
+      if (navigator != null) {
+        navigator.push(
+          MaterialPageRoute(builder: (_) => const CoreTeamTaskPage()),
+        );
+      }
+      return;
+    }
+
     // Handle navigation for overdue tasks notification
     if (receivedAction.payload?['page'] == 'todo') {
       final navigator = navigatorKey.currentState;
