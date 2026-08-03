@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../Navigation/user_cache_service.dart';
@@ -22,6 +23,7 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
   // Form State
   String? _selectedBranch;
   Map<String, dynamic>? _selectedUser;
+  final Set<String> _selectedRoles = {}; // 'sales', 'asst_manager', 'manager'
   final TextEditingController _taskNameController = TextEditingController();
   final TextEditingController _taskController = TextEditingController();
   bool _isAssigning = false;
@@ -125,12 +127,30 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
       );
       return;
     }
-    if (_selectedUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Please select a user to assign the task to')),
-      );
-      return;
+
+    List<Map<String, dynamic>> targetUsers = [];
+    if (_selectedRoles.isNotEmpty) {
+      targetUsers = _eligibleUsers.where((u) {
+        final role = (u['role'] as String? ?? '').toLowerCase();
+        return _selectedRoles.contains(role);
+      }).toList();
+
+      if (targetUsers.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('No users found for selected role(s)')),
+        );
+        return;
+      }
+    } else {
+      if (_selectedUser == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Please select a role option or a recipient user')),
+        );
+        return;
+      }
+      targetUsers = [_selectedUser!];
     }
 
     setState(() => _isAssigning = true);
@@ -145,49 +165,58 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
           userCache.username ?? currentUser.email ?? 'Core Team';
       final assignerEmail = userCache.email ?? currentUser.email ?? '';
 
-      final recipientUid = _selectedUser!['uid'] ?? _selectedUser!['id'] ?? '';
-      final recipientEmail = _selectedUser!['email'] ?? '';
-      final recipientName = _selectedUser!['username'] ?? '';
+      final functions = FirebaseFunctions.instanceFor(region: 'asia-south1');
 
-      // 1. Add to Firestore collection core_tasks
-      final docRef = await _firestore.collection('core_tasks').add({
-        'title': taskName,
-        'description': taskDescription,
-        'assigned_to': recipientUid,
-        'assigned_to_email': recipientEmail,
-        'assigned_to_name': recipientName,
-        'assigned_by': currentUser.uid,
-        'assigned_by_name': assignerName,
-        'assigned_by_email': assignerEmail,
-        'status': 'pending',
-        'timestamp': FieldValue.serverTimestamp(),
-        'note': '',
-        'completed_at': null,
-      });
+      for (final recipient in targetUsers) {
+        final recipientUid = recipient['uid'] ?? recipient['id'] ?? '';
+        final recipientEmail = recipient['email'] ?? '';
+        final recipientName = recipient['username'] ?? '';
 
-      // 2. Trigger push notification via Cloud Function
-      FirebaseFunctions.instanceFor(region: 'asia-south1')
-          .httpsCallable('sendLeadAssignmentNotification')
-          .call(<String, dynamic>{
-        'recipientUid': recipientUid,
-        'title': 'New Task Assigned',
-        'body': 'Core Team assigned you a new task: "$taskName"',
-        'notifType': 'core_task_assignment',
-        'leadDocId': docRef.id,
-      }).catchError((error) {
-        debugPrint('FCM Warning: failed to send task notification: $error');
-      });
+        if (recipientUid.toString().isEmpty) continue;
+
+        // 1. Add to Firestore collection core_tasks
+        final docRef = await _firestore.collection('core_tasks').add({
+          'title': taskName,
+          'description': taskDescription,
+          'assigned_to': recipientUid,
+          'assigned_to_email': recipientEmail,
+          'assigned_to_name': recipientName,
+          'assigned_by': currentUser.uid,
+          'assigned_by_name': assignerName,
+          'assigned_by_email': assignerEmail,
+          'status': 'pending',
+          'timestamp': FieldValue.serverTimestamp(),
+          'note': '',
+          'completed_at': null,
+        });
+
+        // 2. Trigger push notification via Cloud Function
+        functions
+            .httpsCallable('sendLeadAssignmentNotification')
+            .call(<String, dynamic>{
+          'recipientUid': recipientUid,
+          'title': 'New Task Assigned',
+          'body': 'Core Team assigned you a new task: "$taskName"',
+          'notifType': 'core_task_assignment',
+          'leadDocId': docRef.id,
+        }).catchError((error) {
+          debugPrint('FCM Warning: failed to send task notification: $error');
+        });
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Task assigned successfully!'),
+          SnackBar(
+            content: Text(targetUsers.length > 1
+                ? 'Tasks assigned successfully to ${targetUsers.length} users!'
+                : 'Task assigned successfully!'),
             backgroundColor: Colors.green,
           ),
         );
         _taskNameController.clear();
         _taskController.clear();
         setState(() {
+          _selectedRoles.clear();
           _selectedBranch = null;
           _selectedUser = null;
           _userSearchQuery = '';
@@ -235,6 +264,13 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
 
     try {
       await _firestore.collection('core_tasks').doc(docId).delete();
+      try {
+        final notifId = docId.hashCode & 0x7FFFFFFF;
+        await AwesomeNotifications().cancel(notifId);
+      } catch (e) {
+        debugPrint('Error cancelling scheduled notification for deleted task: $e');
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -299,6 +335,8 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
   }
 
   Widget _buildAssignTaskTab(bool isDark) {
+    final isRoleActive = _selectedRoles.isNotEmpty;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -324,7 +362,7 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '1. Select Branch',
+                    '1. Target Role (Mass Assign)',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -332,21 +370,36 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
                     ),
                   ),
                   const SizedBox(height: 10),
-                  _buildBranchDropdown(isDark),
+                  _buildRoleSelector(isDark),
                   const SizedBox(height: 20),
                   Text(
-                    '2. Select Recipient',
+                    '2. Select Branch',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white70 : Colors.black54,
+                      color: isRoleActive
+                          ? (isDark ? Colors.white30 : Colors.black26)
+                          : (isDark ? Colors.white70 : Colors.black54),
                     ),
                   ),
                   const SizedBox(height: 10),
-                  _buildUserSelector(isDark),
+                  _buildBranchDropdown(isDark, isDisabled: isRoleActive),
                   const SizedBox(height: 20),
                   Text(
-                    '3. Task Name',
+                    '3. Select Recipient',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: isRoleActive
+                          ? (isDark ? Colors.white30 : Colors.black26)
+                          : (isDark ? Colors.white70 : Colors.black54),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildUserSelector(isDark, isDisabled: isRoleActive),
+                  const SizedBox(height: 20),
+                  Text(
+                    '4. Task Name',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -375,7 +428,7 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    '4. Task Description',
+                    '5. Task Description',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -433,15 +486,17 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
                                   child: CircularProgressIndicator(
                                       color: Colors.white, strokeWidth: 2.5),
                                 )
-                              : const Row(
+                              : Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.send_rounded,
+                                    const Icon(Icons.send_rounded,
                                         color: Colors.white, size: 20),
-                                    SizedBox(width: 8),
+                                    const SizedBox(width: 8),
                                     Text(
-                                      'Assign Task',
-                                      style: TextStyle(
+                                      isRoleActive
+                                          ? 'Assign Task to Selected Role(s)'
+                                          : 'Assign Task',
+                                      style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
@@ -462,42 +517,97 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
     );
   }
 
-  Widget _buildBranchDropdown(bool isDark) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0F1A2B) : const Color(0xFFF3F4F6),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _selectedBranch,
-          hint: Text(
-            'Select a branch...',
-            style: TextStyle(color: isDark ? Colors.white54 : Colors.black45),
+  Widget _buildRoleSelector(bool isDark) {
+    final rolesOptions = [
+      {'label': 'Sales', 'value': 'sales'},
+      {'label': 'Asst. Manager', 'value': 'asst_manager'},
+      {'label': 'Manager', 'value': 'manager'},
+    ];
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: rolesOptions.map((role) {
+        final key = role['value']!;
+        final label = role['label']!;
+        final isSelected = _selectedRoles.contains(key);
+
+        return FilterChip(
+          label: Text(label),
+          selected: isSelected,
+          selectedColor: const Color(0xFF00897B),
+          checkmarkColor: Colors.white,
+          labelStyle: TextStyle(
+            color: isSelected
+                ? Colors.white
+                : (isDark ? Colors.white70 : Colors.black87),
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           ),
-          isExpanded: true,
-          dropdownColor: isDark ? const Color(0xFF0F1A2B) : Colors.white,
-          style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-          items: _branches.map((branch) {
-            return DropdownMenuItem<String>(
-              value: branch,
-              child: Text(branch),
-            );
-          }).toList(),
-          onChanged: (val) {
+          backgroundColor:
+              isDark ? const Color(0xFF0F1A2B) : const Color(0xFFF3F4F6),
+          side: BorderSide(
+            color: isSelected
+                ? const Color(0xFF00897B)
+                : (isDark ? Colors.white24 : Colors.black12),
+          ),
+          onSelected: (selected) {
             setState(() {
-              _selectedBranch = val;
-              _selectedUser = null; // Clear selected user when branch changes
-              _filterUsers('');
+              if (selected) {
+                _selectedRoles.add(key);
+                _selectedBranch = null;
+                _selectedUser = null;
+              } else {
+                _selectedRoles.remove(key);
+              }
             });
           },
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildBranchDropdown(bool isDark, {bool isDisabled = false}) {
+    return Opacity(
+      opacity: isDisabled ? 0.4 : 1.0,
+      child: IgnorePointer(
+        ignoring: isDisabled,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF0F1A2B) : const Color(0xFFF3F4F6),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedBranch,
+              hint: Text(
+                'Select a branch...',
+                style: TextStyle(color: isDark ? Colors.white54 : Colors.black45),
+              ),
+              isExpanded: true,
+              dropdownColor: isDark ? const Color(0xFF0F1A2B) : Colors.white,
+              style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+              items: _branches.map((branch) {
+                return DropdownMenuItem<String>(
+                  value: branch,
+                  child: Text(branch),
+                );
+              }).toList(),
+              onChanged: (val) {
+                setState(() {
+                  _selectedBranch = val;
+                  _selectedUser = null; // Clear selected user when branch changes
+                  _filterUsers('');
+                });
+              },
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildUserSelector(bool isDark) {
+  Widget _buildUserSelector(bool isDark, {bool isDisabled = false}) {
     if (_isLoadingUsers) {
       return const Center(
         child: Padding(
@@ -507,96 +617,102 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (_selectedUser != null)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF00897B).withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF00897B), width: 1),
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: const Color(0xFF00897B),
-                  child: Text(
-                    (_selectedUser!['username'] as String? ?? '?').isNotEmpty
-                        ? (_selectedUser!['username'] as String)[0]
-                            .toUpperCase()
-                        : '?',
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold),
-                  ),
+    return Opacity(
+      opacity: isDisabled ? 0.4 : 1.0,
+      child: IgnorePointer(
+        ignoring: isDisabled,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_selectedUser != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00897B).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF00897B), width: 1),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: const Color(0xFF00897B),
+                      child: Text(
+                        (_selectedUser!['username'] as String? ?? '?').isNotEmpty
+                            ? (_selectedUser!['username'] as String)[0]
+                                .toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _selectedUser!['username'] ?? 'Unknown User',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                          Text(
+                            '${_selectedUser!['role'] ?? ''} • Branch: ${_selectedUser!['branch'] ?? 'None'}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? Colors.white60 : Colors.black54,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.red),
+                      onPressed: () => setState(() => _selectedUser = null),
+                    ),
+                  ],
+                ),
+              )
+            else
+              GestureDetector(
+                onTap: _selectedBranch == null
+                    ? () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please select a branch first')),
+                        );
+                      }
+                    : _showUserSelectionSheet,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color:
+                        isDark ? const Color(0xFF0F1A2B) : const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.transparent),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        _selectedUser!['username'] ?? 'Unknown User',
+                        _selectedBranch == null
+                            ? 'Select a branch first...'
+                            : 'Select a user...',
                         style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : Colors.black87,
+                          color: isDark ? Colors.white54 : Colors.black45,
                         ),
                       ),
-                      Text(
-                        '${_selectedUser!['role'] ?? ''} • Branch: ${_selectedUser!['branch'] ?? 'None'}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark ? Colors.white60 : Colors.black54,
-                        ),
+                      Icon(
+                        Icons.arrow_drop_down,
+                        color: isDark ? Colors.white70 : Colors.black54,
                       ),
                     ],
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close, color: Colors.red),
-                  onPressed: () => setState(() => _selectedUser = null),
-                ),
-              ],
-            ),
-          )
-        else
-          GestureDetector(
-            onTap: _selectedBranch == null
-                ? () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please select a branch first')),
-                    );
-                  }
-                : _showUserSelectionSheet,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color:
-                    isDark ? const Color(0xFF0F1A2B) : const Color(0xFFF3F4F6),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.transparent),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    _selectedBranch == null
-                        ? 'Select a branch first...'
-                        : 'Select a user...',
-                    style: TextStyle(
-                      color: isDark ? Colors.white54 : Colors.black45,
-                    ),
-                  ),
-                  Icon(
-                    Icons.arrow_drop_down,
-                    color: isDark ? Colors.white70 : Colors.black54,
-                  ),
-                ],
-              ),
-            ),
-          ),
-      ],
+          ],
+        ),
+      ),
     );
   }
 
