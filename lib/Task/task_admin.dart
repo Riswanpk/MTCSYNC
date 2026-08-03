@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../Navigation/user_cache_service.dart';
 
 class CoreTeamTaskPage extends StatefulWidget {
@@ -21,6 +22,7 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
   // Form State
   String? _selectedBranch;
   Map<String, dynamic>? _selectedUser;
+  final TextEditingController _taskNameController = TextEditingController();
   final TextEditingController _taskController = TextEditingController();
   bool _isAssigning = false;
 
@@ -46,6 +48,7 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
   @override
   void dispose() {
     _tabController.dispose();
+    _taskNameController.dispose();
     _taskController.dispose();
     super.dispose();
   }
@@ -106,11 +109,19 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
   }
 
   Future<void> _assignTask() async {
-    final title = _taskController.text.trim();
-    if (title.isEmpty) {
+    final taskName = _taskNameController.text.trim();
+    final taskDescription = _taskController.text.trim();
+    if (taskName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Please enter a task title / description')),
+            content: Text('Please enter a task name')),
+      );
+      return;
+    }
+    if (taskDescription.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Please enter a task description')),
       );
       return;
     }
@@ -140,7 +151,8 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
 
       // 1. Add to Firestore collection core_tasks
       final docRef = await _firestore.collection('core_tasks').add({
-        'title': title,
+        'title': taskName,
+        'description': taskDescription,
         'assigned_to': recipientUid,
         'assigned_to_email': recipientEmail,
         'assigned_to_name': recipientName,
@@ -159,7 +171,7 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
           .call(<String, dynamic>{
         'recipientUid': recipientUid,
         'title': 'New Task Assigned',
-        'body': 'Core Team assigned you a new task: "$title"',
+        'body': 'Core Team assigned you a new task: "$taskName"',
         'notifType': 'core_task_assignment',
         'leadDocId': docRef.id,
       }).catchError((error) {
@@ -173,6 +185,7 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
             backgroundColor: Colors.green,
           ),
         );
+        _taskNameController.clear();
         _taskController.clear();
         setState(() {
           _selectedBranch = null;
@@ -333,7 +346,36 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
                   _buildUserSelector(isDark),
                   const SizedBox(height: 20),
                   Text(
-                    '2. Task Description',
+                    '3. Task Name',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white70 : Colors.black54,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _taskNameController,
+                    decoration: InputDecoration(
+                      hintText: 'Enter task name...',
+                      hintStyle: TextStyle(
+                          color: isDark ? Colors.white30 : Colors.black38),
+                      filled: true,
+                      fillColor: isDark
+                          ? const Color(0xFF0F1A2B)
+                          : const Color(0xFFF3F4F6),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    ),
+                    style: TextStyle(
+                        color: isDark ? Colors.white : Colors.black87),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    '4. Task Description',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -852,10 +894,21 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
                     Text(
                       title,
                       style: TextStyle(
-                        fontSize: 14,
-                        color: isDark ? Colors.white70 : Colors.black87,
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black87,
                       ),
                     ),
+                    if ((data['description'] as String? ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        data['description'] as String,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isDark ? Colors.white70 : Colors.black87,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     Text(
                       'Assigned: $createdDateStr',
@@ -892,6 +945,108 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
                               fontStyle: FontStyle.italic,
                               color: isDark ? Colors.white70 : Colors.black,
                             ),
+                          ),
+                        ),
+                      ],
+                      if (data['attachments'] != null && (data['attachments'] as List).isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          'Attachments:',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white60 : Colors.black54,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          height: 80,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: (data['attachments'] as List).length,
+                            itemBuilder: (context, idx) {
+                              final att = (data['attachments'] as List)[idx];
+                              final String url = att['url'] ?? '';
+                              final String type = att['type'] ?? 'image';
+                              
+                              return GestureDetector(
+                                onTap: () {
+                                  if (type == 'video') {
+                                    launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                                  } else {
+                                    showDialog(
+                                      context: context,
+                                      builder: (context) => Dialog(
+                                        backgroundColor: Colors.transparent,
+                                        insetPadding: const EdgeInsets.all(12),
+                                        child: Stack(
+                                          alignment: Alignment.topRight,
+                                          children: [
+                                            InteractiveViewer(
+                                              child: Image.network(url),
+                                            ),
+                                            Positioned(
+                                              top: 8,
+                                              right: 8,
+                                              child: CircleAvatar(
+                                                backgroundColor: Colors.black54,
+                                                child: IconButton(
+                                                  icon: const Icon(Icons.close, color: Colors.white),
+                                                  onPressed: () => Navigator.pop(context),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                },
+                                child: Container(
+                                  margin: const EdgeInsets.only(right: 8),
+                                  width: 80,
+                                  height: 80,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: isDark ? Colors.white24 : Colors.black12),
+                                    color: isDark ? Colors.white10 : Colors.black12,
+                                  ),
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      if (type == 'image')
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: Image.network(
+                                            url,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (context, error, stackTrace) =>
+                                                const Center(child: Icon(Icons.broken_image)),
+                                          ),
+                                        )
+                                      else
+                                        const Center(child: Icon(Icons.video_library_rounded, color: Colors.orange, size: 36)),
+                                      if (type == 'video')
+                                        Positioned(
+                                          bottom: 4,
+                                          right: 4,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black,
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: const Text(
+                                              'VIDEO',
+                                              style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ],

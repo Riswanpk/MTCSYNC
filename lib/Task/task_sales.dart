@@ -1,3 +1,8 @@
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../Misc/firebase_storage_helper.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -67,6 +72,8 @@ class _UserTaskPageState extends State<UserTaskPage> {
   final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
   final Map<String, TextEditingController> _noteControllers = {};
+  final Map<String, List<Map<String, dynamic>>> _taskAttachments = {};
+  final Map<String, bool> _isUploadingMap = {};
 
   @override
   void initState() {
@@ -96,6 +103,52 @@ class _UserTaskPageState extends State<UserTaskPage> {
     return _noteControllers[docId]!;
   }
 
+  Future<void> _pickAttachment(String docId, String type) async {
+    final picker = ImagePicker();
+    XFile? pickedFile;
+    
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: Text('Take ${type == 'image' ? 'Photo' : 'Video'}'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: Text('Choose from Gallery'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (source == null) return;
+
+    if (type == 'image') {
+      pickedFile = await picker.pickImage(source: source);
+    } else {
+      pickedFile = await picker.pickVideo(source: source);
+    }
+
+    if (pickedFile != null) {
+      setState(() {
+        if (!_taskAttachments.containsKey(docId)) {
+          _taskAttachments[docId] = [];
+        }
+        _taskAttachments[docId]!.add({
+          'file': File(pickedFile!.path),
+          'type': type,
+        });
+      });
+    }
+  }
+
   Future<void> _completeTask(String docId, String title, String assignedByUid) async {
     final noteController = _getControllerForTask(docId);
     final note = noteController.text.trim();
@@ -121,6 +174,10 @@ class _UserTaskPageState extends State<UserTaskPage> {
 
     if (confirm != true) return;
 
+    setState(() {
+      _isUploadingMap[docId] = true;
+    });
+
     try {
       final currentUser = _auth.currentUser;
       if (currentUser == null) throw Exception('No authenticated user');
@@ -129,11 +186,52 @@ class _UserTaskPageState extends State<UserTaskPage> {
       await userCache.ensureLoaded();
       final currentUsername = userCache.username ?? currentUser.email ?? 'User';
 
+      // Upload attachments
+      final List<Map<String, String>> uploadedUrls = [];
+      final attachments = _taskAttachments[docId] ?? [];
+      
+      for (final att in attachments) {
+        final File file = att['file'];
+        final String type = att['type'];
+        final extension = type == 'image' ? 'jpg' : 'mp4';
+        final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}';
+        
+        Reference? ref;
+        Object? lastError;
+        for (final storage in FirebaseStorageHelper.storageCandidates()) {
+          final candidateRef = storage.ref().child('tasks').child('attachments').child(docId).child(fileName);
+          try {
+            await candidateRef.putFile(
+              file,
+              SettableMetadata(contentType: type == 'image' ? 'image/jpeg' : 'video/mp4'),
+            );
+            ref = candidateRef;
+            break;
+          } catch (e) {
+            lastError = e;
+            if (!FirebaseStorageHelper.isBucketNotFoundError(e)) {
+              rethrow;
+            }
+          }
+        }
+        
+        if (ref == null) {
+          throw lastError ?? Exception('Unable to upload attachment to storage');
+        }
+        
+        final downloadUrl = await ref.getDownloadURL();
+        uploadedUrls.add({
+          'url': downloadUrl,
+          'type': type,
+        });
+      }
+
       // 1. Update Firestore status to completed
       await _firestore.collection('core_tasks').doc(docId).update({
         'status': 'completed',
         'note': note,
         'completed_at': FieldValue.serverTimestamp(),
+        'attachments': uploadedUrls,
       });
 
       // 2. Cancel the 9 AM local daily reminder notification
@@ -161,6 +259,7 @@ class _UserTaskPageState extends State<UserTaskPage> {
           ),
         );
         _noteControllers.remove(docId)?.dispose();
+        _taskAttachments.remove(docId);
         setState(() {});
       }
     } catch (e) {
@@ -169,6 +268,12 @@ class _UserTaskPageState extends State<UserTaskPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to complete task: $e'), backgroundColor: Colors.red),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingMap[docId] = false;
+        });
       }
     }
   }
@@ -264,6 +369,7 @@ class _UserTaskPageState extends State<UserTaskPage> {
                   : 'N/A';
 
               final noteController = _getControllerForTask(docId);
+              final attachments = _taskAttachments[docId] ?? [];
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 16),
@@ -292,7 +398,7 @@ class _UserTaskPageState extends State<UserTaskPage> {
                           ),
                         ],
                       ),
-                      const Divider(height: 24),
+                       const Divider(height: 24),
                       // Task Title
                       Text(
                         title,
@@ -302,6 +408,16 @@ class _UserTaskPageState extends State<UserTaskPage> {
                           color: isDark ? Colors.white : Colors.black87,
                         ),
                       ),
+                      if ((data['description'] as String? ?? '').isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          data['description'] as String,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isDark ? Colors.white70 : Colors.black54,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 12),
                       Text(
                         'Assigned: $createdDateStr',
@@ -311,9 +427,93 @@ class _UserTaskPageState extends State<UserTaskPage> {
                         ),
                       ),
                       const SizedBox(height: 16),
+                      // Attachments Section
+                      Text(
+                        'Attachments (Optional)',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white60 : Colors.black54,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: (_isUploadingMap[docId] ?? false)
+                                ? null
+                                : () => _pickAttachment(docId, 'image'),
+                            icon: const Icon(Icons.add_a_photo_rounded, size: 16),
+                            label: const Text('Add Image', style: TextStyle(fontSize: 12)),
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton.icon(
+                            onPressed: (_isUploadingMap[docId] ?? false)
+                                ? null
+                                : () => _pickAttachment(docId, 'video'),
+                            icon: const Icon(Icons.video_call_rounded, size: 16),
+                            label: const Text('Add Video', style: TextStyle(fontSize: 12)),
+                          ),
+                        ],
+                      ),
+                      if (attachments.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          height: 70,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: attachments.length,
+                            itemBuilder: (context, idx) {
+                              final att = attachments[idx];
+                              final File file = att['file'];
+                              final String type = att['type'];
+                              
+                              return Stack(
+                                children: [
+                                  Container(
+                                    margin: const EdgeInsets.only(right: 8, top: 4),
+                                    width: 60,
+                                    height: 60,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: isDark ? Colors.white24 : Colors.black12),
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: type == 'image'
+                                          ? Image.file(file, fit: BoxFit.cover)
+                                          : const Center(child: Icon(Icons.video_library_rounded, color: Colors.orange, size: 28)),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 0,
+                                    right: 4,
+                                    child: GestureDetector(
+                                      onTap: (_isUploadingMap[docId] ?? false)
+                                          ? null
+                                          : () {
+                                              setState(() {
+                                                _taskAttachments[docId]!.removeAt(idx);
+                                              });
+                                            },
+                                      child: const CircleAvatar(
+                                        radius: 10,
+                                        backgroundColor: Colors.red,
+                                        child: Icon(Icons.close, size: 12, color: Colors.white),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
                       // Note Field
                       TextField(
                         controller: noteController,
+                        enabled: !(_isUploadingMap[docId] ?? false),
                         decoration: InputDecoration(
                           hintText: 'Add a completion note (optional)...',
                           hintStyle: TextStyle(color: isDark ? Colors.white30 : Colors.black38),
@@ -332,18 +532,32 @@ class _UserTaskPageState extends State<UserTaskPage> {
                       SizedBox(
                         width: double.infinity,
                         height: 44,
-                        child: ElevatedButton.icon(
-                          onPressed: () => _completeTask(docId, title, assignedByUid),
-                          icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 18),
-                          label: const Text(
-                            'Complete Task',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                          ),
+                        child: ElevatedButton(
+                          onPressed: (_isUploadingMap[docId] ?? false)
+                              ? null
+                              : () => _completeTask(docId, title, assignedByUid),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF8CC63F),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             elevation: 1.5,
                           ),
+                          child: (_isUploadingMap[docId] ?? false)
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 18),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Complete Task',
+                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
                         ),
                       ),
                     ],
