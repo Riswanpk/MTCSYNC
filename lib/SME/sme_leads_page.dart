@@ -342,7 +342,32 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                                 DateFormat('dd-MM-yyyy').format(parsedDate);
                           }
 
-                          final statusColor = _getStatusColor(status);
+                          final screeningStatus = (data['screening_status'] ?? 'pending').toString();
+                          final leadStatusVal = (data['status'] ?? 'In Progress').toString();
+                          final leadStatus = leadStatusVal == 'Sale'
+                              ? 'Sale'
+                              : leadStatusVal == 'Cancelled'
+                                  ? 'Cancelled'
+                                  : 'In Progress';
+
+                          String statusLabel;
+                          Color statusColor;
+
+                          if (screeningStatus == 'promoted') {
+                            statusLabel = 'Approved ($leadStatus)';
+                            statusColor = leadStatus == 'Sale'
+                                ? const Color(0xFF4CAF50)
+                                : leadStatus == 'Cancelled'
+                                    ? const Color(0xFFF44336)
+                                    : const Color(0xFFFFC107);
+                          } else if (screeningStatus == 'rejected') {
+                            statusLabel = 'Rejected';
+                            statusColor = const Color(0xFFF44336);
+                          } else {
+                            statusLabel = 'Pending';
+                            statusColor = const Color(0xFFFF9800);
+                          }
+
                           final priorityColor = _getPriorityColor(priority);
 
                           return GestureDetector(
@@ -428,7 +453,7 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                                                               20),
                                                     ),
                                                     child: Text(
-                                                      status,
+                                                      statusLabel,
                                                       style: TextStyle(
                                                         fontSize: 11,
                                                         fontWeight:
