@@ -190,19 +190,18 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
           'completed_at': null,
         });
 
-        // 2. Trigger push notification via Cloud Function
-        functions
-            .httpsCallable('sendLeadAssignmentNotification')
-            .call(<String, dynamic>{
-          'recipientUid': recipientUid,
-          'title': 'New Task Assigned',
-          'body': 'Core Team assigned you a new task: "$taskName"',
-          'notifType': 'core_task_assignment',
-          'leadDocId': docRef.id,
-        }).catchError((error) {
-          debugPrint('FCM Warning: failed to send task notification: $error');
-        });
-      }
+      // 2. Trigger push notification via Cloud Function
+      FirebaseFunctions.instanceFor(region: 'asia-south1')
+          .httpsCallable('sendLeadAssignmentNotification')
+          .call(<String, dynamic>{
+        'recipientUid': recipientUid,
+        'title': 'New Task Assigned',
+        'body': 'Core Team assigned you a new task: "$taskName"',
+        'notifType': 'core_task_assignment',
+        'leadDocId': docRef.id,
+      }).catchError((error) {
+        debugPrint('FCM Warning: failed to send task notification: $error');
+      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

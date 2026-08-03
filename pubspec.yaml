@@ -108,6 +108,7 @@ flutter:
      - assets/sounds/click.mp3
      - assets/sounds/leadsreminder.mp3
      - assets/sounds/taskreminder.mp3
+     - assets/sounds/You have been assigned a task.mp3
      - assets/fonts/NotoSans-Regular.ttf
      - assets/fonts/Electrolize-Regular.ttf
      - assets/fonts/Montserrat-Regular.ttf

@@ -126,6 +126,17 @@ Future<void> _initializeNotifications() async {
         channelShowBadge: true,
         criticalAlerts: true,
       ),
+      NotificationChannel(
+        channelKey: 'task_assignment_channel',
+        channelName: 'Task Assignment Notifications',
+        channelDescription: 'Channel for when you are assigned a new task',
+        defaultColor: const Color(0xFF005BAC),
+        ledColor: Colors.blue,
+        soundSource: 'resource://raw/you_have_been_assigned_a_task',
+        importance: NotificationImportance.High,
+        channelShowBadge: true,
+        criticalAlerts: true,
+      ),
     ],
     debug: false, // Set to false for production
   );
