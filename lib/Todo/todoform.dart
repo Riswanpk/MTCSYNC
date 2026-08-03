@@ -91,32 +91,6 @@ class _TodoFormPageState extends State<TodoFormPage> {
     });
   }
 
-  Future<void> _scheduleNotification(DateTime dateTime, String title, String docId) async {
-    // Use a consistent ID based on the docId to allow for cancellation/rescheduling
-    final notificationId = docId.hashCode & 0x7FFFFFFF;
-
-    await NotificationPermissionService.instance.safeCreateNotification(
-      content: NotificationContent(
-        id: notificationId,
-        channelKey: 'reminder_channel',
-        title: 'Task Reminder',
-        body: 'Reminder for: $title',
-        notificationLayout: NotificationLayout.Default,
-        payload: {'docId': docId, 'type': 'todo'},
-      ),
-      schedule: NotificationCalendar(
-        year: dateTime.year,
-        month: dateTime.month,
-        day: dateTime.day,
-        hour: dateTime.hour,
-        minute: dateTime.minute,
-        second: 0,
-        millisecond: 0,
-        timeZone: await AwesomeNotifications().getLocalTimeZoneIdentifier(),
-        repeats: false,
-      ),
-    );
-  }
 
   Future<void> _loadTodoForEdit(String docId) async {
     final doc = await FirebaseFirestore.instance.collection('todo').doc(docId).get();
@@ -191,6 +165,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
         'description': desc,
         'priority': _priority,
         'reminder': scheduledDate.toIso8601String(),
+        'reminder_sent': false,
         'email': email,
         'created_by': createdBy,
       });
@@ -205,7 +180,6 @@ class _TodoFormPageState extends State<TodoFormPage> {
       );
 
       await AwesomeNotifications().cancel(widget.docId!.hashCode & 0x7FFFFFFF);
-      await _scheduleNotification(scheduledDate, title, widget.docId!);
 
       await updateTodoWidgetFromFirestore(); // After saving/updating todo
 
@@ -222,6 +196,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
       'email': email,
       'created_by': createdBy,
       'reminder': scheduledDate.toIso8601String(),
+      'reminder_sent': false,
     });
 
     await _clearDraft();
@@ -232,8 +207,6 @@ class _TodoFormPageState extends State<TodoFormPage> {
       documentId: todoRef.id,
       type: 'todo',
     );
-
-    await _scheduleNotification(scheduledDate, title, todoRef.id);
 
     await updateTodoWidgetFromFirestore(); // After saving/updating todo
 

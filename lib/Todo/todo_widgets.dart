@@ -260,7 +260,10 @@ class TodoListItem extends StatelessWidget {
                 await FirebaseFirestore.instance
                     .collection('todo')
                     .doc(doc.id)
-                    .update({'reminder': newReminder.toIso8601String()});
+                    .update({
+                  'reminder': newReminder.toIso8601String(),
+                  'reminder_sent': false,
+                });
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Reminder time updated')),

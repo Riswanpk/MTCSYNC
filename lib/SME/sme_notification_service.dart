@@ -28,7 +28,8 @@ class SmeNotificationService {
         'dme_lead_assignment',
         'lead_transfer',
         'core_task_assignment',
-        'core_task_completion'
+        'core_task_completion',
+        'todo'
       };
       if (!handled.contains(data['type'])) return;
 
@@ -38,12 +39,15 @@ class SmeNotificationService {
 
       final isCoreTaskAssigned = data['type'] == 'core_task_assignment';
       final isCoreTaskCompleted = data['type'] == 'core_task_completion';
+      final isTodo = data['type'] == 'todo';
 
       // Show local notification so AwesomeNotifications action buttons work
       await NotificationPermissionService.instance.safeCreateNotification(
         content: NotificationContent(
           id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-          channelKey: isCoreTaskAssigned ? 'task_assignment_channel' : 'basic_channel',
+          channelKey: isTodo
+              ? 'reminder_channel'
+              : (isCoreTaskAssigned ? 'task_assignment_channel' : 'basic_channel'),
           title: title,
           body: body,
           notificationLayout: NotificationLayout.Default,
@@ -53,7 +57,7 @@ class SmeNotificationService {
                 ? 'core_task'
                 : isCoreTaskCompleted
                     ? 'core_task_complete'
-                    : 'sme_lead',
+                    : (isTodo ? 'todo' : 'sme_lead'),
           },
         ),
       );

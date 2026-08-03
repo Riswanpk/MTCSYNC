@@ -121,7 +121,7 @@ Future<void> _initializeNotifications() async {
         channelDescription: 'Channel for task reminders',
         defaultColor: const Color(0xFF8CC63F),
         ledColor: Colors.green,
-        soundSource: 'resource://raw/taskreminder',
+        soundSource: 'resource://raw/todo_reminder',
         importance: NotificationImportance.High,
         channelShowBadge: true,
         criticalAlerts: true,
