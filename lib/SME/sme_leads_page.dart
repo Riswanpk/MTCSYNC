@@ -211,13 +211,13 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                 children: [
                   _buildFilterChip(
                     label: 'Branch',
-                    value: selectedBranch ?? 'All',
+                    value: selectedBranch,
                     icon: Icons.business_rounded,
                     color: _brandPrimary,
                     onTap: () => _showFilterSheet(
                       'Select Branch',
                       branchOptions,
-                      selectedBranch ?? 'All',
+                      selectedBranch,
                       (val) {
                         setState(() => selectedBranch = val);
                         _resetAndFetch();
@@ -834,7 +834,6 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
   }
 
   Widget _buildSortChip() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     const color = Color(0xFF43A047);
     return GestureDetector(
       onTap: () {

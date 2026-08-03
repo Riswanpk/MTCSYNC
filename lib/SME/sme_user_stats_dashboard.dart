@@ -181,7 +181,7 @@ class _SmeUserStatsDashboardState extends State<SmeUserStatsDashboard> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: DropdownButtonFormField<String>(
-                          value: _selectedBranch,
+                          initialValue: _selectedBranch,
                           hint: const Text('All Branches'),
                           items: _availableBranches
                               .map((branch) => DropdownMenuItem(

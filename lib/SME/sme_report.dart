@@ -89,8 +89,9 @@ class _SmeReportPageState extends State<SmeReportPage> {
         23, 59, 59,
       );
 
-      // -- Fetch all SME leads for selected branch(es) and date range --
-      Query leadsQuery = FirebaseFirestore.instance.collection('follow_ups')
+      // Fetch SME leads for selected branch(es) and date range
+      Query leadsQuery = FirebaseFirestore.instance
+          .collection('follow_ups')
           .where('source', whereIn: ['sme', 'SME'])
           .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
           .where('created_at', isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd));
@@ -109,7 +110,7 @@ class _SmeReportPageState extends State<SmeReportPage> {
         return;
       }
 
-      // -- 3. Build Excel -----------------------------------------------
+      // Build Excel
       if (_selectedBranch == 'All Branches') {
         await _buildAllBranchesExcel(leadsSnap.docs, rangeStart, rangeEnd, messenger);
       } else {
@@ -125,19 +126,20 @@ class _SmeReportPageState extends State<SmeReportPage> {
     }
   }
 
-  // -- Excel helpers ------------------------------------------------------------
-
   void _writeSummarySheetDirect({
     required xlsio.Workbook workbook,
     required xlsio.Worksheet sheet,
     required String title,
     required int total,
-    required int inProgress,
+    required int promoted,
+    required int rejected,
+    required int pendingScreening,
     required int sale,
     required int cancelled,
+    required int inProgress,
     required int sheetIdx,
   }) {
-    const headers = ['Status', 'Count'];
+    const headers = ['Status / Stage', 'Count'];
 
     final titleRange = sheet.getRangeByName('A1:B1');
     titleRange.merge();
@@ -172,10 +174,13 @@ class _SmeReportPageState extends State<SmeReportPage> {
     numStyle.hAlign = xlsio.HAlignType.center;
 
     final statuses = [
-      ('Total', total),
-      ('In Progress', inProgress),
-      ('Sale', sale),
+      ('Total SME Leads', total),
+      ('Promoted (Screening)', promoted),
+      ('Rejected (Screening)', rejected),
+      ('Pending Screening', pendingScreening),
+      ('Sold (Converted)', sale),
       ('Cancelled', cancelled),
+      ('In Progress', inProgress),
     ];
 
     for (int i = 0; i < statuses.length; i++) {
@@ -186,7 +191,7 @@ class _SmeReportPageState extends State<SmeReportPage> {
       sheet.getRangeByIndex(row, 2).cellStyle = numStyle;
     }
 
-    sheet.getRangeByIndex(1, 1).columnWidth = 22;
+    sheet.getRangeByIndex(1, 1).columnWidth = 26;
     sheet.getRangeByIndex(1, 2).columnWidth = 15;
   }
 
@@ -197,7 +202,7 @@ class _SmeReportPageState extends State<SmeReportPage> {
     required Map<String, List<QueryDocumentSnapshot>> leadsByUser,
     required int sheetIdx,
   }) {
-    final titleRange = sheet.getRangeByName('A1:J1');
+    final titleRange = sheet.getRangeByName('A1:L1');
     titleRange.merge();
     titleRange.setText(title);
     titleRange.cellStyle.bold = true;
@@ -211,12 +216,14 @@ class _SmeReportPageState extends State<SmeReportPage> {
     sheet.getRangeByIndex(1, 2).columnWidth = 16;
     sheet.getRangeByIndex(1, 3).columnWidth = 22;
     sheet.getRangeByIndex(1, 4).columnWidth = 14;
-    sheet.getRangeByIndex(1, 5).columnWidth = 14;
-    sheet.getRangeByIndex(1, 6).columnWidth = 12;
-    sheet.getRangeByIndex(1, 7).columnWidth = 32;
-    sheet.getRangeByIndex(1, 8).columnWidth = 20;
-    sheet.getRangeByIndex(1, 9).columnWidth = 18;
-    sheet.getRangeByIndex(1, 10).columnWidth = 20;
+    sheet.getRangeByIndex(1, 5).columnWidth = 18;
+    sheet.getRangeByIndex(1, 6).columnWidth = 14;
+    sheet.getRangeByIndex(1, 7).columnWidth = 12;
+    sheet.getRangeByIndex(1, 8).columnWidth = 32;
+    sheet.getRangeByIndex(1, 9).columnWidth = 20;
+    sheet.getRangeByIndex(1, 10).columnWidth = 18;
+    sheet.getRangeByIndex(1, 11).columnWidth = 20;
+    sheet.getRangeByIndex(1, 12).columnWidth = 25;
 
     final userHdrSt = workbook.styles.add('smeDetUserHdr_$sheetIdx');
     userHdrSt.bold = true;
@@ -241,7 +248,20 @@ class _SmeReportPageState extends State<SmeReportPage> {
     altSt.hAlign = xlsio.HAlignType.left;
     altSt.backColor = '#F0F5FF';
 
-    const detailHeaders = ['Customer Name', 'Phone', 'Address', 'Platform', 'Status', 'Priority', 'Comments', 'Assigned To', 'Created Date', 'Reminder'];
+    const detailHeaders = [
+      'Customer Name',
+      'Phone',
+      'Address',
+      'Platform',
+      'Screening Status',
+      'Lead Status',
+      'Priority',
+      'Comments',
+      'Assigned To',
+      'Created Date',
+      'Reminder',
+      'Rejection Reason'
+    ];
 
     int detailRow = 2;
 
@@ -273,7 +293,19 @@ class _SmeReportPageState extends State<SmeReportPage> {
 
         final isAlt = leadIdx % 2 == 1;
         final statusVal = d['status'] ?? '';
-        final statusLabel = statusVal == 'Sale' ? 'Sold' : statusVal == 'Cancelled' ? 'Cancelled' : 'In Progress';
+        final statusLabel = statusVal == 'Sale'
+            ? 'Sold'
+            : statusVal == 'Cancelled'
+                ? 'Cancelled'
+                : 'In Progress';
+
+        final screeningVal = (d['screening_status'] ?? 'pending').toString();
+        final screeningLabel = screeningVal == 'promoted'
+            ? 'Promoted'
+            : screeningVal == 'rejected'
+                ? 'Rejected'
+                : 'Pending';
+
         final st = isAlt ? altSt : dataSt;
 
         void writeCell(int col, String value) {
@@ -285,12 +317,14 @@ class _SmeReportPageState extends State<SmeReportPage> {
         writeCell(2, d['phone'] ?? '');
         writeCell(3, d['address'] ?? '');
         writeCell(4, d['platform'] ?? '');
-        writeCell(5, statusLabel);
-        writeCell(6, d['priority'] ?? '');
-        writeCell(7, d['comments'] ?? '');
-        writeCell(8, d['assigned_to_name'] ?? '');
-        writeCell(9, createdDateStr);
-        writeCell(10, d['reminder'] ?? '');
+        writeCell(5, screeningLabel);
+        writeCell(6, statusLabel);
+        writeCell(7, d['priority'] ?? '');
+        writeCell(8, d['comments'] ?? '');
+        writeCell(9, d['assigned_to_name'] ?? '');
+        writeCell(10, createdDateStr);
+        writeCell(11, d['reminder'] ?? '');
+        writeCell(12, d['rejection_reason'] ?? '');
 
         detailRow++;
       }
@@ -298,14 +332,44 @@ class _SmeReportPageState extends State<SmeReportPage> {
     }
   }
 
-  Future<void> _buildSingleBranchExcel(List<QueryDocumentSnapshot> leads, String branch, DateTime rangeStart, DateTime rangeEnd, ScaffoldMessengerState messenger) async {
-    final inProgressLeads = leads.where((l) => (l['status'] ?? '') == 'In Progress').toList();
-    final saleLeads = leads.where((l) => (l['status'] ?? '') == 'Sale').toList();
-    final cancelledLeads = leads.where((l) => (l['status'] ?? '') == 'Cancelled').toList();
+  Future<void> _buildSingleBranchExcel(
+    List<QueryDocumentSnapshot> leads,
+    String branch,
+    DateTime rangeStart,
+    DateTime rangeEnd,
+    ScaffoldMessengerState messenger,
+  ) async {
+    int promoted = 0;
+    int rejected = 0;
+    int pendingScreening = 0;
+    int sale = 0;
+    int cancelled = 0;
+    int inProgress = 0;
 
     final Map<String, List<QueryDocumentSnapshot>> leadsByUser = {};
+
     for (final lead in leads) {
-      final assignedTo = lead['assigned_to_name'] ?? 'Unknown';
+      final d = lead.data() as Map<String, dynamic>;
+      final screeningStatus = (d['screening_status'] ?? 'pending').toString();
+      final status = (d['status'] ?? '').toString();
+
+      if (screeningStatus == 'promoted') {
+        promoted++;
+      } else if (screeningStatus == 'rejected') {
+        rejected++;
+      } else {
+        pendingScreening++;
+      }
+
+      if (status == 'Sale') {
+        sale++;
+      } else if (status == 'Cancelled') {
+        cancelled++;
+      } else {
+        inProgress++;
+      }
+
+      final assignedTo = d['assigned_to_name'] ?? 'Unknown';
       leadsByUser.putIfAbsent(assignedTo, () => []).add(lead);
     }
 
@@ -317,15 +381,43 @@ class _SmeReportPageState extends State<SmeReportPage> {
     sheet.name = branch;
 
     if (!_detailedReport) {
-      _writeSummarySheetDirect(workbook: workbook, sheet: sheet, title: title, total: leads.length, inProgress: inProgressLeads.length, sale: saleLeads.length, cancelled: cancelledLeads.length, sheetIdx: 1);
+      _writeSummarySheetDirect(
+        workbook: workbook,
+        sheet: sheet,
+        title: title,
+        total: leads.length,
+        promoted: promoted,
+        rejected: rejected,
+        pendingScreening: pendingScreening,
+        sale: sale,
+        cancelled: cancelled,
+        inProgress: inProgress,
+        sheetIdx: 1,
+      );
     } else {
-      _writeDetailSheetDirect(workbook: workbook, sheet: sheet, title: title, leadsByUser: leadsByUser, sheetIdx: 1);
+      _writeDetailSheetDirect(
+        workbook: workbook,
+        sheet: sheet,
+        title: title,
+        leadsByUser: leadsByUser,
+        sheetIdx: 1,
+      );
     }
 
-    await _saveAndShare(workbook: workbook, fileName: 'SME_Leads_Report_${branch}_${_statusFilter == 'All' ? 'All' : _statusFilter.replaceAll(' ', '_')}_${DateFormat('yyyyMMdd').format(rangeStart)}_${DateFormat('yyyyMMdd').format(rangeEnd)}', messenger: messenger);
+    await _saveAndShare(
+      workbook: workbook,
+      fileName:
+          'SME_Leads_Report_${branch}_${_statusFilter == 'All' ? 'All' : _statusFilter.replaceAll(' ', '_')}_${DateFormat('yyyyMMdd').format(rangeStart)}_${DateFormat('yyyyMMdd').format(rangeEnd)}',
+      messenger: messenger,
+    );
   }
 
-  Future<void> _buildAllBranchesExcel(List<QueryDocumentSnapshot> leads, DateTime rangeStart, DateTime rangeEnd, ScaffoldMessengerState messenger) async {
+  Future<void> _buildAllBranchesExcel(
+    List<QueryDocumentSnapshot> leads,
+    DateTime rangeStart,
+    DateTime rangeEnd,
+    ScaffoldMessengerState messenger,
+  ) async {
     final Map<String, List<QueryDocumentSnapshot>> leadsByBranch = {};
     for (final lead in leads) {
       final branch = (lead['branch'] ?? 'Unknown').toString();
@@ -338,13 +430,37 @@ class _SmeReportPageState extends State<SmeReportPage> {
 
     for (final branch in sortedBranches) {
       final branchLeads = leadsByBranch[branch]!;
-      final inProgressLeads = branchLeads.where((l) => (l['status'] ?? '') == 'In Progress').toList();
-      final saleLeads = branchLeads.where((l) => (l['status'] ?? '') == 'Sale').toList();
-      final cancelledLeads = branchLeads.where((l) => (l['status'] ?? '') == 'Cancelled').toList();
+      int promoted = 0;
+      int rejected = 0;
+      int pendingScreening = 0;
+      int sale = 0;
+      int cancelled = 0;
+      int inProgress = 0;
 
       final Map<String, List<QueryDocumentSnapshot>> leadsByUser = {};
+
       for (final lead in branchLeads) {
-        final assignedTo = lead['assigned_to_name'] ?? 'Unknown';
+        final d = lead.data() as Map<String, dynamic>;
+        final screeningStatus = (d['screening_status'] ?? 'pending').toString();
+        final status = (d['status'] ?? '').toString();
+
+        if (screeningStatus == 'promoted') {
+          promoted++;
+        } else if (screeningStatus == 'rejected') {
+          rejected++;
+        } else {
+          pendingScreening++;
+        }
+
+        if (status == 'Sale') {
+          sale++;
+        } else if (status == 'Cancelled') {
+          cancelled++;
+        } else {
+          inProgress++;
+        }
+
+        final assignedTo = d['assigned_to_name'] ?? 'Unknown';
         leadsByUser.putIfAbsent(assignedTo, () => []).add(lead);
       }
 
@@ -356,16 +472,43 @@ class _SmeReportPageState extends State<SmeReportPage> {
       final title = 'SME Leads Report — $branch$statusText  (${_formatDate(rangeStart)} → ${_formatDate(rangeEnd)})';
 
       if (!_detailedReport) {
-        _writeSummarySheetDirect(workbook: workbook, sheet: sheet, title: title, total: branchLeads.length, inProgress: inProgressLeads.length, sale: saleLeads.length, cancelled: cancelledLeads.length, sheetIdx: sheetIdx);
+        _writeSummarySheetDirect(
+          workbook: workbook,
+          sheet: sheet,
+          title: title,
+          total: branchLeads.length,
+          promoted: promoted,
+          rejected: rejected,
+          pendingScreening: pendingScreening,
+          sale: sale,
+          cancelled: cancelled,
+          inProgress: inProgress,
+          sheetIdx: sheetIdx,
+        );
       } else {
-        _writeDetailSheetDirect(workbook: workbook, sheet: sheet, title: title, leadsByUser: leadsByUser, sheetIdx: sheetIdx);
+        _writeDetailSheetDirect(
+          workbook: workbook,
+          sheet: sheet,
+          title: title,
+          leadsByUser: leadsByUser,
+          sheetIdx: sheetIdx,
+        );
       }
     }
 
-    await _saveAndShare(workbook: workbook, fileName: 'SME_Leads_Report_AllBranches_${_statusFilter == 'All' ? 'All' : _statusFilter.replaceAll(' ', '_')}_${DateFormat('yyyyMMdd').format(rangeStart)}_${DateFormat('yyyyMMdd').format(rangeEnd)}', messenger: messenger);
+    await _saveAndShare(
+      workbook: workbook,
+      fileName:
+          'SME_Leads_Report_AllBranches_${_statusFilter == 'All' ? 'All' : _statusFilter.replaceAll(' ', '_')}_${DateFormat('yyyyMMdd').format(rangeStart)}_${DateFormat('yyyyMMdd').format(rangeEnd)}',
+      messenger: messenger,
+    );
   }
 
-  Future<void> _saveAndShare({required xlsio.Workbook workbook, required String fileName, required ScaffoldMessengerState messenger}) async {
+  Future<void> _saveAndShare({
+    required xlsio.Workbook workbook,
+    required String fileName,
+    required ScaffoldMessengerState messenger,
+  }) async {
     final bytes = workbook.saveAsStream();
     workbook.dispose();
     final directory = await getTemporaryDirectory();
@@ -416,11 +559,11 @@ class _SmeReportPageState extends State<SmeReportPage> {
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(initialValue: _statusFilter, decoration: _fieldDecoration(label: 'Filter by Status', icon: Icons.filter_list_rounded, isDark: isDark), dropdownColor: isDark ? const Color(0xFF162236) : Colors.white, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14), items: const [DropdownMenuItem(value: 'All', child: Text('All leads')), DropdownMenuItem(value: 'Created in this Interval', child: Text('Created in this Interval'))], onChanged: (val) => setState(() => _statusFilter = val ?? 'All')),
           const SizedBox(height: 12),
-          Row(children: [Checkbox(value: _detailedReport, activeColor: _primaryBlue, onChanged: (val) => setState(() => _detailedReport = val ?? false)), const Text('Detailed Report', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)), const SizedBox(width: 6), Tooltip(message: 'Detailed includes: customer name, phone, address,\nplatform, status, priority, comments, assigned to,\ncreated date & reminder for every lead.', child: Icon(Icons.info_outline, size: 18, color: isDark ? Colors.white54 : Colors.black38))]),
+          Row(children: [Checkbox(value: _detailedReport, activeColor: _primaryBlue, onChanged: (val) => setState(() => _detailedReport = val ?? false)), const Text('Detailed Report', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)), const SizedBox(width: 6), Tooltip(message: 'Detailed includes: customer name, phone, address,\nplatform, screening status, lead status, priority,\ncomments, assigned to, created date & reminder.', child: Icon(Icons.info_outline, size: 18, color: isDark ? Colors.white54 : Colors.black38))]),
           const SizedBox(height: 16),
-          ElevatedButton.icon(onPressed: _isGenerating ? null : _generateReport, icon: _isGenerating ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.download_rounded), label: Text(_isGenerating ? 'Generating�' : 'Generate & Share Excel'), style: ElevatedButton.styleFrom(backgroundColor: _primaryGreen, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16), textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))),
+          ElevatedButton.icon(onPressed: _isGenerating ? null : _generateReport, icon: _isGenerating ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.download_rounded), label: Text(_isGenerating ? 'Generating...' : 'Generate & Share Excel'), style: ElevatedButton.styleFrom(backgroundColor: _primaryGreen, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16), textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))),
           const SizedBox(height: 24),
-          Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: isDark ? const Color(0xFF0D2137) : Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: _primaryBlue.withValues(alpha: 0.15))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Report Summary', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? Colors.white70 : _primaryBlue)), const SizedBox(height: 8), _infoLine(Icons.summarize_rounded, 'Non-detailed: user summary with counts', isDark), _infoLine(Icons.list_alt_rounded, 'Detailed: full lead info per user', isDark), _infoLine(Icons.filter_alt_rounded, 'Source filtered to SME leads only', isDark), _infoLine(Icons.share_rounded, 'Report shared as .xlsx file', isDark)]))
+          Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: isDark ? const Color(0xFF0D2137) : Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: _primaryBlue.withValues(alpha: 0.15))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Report Summary', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isDark ? Colors.white70 : _primaryBlue)), const SizedBox(height: 8), _infoLine(Icons.summarize_rounded, 'Non-detailed: branchwise promoted, rejected, sold & cancelled counts', isDark), _infoLine(Icons.list_alt_rounded, 'Detailed: full lead info per user', isDark), _infoLine(Icons.filter_alt_rounded, 'Source filtered to SME leads only', isDark), _infoLine(Icons.share_rounded, 'Report shared as .xlsx file', isDark)]))
         ]),
       ),
     );

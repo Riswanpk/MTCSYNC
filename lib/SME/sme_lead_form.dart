@@ -233,9 +233,10 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
       FirebaseFunctions.instanceFor(region: 'asia-south1')
           .httpsCallable('sendLeadAssignmentNotification')
           .call(notifPayload)
+          .then((_) => null)
           .catchError((error) {
         debugPrint('Warning: Failed to send lead assignment notification: $error');
-        // Non-critical failure, don't block the lead creation
+        return null;
       });
 
       // Daily report tracking
@@ -440,7 +441,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                   icon: Icons.account_tree_rounded,
                   children: [
                     DropdownButtonFormField<String>(
-                      value: _selectedBranch,
+                      initialValue: _selectedBranch,
                       items: _branches
                           .map(
                               (b) => DropdownMenuItem(value: b, child: Text(b)))
@@ -458,7 +459,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                     ),
                     const SizedBox(height: 14),
                     DropdownButtonFormField<String>(
-                      value: _selectedUserId,
+                      initialValue: _selectedUserId,
                       items: _branchUsers
                           .map((u) => DropdownMenuItem(
                                 value: u['id'] as String,
@@ -707,7 +708,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                     ),
                     const SizedBox(height: 14),
                     DropdownButtonFormField<String>(
-                      value: _selectedPlatform,
+                      initialValue: _selectedPlatform,
                       items: ['Instagram', 'Facebook', 'Youtube', 'DME', 'Other']
                           .map((p) =>
                               DropdownMenuItem(value: p, child: Text(p)))
@@ -759,7 +760,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                     ),
                     const SizedBox(height: 14),
                     DropdownButtonFormField<String>(
-                      value: _priority,
+                      initialValue: _priority,
                       items: ['High', 'Medium', 'Low']
                           .map(
                               (p) => DropdownMenuItem(value: p, child: Text(p)))
