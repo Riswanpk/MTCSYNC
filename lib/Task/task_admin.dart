@@ -202,6 +202,7 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
       }).catchError((error) {
         debugPrint('FCM Warning: failed to send task notification: $error');
       });
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
