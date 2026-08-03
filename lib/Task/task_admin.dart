@@ -168,6 +168,7 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
       final assignerEmail = userCache.email ?? currentUser.email ?? '';
 
       final functions = FirebaseFunctions.instanceFor(region: 'asia-south1');
+      final String? massTaskId = targetUsers.length > 1 ? 'mass_${DateTime.now().millisecondsSinceEpoch}' : null;
 
       for (final recipient in targetUsers) {
         final recipientUid = recipient['uid'] ?? recipient['id'] ?? '';
@@ -190,6 +191,8 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
           'timestamp': FieldValue.serverTimestamp(),
           'note': '',
           'completed_at': null,
+          'is_mass_task': massTaskId != null,
+          'mass_task_id': massTaskId,
         });
 
       // 2. Trigger push notification via Cloud Function
@@ -286,6 +289,59 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text('Failed to delete task: $e'),
+              backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteMassTask(MassTaskGroup group) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Mass Task?'),
+        content: Text(
+            'Are you sure you want to delete this mass task for all ${group.userTasks.length} users? This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete All'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final batch = _firestore.batch();
+      for (final doc in group.userTasks) {
+        batch.delete(doc.reference);
+        try {
+          final notifId = doc.id.hashCode & 0x7FFFFFFF;
+          await AwesomeNotifications().cancel(notifId);
+        } catch (_) {}
+      }
+      await batch.commit();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Mass task deleted successfully'),
+              backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error deleting mass task: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Failed to delete mass task: $e'),
               backgroundColor: Colors.red),
         );
       }
@@ -907,21 +963,191 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
           );
         }
 
-        // Sort by timestamp local side (Firestore requires composite index if mixing where + orderby)
-        final sortedDocs = docs.toList()
-          ..sort((a, b) {
-            final tsA = a['timestamp'] as Timestamp?;
-            final tsB = b['timestamp'] as Timestamp?;
-            if (tsA == null) return 1;
-            if (tsB == null) return -1;
-            return tsB.compareTo(tsA); // Newest first
-          });
+        // Group by mass_task_id for mass tasks
+        final Map<String, List<DocumentSnapshot>> massGroups = {};
+        final List<dynamic> displayItems = [];
+
+        for (final doc in docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          final bool isMass = data['is_mass_task'] == true && data['mass_task_id'] != null;
+          if (isMass) {
+            final String massId = data['mass_task_id'];
+            if (!massGroups.containsKey(massId)) {
+              massGroups[massId] = [];
+            }
+            massGroups[massId]!.add(doc);
+          } else {
+            displayItems.add(doc);
+          }
+        }
+
+        massGroups.forEach((massId, docsList) {
+          if (docsList.isNotEmpty) {
+            final firstDoc = docsList.first;
+            final data = firstDoc.data() as Map<String, dynamic>;
+            
+            Timestamp? latestTs = data['timestamp'] as Timestamp?;
+            for (final d in docsList) {
+              final ts = (d.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+              if (ts != null && (latestTs == null || ts.compareTo(latestTs) > 0)) {
+                latestTs = ts;
+              }
+            }
+
+            displayItems.add(MassTaskGroup(
+              massTaskId: massId,
+              title: data['title'] ?? '',
+              description: data['description'] ?? '',
+              assignedByName: data['assigned_by_name'] ?? 'Core Team',
+              assignedByEmail: data['assigned_by_email'] ?? '',
+              timestamp: latestTs,
+              userTasks: docsList,
+            ));
+          }
+        });
+
+        // Sort by timestamp newest first
+        displayItems.sort((a, b) {
+          final tsA = a is DocumentSnapshot 
+              ? (a.data() as Map<String, dynamic>)['timestamp'] as Timestamp?
+              : (a as MassTaskGroup).timestamp;
+          final tsB = b is DocumentSnapshot 
+              ? (b.data() as Map<String, dynamic>)['timestamp'] as Timestamp?
+              : (b as MassTaskGroup).timestamp;
+          if (tsA == null) return 1;
+          if (tsB == null) return -1;
+          return tsB.compareTo(tsA);
+        });
 
         return ListView.builder(
           padding: const EdgeInsets.all(16),
-          itemCount: sortedDocs.length,
+          itemCount: displayItems.length,
           itemBuilder: (context, index) {
-            final doc = sortedDocs[index];
+            final item = displayItems[index];
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+
+            if (item is MassTaskGroup) {
+              final group = item;
+              final totalUsers = group.userTasks.length;
+              final completedUsers = group.userTasks.where((d) => (d.data() as Map<String, dynamic>)['status'] == 'completed').length;
+              final createdTs = group.timestamp;
+              final createdDateStr = createdTs != null
+                  ? DateFormat('dd MMM yyyy, hh:mm a').format(createdTs.toDate())
+                  : 'N/A';
+
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                color: isDark ? const Color(0xFF16253B) : Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 1.5,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => MassTaskUsersPage(group: group),
+                      ),
+                    );
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.blue, width: 1),
+                              ),
+                              child: const Text(
+                                'Mass Task',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: completedUsers == totalUsers
+                                    ? Colors.green.withValues(alpha: 0.15)
+                                    : Colors.amber.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: completedUsers == totalUsers ? Colors.green : Colors.amber,
+                                  width: 1,
+                                ),
+                              ),
+                              child: Text(
+                                'Completed: $completedUsers / $totalUsers',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: completedUsers == totalUsers ? Colors.green : Colors.amber,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Divider(height: 20),
+                        Text(
+                          group.title,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        if (group.description.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            group.description,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: isDark ? Colors.white70 : Colors.black87,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Assigned: $createdDateStr',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isDark ? Colors.white38 : Colors.black38,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline,
+                                  color: Colors.redAccent, size: 20),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () => _deleteMassTask(group),
+                              tooltip: 'Delete Mass Task Record',
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            final doc = item as DocumentSnapshot;
             final data = doc.data() as Map<String, dynamic>;
             final String docId = doc.id;
             final String title = data['title'] ?? '';
@@ -1397,6 +1623,464 @@ class _InAppVideoPlayerDialogState extends State<_InAppVideoPlayerDialog> {
                           ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class MassTaskGroup {
+  final String massTaskId;
+  final String title;
+  final String description;
+  final String assignedByName;
+  final String assignedByEmail;
+  final Timestamp? timestamp;
+  final List<DocumentSnapshot> userTasks;
+
+  MassTaskGroup({
+    required this.massTaskId,
+    required this.title,
+    required this.description,
+    required this.assignedByName,
+    required this.assignedByEmail,
+    required this.timestamp,
+    required this.userTasks,
+  });
+}
+
+class MassTaskUsersPage extends StatelessWidget {
+  final MassTaskGroup group;
+  const MassTaskUsersPage({super.key, required this.group});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF0A1628) : const Color(0xFFF6F7FB),
+      appBar: AppBar(
+        title: Text(group.title),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF005BAC), Color(0xFF00897B)],
+            ),
+          ),
+        ),
+        foregroundColor: Colors.white,
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Card(
+              color: isDark ? const Color(0xFF16253B) : Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Description',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: isDark ? Colors.white70 : Colors.black54,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      group.description.isNotEmpty ? group.description : 'No description provided.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text(
+              'Recipients Status:',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+                color: isDark ? Colors.white70 : Colors.black54,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              itemCount: group.userTasks.length,
+              itemBuilder: (context, index) {
+                final doc = group.userTasks[index];
+                final data = doc.data() as Map<String, dynamic>;
+                final String name = data['assigned_to_name'] ?? 'Unknown User';
+                final String email = data['assigned_to_email'] ?? '';
+                final String status = data['status'] ?? 'pending';
+                final bool isCompleted = status == 'completed';
+
+                return Card(
+                  color: isDark ? const Color(0xFF1E2F4C) : Colors.white,
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    title: Text(
+                      name,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    subtitle: Text(
+                      email,
+                      style: TextStyle(
+                        color: isDark ? Colors.white60 : Colors.black54,
+                      ),
+                    ),
+                    trailing: isCompleted
+                        ? const Icon(Icons.check_circle_rounded, color: Colors.green)
+                        : const Icon(Icons.cancel_rounded, color: Colors.red),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => UserTaskDetailPage(taskDoc: doc),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class UserTaskDetailPage extends StatelessWidget {
+  final DocumentSnapshot taskDoc;
+  const UserTaskDetailPage({super.key, required this.taskDoc});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final data = taskDoc.data() as Map<String, dynamic>;
+    final String title = data['title'] ?? '';
+    final String description = data['description'] ?? '';
+    final String status = data['status'] ?? 'pending';
+    final String note = data['note'] ?? '';
+    final String assignedToName = data['assigned_to_name'] ?? 'Unknown';
+    final String assignedToEmail = data['assigned_to_email'] ?? '';
+    final Timestamp? completedTs = data['completed_at'] as Timestamp?;
+    final String completedDateStr = completedTs != null
+        ? DateFormat('dd MMM yyyy, hh:mm a').format(completedTs.toDate())
+        : '';
+    final bool isCompleted = status == 'completed';
+
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF0A1628) : const Color(0xFFF6F7FB),
+      appBar: AppBar(
+        title: Text('$assignedToName\'s Task'),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF005BAC), Color(0xFF00897B)],
+            ),
+          ),
+        ),
+        foregroundColor: Colors.white,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Card(
+          color: isDark ? const Color(0xFF16253B) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            assignedToName,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                          Text(
+                            assignedToEmail,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? Colors.white60 : Colors.black54,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: !isCompleted
+                            ? Colors.amber.withValues(alpha: 0.15)
+                            : Colors.green.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: !isCompleted ? Colors.amber : Colors.green,
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        !isCompleted ? 'Pending' : 'Completed',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: !isCompleted ? Colors.amber : Colors.green,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+                Text(
+                  'Task Name',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    color: isDark ? Colors.white60 : Colors.black54,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Description',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    color: isDark ? Colors.white60 : Colors.black54,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description.isNotEmpty ? description : 'No description provided.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? Colors.white70 : Colors.black87,
+                  ),
+                ),
+                if (isCompleted) ...[
+                  const Divider(height: 24),
+                  if (completedDateStr.isNotEmpty) ...[
+                    Text(
+                      'Completed At',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: isDark ? Colors.white60 : Colors.black54,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      completedDateStr,
+                      style: const TextStyle(fontSize: 13, color: Colors.green, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  Text(
+                    'Completion Note',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      color: isDark ? Colors.white60 : Colors.black54,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF0F1A2B) : const Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      note.isNotEmpty ? '"$note"' : 'No completion note provided.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontStyle: FontStyle.italic,
+                        color: isDark ? Colors.white70 : Colors.black87,
+                      ),
+                    ),
+                  ),
+                  if (data['attachments'] != null && (data['attachments'] as List).isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      'Attachments:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: isDark ? Colors.white60 : Colors.black54,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 80,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: (data['attachments'] as List).length,
+                        itemBuilder: (context, idx) {
+                          final att = (data['attachments'] as List)[idx];
+                          final String url = att['url'] ?? '';
+                          final String type = att['type'] ?? 'image';
+                          
+                          return GestureDetector(
+                            onTap: () {
+                              if (type == 'video') {
+                                showDialog(
+                                  context: context,
+                                  barrierColor: Colors.black87,
+                                  builder: (context) => _InAppVideoPlayerDialog(videoUrl: url),
+                                );
+                              } else {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => Dialog(
+                                    backgroundColor: Colors.transparent,
+                                    insetPadding: const EdgeInsets.all(12),
+                                    child: Stack(
+                                      alignment: Alignment.topRight,
+                                      children: [
+                                        InteractiveViewer(
+                                          child: Image.network(url),
+                                        ),
+                                        Positioned(
+                                          top: 8,
+                                          right: 8,
+                                          child: CircleAvatar(
+                                            backgroundColor: Colors.black54,
+                                            child: IconButton(
+                                              icon: const Icon(Icons.close, color: Colors.white),
+                                              onPressed: () => Navigator.pop(context),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(right: 8),
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: type == 'video'
+                                      ? Colors.orangeAccent.withValues(alpha: 0.7)
+                                      : (isDark ? Colors.white24 : Colors.black12),
+                                  width: type == 'video' ? 1.5 : 1,
+                                ),
+                                color: isDark ? Colors.white10 : Colors.black12,
+                              ),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  if (type == 'image')
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.network(
+                                        url,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) =>
+                                            const Center(child: Icon(Icons.broken_image)),
+                                      ),
+                                    )
+                                  else
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(7),
+                                      child: Container(
+                                        decoration: const BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                            colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Container(
+                                            width: 32,
+                                            height: 32,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: Colors.orangeAccent.withValues(alpha: 0.9),
+                                            ),
+                                            child: const Icon(
+                                              Icons.play_arrow_rounded,
+                                              color: Colors.white,
+                                              size: 20,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  if (type == 'video')
+                                    Positioned(
+                                      bottom: 4,
+                                      left: 4,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.orangeAccent,
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: const Text(
+                                          'VIDEO',
+                                          style: TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ],
+              ],
+            ),
           ),
         ),
       ),

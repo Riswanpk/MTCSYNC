@@ -149,7 +149,7 @@ class _UserTaskPageState extends State<UserTaskPage> {
     }
   }
 
-  Future<void> _completeTask(String docId, String title, String assignedByUid) async {
+  Future<void> _completeTask(String docId, String title, String assignedByUid, bool isMassTask) async {
     final noteController = _getControllerForTask(docId);
     final note = noteController.text.trim();
 
@@ -239,17 +239,19 @@ class _UserTaskPageState extends State<UserTaskPage> {
       await AwesomeNotifications().cancel(notifId);
 
       // 3. Send Completion FCM Notification to Core Team member
-      FirebaseFunctions.instanceFor(region: 'asia-south1')
-          .httpsCallable('sendLeadAssignmentNotification')
-          .call(<String, dynamic>{
-        'recipientUid': assignedByUid,
-        'title': 'Task Completed',
-        'body': '$currentUsername completed the task: "$title"',
-        'notifType': 'core_task_completion',
-        'leadDocId': docId,
-      }).catchError((error) {
-        debugPrint('FCM Warning: failed to send task completion notification: $error');
-      });
+      if (!isMassTask) {
+        FirebaseFunctions.instanceFor(region: 'asia-south1')
+            .httpsCallable('sendLeadAssignmentNotification')
+            .call(<String, dynamic>{
+          'recipientUid': assignedByUid,
+          'title': 'Task Completed',
+          'body': '$currentUsername completed the task: "$title"',
+          'notifType': 'core_task_completion',
+          'leadDocId': docId,
+        }).catchError((error) {
+          debugPrint('FCM Warning: failed to send task completion notification: $error');
+        });
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -535,7 +537,7 @@ class _UserTaskPageState extends State<UserTaskPage> {
                         child: ElevatedButton(
                           onPressed: (_isUploadingMap[docId] ?? false)
                               ? null
-                              : () => _completeTask(docId, title, assignedByUid),
+                              : () => _completeTask(docId, title, assignedByUid, data['is_mass_task'] ?? false),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF8CC63F),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
