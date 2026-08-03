@@ -43,7 +43,7 @@ class SmeNotificationService {
       await NotificationPermissionService.instance.safeCreateNotification(
         content: NotificationContent(
           id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-          channelKey: 'basic_channel',
+          channelKey: isCoreTaskAssigned ? 'task_assignment_channel' : 'basic_channel',
           title: title,
           body: body,
           notificationLayout: NotificationLayout.Default,

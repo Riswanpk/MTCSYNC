@@ -174,6 +174,7 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
         'body': 'Core Team assigned you a new task: "$taskName"',
         'notifType': 'core_task_assignment',
         'leadDocId': docRef.id,
+        'android_channel_id': 'task_assignment_channel',
       }).catchError((error) {
         debugPrint('FCM Warning: failed to send task notification: $error');
       });
