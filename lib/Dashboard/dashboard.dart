@@ -102,7 +102,7 @@ class _DashboardPageState extends State<DashboardPage>
       followUps = followUps.where('branch', isEqualTo: branch);
     }
 
-    final results = await Future.wait([
+    final leadsResults = await Future.wait([
       followUps.count().get(),
       followUps
           .where('created_at',
@@ -117,10 +117,42 @@ class _DashboardPageState extends State<DashboardPage>
           .get(),
     ]);
 
+    // Fetch pending todos count
+    int pendingTodosCount = 0;
+    try {
+      if (branch != null && branch.isNotEmpty) {
+        final usersSnap = await FirebaseFirestore.instance
+            .collection('users')
+            .where('branch', isEqualTo: branch)
+            .get();
+        final emails = usersSnap.docs
+            .map((d) => d.data()['email'] as String? ?? '')
+            .where((e) => e.isNotEmpty)
+            .toList();
+        if (emails.isNotEmpty) {
+          final todosSnap = await FirebaseFirestore.instance
+              .collection('todo')
+              .where('status', isEqualTo: 'pending')
+              .where('email', whereIn: emails.length > 30 ? emails.sublist(0, 30) : emails)
+              .count()
+              .get();
+          pendingTodosCount = todosSnap.count ?? 0;
+        }
+      } else {
+        final todosSnap = await FirebaseFirestore.instance
+            .collection('todo')
+            .where('status', isEqualTo: 'pending')
+            .count()
+            .get();
+        pendingTodosCount = todosSnap.count ?? 0;
+      }
+    } catch (_) {}
+
     return {
-      'totalLeads': (results[0] as AggregateQuerySnapshot).count ?? 0,
-      'monthLeads': (results[1] as AggregateQuerySnapshot).count ?? 0,
-      'todayLeads': (results[2] as AggregateQuerySnapshot).count ?? 0,
+      'totalLeads': (leadsResults[0] as AggregateQuerySnapshot).count ?? 0,
+      'monthLeads': (leadsResults[1] as AggregateQuerySnapshot).count ?? 0,
+      'todayLeads': (leadsResults[2] as AggregateQuerySnapshot).count ?? 0,
+      'pendingTodos': pendingTodosCount,
     };
   }
 
@@ -307,6 +339,23 @@ class _DashboardPageState extends State<DashboardPage>
                             );
                           },
                         ),
+                        _CardData(
+                          "Pending Todo",
+                          (counts['pendingTodos'] ?? 0).toString(),
+                          Icons.pending_actions_rounded,
+                          3,
+                          () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => PendingTodosModal(
+                                role: role,
+                                branch: branch,
+                              ),
+                            );
+                          },
+                        ),
                       ];
 
                       return Column(
@@ -332,17 +381,25 @@ class _DashboardPageState extends State<DashboardPage>
                             ],
                           ),
                           const SizedBox(height: 14),
-                          // Second row with centered card
-                          Align(
-                            alignment: Alignment.center,
-                            child: SizedBox(
-                              width: (MediaQuery.of(context).size.width - 32 - 14) / 2,
-                              child: _AnimatedStatCard(
-                                data: cards[2],
-                                isDark: isDark,
-                                delay: 200,
+                          // Second row with 2 cards
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _AnimatedStatCard(
+                                  data: cards[2],
+                                  isDark: isDark,
+                                  delay: 200,
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: _AnimatedStatCard(
+                                  data: cards[3],
+                                  isDark: isDark,
+                                  delay: 300,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       );
@@ -984,12 +1041,10 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
   }
 
   Future<void> _fetchUsersAndTodos() async {
-    Query usersQuery = FirebaseFirestore.instance
-        .collection('users')
-        .where('role', isEqualTo: 'sales');
+    Query usersQuery = FirebaseFirestore.instance.collection('users');
     if (widget.role == 'manager' || widget.role == 'asst_manager') {
       usersQuery = usersQuery.where('branch', isEqualTo: widget.branch);
-    } else if (_selectedBranch != null) {
+    } else if (_selectedBranch != null && _selectedBranch!.isNotEmpty) {
       usersQuery = usersQuery.where('branch', isEqualTo: _selectedBranch);
     }
     final usersSnapshot = await usersQuery.get();
@@ -997,16 +1052,18 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
         .map((doc) => {
               'uid': doc.id,
               'username': doc['username'] ?? '',
+              'role': doc['role'] ?? '',
               'email': doc['email'] ?? '',
               'branch': doc['branch'] ?? '',
             })
+        .where((u) => u['role'] != 'admin' && u['role'] != 'sync_head')
         .toList();
 
-    final emails = users.map((u) => u['email'] as String).toList();
+    final emails = users.map((u) => u['email'] as String).where((e) => e.isNotEmpty).toList();
     Query todosQuery = FirebaseFirestore.instance
         .collection('todo')
         .where('status', isEqualTo: 'pending')
-        .where('email', whereIn: emails.isEmpty ? [''] : emails);
+        .where('email', whereIn: emails.isEmpty ? [''] : (emails.length > 30 ? emails.sublist(0, 30) : emails));
 
     final todosSnapshot = await todosQuery.get();
     final todos = todosSnapshot.docs
@@ -1101,7 +1158,7 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
                                 ),
                               ),
                               Text(
-                                "by sales team",
+                                "by team members",
                                 style: TextStyle(
                                   fontSize: 13,
                                   color: textColor.withValues(alpha: 0.5),
@@ -1114,7 +1171,7 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
                     ),
 
                     // Branch selector
-                    if (_branches.isNotEmpty && widget.role != 'manager')
+                    if (_branches.isNotEmpty && widget.role != 'manager' && widget.role != 'asst_manager')
                       Padding(
                         padding: const EdgeInsets.only(top: 16, bottom: 8),
                         child: Container(

@@ -83,6 +83,8 @@ class _FollowUpFormState extends State<FollowUpForm> {
         millisecond: 0,
         timeZone: await AwesomeNotifications().getLocalTimeZoneIdentifier(),
         repeats: false,
+        preciseAlarm: true,
+        allowWhileIdle: true,
       ),
     );
   }
@@ -189,6 +191,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
             millisecond: 0,
             timeZone: await AwesomeNotifications().getLocalTimeZoneIdentifier(),
             preciseAlarm: true,
+            allowWhileIdle: true,
           ),
         );
       }

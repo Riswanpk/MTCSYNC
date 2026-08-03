@@ -1091,8 +1091,18 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                           final customer = sortedCustomers[customerIndex];
                           final bool callMade = customer['callMade'] == true;
                           final bool isEven = customerIndex % 2 == 0;
+                          final bool isPendingDeletion = customer['pendingDeletion'] == true;
 
                           void openViewer() {
+                            if (isPendingDeletion) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('This customer is pending deletion approval.'),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
+                              return;
+                            }
                             _isTileViewerOpen = true;
                             Navigator.push(
                               context,
@@ -1119,192 +1129,236 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                             });
                           }
 
-                          final bool needsRemarks = callMade &&
+                          final bool needsRemarks = !isPendingDeletion && callMade &&
                               (customer['remarks'] ?? '').toString().trim().isEmpty &&
                               _highlightNoRemarks;
 
-                          return Material(
-                            color: needsRemarks
-                                ? Colors.orange.withValues(alpha: 0.12)
-                                : (isEven
-                                    ? (isDark ? const Color(0xFF1E2128) : Colors.white)
-                                    : (isDark ? const Color(0xFF23272E) : const Color(0xFFF5F9FF))),
-                            child: InkWell(
-                              onTap: openViewer,
-                              onLongPress: () async {
-                                final action = await showModalBottomSheet<String>(
-                                  context: context,
-                                  builder: (context) => SafeArea(
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        ListTile(
-                                          leading: const Icon(Icons.edit, color: Colors.blue),
-                                          title: const Text('Edit'),
-                                          onTap: () => Navigator.pop(context, 'edit'),
-                                        ),
-                                        ListTile(
-                                          leading: const Icon(Icons.delete, color: Colors.red),
-                                          title: const Text('Delete'),
-                                          onTap: () => Navigator.pop(context, 'delete'),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                                if (action == 'edit') {
-                                  _isTileViewerOpen = true;
-                                  await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => SalesCustomerTileViewer(
-                                        customer: customer,
-                                        onStatusChanged: (remarks) async {
-                                          setState(() {
-                                            customer['callMade'] = true;
-                                            if (customer['callDate'] == null) {
-                                              customer['callDate'] = Timestamp.now();
-                                            }
-                                            customer['remarks'] = remarks;
-                                          });
-                                          await _updateFirestore();
-                                        },
-                                      ),
-                                    ),
-                                  );
-                                  _isTileViewerOpen = false;
-                                  await _fetchCustomerData();
-                                } else if (action == 'delete') {
-                                  final confirm = await showDialog<bool>(
+                          return Opacity(
+                            opacity: isPendingDeletion ? 0.45 : 1.0,
+                            child: Material(
+                              color: isPendingDeletion
+                                  ? (isDark ? Colors.grey.shade900 : Colors.grey.shade300)
+                                  : (needsRemarks
+                                      ? Colors.orange.withValues(alpha: 0.12)
+                                      : (isEven
+                                          ? (isDark ? const Color(0xFF1E2128) : Colors.white)
+                                          : (isDark ? const Color(0xFF23272E) : const Color(0xFFF5F9FF)))),
+                              child: InkWell(
+                                onTap: openViewer,
+                                onLongPress: isPendingDeletion
+                                    ? null
+                                    : () async {
+                                  final action = await showModalBottomSheet<String>(
                                     context: context,
-                                    builder: (dialogContext) => AlertDialog(
-                                      title: const Text('Delete Customer'),
-                                      content: const Text('Are you sure you want to delete this customer?'),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(dialogContext, false),
-                                          child: const Text('Cancel'),
-                                        ),
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(dialogContext, true),
-                                          child: const Text('Delete', style: TextStyle(color: Colors.red)),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                  if (confirm == true) {
-                                    setState(() {
-                                      _customers!.removeWhere((c) =>
-                                        c['name'] == customer['name'] &&
-                                        (c['contact1'] ?? c['contact']) ==
-                                            (customer['contact1'] ?? customer['contact'])
-                                      );
-                                    });
-                                    await _updateFirestore();
-                                    await _fetchCustomerData();
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Customer deleted.'), backgroundColor: Colors.red),
-                                      );
-                                    }
-                                  }
-                                }
-                              },
-                              splashColor: (isDark ? primaryBlue : primaryGreen).withValues(alpha: 0.15),
-                              highlightColor: (isDark ? primaryBlue : primaryGreen).withValues(alpha: 0.08),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                decoration: BoxDecoration(
-                                  border: Border(
-                                    bottom: BorderSide(
-                                      color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-                                      width: 0.5,
-                                    ),
-                                    left: needsRemarks
-                                        ? const BorderSide(color: Colors.orange, width: 4)
-                                        : BorderSide.none,
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      flex: 4,
-                                      child: Row(
+                                    builder: (context) => SafeArea(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          CircleAvatar(
-                                            radius: 14,
-                                            backgroundColor: Color(0xFFE3F2FD), // light blue background for contrast
-                                            child: Text(
-                                              (customer['name'] ?? '?').toString().toUpperCase().isNotEmpty
-                                                  ? (customer['name'] ?? '?').toString().toUpperCase()[0]
-                                                  : '?',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.black, // black text for avatar
-                                              ),
-                                            ),
+                                          ListTile(
+                                            leading: const Icon(Icons.edit, color: Colors.blue),
+                                            title: const Text('Edit'),
+                                            onTap: () => Navigator.pop(context, 'edit'),
                                           ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Text(
-                                              (customer['name'] ?? '').toString().toUpperCase(),
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w500,
-                                                color: Color.fromARGB(255, 108, 186, 5), // green as in login.dart
-                                              ),
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
+                                          ListTile(
+                                            leading: const Icon(Icons.delete, color: Colors.red),
+                                            title: const Text('Delete'),
+                                            onTap: () => Navigator.pop(context, 'delete'),
                                           ),
                                         ],
                                       ),
                                     ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(
-                                        (customer['address'] ?? '-').toString().toUpperCase(),
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color: Color(0xFF005BAC).withValues(alpha: 0.9), // blue as in login.dart
+                                  );
+                                  if (action == 'edit') {
+                                    _isTileViewerOpen = true;
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => SalesCustomerTileViewer(
+                                          customer: customer,
+                                          onStatusChanged: (remarks) async {
+                                            setState(() {
+                                              customer['callMade'] = true;
+                                              if (customer['callDate'] == null) {
+                                                customer['callDate'] = Timestamp.now();
+                                              }
+                                              customer['remarks'] = remarks;
+                                            });
+                                            await _updateFirestore();
+                                          },
                                         ),
-                                        textAlign: TextAlign.center,
-                                        overflow: TextOverflow.ellipsis,
-                                        maxLines: 2,
                                       ),
-                                    ),
-                                    Expanded(
-                                      flex: 1,
-                                      child: Center(
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                          decoration: BoxDecoration(
-                                            color: callMade
-                                                ? Colors.green.withValues(alpha: 0.15)
-                                                : Colors.orange.withValues(alpha: 0.15),
-                                            borderRadius: BorderRadius.circular(20),
-                                            border: Border.all(
-                                              color: callMade
-                                                  ? Colors.green.withValues(alpha: 0.4)
-                                                  : Colors.orange.withValues(alpha: 0.4),
-                                              width: 1,
-                                            ),
+                                    );
+                                    _isTileViewerOpen = false;
+                                    await _fetchCustomerData();
+                                  } else if (action == 'delete') {
+                                    final confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder: (dialogContext) => AlertDialog(
+                                        title: const Text('Request Deletion'),
+                                        content: const Text('Are you sure you want to request deletion for this customer?'),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(dialogContext, false),
+                                            child: const Text('Cancel'),
                                           ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                callMade ? Icons.check_circle : Icons.pending,
-                                                size: 14,
-                                                color: callMade ? Colors.green : Colors.orange,
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(dialogContext, true),
+                                            child: const Text('Request Delete', style: TextStyle(color: Colors.red)),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                    if (confirm == true) {
+                                      setState(() {
+                                        customer['pendingDeletion'] = true;
+                                      });
+                                      await _updateFirestore();
+
+                                      final user = FirebaseAuth.instance.currentUser;
+                                      final now = DateTime.now();
+                                      final monthYear = "${_monthName(now.month)} ${now.year}";
+
+                                      await FirebaseFirestore.instance
+                                          .collection('customer_deletion_requests')
+                                          .add({
+                                        'monthYear': monthYear,
+                                        'userDocId': _docId,
+                                        'userEmail': user?.email ?? '',
+                                        'userName': user?.displayName ?? user?.email ?? '',
+                                        'customerData': customer,
+                                        'requestedAt': FieldValue.serverTimestamp(),
+                                        'status': 'pending',
+                                      });
+
+                                      if (mounted) {
+                                        showDialog(
+                                          context: context,
+                                          builder: (dialogContext) => AlertDialog(
+                                            title: const Text('Deletion Request Sent'),
+                                            content: const Text('Deletion request has been sent for approval to the Sync Head.'),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(dialogContext),
+                                                child: const Text('OK'),
                                               ),
                                             ],
                                           ),
+                                        );
+                                      }
+                                    }
+                                  }
+                                },
+                                splashColor: (isDark ? primaryBlue : primaryGreen).withValues(alpha: 0.15),
+                                highlightColor: (isDark ? primaryBlue : primaryGreen).withValues(alpha: 0.08),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+                                        width: 0.5,
+                                      ),
+                                      left: needsRemarks
+                                          ? const BorderSide(color: Colors.orange, width: 4)
+                                          : BorderSide.none,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        flex: 4,
+                                        child: Row(
+                                          children: [
+                                            CircleAvatar(
+                                              radius: 14,
+                                              backgroundColor: isPendingDeletion
+                                                  ? Colors.grey.shade400
+                                                  : const Color(0xFFE3F2FD),
+                                              child: Text(
+                                                (customer['name'] ?? '?').toString().toUpperCase().isNotEmpty
+                                                    ? (customer['name'] ?? '?').toString().toUpperCase()[0]
+                                                    : '?',
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.black,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Text(
+                                                (customer['name'] ?? '').toString().toUpperCase(),
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: isPendingDeletion
+                                                      ? Colors.grey
+                                                      : const Color.fromARGB(255, 108, 186, 5),
+                                                  decoration: isPendingDeletion ? TextDecoration.lineThrough : null,
+                                                ),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                    ),
-                                  ],
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          (customer['address'] ?? '-').toString().toUpperCase(),
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: isPendingDeletion
+                                                ? Colors.grey
+                                                : const Color(0xFF005BAC).withValues(alpha: 0.9),
+                                          ),
+                                          textAlign: TextAlign.center,
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 2,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 1,
+                                        child: Center(
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                            decoration: BoxDecoration(
+                                              color: isPendingDeletion
+                                                  ? Colors.red.withValues(alpha: 0.15)
+                                                  : (callMade
+                                                      ? Colors.green.withValues(alpha: 0.15)
+                                                      : Colors.orange.withValues(alpha: 0.15)),
+                                              borderRadius: BorderRadius.circular(20),
+                                              border: Border.all(
+                                                color: isPendingDeletion
+                                                    ? Colors.red.withValues(alpha: 0.4)
+                                                    : (callMade
+                                                        ? Colors.green.withValues(alpha: 0.4)
+                                                        : Colors.orange.withValues(alpha: 0.4)),
+                                                width: 1,
+                                              ),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  isPendingDeletion
+                                                      ? Icons.hourglass_top_rounded
+                                                      : (callMade ? Icons.check_circle : Icons.pending),
+                                                  size: 14,
+                                                  color: isPendingDeletion
+                                                      ? Colors.red
+                                                      : (callMade ? Colors.green : Colors.orange),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),

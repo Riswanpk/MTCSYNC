@@ -19,6 +19,7 @@ import '../Todo/todo_widget_updater.dart';
 import 'home_widgets.dart';
 import '../Sync Head/sync_head_leads_page.dart';
 import '../Sync Head/sync_head_todos_page.dart';
+import '../Sync Head/sync_head_customer_list_deletion_approval.dart';
 import '../SME/sme_leads_page.dart';
 import '../SME/sme_dashboard.dart';
 import '../DME/services/dme_supabase_service.dart';
@@ -716,6 +717,16 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
                     MaterialPageRoute(
                       builder: (_) => const LoadingOverlayPage(
                         child: CustomerAdminViewerPage(),
+                      ),
+                    ),
+                  );
+                },
+                onLongPress: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const LoadingOverlayPage(
+                        child: SyncHeadCustomerListDeletionApprovalPage(),
                       ),
                     ),
                   );

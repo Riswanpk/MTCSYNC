@@ -304,8 +304,10 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
             minute: scheduledDateTime.minute,
             second: 0,
             millisecond: 0,
+            timeZone: await AwesomeNotifications().getLocalTimeZoneIdentifier(),
             repeats: false,
             preciseAlarm: true,
+            allowWhileIdle: true,
           ),
         );
       }

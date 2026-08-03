@@ -47,6 +47,7 @@ class _LeadsPageState extends State<LeadsPage> {
     'Sales',
     'DME',
     'CC',
+    'SME',
   ];
 
   // Add this for sort order
@@ -197,8 +198,8 @@ class _LeadsPageState extends State<LeadsPage> {
 
     Query query = FirebaseFirestore.instance.collection('follow_ups').where('branch', isEqualTo: branch);
 
-    // Exclude SME-sourced leads — they are managed in the SME screening page
-    query = query.where('source', whereNotIn: ['SME', 'sme']);
+    // Exclude SME-sourced leads — they are managed in the SME screening page.
+    // Done client-side below due to Firestore limitation with orderBy('created_at') and inequality filters.
 
     // Apply filters — always applied, including during search
     if (selectedUser != null) {
