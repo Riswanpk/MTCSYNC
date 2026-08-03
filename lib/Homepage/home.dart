@@ -66,6 +66,7 @@ class _HomePageState extends State<HomePage>
 
   int _transferredCount = 0;
   int _otherCount = 0;
+  int _taskCount = 0;
   StreamSubscription? _notificationListener;
   StreamSubscription? _assignedLeadsListener;
   StreamSubscription? _complaintsListener;
@@ -353,15 +354,17 @@ class _HomePageState extends State<HomePage>
       }
     } catch (_) {}
 
+    int taskCount = 0;
     // Count core tasks (pending for assigned users, completed-unseen for core team)
     try {
-      if (_role == 'sales' || _role == 'manager' || _role == 'asst_manager') {
+      if (_role == 'sales' || _role == 'manager' || _role == 'asst_manager' || _role == 'admin') {
         final tasksSnap = await FirebaseFirestore.instance
             .collection('core_tasks')
             .where('assigned_to', isEqualTo: uid)
             .where('status', isEqualTo: 'pending')
             .get();
-        count += tasksSnap.docs.length;
+        taskCount = tasksSnap.docs.length;
+        count += taskCount;
       } else if (_role == 'core_team') {
         final tasksSnap = await FirebaseFirestore.instance
             .collection('core_tasks')
@@ -369,6 +372,7 @@ class _HomePageState extends State<HomePage>
             .where('status', isEqualTo: 'completed')
             .get();
 
+        int unseenTasks = 0;
         for (final doc in tasksSnap.docs) {
           try {
             final userSeenDoc = await FirebaseFirestore.instance
@@ -376,16 +380,23 @@ class _HomePageState extends State<HomePage>
                 .doc('${doc.id}__${uid}')
                 .get();
             if (!userSeenDoc.exists) {
-              count++;
+              unseenTasks++;
             }
           } catch (_) {
-            count++;
+            unseenTasks++;
           }
         }
+        taskCount = unseenTasks;
+        count += taskCount;
       }
     } catch (_) {}
 
-    if (mounted) setState(() => _otherCount = count);
+    if (mounted) {
+      setState(() {
+        _otherCount = count;
+        _taskCount = taskCount;
+      });
+    }
   }
 
   Future<void> _openNotifications() async {
@@ -822,6 +833,7 @@ class _HomePageState extends State<HomePage>
                   HomeButtonsContainer(
                     role: role,
                     isDark: isDark,
+                    taskCount: _taskCount,
                     onPageChanged: (index) {
                       setState(() {
                         _currentPageIndex = index;

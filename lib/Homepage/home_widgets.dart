@@ -9,6 +9,7 @@ class NeumorphicButton extends StatefulWidget {
   final Color textColor;
   final IconData? icon;
   final TextStyle? textStyle;
+  final int? badgeCount;
 
   const NeumorphicButton({
     super.key,
@@ -19,6 +20,7 @@ class NeumorphicButton extends StatefulWidget {
     required this.textColor,
     this.icon,
     this.textStyle,
+    this.badgeCount,
   });
 
   @override
@@ -77,9 +79,7 @@ class _NeumorphicButtonState extends State<NeumorphicButton>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return AnimatedBuilder(
+    final Widget buttonWidget = AnimatedBuilder(
       animation: _bounceController,
       builder: (context, child) {
         return Transform.scale(
@@ -193,6 +193,41 @@ class _NeumorphicButtonState extends State<NeumorphicButton>
         );
       },
     );
+
+    if (widget.badgeCount != null && widget.badgeCount! > 0) {
+      return Stack(
+        clipBehavior: Clip.none,
+        children: [
+          buttonWidget,
+          Positioned(
+            right: 8,
+            top: 8,
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              constraints: const BoxConstraints(
+                minWidth: 18,
+                minHeight: 18,
+              ),
+              child: Text(
+                widget.badgeCount! > 99 ? '99+' : '${widget.badgeCount}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return buttonWidget;
   }
 }
 

@@ -323,12 +323,14 @@ class HomeButtonsContainer extends StatefulWidget {
   final String? role;
   final bool isDark;
   final ValueChanged<int>? onPageChanged;
+  final int taskCount;
 
   const HomeButtonsContainer({
     super.key,
     required this.role,
     required this.isDark,
     this.onPageChanged,
+    this.taskCount = 0,
   });
 
   @override
@@ -543,13 +545,13 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
         textColor: Colors.white,
         icon: Icons.campaign_rounded,
       ),
-      if (role == 'sales' || role == 'manager' || role == 'asst_manager')
+      if (role == 'sales' || role == 'admin' || role == 'manager' || role == 'asst_manager')
         NeumorphicButton(
-          onTap: () => _navigateToUserTasks(context),
-          text: 'Tasks',
+          onTap: () => _navigateToOrders(context),
+          text: 'Orders',
           color: primaryGreen,
           textColor: Colors.white,
-          icon: Icons.assignment_rounded,
+          icon: Icons.inventory_2_rounded,
         ),
     ];
 
@@ -623,7 +625,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
         textColor: Colors.white,
         icon: Icons.assignment_ind_rounded,
       ),
-      // Button 5 (Row 3 Left): Dashboard (admin/manager) or Orders (sales)
+      // Button 5 (Row 3 Left): Dashboard (admin/manager) or Tasks (sales)
       if (role == 'admin' || role == 'manager' || role == 'asst_manager')
         NeumorphicButton(
           onTap: () => _navigateToDashboard(context),
@@ -634,20 +636,22 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
         )
       else if (role == 'sales')
         NeumorphicButton(
-          onTap: () => _navigateToOrders(context),
-          text: 'Orders',
+          onTap: () => _navigateToUserTasks(context),
+          text: 'Tasks',
           color: primaryBlue,
           textColor: Colors.white,
-          icon: Icons.inventory_2_rounded,
+          icon: Icons.assignment_rounded,
+          badgeCount: widget.taskCount,
         ),
-      // Button 6 (Row 3 Right): Orders (admin/manager) or SME Leads (sales)
+      // Button 6 (Row 3 Right): Tasks (admin/manager) or SME Leads (sales)
       if (role == 'admin' || role == 'manager' || role == 'asst_manager')
         NeumorphicButton(
-          onTap: () => _navigateToOrders(context),
-          text: 'Orders',
+          onTap: () => _navigateToUserTasks(context),
+          text: 'Tasks',
           color: primaryGreen,
           textColor: Colors.white,
-          icon: Icons.inventory_2_rounded,
+          icon: Icons.assignment_rounded,
+          badgeCount: widget.taskCount,
         )
       else if (role == 'sales')
         NeumorphicButton(
