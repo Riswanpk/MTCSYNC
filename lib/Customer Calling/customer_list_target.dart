@@ -1191,24 +1191,58 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                                     _isTileViewerOpen = false;
                                     await _fetchCustomerData();
                                   } else if (action == 'delete') {
-                                    final confirm = await showDialog<bool>(
+                                    final reasonController = TextEditingController();
+                                    final formKey = GlobalKey<FormState>();
+
+                                    final reasonResult = await showDialog<String>(
                                       context: context,
                                       builder: (dialogContext) => AlertDialog(
                                         title: const Text('Request Deletion'),
-                                        content: const Text('Are you sure you want to request deletion for this customer?'),
+                                        content: Form(
+                                          key: formKey,
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              const Text('Please provide a mandatory reason for deleting this customer:'),
+                                              const SizedBox(height: 12),
+                                              TextFormField(
+                                                controller: reasonController,
+                                                maxLines: 3,
+                                                autofocus: true,
+                                                decoration: const InputDecoration(
+                                                  hintText: 'Enter deletion reason...',
+                                                  border: OutlineInputBorder(),
+                                                ),
+                                                validator: (val) {
+                                                  if (val == null || val.trim().isEmpty) {
+                                                    return 'Reason is required';
+                                                  }
+                                                  return null;
+                                                },
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                         actions: [
                                           TextButton(
-                                            onPressed: () => Navigator.pop(dialogContext, false),
+                                            onPressed: () => Navigator.pop(dialogContext, null),
                                             child: const Text('Cancel'),
                                           ),
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(dialogContext, true),
-                                            child: const Text('Request Delete', style: TextStyle(color: Colors.red)),
+                                          ElevatedButton(
+                                            onPressed: () {
+                                              if (formKey.currentState?.validate() ?? false) {
+                                                Navigator.pop(dialogContext, reasonController.text.trim());
+                                              }
+                                            },
+                                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                            child: const Text('Submit Request', style: TextStyle(color: Colors.white)),
                                           ),
                                         ],
                                       ),
                                     );
-                                    if (confirm == true) {
+
+                                    if (reasonResult != null && reasonResult.isNotEmpty) {
                                       setState(() {
                                         customer['pendingDeletion'] = true;
                                       });
@@ -1226,6 +1260,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                                         'userEmail': user?.email ?? '',
                                         'userName': user?.displayName ?? user?.email ?? '',
                                         'customerData': customer,
+                                        'reason': reasonResult,
                                         'requestedAt': FieldValue.serverTimestamp(),
                                         'status': 'pending',
                                       });

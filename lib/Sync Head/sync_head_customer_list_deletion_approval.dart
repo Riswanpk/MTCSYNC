@@ -318,6 +318,8 @@ class _SyncHeadCustomerListDeletionApprovalPageState
                     final custAddress = (customerData['address'] ?? '-').toString();
                     final custArea = (customerData['area'] ?? '').toString();
 
+                    final reason = (data['reason'] ?? '').toString();
+
                     return Card(
                       margin: const EdgeInsets.only(bottom: 14),
                       elevation: 2,
@@ -408,6 +410,47 @@ class _SyncHeadCustomerListDeletionApprovalPageState
                                     ),
                                   ),
                                 ],
+                              ),
+                            ],
+                            if (reason.isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Colors.red.withValues(alpha: 0.3),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.red),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text.rich(
+                                        TextSpan(
+                                          children: [
+                                            const TextSpan(
+                                              text: 'Reason: ',
+                                              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+                                            ),
+                                            TextSpan(
+                                              text: reason,
+                                              style: TextStyle(
+                                                color: isDark ? Colors.grey.shade300 : Colors.black87,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        style: const TextStyle(fontSize: 13),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                             const Divider(height: 24),
