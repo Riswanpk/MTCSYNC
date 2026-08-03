@@ -355,9 +355,9 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
         } catch (_) {}
 
         for (final doc in snapshot.docs) {
-          if (seenLeadIds.contains(doc.id)) continue;
-
           final data = doc.data();
+          if (data['is_mass_task'] == true) continue;
+          if (seenLeadIds.contains(doc.id)) continue;
           final title = data['title'] ?? 'Task Completed';
           final assignedTo = data['assigned_to_name'] ?? 'User';
           final note = data['note'] ?? '';
