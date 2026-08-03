@@ -317,7 +317,6 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                           final doc = _leads[index];
                           final data = doc.data() as Map<String, dynamic>;
                           final name = data['name'] ?? 'No Name';
-                          final status = data['status'] ?? 'Unknown';
                           final priority = data['priority'] ?? 'High';
                           final assignedToName =
                               data['assigned_to_name'] ?? 'Unknown';
@@ -629,19 +628,6 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
         },
       ),
     );
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'Sale':
-        return const Color(0xFF4CAF50);
-      case 'In Progress':
-        return const Color(0xFFFFC107);
-      case 'Cancelled':
-        return const Color(0xFFF44336);
-      default:
-        return Colors.grey;
-    }
   }
 
   Color _getPriorityColor(String priority) {
