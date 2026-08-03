@@ -73,6 +73,7 @@ class _HomePageState extends State<HomePage>
   @override
   void initState() {
     super.initState();
+    isAppReady = true;
     _initSwingAnimation();
     // Initialize Supabase early so notification dot shows on app startup
     DmeSupabaseService.instance.ensureInitialized().catchError((_) {});

@@ -198,14 +198,9 @@ class _SplashScreenState extends State<SplashScreen> {
 
     if (user == null) {
       await NavigationState.clearState(); // Clear any pending state for logged out users
+      initialNotificationAction = null;
       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => const LoginPage()));
     } else {
-      // Handle initial notification action if the app was opened from a notification.
-      if (initialNotificationAction != null) {
-        _handleInitialNotification(initialNotificationAction!);
-        initialNotificationAction = null; // Clear after handling
-      }
-      
       // Check for pending navigation state (activity recreation recovery)
       final pendingState = await NavigationState.getState();
       if (pendingState == 'marketing') {
@@ -215,9 +210,10 @@ class _SplashScreenState extends State<SplashScreen> {
             userData['userid'] != null && 
             userData['branch'] != null) {
           // Restore user to marketing form
-          Navigator.of(context).pushReplacement(
+          await Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (_) => const HomePage()),
           );
+          isAppReady = true;
           // Then push marketing on top (with slight delay to ensure home is loaded)
           Future.delayed(const Duration(milliseconds: 100), () {
             if (mounted) {
@@ -241,28 +237,15 @@ class _SplashScreenState extends State<SplashScreen> {
       }
       
       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => const HomePage()));
-    }
-  }
+      isAppReady = true;
 
-  void _handleInitialNotification(ReceivedAction action) {
-    final payload = action.payload;
-    final docId = payload?['docId'];
-    final page = payload?['page'];
-    final isTodo = payload?['type'] == 'todo';
-
-    final navigator = navigatorKey.currentState;
-    if (navigator == null) return;
-
-    if (page == 'todo') {
-      navigator.push(MaterialPageRoute(builder: (_) => const TodoPage()));
-    } else if (docId != null) {
-      final isEdit = action.buttonKeyPressed == 'EDIT_FOLLOWUP';
-      if (isEdit) {
-        navigator.push(MaterialPageRoute(builder: (_) => PresentFollowUp(docId: docId, editMode: true)));
-      } else if (isTodo) {
-        navigator.push(MaterialPageRoute(builder: (_) => TaskDetailPageFromId(docId: docId)));
-      } else {
-        navigator.push(MaterialPageRoute(builder: (_) => PresentFollowUp(docId: docId)));
+      // Handle initial notification action if app was opened from a notification
+      final action = initialNotificationAction;
+      if (action != null) {
+        initialNotificationAction = null; // Clear after handling
+        Future.microtask(() {
+          NotificationController.handleNotificationAction(action);
+        });
       }
     }
   }

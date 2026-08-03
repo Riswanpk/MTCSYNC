@@ -1,8 +1,9 @@
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'task_detail_widgets.dart';
-import 'todoform.dart';
+import 'todo_widget_updater.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -250,13 +251,17 @@ class TodoListItem extends StatelessWidget {
               if (pickedTime != null && context.mounted) {
                 // Use today's date or existing reminder date
                 final baseDate = reminderDateTime ?? now;
-                final newReminder = DateTime(
+                var newReminder = DateTime(
                   baseDate.year,
                   baseDate.month,
                   baseDate.day,
                   pickedTime.hour,
                   pickedTime.minute,
                 );
+                if (newReminder.isBefore(now)) {
+                  newReminder = newReminder.add(const Duration(days: 1));
+                }
+
                 await FirebaseFirestore.instance
                     .collection('todo')
                     .doc(doc.id)
@@ -264,9 +269,43 @@ class TodoListItem extends StatelessWidget {
                   'reminder': newReminder.toIso8601String(),
                   'reminder_sent': false,
                 });
+
+                // Reschedule local notification on phone
+                final notifId = doc.id.hashCode & 0x7FFFFFFF;
+                await AwesomeNotifications().cancel(notifId);
+                final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
+                await AwesomeNotifications().createNotification(
+                  content: NotificationContent(
+                    id: notifId,
+                    channelKey: 'reminder_channel',
+                    title: 'To-Do Reminder',
+                    body: 'Reminder: ${doc['title'] ?? 'Task'}',
+                    notificationLayout: NotificationLayout.Default,
+                    payload: {
+                      'type': 'todo',
+                      'docId': doc.id,
+                    },
+                  ),
+                  schedule: NotificationCalendar(
+                    year: newReminder.year,
+                    month: newReminder.month,
+                    day: newReminder.day,
+                    hour: newReminder.hour,
+                    minute: newReminder.minute,
+                    second: 0,
+                    millisecond: 0,
+                    timeZone: tz,
+                    repeats: false,
+                    preciseAlarm: true,
+                    allowWhileIdle: true,
+                  ),
+                );
+
+                await updateTodoWidgetFromFirestore();
+
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Reminder time updated')),
+                    const SnackBar(content: Text('Reminder postponed and scheduled!')),
                   );
                 }
               }

@@ -171,6 +171,7 @@ void _initializeDeferredServices(SharedPreferences prefs) {
 final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+bool isAppReady = false;
 ReceivedAction? initialNotificationAction;
 
 class MyApp extends StatelessWidget {
@@ -276,143 +277,108 @@ Future<void> clearNotificationOpened(String docId) async {
 class NotificationController {
   @pragma("vm:entry-point")
   static Future<void> onActionReceivedMethod(ReceivedAction receivedAction) async {
-    // Handle core tasks notifications navigation
-    if (receivedAction.payload?['type'] == 'core_task') {
-      final navigator = navigatorKey.currentState;
-      if (navigator != null) {
-        navigator.push(
-          MaterialPageRoute(builder: (_) => const UserTaskPage()),
-        );
-      }
-      return;
+    initialNotificationAction = receivedAction;
+
+    if (isAppReady) {
+      handleNotificationAction(receivedAction);
     }
-    if (receivedAction.payload?['type'] == 'core_task_complete') {
-      final navigator = navigatorKey.currentState;
-      if (navigator != null) {
-        navigator.push(
-          MaterialPageRoute(builder: (_) => const CoreTeamTaskPage()),
-        );
-      }
+  }
+
+  static Future<void> handleNotificationAction(ReceivedAction receivedAction) async {
+    final payload = receivedAction.payload;
+
+    // Handle overdue tasks notification
+    if (payload?['page'] == 'todo') {
+      _doPush((_) => const TodoPage());
       return;
     }
 
-    // Handle navigation for overdue tasks notification
-    if (receivedAction.payload?['page'] == 'todo') {
-      final navigator = navigatorKey.currentState;
-      if (navigator != null) {
-        navigator.push(
-          MaterialPageRoute(builder: (_) => const TodoPage()),
-        );
-      }
+    // Handle core tasks notifications navigation
+    if (payload?['type'] == 'core_task') {
+      _doPush((_) => const UserTaskPage());
+      return;
+    }
+    if (payload?['type'] == 'core_task_complete') {
+      _doPush((_) => const CoreTeamTaskPage());
       return;
     }
 
     // Handle DME reminder notification
-    if (receivedAction.payload?['type'] == 'dme_reminder') {
-      final reminderId = receivedAction.payload!['reminderId'];
-      final customerId = int.tryParse(receivedAction.payload!['customerId'] ?? '');
-      
-      if (customerId != null && reminderId != null && reminderId.isNotEmpty) {
-        try {
-          WidgetsFlutterBinding.ensureInitialized();
-          await Firebase.initializeApp(
-            options: FirebaseOptions(
-              apiKey: firebaseApiKey,
-              appId: firebaseAppId,
-              messagingSenderId: firebaseMessagingSenderId,
-              projectId: firebaseProjectId,
-              authDomain: firebaseAuthDomain,
-              storageBucket: firebaseStorageBucket,
-              measurementId: firebaseMeasurementId,
-            ),
-          );
-          
-          // Fetch reminder details from Supabase
-          final svc = DmeSupabaseService.instance;
-          final reminder = await svc.getReminderDetail(int.parse(reminderId as String));
-          
-          if (reminder != null) {
-            // Get the current user's Firebase UID from cache
-            final userCache = UserCacheService.instance;
-            final firebaseUid = userCache.uid;
-            
-            // Only proceed if we have the Firebase UID
-            if (firebaseUid != null) {
-              final user = await svc.getCurrentUser(firebaseUid);
-              if (user != null) {
-                final navigator = navigatorKey.currentState;
-                if (navigator != null) {
-                  navigator.push(
-                    MaterialPageRoute(
-                      builder: (_) => DmeCustomerTileViewer(
-                        reminder: reminder,
-                        dmeUser: user,
-                      ),
-                    ),
-                  );
-                }
-              }
-            }
-          }
-        } catch (e) {
-          debugPrint('Error handling DME reminder notification: $e');
-        }
-      }
+    if (payload?['type'] == 'dme_reminder') {
+      _handleDmeReminder(receivedAction);
       return;
     }
 
-    // Ensure plugins are initialized in this background isolate
-    WidgetsFlutterBinding.ensureInitialized();
-    await Firebase.initializeApp(
-        options: FirebaseOptions(
-            apiKey: firebaseApiKey, appId: firebaseAppId, messagingSenderId: firebaseMessagingSenderId,
-            projectId: firebaseProjectId, authDomain: firebaseAuthDomain, storageBucket: firebaseStorageBucket,
-            measurementId: firebaseMeasurementId
-        )
-    );
-    if (receivedAction.payload?['docId'] != null) {
-      final docId = receivedAction.payload!['docId']!;
-      // Mark as opened
+    if (payload?['docId'] != null) {
+      final docId = payload!['docId']!;
       await markNotificationOpened(docId);
 
-      Future<void> doNavigate() async {
-        final navigator = navigatorKey.currentState;
-        if (navigator != null) {
-          final docId = receivedAction.payload!['docId']!;
-          final isEdit = receivedAction.buttonKeyPressed == 'EDIT_FOLLOWUP';
-          final channelKey = receivedAction.channelKey;
-          final notifType = receivedAction.payload?['type'];
-          final isTodo = notifType == 'todo';
-          final isSmeLead = notifType == 'sme_lead' || notifType == 'sme_lead_assignment';
+      final isEdit = receivedAction.buttonKeyPressed == 'EDIT_FOLLOWUP';
+      final channelKey = receivedAction.channelKey;
+      final notifType = payload['type'];
+      final isTodo = notifType == 'todo';
+      final isSmeLead = notifType == 'sme_lead' || notifType == 'sme_lead_assignment';
 
-          // Use same logic as edit followup for todo: open in view for normal, edit for edit button
-          // Simple push ensures the back button works correctly.
-          if (isSmeLead) {
-            navigator.push(
-              MaterialPageRoute(builder: (_) => SmeLeadDetailPageFromId(docId: docId)),
-            );
-          } else if (isEdit) {
-            navigator.push(
-              MaterialPageRoute(builder: (_) => PresentFollowUp(docId: docId, editMode: true)),
-            );
-          } else if ((channelKey == 'reminder_channel' || channelKey == 'basic_channel') && isTodo) {
-            navigator.push(
-              MaterialPageRoute(builder: (_) => TaskDetailPageFromId(docId: docId)),
-            );
-          } else {
-            navigator.push(
-              MaterialPageRoute(builder: (_) => PresentFollowUp(docId: docId)),
-            );
-          }
-        } else {
-          // If navigator is not ready, try again shortly
-          await Future.delayed(const Duration(milliseconds: 300));
-          await doNavigate();
-        }
+      if (isSmeLead) {
+        _doPush((_) => SmeLeadDetailPageFromId(docId: docId));
+      } else if (isEdit) {
+        _doPush((_) => PresentFollowUp(docId: docId, editMode: true));
+      } else if (isTodo || ((channelKey == 'reminder_channel' || channelKey == 'basic_channel') && isTodo)) {
+        _doPush((_) => TaskDetailPageFromId(docId: docId));
+      } else {
+        _doPush((_) => PresentFollowUp(docId: docId));
       }
+    }
+  }
 
-      // Start navigation attempt
-      doNavigate();
+  static void _doPush(WidgetBuilder builder) {
+    final navigator = navigatorKey.currentState;
+    if (navigator != null) {
+      navigator.push(MaterialPageRoute(builder: builder));
+    } else {
+      Future.microtask(() => _doPush(builder));
+    }
+  }
+
+  static Future<void> _handleDmeReminder(ReceivedAction receivedAction) async {
+    final reminderId = receivedAction.payload?['reminderId'];
+    final customerId = int.tryParse(receivedAction.payload?['customerId'] ?? '');
+    
+    if (customerId != null && reminderId != null && reminderId.isNotEmpty) {
+      try {
+        WidgetsFlutterBinding.ensureInitialized();
+        await Firebase.initializeApp(
+          options: FirebaseOptions(
+            apiKey: firebaseApiKey,
+            appId: firebaseAppId,
+            messagingSenderId: firebaseMessagingSenderId,
+            projectId: firebaseProjectId,
+            authDomain: firebaseAuthDomain,
+            storageBucket: firebaseStorageBucket,
+            measurementId: firebaseMeasurementId,
+          ),
+        );
+        
+        final svc = DmeSupabaseService.instance;
+        final reminder = await svc.getReminderDetail(int.parse(reminderId as String));
+        
+        if (reminder != null) {
+          final userCache = UserCacheService.instance;
+          final firebaseUid = userCache.uid;
+          
+          if (firebaseUid != null) {
+            final user = await svc.getCurrentUser(firebaseUid);
+            if (user != null) {
+              _doPush((_) => DmeCustomerTileViewer(
+                reminder: reminder,
+                dmeUser: user,
+              ));
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Error handling DME reminder notification: $e');
+      }
     }
   }
 
