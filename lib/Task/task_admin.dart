@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import '../Navigation/user_cache_service.dart';
@@ -184,6 +183,7 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
           'assigned_to': recipientUid,
           'assigned_to_email': recipientEmail,
           'assigned_to_name': recipientName,
+          'assigned_to_branch': recipient['branch'] ?? 'None',
           'assigned_by': currentUser.uid,
           'assigned_by_name': assignerName,
           'assigned_by_email': assignerEmail,
@@ -1650,18 +1650,56 @@ class MassTaskGroup {
   });
 }
 
-class MassTaskUsersPage extends StatelessWidget {
+class MassTaskUsersPage extends StatefulWidget {
   final MassTaskGroup group;
   const MassTaskUsersPage({super.key, required this.group});
 
   @override
+  State<MassTaskUsersPage> createState() => _MassTaskUsersPageState();
+}
+
+class _MassTaskUsersPageState extends State<MassTaskUsersPage> {
+  String? _selectedBranch;
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
+    // Retrieve unique branches from the user tasks in this group
+    final Set<String> uniqueBranches = {};
+    for (final doc in widget.group.userTasks) {
+      final data = doc.data() as Map<String, dynamic>;
+      final branch = (data['assigned_to_branch'] as String? ?? data['branch'] ?? 'Unknown').toString().trim().toUpperCase();
+      if (branch.isNotEmpty) {
+        uniqueBranches.add(branch);
+      }
+    }
+    final sortedBranches = uniqueBranches.toList()..sort();
+
+    // Filtered tasks list
+    final filteredTasks = widget.group.userTasks.where((doc) {
+      if (_selectedBranch == null || _selectedBranch!.isEmpty) {
+        return true;
+      }
+      final data = doc.data() as Map<String, dynamic>;
+      final branch = (data['assigned_to_branch'] as String? ?? data['branch'] ?? 'Unknown').toString().trim().toUpperCase();
+      return branch == _selectedBranch;
+    }).toList();
+
+    // Calculate completions for the FILTERED tasks
+    final totalFiltered = filteredTasks.length;
+    final completedFiltered = filteredTasks.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      return (data['status'] ?? 'pending') == 'completed';
+    }).length;
+
+    final double completionRatio = totalFiltered > 0 ? completedFiltered / totalFiltered : 0.0;
+    final int completionPercent = (completionRatio * 100).round();
+
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0A1628) : const Color(0xFFF6F7FB),
       appBar: AppBar(
-        title: Text(group.title),
+        title: Text(widget.group.title),
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -1676,6 +1714,7 @@ class MassTaskUsersPage extends StatelessWidget {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Description Card
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Card(
@@ -1696,7 +1735,7 @@ class MassTaskUsersPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      group.description.isNotEmpty ? group.description : 'No description provided.',
+                      widget.group.description.isNotEmpty ? widget.group.description : 'No description provided.',
                       style: TextStyle(
                         fontSize: 14,
                         color: isDark ? Colors.white : Colors.black87,
@@ -1707,6 +1746,111 @@ class MassTaskUsersPage extends StatelessWidget {
               ),
             ),
           ),
+
+          // Branch Filter Dropdown
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Row(
+              children: [
+                Text(
+                  'Filter Branch: ',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: isDark ? Colors.white70 : Colors.black,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF16253B) : Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isDark ? Colors.white24 : Colors.black12,
+                      ),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedBranch,
+                        hint: const Text('Show All Branches'),
+                        isExpanded: true,
+                        dropdownColor: isDark ? const Color(0xFF16253B) : Colors.white,
+                        style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                        items: [
+                          const DropdownMenuItem<String>(
+                            value: null,
+                            child: Text('All Branches'),
+                          ),
+                          ...sortedBranches.map((br) => DropdownMenuItem<String>(
+                            value: br,
+                            child: Text(br),
+                          )),
+                        ],
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedBranch = val;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Completion Progress Bar Card
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Card(
+              color: isDark ? const Color(0xFF16253B) : Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Filtered Completion Rate',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: isDark ? Colors.white70 : Colors.black54,
+                          ),
+                        ),
+                        Text(
+                          '$completedFiltered / $totalFiltered ($completionPercent%)',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Color(0xFF00897B),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: completionRatio,
+                        minHeight: 10,
+                        backgroundColor: isDark ? Colors.white12 : Colors.black12,
+                        valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF00897B)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: Text(
@@ -1720,49 +1864,59 @@ class MassTaskUsersPage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              itemCount: group.userTasks.length,
-              itemBuilder: (context, index) {
-                final doc = group.userTasks[index];
-                final data = doc.data() as Map<String, dynamic>;
-                final String name = data['assigned_to_name'] ?? 'Unknown User';
-                final String email = data['assigned_to_email'] ?? '';
-                final String status = data['status'] ?? 'pending';
-                final bool isCompleted = status == 'completed';
+            child: filteredTasks.isEmpty
+                ? Center(
+                    child: Text(
+                      'No recipients found in selected branch',
+                      style: TextStyle(
+                        color: isDark ? Colors.white38 : Colors.black38,
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    itemCount: filteredTasks.length,
+                    itemBuilder: (context, index) {
+                      final doc = filteredTasks[index];
+                      final data = doc.data() as Map<String, dynamic>;
+                      final String name = data['assigned_to_name'] ?? 'Unknown User';
+                      final String email = data['assigned_to_email'] ?? '';
+                      final String status = data['status'] ?? 'pending';
+                      final bool isCompleted = status == 'completed';
+                      final String branch = (data['assigned_to_branch'] as String? ?? data['branch'] ?? 'Unknown').toString().trim().toUpperCase();
 
-                return Card(
-                  color: isDark ? const Color(0xFF1E2F4C) : Colors.white,
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    title: Text(
-                      name,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                    subtitle: Text(
-                      email,
-                      style: TextStyle(
-                        color: isDark ? Colors.white60 : Colors.black54,
-                      ),
-                    ),
-                    trailing: isCompleted
-                        ? const Icon(Icons.check_circle_rounded, color: Colors.green)
-                        : const Icon(Icons.cancel_rounded, color: Colors.red),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => UserTaskDetailPage(taskDoc: doc),
+                      return Card(
+                        color: isDark ? const Color(0xFF1E2F4C) : Colors.white,
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          title: Text(
+                            name,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                          subtitle: Text(
+                            '$email • Branch: $branch',
+                            style: TextStyle(
+                              color: isDark ? Colors.white60 : Colors.black54,
+                            ),
+                          ),
+                          trailing: isCompleted
+                              ? const Icon(Icons.check_circle_rounded, color: Colors.green)
+                              : const Icon(Icons.cancel_rounded, color: Colors.red),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => UserTaskDetailPage(taskDoc: doc),
+                              ),
+                            );
+                          },
                         ),
                       );
                     },
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),

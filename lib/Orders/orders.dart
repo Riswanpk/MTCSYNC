@@ -210,6 +210,7 @@ class _OrdersPageState extends State<OrdersPage> {
         final role = userData['role'] ?? 'sales';
         final isAdminLike = role == 'admin' || role == 'sync_head' || role == 'Sync Head';
         final isManagerLike = role == 'manager' || role == 'asst_manager';
+        final isDark = Theme.of(context).brightness == Brightness.dark;
 
         return Scaffold(
           appBar: AppBar(
@@ -284,7 +285,7 @@ class _OrdersPageState extends State<OrdersPage> {
                                   decoration: InputDecoration(
                                     labelText: 'Branch',
                                     filled: true,
-                                    fillColor: const Color.fromARGB(255, 229, 237, 229),
+                                    fillColor: isDark ? const Color(0xFF23262F) : const Color.fromARGB(255, 229, 237, 229),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(10),
                                       borderSide: BorderSide.none,
@@ -307,7 +308,7 @@ class _OrdersPageState extends State<OrdersPage> {
                                   decoration: InputDecoration(
                                     labelText: 'User',
                                     filled: true,
-                                    fillColor: const Color.fromARGB(255, 229, 237, 229),
+                                    fillColor: isDark ? const Color(0xFF23262F) : const Color.fromARGB(255, 229, 237, 229),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(10),
                                       borderSide: BorderSide.none,
@@ -333,7 +334,7 @@ class _OrdersPageState extends State<OrdersPage> {
                               decoration: InputDecoration(
                                 labelText: 'User',
                                 filled: true,
-                                fillColor: const Color.fromARGB(255, 229, 237, 229),
+                                fillColor: isDark ? const Color(0xFF23262F) : const Color.fromARGB(255, 229, 237, 229),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(10),
                                   borderSide: BorderSide.none,
@@ -359,7 +360,7 @@ class _OrdersPageState extends State<OrdersPage> {
                                 decoration: InputDecoration(
                                   labelText: 'Status',
                                   filled: true,
-                                  fillColor: const Color.fromARGB(255, 229, 237, 229),
+                                  fillColor: isDark ? const Color(0xFF23262F) : const Color.fromARGB(255, 229, 237, 229),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(10),
                                     borderSide: BorderSide.none,

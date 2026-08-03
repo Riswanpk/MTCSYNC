@@ -116,6 +116,7 @@ class OrderCard extends StatelessWidget {
     final isCompleted = status == 'Completed';
     final createdText = formatOrderDate(createdAt);
     final deliveryText = formatOrderDate(deliveryDate);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Slidable(
       key: ValueKey(docId),
@@ -164,11 +165,11 @@ class OrderCard extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 14),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isDark ? const Color(0xFF23262F) : Colors.white,
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
+                color: isDark ? Colors.black.withValues(alpha: 0.3) : Colors.black.withValues(alpha: 0.05),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -191,12 +192,34 @@ class OrderCard extends StatelessWidget {
                   children: [
                     Text(
                       '$name ($status)',
-                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
                     ),
                     const SizedBox(height: 4),
-                    Text('Created: $createdText', style: const TextStyle(fontSize: 12, color: Colors.black54)),
-                    Text('Delivery: $deliveryText', style: const TextStyle(fontSize: 12, color: Colors.blueGrey)),
-                    Text('Created by: $createdBy', style: const TextStyle(fontSize: 12, color: Colors.black45)),
+                    Text(
+                      'Created: $createdText',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.white70 : Colors.black54,
+                      ),
+                    ),
+                    Text(
+                      'Delivery: $deliveryText',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.blue.shade200 : Colors.blueGrey,
+                      ),
+                    ),
+                    Text(
+                      'Created by: $createdBy',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.white60 : Colors.black45,
+                      ),
+                    ),
                   ],
                 ),
               ),
