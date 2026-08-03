@@ -46,7 +46,6 @@ class _HomePageState extends State<HomePage>
     with TickerProviderStateMixin, RouteAware {
   late AnimationController _swingController;
   late Animation<double> _swingAnimation;
-  StreamSubscription<User?>? _authSubscription;
   StreamSubscription<String>? _fcmTokenSubscription;
   StreamSubscription<Uri?>? _widgetClickSub;
 
@@ -59,7 +58,6 @@ class _HomePageState extends State<HomePage>
   DateTime? _lastTodoWarningCheck;
 
   final _userCache = UserCacheService.instance;
-  bool _perfCheckDone = false;
   String? _role;
   String? _username;
   String? _branch;
@@ -99,7 +97,6 @@ class _HomePageState extends State<HomePage>
     _loadProfileImage();
     _checkTodoWarning();
     _checkPendingTodosReminder();
-    _setupPerformanceNotifications();
     _setupFcmTokenSync();
     _startSmeNotificationService();
     _fetchAndCacheContacts();
@@ -137,18 +134,7 @@ class _HomePageState extends State<HomePage>
     );
   }
 
-  void _setupPerformanceNotifications() {
-    _authSubscription =
-        FirebaseAuth.instance.authStateChanges().listen((user) async {
-      if (user != null && !_perfCheckDone) {
-        _perfCheckDone = true;
-        await _userCache.ensureLoaded();
-        if (_userCache.role == 'sales') {
-          _checkAndShowPerformanceDeductionNotification();
-        }
-      }
-    });
-  }
+
 
   void _startSmeNotificationService() {
     SmeNotificationService.instance.startListening();
@@ -167,7 +153,6 @@ class _HomePageState extends State<HomePage>
 
   @override
   void dispose() {
-    _authSubscription?.cancel();
     _fcmTokenSubscription?.cancel();
     _widgetClickSub?.cancel().catchError((_) {});
     _notificationListener?.cancel();
@@ -487,82 +472,7 @@ class _HomePageState extends State<HomePage>
 
   // ==================== Helper Methods ====================
 
-  Future<void> _checkAndShowPerformanceDeductionNotification() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
 
-    final now = DateTime.now();
-    final monthStart = DateTime(now.year, now.month, 1);
-    final monthEnd = DateTime(now.year, now.month + 1, 1);
-
-    final formsSnapshot = await FirebaseFirestore.instance
-        .collection('dailyform')
-        .where('userId', isEqualTo: user.uid)
-        .where('timestamp',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
-        .where('timestamp', isLessThan: Timestamp.fromDate(monthEnd))
-        .get();
-
-    final forms = formsSnapshot.docs
-        .map((doc) => doc.data() as Map<String, dynamic>)
-        .toList();
-
-    final today = DateTime(now.year, now.month, now.day);
-    final currentWeekNum = _isoWeekNumber(today);
-    final weekForms = forms.where((form) {
-      final ts = form['timestamp'];
-      final date =
-          ts is Timestamp ? ts.toDate() : DateTime.parse(ts.toString());
-      return _isoWeekNumber(date) == currentWeekNum && date.year == today.year;
-    }).toList();
-
-    bool deduction = _hasDeduction(weekForms);
-
-    final prefs = await SharedPreferences.getInstance();
-    final lastNotified = prefs.getString('last_perf_deduction_notify');
-    final todayStr = "${now.year}-${now.month}-${now.day}";
-    if (deduction && lastNotified != todayStr) {
-      await NotificationPermissionService.instance.safeCreateNotification(
-        content: NotificationContent(
-          id: 2002,
-          channelKey: 'reminder_channel',
-          title: 'Performance Deduction',
-          body:
-              'Your performance score was reduced. Check the Performance page for details.',
-          notificationLayout: NotificationLayout.Default,
-        ),
-      );
-      await prefs.setString('last_perf_deduction_notify', todayStr);
-    }
-  }
-
-  bool _hasDeduction(List<Map<String, dynamic>> weekForms) {
-    for (var form in weekForms) {
-      final att = form['attendance'];
-      if (att == 'late' || att == 'notApproved') return true;
-      if (att != 'approved' && att != 'notApproved') {
-        if (form['dressCode']?['cleanUniform'] == false ||
-            form['dressCode']?['keepInside'] == false ||
-            form['dressCode']?['neatHair'] == false ||
-            form['attitude']?['greetSmile'] == false ||
-            form['attitude']?['askNeeds'] == false ||
-            form['attitude']?['helpFindProduct'] == false ||
-            form['attitude']?['confirmPurchase'] == false ||
-            form['attitude']?['offerHelp'] == false ||
-            form['meeting']?['attended'] == false) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  int _isoWeekNumber(DateTime date) {
-    final thursday = date.subtract(Duration(days: (date.weekday + 6) % 7 - 3));
-    final firstThursday = DateTime(date.year, 1, 4);
-    final diff = thursday.difference(firstThursday).inDays ~/ 7;
-    return 1 + diff;
-  }
 
   Future<void> _loadProfileImage() async {
     final prefs = await SharedPreferences.getInstance();

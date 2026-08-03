@@ -179,7 +179,36 @@ class _TodoFormPageState extends State<TodoFormPage> {
         type: 'todo',
       );
 
-      await AwesomeNotifications().cancel(widget.docId!.hashCode & 0x7FFFFFFF);
+      // Cancel old notification and reschedule with updated time
+      final notifId = widget.docId!.hashCode & 0x7FFFFFFF;
+      await AwesomeNotifications().cancel(notifId);
+      final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
+      await AwesomeNotifications().createNotification(
+        content: NotificationContent(
+          id: notifId,
+          channelKey: 'reminder_channel',
+          title: 'To-Do Reminder',
+          body: 'Reminder: $title',
+          notificationLayout: NotificationLayout.Default,
+          payload: {
+            'type': 'todo',
+            'docId': widget.docId!,
+          },
+        ),
+        schedule: NotificationCalendar(
+          year: scheduledDate.year,
+          month: scheduledDate.month,
+          day: scheduledDate.day,
+          hour: scheduledDate.hour,
+          minute: scheduledDate.minute,
+          second: 0,
+          millisecond: 0,
+          timeZone: tz,
+          repeats: false,
+          preciseAlarm: true,
+          allowWhileIdle: true,
+        ),
+      );
 
       await updateTodoWidgetFromFirestore(); // After saving/updating todo
 
@@ -198,6 +227,36 @@ class _TodoFormPageState extends State<TodoFormPage> {
       'reminder': scheduledDate.toIso8601String(),
       'reminder_sent': false,
     });
+
+    // Schedule local notification for the exact reminder time
+    final notifId = todoRef.id.hashCode & 0x7FFFFFFF;
+    final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: notifId,
+        channelKey: 'reminder_channel',
+        title: 'To-Do Reminder',
+        body: 'Reminder: $title',
+        notificationLayout: NotificationLayout.Default,
+        payload: {
+          'type': 'todo',
+          'docId': todoRef.id,
+        },
+      ),
+      schedule: NotificationCalendar(
+        year: scheduledDate.year,
+        month: scheduledDate.month,
+        day: scheduledDate.day,
+        hour: scheduledDate.hour,
+        minute: scheduledDate.minute,
+        second: 0,
+        millisecond: 0,
+        timeZone: tz,
+        repeats: false,
+        preciseAlarm: true,
+        allowWhileIdle: true,
+      ),
+    );
 
     await _clearDraft();
 

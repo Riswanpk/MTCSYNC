@@ -8,7 +8,7 @@ import 'package:android_intent_plus/android_intent.dart';
 import 'dart:io';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../Performance/excel_performance_report.dart'; // <-- Import here
+
 
 class SettingsPage extends StatelessWidget {
   Future<void> _triggerDeleteOldLeads(BuildContext context) async {
@@ -168,73 +168,6 @@ class SettingsPage extends StatelessWidget {
     return roleRaw.toString().toLowerCase().replaceAll('_', ' ').trim();
   }
 
-  Future<void> _pickMonthAndSendExcel(BuildContext context) async {
-    DateTime now = DateTime.now();
-    int selectedYear = now.year;
-    int selectedMonth = now.month;
-
-    await showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: Text('Select Month'),
-          content: StatefulBuilder(
-            builder: (context, setState) {
-              return Row(
-                children: [
-                  DropdownButton<int>(
-                    value: selectedMonth,
-                    items: List.generate(12, (i) => i + 1)
-                        .map((m) => DropdownMenuItem(
-                              value: m,
-                              child: Text(
-                                '${monthShort(m)}', // <-- Use helper from excel_performance_report.dart
-                                style: TextStyle(fontSize: 16),
-                              ),
-                            ))
-                        .toList(),
-                    onChanged: (val) => setState(() => selectedMonth = val!),
-                  ),
-                  SizedBox(width: 16),
-                  DropdownButton<int>(
-                    value: selectedYear,
-                    items: [now.year - 1, now.year, now.year + 1]
-                        .map((y) => DropdownMenuItem(
-                              value: y,
-                              child: Text('$y'),
-                            ))
-                        .toList(),
-                    onChanged: (val) => setState(() => selectedYear = val!),
-                  ),
-                ],
-              );
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(
-                    ctx, {'year': selectedYear, 'month': selectedMonth});
-              },
-              child: Text('Send'),
-            ),
-          ],
-        );
-      },
-    ).then((result) {
-      if (result != null && result is Map) {
-        exportAndSendExcel(context,
-            year: result['year'],
-            month: result['month']); // <-- Call from imported file
-      }
-    });
-  }
-
-  // Remove exportAndSendExcel, _monthShort, isoWeekNumber from this file
 
   @override
   Widget build(BuildContext context) {
@@ -329,13 +262,7 @@ class SettingsPage extends StatelessWidget {
                                   child:
                                       const Text('Generate Registration Code'),
                                 ),
-                                const SizedBox(height: 16),
-                                ElevatedButton(
-                                  onPressed: () =>
-                                      _pickMonthAndSendExcel(context),
-                                  child:
-                                      const Text('Send Monthly Excel Report'),
-                                ),
+
                                 if (isAdmin) ...[
                                   const SizedBox(height: 16),
                                   ElevatedButton(

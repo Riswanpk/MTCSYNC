@@ -10,12 +10,10 @@ import '../Login/login.dart';
 import 'settings.dart';
 import '../Navigation/user_cache_service.dart';
 import 'manageusers.dart';
-import '../Performance/dailyform.dart';
 
 import '../Instructions/instructions.dart';
 import '../Misc/theme_notifier.dart';
-import '../Sync Head/sync_head_performance_drawer.dart';
-import '../Performance/my_performance_page.dart';
+
 import '../DME/screens/dme_user_management.dart';
 import '../DME/screens/dme_complaints_management.dart';
 import '../SME/sme_lead_form.dart';
@@ -46,18 +44,16 @@ class HomeDrawer extends StatelessWidget {
           _buildDrawerHeader(context),
           _buildSettingsTile(context),
           // Managers/sales/asst_manager: one 'Complaints' page showing all
-          if (role == 'manager' || role == 'asst_manager' || role == 'sales') _buildComplaintsTile(context),
+          if (role == 'manager' || role == 'asst_manager' || role == 'sales')
+            _buildComplaintsTile(context),
           // DME users: 'My Complaints' showing only their own raised complaints
           if (role == 'dme_user') _buildDmeUserComplaintsTile(context),
           if (role == 'dme_user') _buildDmeUserAddLeadTile(context),
           if (role == 'dme_user') _buildDmeUserVariantsTile(context),
-          if (role == 'admin' || role == 'sync_head' || role == 'Sync Head') _buildManageUsersTile(context),
+          if (role == 'admin' || role == 'sync_head' || role == 'Sync Head')
+            _buildManageUsersTile(context),
           if (role == 'dme_admin') _buildDmeUsersTile(context),
-          if (role == 'manager') _buildDailyFormTile(context),
-          if (role == 'sales' || role == 'asst_manager') _buildMyPerformanceTile(context),
 
-          if (role == 'admin') _buildAdminPerformanceTile(context),
-          if (role == 'sync_head' || role == 'Sync Head') _buildSyncHeadPerformanceTile(context),
           _buildInstructionsTile(context),
           _buildLogoutTile(context),
         ],
@@ -105,7 +101,8 @@ class HomeDrawer extends StatelessWidget {
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       leading: const Icon(Icons.category_rounded, color: Colors.purpleAccent),
       title: const Text('Multi-Category Customers'),
-      subtitle: const Text('2+ categories or types', style: TextStyle(fontSize: 10)),
+      subtitle:
+          const Text('2+ categories or types', style: TextStyle(fontSize: 10)),
       onTap: () {
         Navigator.pop(context);
         Navigator.push(
@@ -252,72 +249,6 @@ class HomeDrawer extends StatelessWidget {
           context,
           MaterialPageRoute(
               builder: (context) => const DmeUserManagementPage()),
-        );
-      },
-    );
-  }
-
-  Widget _buildDailyFormTile(BuildContext context) {
-    return ListTile(
-      dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: const Icon(Icons.assignment_turned_in, color: Colors.orange),
-      title: const Text('Daily Form'),
-      onTap: () {
-        Navigator.pop(context);
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => PerformanceForm()),
-        );
-      },
-    );
-  }
-
-  Widget _buildMyPerformanceTile(BuildContext context) {
-    return ListTile(
-      dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: const Icon(Icons.bar_chart_rounded, color: Color(0xFF005BAC)),
-      title: const Text('My Performance'),
-      onTap: () {
-        Navigator.pop(context);
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const MyPerformancePage()),
-        );
-      },
-    );
-  }
-
-  Widget _buildSyncHeadPerformanceTile(BuildContext context) {
-    return ListTile(
-      dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: const Icon(Icons.bar_chart_rounded, color: Color(0xFF005BAC)),
-      title: const Text('Performance'),
-      onTap: () {
-        Navigator.pop(context);
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (context) => const SyncHeadPerformancePage()),
-        );
-      },
-    );
-  }
-
-  Widget _buildAdminPerformanceTile(BuildContext context) {
-    return ListTile(
-      dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: const Icon(Icons.bar_chart_rounded, color: Color(0xFF005BAC)),
-      title: const Text('Performance'),
-      onTap: () {
-        Navigator.pop(context);
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (context) => const SyncHeadPerformancePage()),
         );
       },
     );
