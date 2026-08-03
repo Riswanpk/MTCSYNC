@@ -21,48 +21,253 @@ class _LocationResult {
   _LocationResult(this.position);
 }
 
-class _CameraPageState extends State<CameraPage> {
+class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
   File? _capturedImage;
   String? _locationString;
   String? _dateTimeString;
   bool _isLoading = false;
   bool _isUploading = false;
+  bool _waitingForSettings = false; // Track if user went to settings
 
-  /// Gets the device location. Returns null if location unavailable.
-  /// Uses medium accuracy — sufficient for watermark text, much faster than high.
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Called when app resumes (e.g. user returns from Settings).
+  /// If we were waiting for the user to enable location from settings,
+  /// we retry location automatically.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _waitingForSettings) {
+      _waitingForSettings = false;
+      // Don't auto-retry here — the user will tap "Capture" again.
+    }
+  }
+
+  // ─── LOCATION SERVICES DISABLED DIALOG ───────────────────────────────────
+  Future<bool> _showLocationServicesDialog() async {
+    if (!mounted) return false;
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.location_off_rounded, color: Colors.orange, size: 28),
+            SizedBox(width: 10),
+            Text('Location Disabled', style: TextStyle(fontFamily: 'Electorize', fontSize: 18)),
+          ],
+        ),
+        content: const Text(
+          'Location services are turned off on your device.\n\n'
+          'Please enable Location (GPS) to continue.',
+          style: TextStyle(fontFamily: 'Electorize', fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel', style: TextStyle(fontFamily: 'Electorize')),
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.settings, size: 18),
+            label: const Text('Open Settings', style: TextStyle(fontFamily: 'Electorize')),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () async {
+              Navigator.of(ctx).pop(true);
+            },
+          ),
+        ],
+      ),
+    );
+    if (result == true) {
+      _waitingForSettings = true;
+      await Geolocator.openLocationSettings();
+      // Wait a moment for user to toggle setting
+      await Future.delayed(const Duration(milliseconds: 500));
+      // Re-check if location is now enabled
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      return enabled;
+    }
+    return false;
+  }
+
+  // ─── PERMISSION DENIED FOREVER DIALOG ────────────────────────────────────
+  Future<bool> _showPermissionDeniedForeverDialog() async {
+    if (!mounted) return false;
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.no_photography_rounded, color: Colors.red, size: 28),
+            SizedBox(width: 10),
+            Flexible(
+              child: Text('Permission Required', style: TextStyle(fontFamily: 'Electorize', fontSize: 18)),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Location permission has been permanently denied.\n\n'
+          'To use the camera with GPS tagging, please:\n'
+          '1. Tap "Open Settings" below\n'
+          '2. Go to Permissions → Location\n'
+          '3. Select "Allow" or "While using the app"\n'
+          '4. Come back and try again',
+          style: TextStyle(fontFamily: 'Electorize', fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel', style: TextStyle(fontFamily: 'Electorize')),
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.settings, size: 18),
+            label: const Text('Open Settings', style: TextStyle(fontFamily: 'Electorize')),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () async {
+              Navigator.of(ctx).pop(true);
+            },
+          ),
+        ],
+      ),
+    );
+    if (result == true) {
+      _waitingForSettings = true;
+      await Geolocator.openAppSettings();
+      // Wait for user to return
+      await Future.delayed(const Duration(milliseconds: 500));
+      // Re-check permission
+      final perm = await Geolocator.checkPermission();
+      return perm == LocationPermission.always || perm == LocationPermission.whileInUse;
+    }
+    return false;
+  }
+
+  // ─── PERMISSION DENIED (first time) DIALOG ───────────────────────────────
+  Future<bool> _showPermissionDeniedDialog() async {
+    if (!mounted) return false;
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.location_disabled_rounded, color: Colors.orange, size: 28),
+            SizedBox(width: 10),
+            Flexible(
+              child: Text('Location Needed', style: TextStyle(fontFamily: 'Electorize', fontSize: 18)),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Location permission is required to add GPS coordinates on the photo.\n\n'
+          'Please allow location access when prompted.',
+          style: TextStyle(fontFamily: 'Electorize', fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel', style: TextStyle(fontFamily: 'Electorize')),
+          ),
+          ElevatedButton(
+            child: const Text('Grant Permission', style: TextStyle(fontFamily: 'Electorize')),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+          ),
+        ],
+      ),
+    );
+    return result == true;
+  }
+
+  /// Gets the device location with full permission flow.
+  /// Returns null if location unavailable (user will see dialogs).
   Future<_LocationResult?> _getLocation() async {
     try {
-      // Check if location services are enabled
+      // Step 1: Check if location services are enabled
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       debugPrint('Location service enabled: $serviceEnabled');
       if (!serviceEnabled) {
-        debugPrint('Location service is not enabled');
-        return null;
+        debugPrint('Location service is not enabled — showing dialog');
+        if (!mounted) return null;
+        final nowEnabled = await _showLocationServicesDialog();
+        if (!nowEnabled) {
+          debugPrint('User did not enable location services');
+          return null;
+        }
       }
 
-      // Check current permission status
+      // Step 2: Check current permission status
       LocationPermission permission = await Geolocator.checkPermission();
       debugPrint('Initial permission status: $permission');
-      
-      // If denied, request permission once
+
+      // Step 3: Handle denied permission
       if (permission == LocationPermission.denied) {
         debugPrint('Requesting location permission...');
         permission = await Geolocator.requestPermission();
         debugPrint('Permission after request: $permission');
+
+        // If still denied after system prompt, show our custom dialog
+        if (permission == LocationPermission.denied) {
+          if (!mounted) return null;
+          final wantsToRetry = await _showPermissionDeniedDialog();
+          if (wantsToRetry) {
+            // Try requesting one more time
+            permission = await Geolocator.requestPermission();
+            debugPrint('Permission after retry: $permission');
+          }
+        }
       }
-      
-      // If still denied or permanently denied, return null
-      if (permission == LocationPermission.denied || 
+
+      // Step 4: Handle permanently denied
+      if (permission == LocationPermission.deniedForever) {
+        debugPrint('Location permission denied forever — showing settings dialog');
+        if (!mounted) return null;
+        final nowGranted = await _showPermissionDeniedForeverDialog();
+        if (!nowGranted) {
+          debugPrint('User did not grant permission from settings');
+          return null;
+        }
+        // Re-check after settings
+        permission = await Geolocator.checkPermission();
+      }
+
+      // Step 5: Final check — if still not granted, give up
+      if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         debugPrint('Location permission denied: $permission');
         return null;
       }
 
       debugPrint('Attempting to get current position...');
-      // Get position - use last known location as fallback for speed
+
+      // Step 6: Get position — try last known first for speed
       Position? position;
       try {
-        // Try to get last known position first (instant)
         position = await Geolocator.getLastKnownPosition();
         if (position != null) {
           debugPrint('Using last known position: lat=${position.latitude}, lon=${position.longitude}');
@@ -71,12 +276,12 @@ class _CameraPageState extends State<CameraPage> {
       } catch (e) {
         debugPrint('Could not get last known position: $e');
       }
-      
-      // If no last known position, get current position with adequate timeout for GPS fix
+
+      // Step 7: Get current position with timeout
       try {
         position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.medium,
-          timeLimit: const Duration(seconds: 20), // GPS can take 10-15s for initial fix
+          timeLimit: const Duration(seconds: 20),
         );
         debugPrint('Got current position: lat=${position.latitude}, lon=${position.longitude}');
         return _LocationResult(position);
@@ -92,6 +297,12 @@ class _CameraPageState extends State<CameraPage> {
 
   Future<File?> _compressImage(File imageFile) async {
     try {
+      // Verify source file exists
+      if (!imageFile.existsSync()) {
+        debugPrint('Source image file does not exist: ${imageFile.path}');
+        return null;
+      }
+
       final Directory tempDir = await getTemporaryDirectory();
       final String targetPath =
           p.join(tempDir.path, "${DateTime.now().millisecondsSinceEpoch}.jpg");
@@ -108,7 +319,10 @@ class _CameraPageState extends State<CameraPage> {
       );
 
       if (compressedXFile != null) {
-        return File(compressedXFile.path);
+        final compressedFile = File(compressedXFile.path);
+        if (compressedFile.existsSync()) {
+          return compressedFile;
+        }
       }
       return null;
     } catch (e) {
@@ -124,15 +338,58 @@ class _CameraPageState extends State<CameraPage> {
     });
     try {
       final picker = ImagePicker();
-      final pickedFile = await picker.pickImage(source: ImageSource.camera);
+
+      // Attempt to pick image — this can throw PlatformException if camera
+      // permission is denied at the OS level. We catch it gracefully.
+      XFile? pickedFile;
+      try {
+        pickedFile = await picker.pickImage(source: ImageSource.camera);
+      } catch (cameraError) {
+        debugPrint('Camera error (likely permission denied): $cameraError');
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+
+        // Show a user-friendly message about camera permission
+        if (cameraError.toString().contains('camera_access_denied') ||
+            cameraError.toString().contains('PlatformException') ||
+            cameraError.toString().contains('permission')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('📷 Camera permission is required.\nPlease allow camera access in your device Settings.'),
+              duration: Duration(seconds: 5),
+              backgroundColor: Colors.red,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Camera error: ${cameraError.toString().length > 80 ? cameraError.toString().substring(0, 80) : cameraError}'),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
 
       if (pickedFile != null) {
+        // Verify the picked file actually exists
+        final pickedImageFile = File(pickedFile.path);
+        if (!pickedImageFile.existsSync()) {
+          debugPrint('Picked image file does not exist: ${pickedFile.path}');
+          if (!mounted) return;
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to access captured image. Please try again.')),
+          );
+          return;
+        }
+
         // --- OPTIMIZATION: Run compression and location fetch in parallel ---
-        final compressionFuture = _compressImage(File(pickedFile.path));
+        final compressionFuture = _compressImage(pickedImageFile);
         final locationFuture = _getLocation().timeout(
-          const Duration(seconds: 25), // Allow enough time for GPS fix
+          const Duration(seconds: 30), // Allow enough time for GPS fix + dialogs
           onTimeout: () {
-            debugPrint('Location fetch timed out after 25 seconds');
+            debugPrint('Location fetch timed out after 30 seconds');
             return null;
           },
         );
@@ -141,8 +398,9 @@ class _CameraPageState extends State<CameraPage> {
         final compressedImageFile = results[0] as File?;
         final locationResult = results[1] as _LocationResult?;
 
+        if (!mounted) return;
+
         if (compressedImageFile == null) {
-          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Failed to process image. Please try again.')),
           );
@@ -152,11 +410,10 @@ class _CameraPageState extends State<CameraPage> {
 
         // GPS is MANDATORY - cannot proceed without location
         if (locationResult == null) {
-          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('❌ GPS location is required. Please:\n• Go outdoors or near a window\n• Wait for GPS signal to lock\n• Ensure Location is High Accuracy mode'),
-              duration: Duration(seconds: 7),
+              content: Text('❌ GPS location is required. Please enable location and try again.'),
+              duration: Duration(seconds: 5),
               backgroundColor: Colors.red,
             ),
           );
@@ -169,6 +426,7 @@ class _CameraPageState extends State<CameraPage> {
         try {
           final placemarks =
               await placemarkFromCoordinates(position.latitude, position.longitude);
+          if (!mounted) return;
           if (placemarks.isNotEmpty) {
             final placemark = placemarks.first;
             locationText =
@@ -194,6 +452,7 @@ class _CameraPageState extends State<CameraPage> {
           _isLoading = false;
         });
       } else {
+        // User cancelled the camera picker
         if (!mounted) return;
         setState(() {
           _isLoading = false;
@@ -209,6 +468,54 @@ class _CameraPageState extends State<CameraPage> {
         SnackBar(content: Text('Error taking photo: ${e.toString().length > 80 ? e.toString().substring(0, 80) : e}')),
       );
     }
+  }
+
+  /// Safely builds an image widget with error handling
+  Widget _buildSafeImage(File imageFile, {double? height, BoxFit? fit}) {
+    if (!imageFile.existsSync()) {
+      return Container(
+        height: height ?? 300,
+        decoration: BoxDecoration(
+          color: Colors.grey[200],
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.broken_image_rounded, size: 48, color: Colors.grey),
+              SizedBox(height: 8),
+              Text('Image not available', style: TextStyle(color: Colors.grey, fontFamily: 'Electorize')),
+            ],
+          ),
+        ),
+      );
+    }
+    return Image.file(
+      imageFile,
+      height: height,
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) {
+        debugPrint('Error loading image: $error');
+        return Container(
+          height: height ?? 300,
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.broken_image_rounded, size: 48, color: Colors.grey),
+                SizedBox(height: 8),
+                Text('Failed to load image', style: TextStyle(color: Colors.grey, fontFamily: 'Electorize')),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -314,7 +621,7 @@ class _CameraPageState extends State<CameraPage> {
                               ),
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(14),
-                                child: Image.file(_capturedImage!, height: 300, fit: BoxFit.cover),
+                                child: _buildSafeImage(_capturedImage!, height: 300, fit: BoxFit.cover),
                               ),
                             ),
                             const SizedBox(height: 28),
@@ -343,6 +650,20 @@ class _CameraPageState extends State<CameraPage> {
                                     if (_capturedImage != null &&
                                         _locationString != null &&
                                         _dateTimeString != null) {
+                                      // Verify image still exists before processing
+                                      if (!_capturedImage!.existsSync()) {
+                                        if (!mounted) return;
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Image file is no longer available. Please retake the photo.')),
+                                        );
+                                        setState(() {
+                                          _capturedImage = null;
+                                          _locationString = null;
+                                          _dateTimeString = null;
+                                        });
+                                        return;
+                                      }
+
                                       setState(() {
                                         _isUploading = true;
                                       });
@@ -353,6 +674,7 @@ class _CameraPageState extends State<CameraPage> {
                                           imageFile: _capturedImage!,
                                           watermarkText: watermarkText,
                                         );
+                                        if (!mounted) return;
                                         // Re-compress after watermarking — the watermark library
                                         // may output a much larger file (decoded/re-encoded pixels).
                                         // This re-compression is the #1 upload speed optimization.
