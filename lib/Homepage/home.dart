@@ -360,6 +360,8 @@ class _HomePageState extends State<HomePage>
 
         int unseenTasks = 0;
         for (final doc in tasksSnap.docs) {
+          final data = doc.data();
+          if (data['is_mass_task'] == true) continue;
           try {
             final userSeenDoc = await FirebaseFirestore.instance
                 .collection('user_seen_leads')
