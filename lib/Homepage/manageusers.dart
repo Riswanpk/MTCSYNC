@@ -266,7 +266,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                   ..sort((a, b) => a.key.compareTo(b.key));
 
                 // Get latest version from app_constants.dart
-                const String latestVersion = '1.2.167';
+                const String latestVersion = '2.0.168';
 
                 return AlertDialog(
                   title: Row(
@@ -540,7 +540,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                   fontSize: 13,
                                 ),
                                 underline: Container(),
-                                 items: _roles
+                                items: _roles
                                     .map((r) => DropdownMenuItem(
                                           value: r,
                                           child: Row(
@@ -549,15 +549,21 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                                 r == 'admin'
                                                     ? Icons.security
                                                     : r == 'manager'
-                                                        ? Icons.supervisor_account
+                                                        ? Icons
+                                                            .supervisor_account
                                                         : r == 'asst_manager'
-                                                            ? Icons.manage_accounts
+                                                            ? Icons
+                                                                .manage_accounts
                                                             : r == 'sync_head'
                                                                 ? Icons.hub
-                                                                : r == 'core_team'
-                                                                    ? Icons.group_work_rounded
-                                                                    : r == 'dme_admin'
-                                                                        ? Icons.admin_panel_settings
+                                                                : r ==
+                                                                        'core_team'
+                                                                    ? Icons
+                                                                        .group_work_rounded
+                                                                    : r ==
+                                                                            'dme_admin'
+                                                                        ? Icons
+                                                                            .admin_panel_settings
                                                                         : r == 'dme_user'
                                                                             ? Icons.person_outline
                                                                             : Icons.person,
@@ -569,10 +575,14 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                                             ? Colors.deepOrange
                                                             : r == 'sync_head'
                                                                 ? Colors.blue
-                                                                : r == 'core_team'
-                                                                    ? Colors.pink
-                                                                    : r == 'dme_admin'
-                                                                        ? Colors.indigo
+                                                                : r ==
+                                                                        'core_team'
+                                                                    ? Colors
+                                                                        .pink
+                                                                    : r ==
+                                                                            'dme_admin'
+                                                                        ? Colors
+                                                                            .indigo
                                                                         : r == 'dme_user'
                                                                             ? Colors.teal
                                                                             : Colors.green,
@@ -589,9 +599,12 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                                               ? 'DME Admin'
                                                               : r == 'dme_user'
                                                                   ? 'DME User'
-                                                                  : r == 'supersale_admin'
+                                                                  : r ==
+                                                                          'supersale_admin'
                                                                       ? 'Supersale Admin'
-                                                                      : r[0].toUpperCase() + r.substring(1)),
+                                                                      : r[0].toUpperCase() +
+                                                                          r.substring(
+                                                                              1)),
                                             ],
                                           ),
                                         ))

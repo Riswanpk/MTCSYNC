@@ -64,8 +64,8 @@ class _DmeComplaintsViewPageState extends State<DmeComplaintsViewPage> {
       List<DmeComplaint> complaints = [];
 
       // Load based on user role
-      if (_userRole == 'dme_admin') {
-        // Admin sees all complaints
+      if (_userRole == 'dme_admin' || _userRole == 'admin' || _userRole == 'sync_head' || _userRole == 'Sync Head') {
+        // Admin / Sync Head sees all complaints across all branches
         complaints = await _complaintService.getAllComplaints();
       } else if (_userRole == 'dme_user') {
         // DME user sees complaints they raised

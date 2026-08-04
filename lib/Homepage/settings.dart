@@ -9,7 +9,6 @@ import 'dart:io';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-
 class SettingsPage extends StatelessWidget {
   Future<void> _triggerDeleteOldLeads(BuildContext context) async {
     try {
@@ -168,7 +167,6 @@ class SettingsPage extends StatelessWidget {
     return roleRaw.toString().toLowerCase().replaceAll('_', ' ').trim();
   }
 
-
   @override
   Widget build(BuildContext context) {
     final themeProvider = context.watch<ThemeProvider>();
@@ -262,7 +260,6 @@ class SettingsPage extends StatelessWidget {
                                   child:
                                       const Text('Generate Registration Code'),
                                 ),
-
                                 if (isAdmin) ...[
                                   const SizedBox(height: 16),
                                   ElevatedButton(

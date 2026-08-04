@@ -65,6 +65,7 @@ class _HomePageState extends State<HomePage>
   int _transferredCount = 0;
   int _otherCount = 0;
   int _taskCount = 0;
+  int _complaintCount = 0;
   StreamSubscription? _notificationListener;
   StreamSubscription? _assignedLeadsListener;
   StreamSubscription? _complaintsListener;
@@ -296,6 +297,7 @@ class _HomePageState extends State<HomePage>
     } catch (_) {}
 
     // Count complaints assigned to this user that are still raised (excluding seen ones)
+    int unresolvedComplaintsCount = 0;
     List<String> countedComplaintIds = [];
     try {
       final complaints = await DmeComplaintService.instance
@@ -307,6 +309,7 @@ class _HomePageState extends State<HomePage>
             .isComplaintSeen(complaintId: complaint.id ?? '', userId: uid);
         if (!isSeen) {
           count++;
+          unresolvedComplaintsCount++;
           countedComplaintIds.add(complaint.id ?? '');
         }
       }
@@ -333,6 +336,7 @@ class _HomePageState extends State<HomePage>
                   .isComplaintSeen(complaintId: complaint.id ?? '', userId: uid);
               if (!isSeen) {
                 count++;
+                unresolvedComplaintsCount++;
               }
             }
           }
@@ -383,6 +387,7 @@ class _HomePageState extends State<HomePage>
       setState(() {
         _otherCount = count;
         _taskCount = taskCount;
+        _complaintCount = unresolvedComplaintsCount;
       });
     }
   }
@@ -747,6 +752,7 @@ class _HomePageState extends State<HomePage>
                     role: role,
                     isDark: isDark,
                     taskCount: _taskCount,
+                    complaintCount: _complaintCount,
                     onPageChanged: (index) {
                       setState(() {
                         _currentPageIndex = index;

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../Navigation/user_cache_service.dart';
@@ -339,13 +340,62 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
         'branches': _selectedBranches,
       };
 
+      String? targetDocId = widget.docId;
+      String notifTitle = '';
+      String notifBody = '';
+      final List<String> notifBranches = List<String>.from(_selectedBranches);
+
+      final nowUtc = DateTime.now().toUtc();
+      final isNewBookingOpen = nowUtc.isAfter(bookingStart) && nowUtc.isBefore(bookingEnd);
+      final itemName = _itemController.text.trim();
+
       if (widget.docId == null) {
         data['created_by'] = user.uid;
         data['created_at'] = FieldValue.serverTimestamp();
         data['status'] = 'active';
-        await FirebaseFirestore.instance.collection('supersales').add(data);
+        final docRef = await FirebaseFirestore.instance.collection('supersales').add(data);
+        targetDocId = docRef.id;
+
+        if (isNewBookingOpen) {
+          notifTitle = 'Booking Opened';
+          notifBody = 'Supersale booking for "$itemName" is now open for your branch.';
+        } else if (nowUtc.isBefore(bookingStart)) {
+          notifTitle = 'Booking Scheduled';
+          final localStart = bookingStart.toLocal();
+          final formattedTime = DateFormat('dd MMM yyyy, hh:mm a').format(localStart);
+          notifBody = 'Supersale booking for "$itemName" is scheduled to start on $formattedTime.';
+        }
       } else {
         await FirebaseFirestore.instance.collection('supersales').doc(widget.docId).update(data);
+
+        final oldBookingRange = widget.bookingRange;
+        if (oldBookingRange != null) {
+          final isOldBookingOpen = nowUtc.isAfter(oldBookingRange.start.toUtc()) && nowUtc.isBefore(oldBookingRange.end.toUtc());
+
+          if (isOldBookingOpen && !isNewBookingOpen) {
+            notifTitle = 'Booking Closed';
+            notifBody = 'Supersale booking for "$itemName" has been closed.';
+          } else if (!isOldBookingOpen && isNewBookingOpen) {
+            notifTitle = 'Booking Opened';
+            notifBody = 'Supersale booking for "$itemName" is now open for your branch.';
+          } else if (oldBookingRange.start.toUtc() != bookingStart || oldBookingRange.end.toUtc() != bookingEnd) {
+            notifTitle = 'Booking Time Updated';
+            final localStart = bookingStart.toLocal();
+            final localEnd = bookingEnd.toLocal();
+            final formattedStart = DateFormat('dd MMM, hh:mm a').format(localStart);
+            final formattedEnd = DateFormat('dd MMM, hh:mm a').format(localEnd);
+            notifBody = 'Booking time for "$itemName" has been updated: $formattedStart to $formattedEnd.';
+          }
+        }
+      }
+
+      if (notifTitle.isNotEmpty && targetDocId != null && notifBranches.isNotEmpty) {
+        _sendFCMNotifications(
+          branches: notifBranches,
+          title: notifTitle,
+          body: notifBody,
+          docId: targetDocId,
+        );
       }
 
       if (mounted) {
@@ -370,6 +420,46 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
       if (mounted) {
         setState(() => _isSaving = false);
       }
+    }
+  }
+
+  Future<void> _sendFCMNotifications({
+    required List<String> branches,
+    required String title,
+    required String body,
+    required String docId,
+  }) async {
+    try {
+      final List<String> recipientUids = [];
+      for (final branch in branches) {
+        final usersSnap = await FirebaseFirestore.instance
+            .collection('users')
+            .where('branch', isEqualTo: branch)
+            .get();
+        for (final doc in usersSnap.docs) {
+          if (doc.id.isNotEmpty && !recipientUids.contains(doc.id)) {
+            recipientUids.add(doc.id);
+          }
+        }
+      }
+
+      for (final recipientUid in recipientUids) {
+        try {
+          await FirebaseFunctions.instanceFor(region: 'asia-south1')
+              .httpsCallable('sendLeadAssignmentNotification')
+              .call(<String, dynamic>{
+            'recipientUid': recipientUid,
+            'title': title,
+            'body': body,
+            'notifType': 'supersale_notification',
+            'leadDocId': docId,
+          });
+        } catch (error) {
+          debugPrint('FCM Warning: failed to send supersale notification to $recipientUid: $error');
+        }
+      }
+    } catch (e) {
+      debugPrint('Error triggering FCM notifications: $e');
     }
   }
 

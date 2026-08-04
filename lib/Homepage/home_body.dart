@@ -325,6 +325,7 @@ class HomeButtonsContainer extends StatefulWidget {
   final bool isDark;
   final ValueChanged<int>? onPageChanged;
   final int taskCount;
+  final int complaintCount;
 
   const HomeButtonsContainer({
     super.key,
@@ -332,6 +333,7 @@ class HomeButtonsContainer extends StatefulWidget {
     required this.isDark,
     this.onPageChanged,
     this.taskCount = 0,
+    this.complaintCount = 0,
   });
 
   @override
@@ -358,6 +360,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   Future<void> _navigateToSupersale(BuildContext context) async {
     final cache = UserCacheService.instance;
     await cache.ensureLoaded();
+    if (!context.mounted) return;
     final role = cache.role;
 
     if (role == 'supersale_admin') {
@@ -538,14 +541,15 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     final role = widget.role;
 
     final List<Widget> buttons = [
-      // Button 1 (Row 1 Left): Marketing
-      NeumorphicButton(
-        onTap: () => _navigateToMarketing(context),
-        text: 'Marketing',
-        color: const Color(0xFFFF5722),
-        textColor: Colors.white,
-        icon: Icons.campaign_rounded,
-      ),
+      // Button 1 (Row 1 Left): Marketing (hidden for dme_admin and dme_user)
+      if (role != 'dme_admin' && role != 'dme_user')
+        NeumorphicButton(
+          onTap: () => _navigateToMarketing(context),
+          text: 'Marketing',
+          color: const Color(0xFFFF5722),
+          textColor: Colors.white,
+          icon: Icons.campaign_rounded,
+        ),
       if (role == 'sales' || role == 'admin' || role == 'manager' || role == 'asst_manager')
         NeumorphicButton(
           onTap: () => _navigateToOrders(context),
@@ -553,6 +557,15 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           color: primaryGreen,
           textColor: Colors.white,
           icon: Icons.inventory_2_rounded,
+        ),
+      if (role == 'admin' || role == 'manager' || role == 'asst_manager' || role == 'sales')
+        NeumorphicButton(
+          onTap: () => _navigateToDmeComplaints(context),
+          text: 'Complaints',
+          color: const Color(0xFFE53935),
+          textColor: Colors.white,
+          icon: Icons.warning_rounded,
+          badgeCount: widget.complaintCount,
         ),
     ];
 
@@ -626,7 +639,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
         textColor: Colors.white,
         icon: Icons.assignment_ind_rounded,
       ),
-      // Button 5 (Row 3 Left): Dashboard (admin/manager) or Tasks (sales)
+      // Button 5 (Row 3 Left): Dashboard (admin/manager/asst_manager) or Tasks (sales)
       if (role == 'admin' || role == 'manager' || role == 'asst_manager')
         NeumorphicButton(
           onTap: () => _navigateToDashboard(context),
@@ -644,7 +657,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           icon: Icons.assignment_rounded,
           badgeCount: widget.taskCount,
         ),
-      // Button 6 (Row 3 Right): Tasks (admin/manager) or SME Leads (sales)
+      // Button 6 (Row 3 Right): Tasks (admin/manager/asst_manager) or SME Leads (sales)
       if (role == 'admin' || role == 'manager' || role == 'asst_manager')
         NeumorphicButton(
           onTap: () => _navigateToUserTasks(context),
@@ -1016,13 +1029,28 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   }
 
   Future<void> _navigateToUserTasks(BuildContext context) async {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const LoadingOverlayPage(
-          child: UserTaskPage(),
+    final cache = UserCacheService.instance;
+    await cache.ensureLoaded();
+    if (!context.mounted) return;
+    final role = cache.role;
+
+    if (role == 'admin' || role == 'core_team') {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const LoadingOverlayPage(
+            child: CoreTeamTaskPage(),
+          ),
         ),
-      ),
-    );
+      );
+    } else {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const LoadingOverlayPage(
+            child: UserTaskPage(),
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _navigateToMarketing(BuildContext context) async {
