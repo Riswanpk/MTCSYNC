@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
@@ -165,18 +166,22 @@ class _TransferLeadDialogState extends State<TransferLeadDialog> {
       // Send push notification to the new lead recipient (non-blocking)
       if (_selectedUserId != null) {
         final leadName = widget.leadData['name'] as String? ?? 'A lead';
-        FirebaseFunctions.instanceFor(region: 'asia-south1')
-            .httpsCallable('sendLeadAssignmentNotification')
-            .call(<String, dynamic>{
-          'recipientUid': _selectedUserId,
-          'title': 'Lead Transferred to You',
-          'body': '"$leadName" has been transferred to you',
-          'leadDocId': widget.leadDocId,
-          'leadName': leadName,
-          'notifType': 'lead_transfer',
-        }).catchError((error) {
-          debugPrint('Warning: Failed to send transfer notification: $error');
-        });
+        unawaited(() async {
+          try {
+            await FirebaseFunctions.instanceFor(region: 'asia-south1')
+                .httpsCallable('sendLeadAssignmentNotification')
+                .call(<String, dynamic>{
+              'recipientUid': _selectedUserId,
+              'title': 'Lead Transferred to You',
+              'body': '"$leadName" has been transferred to you',
+              'leadDocId': widget.leadDocId,
+              'leadName': leadName,
+              'notifType': 'lead_transfer',
+            });
+          } catch (error) {
+            debugPrint('Warning: Failed to send transfer notification: $error');
+          }
+        }());
       }
 
       if (mounted) {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -1371,18 +1372,22 @@ class _DmeCustomerTileViewerState extends State<DmeCustomerTileViewer>
       // Send push notification to assigned user (non-blocking)
       if (_selectedUserId != null) {
         final customerName = r.customerName ?? 'Unknown';
-        FirebaseFunctions.instanceFor(region: 'asia-south1')
-            .httpsCallable('sendLeadAssignmentNotification')
-            .call(<String, dynamic>{
-          'recipientUid': _selectedUserId,
-          'title': 'New DME Lead Assigned',
-          'body': 'You have been assigned a DME lead: "$customerName"',
-          'leadDocId': docRef.id,
-          'leadName': customerName,
-          'notifType': 'dme_lead_assignment',
-        }).catchError((error) {
-          debugPrint('Warning: Failed to send DME lead notification: $error');
-        });
+        unawaited(() async {
+          try {
+            await FirebaseFunctions.instanceFor(region: 'asia-south1')
+                .httpsCallable('sendLeadAssignmentNotification')
+                .call(<String, dynamic>{
+              'recipientUid': _selectedUserId,
+              'title': 'New DME Lead Assigned',
+              'body': 'You have been assigned a DME lead: "$customerName"',
+              'leadDocId': docRef.id,
+              'leadName': customerName,
+              'notifType': 'dme_lead_assignment',
+            });
+          } catch (error) {
+            debugPrint('Warning: Failed to send DME lead notification: $error');
+          }
+        }());
       }
 
       if (mounted) {

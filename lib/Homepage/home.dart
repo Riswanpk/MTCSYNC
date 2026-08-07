@@ -77,7 +77,11 @@ class _HomePageState extends State<HomePage>
     isAppReady = true;
     _initSwingAnimation();
     // Initialize Supabase early so notification dot shows on app startup
-    DmeSupabaseService.instance.ensureInitialized().catchError((_) {});
+    unawaited(() async {
+      try {
+        await DmeSupabaseService.instance.ensureInitialized();
+      } catch (_) {}
+    }());
     _userCache.ensureLoaded().then((_) {
       if (mounted) {
         setState(() {
@@ -87,9 +91,13 @@ class _HomePageState extends State<HomePage>
         });
         final uid = FirebaseAuth.instance.currentUser?.uid;
         if (uid != null && (_role == 'sales' || _role == 'manager' || _role == 'asst_manager')) {
-          syncTaskReminders(uid).catchError((e) {
-            debugPrint('Failed to sync tasks reminders: $e');
-          });
+          unawaited(() async {
+            try {
+              await syncTaskReminders(uid);
+            } catch (e) {
+              debugPrint('Failed to sync tasks reminders: $e');
+            }
+          }());
         }
         _listenForTransferredLeads();
         _listenForAssignedLeadsAndComplaints();

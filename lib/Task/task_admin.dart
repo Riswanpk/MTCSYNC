@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -196,17 +197,21 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
         });
 
       // 2. Trigger push notification via Cloud Function
-      FirebaseFunctions.instanceFor(region: 'asia-south1')
-          .httpsCallable('sendLeadAssignmentNotification')
-          .call(<String, dynamic>{
-        'recipientUid': recipientUid,
-        'title': 'New Task Assigned',
-        'body': 'Core Team assigned you a new task: "$taskName"',
-        'notifType': 'core_task_assignment',
-        'leadDocId': docRef.id,
-      }).catchError((error) {
-        debugPrint('FCM Warning: failed to send task notification: $error');
-      });
+      unawaited(() async {
+        try {
+          await FirebaseFunctions.instanceFor(region: 'asia-south1')
+              .httpsCallable('sendLeadAssignmentNotification')
+              .call(<String, dynamic>{
+            'recipientUid': recipientUid,
+            'title': 'New Task Assigned',
+            'body': 'Core Team assigned you a new task: "$taskName"',
+            'notifType': 'core_task_assignment',
+            'leadDocId': docRef.id,
+          });
+        } catch (error) {
+          debugPrint('FCM Warning: failed to send task notification: $error');
+        }
+      }());
       }
 
       if (mounted) {

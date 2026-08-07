@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -230,14 +231,15 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
       }
       
       // Non-blocking call to Cloud Function (fire and forget with error logging)
-      FirebaseFunctions.instanceFor(region: 'asia-south1')
-          .httpsCallable('sendLeadAssignmentNotification')
-          .call(notifPayload)
-          .then((_) => null)
-          .catchError((error) {
-        debugPrint('Warning: Failed to send lead assignment notification: $error');
-        return null;
-      });
+      unawaited(() async {
+        try {
+          await FirebaseFunctions.instanceFor(region: 'asia-south1')
+              .httpsCallable('sendLeadAssignmentNotification')
+              .call(notifPayload);
+        } catch (error) {
+          debugPrint('Warning: Failed to send lead assignment notification: $error');
+        }
+      }());
 
       // Daily report tracking
       await createDailyReportIfNeededLeads(

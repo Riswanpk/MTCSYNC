@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -244,17 +245,21 @@ class _UserTaskPageState extends State<UserTaskPage> {
 
       // 3. Send Completion FCM Notification to Core Team member
       if (!isMassTask) {
-        FirebaseFunctions.instanceFor(region: 'asia-south1')
-            .httpsCallable('sendLeadAssignmentNotification')
-            .call(<String, dynamic>{
-          'recipientUid': assignedByUid,
-          'title': 'Task Completed',
-          'body': '$currentUsername completed the task: "$title"',
-          'notifType': 'core_task_completion',
-          'leadDocId': docId,
-        }).catchError((error) {
-          debugPrint('FCM Warning: failed to send task completion notification: $error');
-        });
+        unawaited(() async {
+          try {
+            await FirebaseFunctions.instanceFor(region: 'asia-south1')
+                .httpsCallable('sendLeadAssignmentNotification')
+                .call(<String, dynamic>{
+              'recipientUid': assignedByUid,
+              'title': 'Task Completed',
+              'body': '$currentUsername completed the task: "$title"',
+              'notifType': 'core_task_completion',
+              'leadDocId': docId,
+            });
+          } catch (error) {
+            debugPrint('FCM Warning: failed to send task completion notification: $error');
+          }
+        }());
       }
 
       if (mounted) {
