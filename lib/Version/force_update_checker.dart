@@ -6,8 +6,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 /// Firestore path: `config/app_config`
 /// Required field:  `min_version_code` (int)  — matches Android versionCode
 ///
-/// To force all users below versionCode 169 to update, set:
-///   config/app_config → { min_version_code: 169 }
+/// To force all users below versionCode 170 to update, set:
+///   config/app_config → { min_version_code: 170 }
 class ForceUpdateChecker {
   static Future<bool> isUpdateRequired() async {
     try {
@@ -15,12 +15,15 @@ class ForceUpdateChecker {
       final packageInfo = await PackageInfo.fromPlatform();
       final currentBuildNumber = int.tryParse(packageInfo.buildNumber) ?? 0;
 
-      // Fetch the minimum required version from Firestore
+      // If build number cannot be determined, do not block the user
+      if (currentBuildNumber == 0) return false;
+
+      // Fetch the minimum required version from Firestore with a 3-second timeout
       final doc = await FirebaseFirestore.instance
           .collection('config')
           .doc('app_config')
           .get()
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 3));
 
       if (!doc.exists) return false; // No config → don't block
 
@@ -30,7 +33,7 @@ class ForceUpdateChecker {
       final required = (minVersionCode as num).toInt();
       return currentBuildNumber < required;
     } catch (e) {
-      // On any error (network, Firestore, etc.) → don't block the user
+      // On any error (network timeout, Firestore error, etc.) → don't block the user
       return false;
     }
   }

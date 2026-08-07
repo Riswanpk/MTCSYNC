@@ -40,13 +40,17 @@ class _SplashScreenState extends State<SplashScreen> {
     // ── Force update check ────────────────────────────────────────────────────
     // Run before anything else. If the installed build is too old, replace the
     // splash with a non-dismissible update screen and stop further navigation.
-    final updateRequired = await ForceUpdateChecker.isUpdateRequired();
-    if (!mounted) return;
-    if (updateRequired) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const ForceUpdateScreen()),
-      );
-      return;
+    try {
+      final updateRequired = await ForceUpdateChecker.isUpdateRequired();
+      if (!mounted) return;
+      if (updateRequired) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const ForceUpdateScreen()),
+        );
+        return;
+      }
+    } catch (e) {
+      debugPrint('Force update check error: $e');
     }
     // ─────────────────────────────────────────────────────────────────────────
 
