@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'sme_ad_wise_detail_page.dart';
 
 class SmeAdWiseReportPage extends StatefulWidget {
   const SmeAdWiseReportPage({super.key});
@@ -32,8 +33,6 @@ class _SmeAdWiseReportPageState extends State<SmeAdWiseReportPage> {
 
       final snapshot = await query.get();
 
-      // Map of adName -> StatMap
-      // StatMap: { 'total': 0, 'promoted': 0, 'rejected': 0, 'sold': 0, 'cancelled': 0, 'in_progress': 0 }
       final Map<String, Map<String, int>> adStats = {};
 
       for (var doc in snapshot.docs) {
@@ -150,7 +149,7 @@ class _SmeAdWiseReportPageState extends State<SmeAdWiseReportPage> {
                     final filterOptions = ['ALL', ...adNames, 'Unspecified / No Ad'];
 
                     return DropdownButtonFormField<String>(
-                      value: _selectedAdFilter ?? 'ALL',
+                      initialValue: _selectedAdFilter ?? 'ALL',
                       decoration: InputDecoration(
                         labelText: 'Filter by Ad Name',
                         prefixIcon: const Icon(Icons.filter_alt_rounded, color: _primaryBlue),
@@ -256,98 +255,115 @@ class _SmeAdWiseReportPageState extends State<SmeAdWiseReportPage> {
                           ),
                         ],
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Header: Ad Name & Total Leads Badge
-                            Row(
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => SmeAdWiseDetailPage(
+                                  adName: adName,
+                                  dateRange: _selectedDateRange,
+                                ),
+                              ),
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: _primaryBlue.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: const Icon(Icons.campaign_rounded, color: _primaryBlue, size: 20),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    adName,
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: isDark ? Colors.white : const Color(0xFF1A1B22),
+                                // Header: Ad Name & Total Leads Badge
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: _primaryBlue.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: const Icon(Icons.campaign_rounded, color: _primaryBlue, size: 20),
                                     ),
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: _primaryBlue,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    '$total Leads',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        adName,
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDark ? Colors.white : const Color(0xFF1A1B22),
+                                        ),
+                                      ),
                                     ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: _primaryBlue,
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Text(
+                                        '$total Leads',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                const Divider(height: 1),
+                                const SizedBox(height: 16),
+
+                                // Grid Breakdown Stats
+                                Row(
+                                  children: [
+                                    _statChip('Promoted', '$promoted', const Color(0xFF26A69A), isDark),
+                                    const SizedBox(width: 8),
+                                    _statChip('Rejected', '$rejected', const Color(0xFFEF5350), isDark),
+                                    const SizedBox(width: 8),
+                                    _statChip('Sold', '$sold', const Color(0xFF42A5F5), isDark),
+                                    const SizedBox(width: 8),
+                                    _statChip('Cancelled', '$cancelled', const Color(0xFFFFA726), isDark),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+
+                                // Summary Bar (Conversion rate & In Progress)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFF8FAFC),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'In Progress: $inProgress',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: isDark ? Colors.white70 : Colors.black87,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Conversion Rate: $convRate%',
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: _primaryBlue,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 16),
-                            const Divider(height: 1),
-                            const SizedBox(height: 16),
-
-                            // Grid Breakdown Stats
-                            Row(
-                              children: [
-                                _statChip('Promoted', '$promoted', const Color(0xFF26A69A), isDark),
-                                const SizedBox(width: 8),
-                                _statChip('Rejected', '$rejected', const Color(0xFFEF5350), isDark),
-                                const SizedBox(width: 8),
-                                _statChip('Sold', '$sold', const Color(0xFF42A5F5), isDark),
-                                const SizedBox(width: 8),
-                                _statChip('Cancelled', '$cancelled', const Color(0xFFFFA726), isDark),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-
-                            // Summary Bar (Conversion rate & In Progress)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'In Progress: $inProgress',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: isDark ? Colors.white70 : Colors.black87,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Conversion Rate: $convRate%',
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: _primaryBlue,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     );
