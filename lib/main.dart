@@ -320,7 +320,7 @@ class NotificationController {
       final isSmeLead = notifType == 'sme_lead' || notifType == 'sme_lead_assignment';
 
       if (isSmeLead) {
-        _doPush((_) => SmeLeadDetailPageFromId(docId: docId));
+        _doPush((_) => const SmeAssignedLeadsPage());
       } else if (isEdit) {
         _doPush((_) => PresentFollowUp(docId: docId, editMode: true));
       } else if (isTodo || ((channelKey == 'reminder_channel' || channelKey == 'basic_channel') && isTodo)) {

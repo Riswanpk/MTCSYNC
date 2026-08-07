@@ -3,51 +3,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'task_detail_widgets.dart';
-import 'todo_widget_updater.dart';
+
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
 
-/// Returns the priority indicator color.
-Color getPriorityColor(String priority) {
-  switch (priority) {
-    case 'High':
-      return Colors.red;
-    case 'Medium':
-      return Colors.amber;
-    case 'Low':
-      return Colors.green;
-    default:
-      return Colors.grey;
-  }
-}
 
-/// Returns the priority background color based on theme brightness.
-Color getPriorityBgColor(String priority, bool isDark) {
-  if (isDark) {
-    switch (priority) {
-      case 'High':
-        return const Color(0xFF3B2323);
-      case 'Medium':
-        return const Color(0xFF39321A);
-      case 'Low':
-        return const Color(0xFF1B3223);
-      default:
-        return Colors.grey.shade800;
-    }
-  } else {
-    switch (priority) {
-      case 'High':
-        return const Color(0xFFFFEBEE);
-      case 'Medium':
-        return const Color(0xFFFFF8E1);
-      case 'Low':
-        return const Color(0xFFE8F5E9);
-      default:
-        return Colors.grey.shade100;
-    }
-  }
-}
 
 /// A reusable todo list item card with slidable actions.
 class TodoListItem extends StatelessWidget {
@@ -73,7 +34,6 @@ class TodoListItem extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final title = data['title'] ?? 'No title';
     final description = data['description'] ?? '';
-    final priority = data['priority'] ?? 'High';
     final reminderData = data['reminder'];
     DateTime? reminderDateTime;
     if (reminderData is Timestamp) {
@@ -84,22 +44,18 @@ class TodoListItem extends StatelessWidget {
     final timeStr = reminderDateTime != null
         ? TimeOfDay.fromDateTime(reminderDateTime.toLocal()).format(context)
         : 'No reminder';
-
-    final priorityColor = getPriorityColor(priority);
-    final priorityBgColor = getPriorityBgColor(priority, isDark);
-
     final child = Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: priorityBgColor,
+        color: isDark ? const Color(0xFF23262F) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: priorityColor.withValues(alpha: 0.2),
+          color: isDark ? Colors.white10 : Colors.black12,
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: priorityColor.withValues(alpha: 0.1),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 12,
             offset: const Offset(0, 4),
             spreadRadius: 0,
@@ -142,15 +98,8 @@ class TodoListItem extends StatelessWidget {
                   width: 4,
                   height: 60,
                   decoration: BoxDecoration(
-                    color: priorityColor,
+                    color: primaryBlue,
                     borderRadius: BorderRadius.circular(8),
-                    boxShadow: [
-                      BoxShadow(
-                        color: priorityColor.withValues(alpha: 0.4),
-                        blurRadius: 4,
-                        spreadRadius: 0,
-                      ),
-                    ],
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -301,7 +250,7 @@ class TodoListItem extends StatelessWidget {
                   ),
                 );
 
-                await updateTodoWidgetFromFirestore();
+
 
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(

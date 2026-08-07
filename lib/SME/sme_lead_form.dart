@@ -635,6 +635,11 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                     const SizedBox(height: 14),
                     TextFormField(
                       controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(10),
+                      ],
                       decoration: _inputDecoration(
                         label: 'Phone *',
                         icon: Icons.phone,
@@ -648,7 +653,8 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                                 final clipboardData =
                                     await Clipboard.getData('text/plain');
                                 if (clipboardData?.text != null) {
-                                  _phoneController.text = clipboardData!.text!;
+                                  final digits = clipboardData!.text!.replaceAll(RegExp(r'\D'), '');
+                                  _phoneController.text = digits.length > 10 ? digits.substring(digits.length - 10) : digits;
                                 }
                               },
                             ),
@@ -684,7 +690,8 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                                           scrollController: scrollController,
                                           onSelect: (name, phone) {
                                             setState(() {
-                                              _phoneController.text = phone;
+                                              final digits = phone.replaceAll(RegExp(r'\D'), '');
+                                              _phoneController.text = digits.length > 10 ? digits.substring(digits.length - 10) : digits;
                                               if (name.isNotEmpty)
                                                 _nameController.text = name;
                                             });
@@ -699,10 +706,13 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                           ],
                         ),
                       ),
-                      keyboardType: TextInputType.phone,
                       validator: (value) {
-                        if (value == null || value.isEmpty)
+                        if (value == null || value.trim().isEmpty) {
                           return 'Enter phone number';
+                        }
+                        if (value.trim().length != 10) {
+                          return 'Phone number must be 10 digits';
+                        }
                         return null;
                       },
                     ),

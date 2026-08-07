@@ -23,6 +23,7 @@ class SmeNotificationService {
 
     _subscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
       final data = message.data;
+      final type = data['type'] ?? data['notifType'];
       const handled = {
         'sme_lead_assignment',
         'dme_lead_assignment',
@@ -31,15 +32,15 @@ class SmeNotificationService {
         'core_task_completion',
         'todo'
       };
-      if (!handled.contains(data['type'])) return;
+      if (!handled.contains(type)) return;
 
       final title = message.notification?.title ?? data['title'] ?? 'New Notification';
       final body = message.notification?.body ?? data['body'] ?? '';
       final leadDocId = data['leadDocId'] ?? '';
 
-      final isCoreTaskAssigned = data['type'] == 'core_task_assignment';
-      final isCoreTaskCompleted = data['type'] == 'core_task_completion';
-      final isTodo = data['type'] == 'todo';
+      final isCoreTaskAssigned = type == 'core_task_assignment';
+      final isCoreTaskCompleted = type == 'core_task_completion';
+      final isTodo = type == 'todo';
 
       // Show local notification so AwesomeNotifications action buttons work
       await NotificationPermissionService.instance.safeCreateNotification(
@@ -57,7 +58,7 @@ class SmeNotificationService {
                 ? 'core_task'
                 : isCoreTaskCompleted
                     ? 'core_task_complete'
-                    : (isTodo ? 'todo' : 'sme_lead'),
+                    : (isTodo ? 'todo' : 'sme_lead_assignment'),
           },
         ),
       );

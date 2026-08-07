@@ -15,7 +15,7 @@ import '../Marketing/viewer_marketing.dart';
 import '../Customer Calling/customer_list_target.dart';
 import '../Customer Calling/customer_admin_viewer.dart';
 import '../Navigation/loading_page.dart';
-import '../Todo/todo_widget_updater.dart';
+
 import 'home_widgets.dart';
 import '../Sync Head/sync_head_leads_page.dart';
 import '../Sync Head/sync_head_todos_page.dart';
@@ -499,50 +499,38 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   }
 
   Widget _buildSupersaleAdminTiles(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: NeumorphicButton(
-                onTap: () => _navigateToSupersale(context),
-                text: 'Supersale',
-                color: const Color(0xFFFF5722), // Vibrant deep orange
-                textColor: Colors.white,
-                icon: Icons.flash_on_rounded,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: NeumorphicButton(
-                onTap: () => _navigateToSupersaleDashboard(context),
-                text: 'Dashboard',
-                color: primaryGreen,
-                textColor: Colors.white,
-                icon: Icons.dashboard_rounded,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        NeumorphicButton(
-          onTap: () => _navigateToMarketing(context),
-          text: 'Marketing',
-          color: primaryBlue.withBlue(180),
-          textColor: Colors.white,
-          icon: Icons.campaign_rounded,
-        ),
-      ],
-    );
+    final List<Widget> buttons = [
+      NeumorphicButton(
+        onTap: () => _navigateToSupersale(context),
+        text: 'Supersale',
+        color: const Color(0xFFFF5722), // Vibrant deep orange
+        textColor: Colors.white,
+        icon: Icons.flash_on_rounded,
+      ),
+      NeumorphicButton(
+        onTap: () => _navigateToSupersaleDashboard(context),
+        text: 'Dashboard',
+        color: primaryGreen,
+        textColor: Colors.white,
+        icon: Icons.dashboard_rounded,
+      ),
+      NeumorphicButton(
+        onTap: () => _navigateToMarketing(context),
+        text: 'Marketing',
+        color: primaryBlue.withBlue(180),
+        textColor: Colors.white,
+        icon: Icons.campaign_rounded,
+      ),
+    ];
+    return _buildButtonGrid(buttons);
   }
 
   Widget _buildSupersalePage(BuildContext context) {
     final role = widget.role;
 
     final List<Widget> buttons = [
-      // Button 1 (Row 1 Left): Marketing (hidden for dme_admin and dme_user)
-      if (role != 'dme_admin' && role != 'dme_user')
+      // Button 1 (Row 1 Left): Marketing (hidden for dme_admin, dme_user, sync_head, sme)
+      if (role != 'dme_admin' && role != 'dme_user' && role != 'sync_head' && role != 'sme')
         NeumorphicButton(
           onTap: () => _navigateToMarketing(context),
           text: 'Marketing',
@@ -614,6 +602,17 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       // Button 3 (Row 2 Left): Supersale
       NeumorphicButton(
         onTap: () => _navigateToSupersale(context),
+        onLongPress: role == 'admin'
+            ? () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const LoadingOverlayPage(
+                      child: SupersalePage(),
+                    ),
+                  ),
+                );
+              }
+            : null,
         text: 'Supersale',
         color: primaryBlue,
         textColor: Colors.white,
@@ -1018,7 +1017,6 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   }
 
   Future<void> _navigateToTodo(BuildContext context) async {
-    await updateTodoWidgetFromFirestore();
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => const LoadingOverlayPage(
@@ -1074,7 +1072,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       rethrow;
     }
 
-    if (role == 'admin' || role == 'Sync Head' || role == 'sync_head') {
+    if (role == 'admin' || role == 'Sync Head' || role == 'sync_head' || role == 'supersale_admin') {
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => const LoadingOverlayPage(

@@ -11,12 +11,12 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'dart:convert';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:home_widget/home_widget.dart';
+
 import 'package:mtcsync/Misc/notification_permission_service.dart';
 import '../main.dart';
 import '../Todo/todo.dart';
 import '../Todo/todoform.dart';
-import '../Todo/todo_widget_updater.dart';
+
 import '../Leads/presentfollowup.dart';
 import '../Homepage/home_widgets.dart';
 import '../Homepage/home_drawer.dart';
@@ -46,7 +46,6 @@ class _HomePageState extends State<HomePage>
   late AnimationController _swingController;
   late Animation<double> _swingAnimation;
   StreamSubscription<String>? _fcmTokenSubscription;
-  StreamSubscription<Uri?>? _widgetClickSub;
 
   bool _showTodoWarning = false;
   int _logoTapCount = 0;
@@ -99,16 +98,9 @@ class _HomePageState extends State<HomePage>
     // Stagger heavy startup tasks so they don't all hit the event loop at once.
     // This is the primary fix for ANR on low-spec devices (Xiaomi/Redmi etc.)
     _checkForUpdate();
-    // Listen for widget taps when app is warm (already running)
-    try {
-      _widgetClickSub = HomeWidget.widgetClicked.listen(_handleWidgetDeepLink);
-    } catch (_) {
-      // Platform may not have an active stream — safe to ignore
-    }
-    // Tier-1 (after first frame): contact cache and widget data
+    // Tier-1 (after first frame): contact cache
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchAndCacheContacts();
-      updateTodoWidgetFromFirestore().catchError((_) {});
     });
     // Tier-2 (500 ms): todo warning check
     Future.delayed(const Duration(milliseconds: 500), () {
@@ -174,7 +166,6 @@ class _HomePageState extends State<HomePage>
   void dispose() {
     _fcmTokenSubscription?.cancel();
     _debounceTimer?.cancel();
-    _widgetClickSub?.cancel().catchError((_) {});
     _notificationListener?.cancel();
     _assignedLeadsListener?.cancel();
     _complaintsListener?.cancel();
@@ -202,18 +193,17 @@ class _HomePageState extends State<HomePage>
       
       // Count only transferred leads that haven't been seen by this user
       int unseenCount = 0;
-      for (final doc in snapshot.docs) {
+      if (snapshot.docs.isNotEmpty) {
+        final docIds = snapshot.docs.map((d) => '${d.id}__$currentUserId').take(30).toList();
         try {
-          final userSeenDoc = await FirebaseFirestore.instance
+          final seenSnap = await FirebaseFirestore.instance
               .collection('user_seen_leads')
-              .doc('${doc.id}__${currentUserId}')
+              .where(FieldPath.documentId, whereIn: docIds)
               .get();
-          if (!userSeenDoc.exists) {
-            unseenCount++;
-          }
+          final seenIds = seenSnap.docs.map((d) => d.id).toSet();
+          unseenCount = docIds.where((id) => !seenIds.contains(id)).length;
         } catch (_) {
-          // If there's an error, assume it hasn't been seen
-          unseenCount++;
+          unseenCount = snapshot.docs.length;
         }
       }
       
@@ -440,33 +430,6 @@ class _HomePageState extends State<HomePage>
     if (mounted) {
       _listenForTransferredLeads();
       await _updateOtherCountFromListeners();
-    }
-  }
-
-  void _handleWidgetDeepLink(Uri? uri) {
-    if (!mounted || uri == null) return;
-    final host = uri.host;
-    final segments = uri.pathSegments;
-    if (host == 'todo') {
-      if (segments.isNotEmpty) {
-        // Navigate to the specific todo detail
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => TaskDetailPageFromId(docId: segments.first),
-          ),
-        );
-      } else {
-        // Navigate to the todo list
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const TodoPage()),
-        );
-      }
-    } else if (host == 'lead' && segments.isNotEmpty) {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => PresentFollowUp(docId: segments.first),
-        ),
-      );
     }
   }
 

@@ -7,6 +7,7 @@ import 'dart:math';
 import 'leadsform.dart';
 import 'leads_widgets.dart';
 import 'customer_list.dart'; 
+import 'package:shared_preferences/shared_preferences.dart';
 import '../Navigation/user_cache_service.dart';
 
 class LeadsPage extends StatefulWidget {
@@ -71,12 +72,13 @@ class _LeadsPageState extends State<LeadsPage> {
   @override
   void initState() {
     super.initState();
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid != null) {
-      _currentUserData = FirebaseFirestore.instance.collection('users').doc(uid).get().then((doc) => doc.data());
-    } else {
-      _currentUserData = Future.value(null);
-    }
+    _currentUserData = UserCacheService.instance.ensureLoaded().then((_) {
+      return {
+        'role': UserCacheService.instance.role,
+        'branch': UserCacheService.instance.branch,
+        'username': UserCacheService.instance.username,
+      };
+    });
     _initialize();
   }
 
@@ -270,7 +272,11 @@ class _LeadsPageState extends State<LeadsPage> {
 
     if (!mounted) return;
     setState(() {
-      _leads = snapshot.docs;
+      // Exclude SME/DME screening leads — they are managed in SME/DME screening pages until promoted
+      _leads = snapshot.docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return data['screening_status'] == null;
+      }).toList();
       _isLoading = false;
     });
 
@@ -319,9 +325,16 @@ class _LeadsPageState extends State<LeadsPage> {
   Future<void> autoRescheduleLeads(String? currentUserId, String? branch) async {
     if (currentUserId == null || branch == null || branch.isEmpty) return;
 
-    final now = DateTime.now();
-
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastCheckMillis = prefs.getInt('last_reschedule_check_$currentUserId') ?? 0;
+      final nowMillis = DateTime.now().millisecondsSinceEpoch;
+      if (nowMillis - lastCheckMillis < 86400000) {
+        return; // Run at most once per 24 hours
+      }
+      await prefs.setInt('last_reschedule_check_$currentUserId', nowMillis);
+
+      final now = DateTime.now();
       // Fetch only this user's "In Progress" leads server-side to avoid downloading the entire branch
       final createdByQuery = await FirebaseFirestore.instance
           .collection('follow_ups')

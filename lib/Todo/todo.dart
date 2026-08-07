@@ -6,7 +6,7 @@ import 'todoform.dart' as todoform;
 import 'report_todo.dart';
 import '../Navigation/user_cache_service.dart';
 import 'dart:async';
-import 'todo_widget_updater.dart';
+
 import 'todo_widgets.dart' as todowidgets;
 import 'todo_list_body.dart';
 import 'todo_manager_tab.dart';
@@ -392,13 +392,12 @@ class _TodoPageState extends State<TodoPage>
         'status': newStatus,
         'timestamp': Timestamp.now(),
       });
-      await updateTodoWidgetFromFirestore();
+
     } else {
       await _firestore.collection('todo').doc(doc.id).update({
         'status': newStatus,
         'timestamp': FieldValue.serverTimestamp(),
       });
-      await updateTodoWidgetFromFirestore();
     }
   }
 
@@ -408,7 +407,7 @@ class _TodoPageState extends State<TodoPage>
     await AwesomeNotifications().cancel(notificationId);
     
     await _firestore.collection('todo').doc(docId).delete();
-    await updateTodoWidgetFromFirestore();
+
   }
 
   Future<void> _clearAllTodos() async {
@@ -441,7 +440,7 @@ class _TodoPageState extends State<TodoPage>
         batch.delete(doc.reference);
       }
       await batch.commit();
-      await updateTodoWidgetFromFirestore();
+
     }
   }
 

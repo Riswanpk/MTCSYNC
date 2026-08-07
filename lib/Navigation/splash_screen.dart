@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:awesome_notifications/awesome_notifications.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mtcsync/Misc/notification_permission_service.dart';
 import '../Login/login.dart';
@@ -12,12 +12,12 @@ import '../Version/force_update_checker.dart';
 import '../Version/force_update_screen.dart';
 import '../Homepage/home.dart';
 import '../main.dart'; // For navigatorKey and initialNotificationAction
-import '../Leads/presentfollowup.dart'; // For PresentFollowUp
-import '../Todo/todo.dart'; // For TodoPage and TaskDetailPageFromId
+
+
 import '../Marketing/marketing.dart'; // For MarketingFormPage
 import 'loading_page.dart'; // For LoadingOverlayPage
 import 'navigation_state.dart'; // For navigation state restoration
-import 'package:home_widget/home_widget.dart'; // For HomeWidget
+
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -27,80 +27,13 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  static const _platform = MethodChannel('com.mtc.mtcsync/deeplink');
-  StreamSubscription<Uri?>? _widgetClickSub;
-  bool _openedFromWidget = false; // Add this flag
-
   @override
   void initState() {
     super.initState();
-    // Listen for widget clicks when app is already running (warm start)
-    try {
-      _widgetClickSub = HomeWidget.widgetClicked.listen(_handleWidgetClick);
-    } catch (_) {
-      // Platform may not have an active stream — safe to ignore
-    }
-    // Check if app was cold-started from a widget/deep link via the platform channel
-    _checkInitialDeepLink();
     // Delay permission request and navigation until after first frame (UI visible)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _requestPermissionsAndNavigate();
     });
-  }
-
-  /// Get the initial deep link if the app was launched from a widget or deep link
-  Future<void> _checkInitialDeepLink() async {
-    try {
-      final String? deepLink = await _platform.invokeMethod<String>('getInitialDeepLink');
-      if (deepLink != null && deepLink.isNotEmpty) {
-        debugPrint('Initial deep link from intent: $deepLink');
-        _handleWidgetClick(Uri.parse(deepLink));
-      }
-    } on PlatformException catch (e) {
-      debugPrint('Failed to get deep link: ${e.message}');
-    }
-  }
-
-  void _handleWidgetClick(Uri? uri) {
-    if (!mounted || _openedFromWidget) return;
-    if (uri != null) {
-      debugPrint('Widget clicked! URI: $uri');
-      _openedFromWidget = true;
-
-      // Extract the path: "mtcsync://todo/<docId>" or "mtcsync://todo" etc.
-      final host = uri.host;
-      final pathSegments = uri.pathSegments;
-
-      // Bypass HomePage — go directly to the detail/list page
-      if (host == 'todo') {
-        if (pathSegments.isNotEmpty) {
-          // Go directly to todo detail page
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (_) => TaskDetailPageFromId(docId: pathSegments.first),
-            ),
-          );
-        } else {
-          // Go directly to todo list page
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const TodoPage()),
-          );
-        }
-      } else if (host == 'lead' && pathSegments.isNotEmpty) {
-        // Go directly to lead detail page
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => PresentFollowUp(docId: pathSegments.first),
-          ),
-        );
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _widgetClickSub?.cancel().catchError((_) {});
-    super.dispose();
   }
 
   Future<void> _requestPermissionsAndNavigate() async {
@@ -193,8 +126,6 @@ class _SplashScreenState extends State<SplashScreen> {
   Future<void> _checkAuthAndNavigate() async {
     final user = await _resolveAuthUser();
     if (!mounted) return;
-
-    if (_openedFromWidget) return; // Bypass default navigation if opened from widget
 
     if (user == null) {
       await NavigationState.clearState(); // Clear any pending state for logged out users

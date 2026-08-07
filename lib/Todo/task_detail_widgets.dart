@@ -22,7 +22,7 @@ class TaskDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final priority = data['priority'] ?? 'High';
+
 
     return Scaffold(
       backgroundColor:
@@ -149,29 +149,7 @@ class TaskDetailPage extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 18),
-            // Priority
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: getPriorityBgColor(priority, isDark),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.flag, color: getPriorityColor(priority), size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    priority,
-                    style: TextStyle(
-                      color: getPriorityColor(priority),
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+
             const SizedBox(height: 24),
             // Description
             Text(

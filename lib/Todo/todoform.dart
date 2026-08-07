@@ -8,7 +8,7 @@ import 'dart:convert';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:mtcsync/Misc/notification_permission_service.dart';
-import 'todo_widget_updater.dart'; // At the top
+
 import '../Navigation/user_cache_service.dart';
 
 /// Returns the current 12 PM–12 PM IST window as [windowStart, windowEnd].
@@ -74,7 +74,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _reminderController = TextEditingController();
-  String _priority = 'High';
+
   bool _isSaving = false;
   TimeOfDay? _selectedReminderTime;
   DateTime? _selectedReminderDate;
@@ -100,7 +100,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
     setState(() {
       _titleController.text = data['title'] ?? '';
       _descController.text = data['description'] ?? '';
-      _priority = data['priority'] ?? 'High';
+
       if (data['reminder'] != null) {
         final reminderDate = DateTime.tryParse(data['reminder']);
         if (reminderDate != null) {
@@ -117,7 +117,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
     final title = _titleController.text.trim();
     final desc = _descController.text.trim();
 
-    if (title.isEmpty || desc.isEmpty || _priority.isEmpty) {
+    if (title.isEmpty || desc.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all required fields')),
       );
@@ -163,7 +163,6 @@ class _TodoFormPageState extends State<TodoFormPage> {
         'title': title,
         'userId': user.uid,
         'description': desc,
-        'priority': _priority,
         'reminder': scheduledDate.toIso8601String(),
         'reminder_sent': false,
         'email': email,
@@ -210,7 +209,6 @@ class _TodoFormPageState extends State<TodoFormPage> {
         ),
       );
 
-      await updateTodoWidgetFromFirestore(); // After saving/updating todo
 
       if (mounted) Navigator.pop(context);
       return;
@@ -219,7 +217,6 @@ class _TodoFormPageState extends State<TodoFormPage> {
     final todoRef = await FirebaseFirestore.instance.collection('todo').add({
       'title': title,
       'description': desc,
-      'priority': _priority,
       'status': 'pending',
       'timestamp': FieldValue.serverTimestamp(),
       'email': email,
@@ -267,7 +264,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
       type: 'todo',
     );
 
-    await updateTodoWidgetFromFirestore(); // After saving/updating todo
+
 
     if (mounted) {
       Navigator.pop(context);
@@ -280,8 +277,6 @@ class _TodoFormPageState extends State<TodoFormPage> {
     final draftData = {
       'title': _titleController.text,
       'description': _descController.text,
-      'priority': _priority,
-      'reminder': _reminderController.text,
       'reminder_date': _selectedReminderDate?.toIso8601String(),
       'reminder_hour': _selectedReminderTime?.hour,
       'reminder_minute': _selectedReminderTime?.minute,
@@ -317,8 +312,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
         setState(() {
           _titleController.text = draftData['title'] ?? '';
           _descController.text = draftData['description'] ?? '';
-          _priority = draftData['priority'] ?? 'High';
-          _reminderController.text = draftData['reminder'] ?? '';
+
           if (draftData['reminder_date'] != null) {
             _selectedReminderDate = DateTime.tryParse(draftData['reminder_date']);
           }
@@ -343,30 +337,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
     super.dispose();
   }
 
-  Widget _priorityDot(String priority) {
-    Color color;
-    switch (priority) {
-      case 'High':
-        color = Colors.red;
-        break;
-      case 'Medium':
-        color = Colors.amber;
-        break;
-      case 'Low':
-        color = Colors.green;
-        break;
-      default:
-        color = Colors.grey;
-    }
-    return Container(
-      width: 10,
-      height: 10,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-      ),
-    );
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -421,55 +392,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
                   hintStyle: TextStyle(color: isDark ? Colors.white38 : Colors.grey),
                 ),
               ),
-              const SizedBox(height: 18),
-              Text('Priority', style: TextStyle(color: labelColor, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 6),
-              DropdownButtonFormField<String>(
-                value: _priority,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: inputFillColor,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                dropdownColor: inputFillColor,
-                style: TextStyle(color: inputTextColor),
-                items: [
-                  DropdownMenuItem(
-                    value: 'High',
-                    child: Row(
-                      children: [
-                        _priorityDot('High'),
-                        const SizedBox(width: 6),
-                        const Text('High'),
-                      ],
-                    ),
-                  ),
-                  DropdownMenuItem(
-                    value: 'Medium',
-                    child: Row(
-                      children: [
-                        _priorityDot('Medium'),
-                        const SizedBox(width: 6),
-                        const Text('Medium'),
-                      ],
-                    ),
-                  ),
-                  DropdownMenuItem(
-                    value: 'Low',
-                    child: Row(
-                      children: [
-                        _priorityDot('Low'),
-                        const SizedBox(width: 6),
-                        const Text('Low'),
-                      ],
-                    ),
-                  ),
-                ],
-                onChanged: (val) {
-                  setState(() => _priority = val!);
-                  _saveDraft();
-                },
-              ),
+
               const SizedBox(height: 18),
               Text('Reminder (required)', style: TextStyle(color: labelColor, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),

@@ -9,6 +9,7 @@ import '../DME/services/dme_complaint_service.dart';
 import '../DME/services/dme_supabase_service.dart';
 import '../DME/screens/dme_complaints_management.dart';
 import 'presentfollowup.dart';
+import '../SME/sme_assigned_leads_page.dart';
 import '../Task/task_sales.dart';
 import '../Task/task_admin.dart';
 
@@ -438,10 +439,10 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
       }
       
       if (!mounted) return;
-      // Navigate to lead details, then refresh notifications when returning
+      // Navigate to SME leads page, then refresh notifications when returning
       await Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => PresentFollowUp(docId: item.id)),
+        MaterialPageRoute(builder: (_) => const SmeAssignedLeadsPage()),
       );
       
       // Refresh the notification list when returning

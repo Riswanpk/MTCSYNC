@@ -89,9 +89,13 @@ class _UserTaskPageState extends State<UserTaskPage> {
     super.dispose();
   }
 
+  static bool _taskRemindersSynced = false;
+
   Future<void> _triggerSync() async {
+    if (_taskRemindersSynced) return;
     final uid = _auth.currentUser?.uid;
     if (uid != null) {
+      _taskRemindersSynced = true;
       await syncTaskReminders(uid);
     }
   }
