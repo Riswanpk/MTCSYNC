@@ -4,8 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:io';
-import 'package:image_picker/image_picker.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:in_app_update/in_app_update.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
@@ -49,8 +48,6 @@ class _HomePageState extends State<HomePage>
   StreamSubscription<String>? _fcmTokenSubscription;
   StreamSubscription<Uri?>? _widgetClickSub;
 
-  File? _profileImage;
-  String? _profileImagePath;
   bool _showTodoWarning = false;
   int _logoTapCount = 0;
   List<Contact>? _cachedContacts;
@@ -70,6 +67,10 @@ class _HomePageState extends State<HomePage>
   StreamSubscription? _assignedLeadsListener;
   StreamSubscription? _complaintsListener;
   StreamSubscription? _coreTasksListener;
+
+  // --- ANR Guards ---
+  bool _isUpdatingCount = false; // prevents concurrent heavy Firestore chains
+  Timer? _debounceTimer;         // coalesces rapid listener callbacks
 
   @override
   void initState() {
@@ -95,22 +96,38 @@ class _HomePageState extends State<HomePage>
         _listenForAssignedLeadsAndComplaints();
       }
     });
+    // Stagger heavy startup tasks so they don't all hit the event loop at once.
+    // This is the primary fix for ANR on low-spec devices (Xiaomi/Redmi etc.)
     _checkForUpdate();
-    _loadProfileImage();
-    _checkTodoWarning();
-    _checkPendingTodosReminder();
-    _setupFcmTokenSync();
-    _startSmeNotificationService();
-    _fetchAndCacheContacts();
-    _checkBatteryOptimization();
     // Listen for widget taps when app is warm (already running)
     try {
       _widgetClickSub = HomeWidget.widgetClicked.listen(_handleWidgetDeepLink);
     } catch (_) {
       // Platform may not have an active stream — safe to ignore
     }
-    // Refresh widget data on every home screen visit
-    updateTodoWidgetFromFirestore().catchError((_) {});
+    // Tier-1 (after first frame): contact cache and widget data
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchAndCacheContacts();
+      updateTodoWidgetFromFirestore().catchError((_) {});
+    });
+    // Tier-2 (500 ms): todo warning check
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) _checkTodoWarning();
+    });
+    // Tier-3 (1 s): pending todos reminder + FCM token sync
+    Future.delayed(const Duration(seconds: 1), () {
+      if (mounted) {
+        _checkPendingTodosReminder();
+        _setupFcmTokenSync();
+      }
+    });
+    // Tier-4 (2 s): SME service + battery optimisation dialog
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        _startSmeNotificationService();
+        _checkBatteryOptimization();
+      }
+    });
   }
 
   /// Check and prompt for battery optimization after first frame
@@ -156,6 +173,7 @@ class _HomePageState extends State<HomePage>
   @override
   void dispose() {
     _fcmTokenSubscription?.cancel();
+    _debounceTimer?.cancel();
     _widgetClickSub?.cancel().catchError((_) {});
     _notificationListener?.cancel();
     _assignedLeadsListener?.cancel();
@@ -219,7 +237,7 @@ class _HomePageState extends State<HomePage>
         .snapshots()
         .listen((snapshot) async {
       if (!mounted) return;
-      await _updateOtherCountFromListeners();
+      _scheduleDebouncedCountUpdate();
     });
 
     // Listen for Core Tasks in realtime
@@ -230,7 +248,7 @@ class _HomePageState extends State<HomePage>
           .where('assigned_to', isEqualTo: uid)
           .snapshots()
           .listen((_) {
-        if (mounted) _updateOtherCountFromListeners();
+        if (mounted) _scheduleDebouncedCountUpdate();
       });
     } else if (_role == 'core_team') {
       _coreTasksListener = FirebaseFirestore.instance
@@ -238,7 +256,7 @@ class _HomePageState extends State<HomePage>
           .where('assigned_by', isEqualTo: uid)
           .snapshots()
           .listen((_) {
-        if (mounted) _updateOtherCountFromListeners();
+        if (mounted) _scheduleDebouncedCountUpdate();
       });
     }
 
@@ -248,147 +266,164 @@ class _HomePageState extends State<HomePage>
 
   void _listenForComplaintsRealtime(String uid) {
     _complaintsListener?.cancel();
-    // Set up a periodic check for complaints since Supabase doesn't have easy Dart listeners
-    // Check every 3 seconds for new/updated complaints
-    _complaintsListener = Stream.periodic(const Duration(seconds: 3)).listen((_) {
-      if (mounted) {
-        _updateOtherCountFromListeners();
-      }
+    // Poll every 60 s — reduced from 3 s to prevent ANR on low-spec devices.
+    // Each tick triggers the debounced updater so rapid bursts are still coalesced.
+    _complaintsListener = Stream.periodic(const Duration(seconds: 60)).listen((_) {
+      if (mounted) _scheduleDebouncedCountUpdate();
+    });
+  }
+
+  /// Debounces calls to [_updateOtherCountFromListeners] so that multiple
+  /// rapid-fire listener events (assigned leads + core tasks + periodic poll
+  /// all firing at once) are coalesced into a single execution after 500 ms.
+  void _scheduleDebouncedCountUpdate() {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+      if (mounted) _updateOtherCountFromListeners();
     });
   }
 
   Future<void> _updateOtherCountFromListeners() async {
     if (!mounted) return;
+    // Guard: skip if a previous call is still running to avoid piling up
+    // overlapping Firestore round-trips that stall the event loop (ANR).
+    if (_isUpdatingCount) return;
+    _isUpdatingCount = true;
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
+    if (uid == null) { _isUpdatingCount = false; return; }
 
     int count = 0;
 
-    // Count SME / DME leads assigned to this user that are still In Progress (excluding seen ones)
     try {
-      final snap = await FirebaseFirestore.instance
-          .collection('follow_ups')
-          .where('assigned_to', isEqualTo: uid)
-          .get();
-      
-      for (final doc in snap.docs) {
-        final source =
-            (doc.data()['source'] as String? ?? '').toLowerCase().trim();
-        final status = doc.data()['status'] as String? ?? '';
-        
-        if ((source != 'sme' && source != 'dme') || status != 'In Progress') {
-          continue;
-        }
-        
-        // Check if this user has seen this lead
-        try {
-          final userSeenDoc = await FirebaseFirestore.instance
-              .collection('user_seen_leads')
-              .doc('${doc.id}__${uid}')
-              .get();
-          if (!userSeenDoc.exists) {
-            count++;
-          }
-        } catch (_) {
-          // If there's an error, assume it hasn't been seen
-          count++;
-        }
-      }
-    } catch (_) {}
-
-    // Count complaints assigned to this user that are still raised (excluding seen ones)
-    int unresolvedComplaintsCount = 0;
-    List<String> countedComplaintIds = [];
-    try {
-      final complaints = await DmeComplaintService.instance
-          .getAssignedComplaints(userId: uid, status: 'raised');
-      
-      // Filter out complaints that have been marked as seen by this user
-      for (final complaint in complaints) {
-        final isSeen = await DmeComplaintService.instance
-            .isComplaintSeen(complaintId: complaint.id ?? '', userId: uid);
-        if (!isSeen) {
-          count++;
-          unresolvedComplaintsCount++;
-          countedComplaintIds.add(complaint.id ?? '');
-        }
-      }
-    } catch (_) {}
-
-    // Also count branch complaints for managers (avoid duplicates)
-    try {
-      if (_role == 'manager' || _role == 'asst_manager') {
-        final branchName = _userCache.branch ?? '';
-        if (branchName.isNotEmpty) {
-          final branchId = await DmeComplaintService.instance
-              .getBranchIdByName(branchName);
-          
-          if (branchId != null) {
-            final branchComplaints = await DmeComplaintService.instance
-                .getComplaintsForBranch(branchId: branchId, status: 'raised');
-            
-            for (final complaint in branchComplaints) {
-              // Skip if already counted in assigned complaints
-              if (countedComplaintIds.contains(complaint.id)) continue;
-              
-              // Only count if not already in assigned complaints and not seen by this user
-              final isSeen = await DmeComplaintService.instance
-                  .isComplaintSeen(complaintId: complaint.id ?? '', userId: uid);
-              if (!isSeen) {
-                count++;
-                unresolvedComplaintsCount++;
-              }
-            }
-          }
-        }
-      }
-    } catch (_) {}
-
-    int taskCount = 0;
-    // Count core tasks (pending for assigned users, completed-unseen for core team)
-    try {
-      if (_role == 'sales' || _role == 'manager' || _role == 'asst_manager' || _role == 'admin') {
-        final tasksSnap = await FirebaseFirestore.instance
-            .collection('core_tasks')
+      // Count SME / DME leads assigned to this user that are still In Progress (excluding seen ones)
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('follow_ups')
             .where('assigned_to', isEqualTo: uid)
-            .where('status', isEqualTo: 'pending')
             .get();
-        taskCount = tasksSnap.docs.length;
-        count += taskCount;
-      } else if (_role == 'core_team') {
-        final tasksSnap = await FirebaseFirestore.instance
-            .collection('core_tasks')
-            .where('assigned_by', isEqualTo: uid)
-            .where('status', isEqualTo: 'completed')
-            .get();
-
-        int unseenTasks = 0;
-        for (final doc in tasksSnap.docs) {
-          final data = doc.data();
-          if (data['is_mass_task'] == true) continue;
+        
+        for (final doc in snap.docs) {
+          final source =
+              (doc.data()['source'] as String? ?? '').toLowerCase().trim();
+          final status = doc.data()['status'] as String? ?? '';
+          
+          if ((source != 'sme' && source != 'dme') || status != 'In Progress') {
+            continue;
+          }
+          
+          // Check if this user has seen this lead
           try {
             final userSeenDoc = await FirebaseFirestore.instance
                 .collection('user_seen_leads')
                 .doc('${doc.id}__${uid}')
                 .get();
             if (!userSeenDoc.exists) {
-              unseenTasks++;
+              count++;
             }
           } catch (_) {
-            unseenTasks++;
+            // If there's an error, assume it hasn't been seen
+            count++;
           }
         }
-        taskCount = unseenTasks;
-        count += taskCount;
-      }
-    } catch (_) {}
+      } catch (_) {}
 
-    if (mounted) {
-      setState(() {
-        _otherCount = count;
-        _taskCount = taskCount;
-        _complaintCount = unresolvedComplaintsCount;
-      });
+      // Count complaints assigned to this user that are still raised (excluding seen ones)
+      int unresolvedComplaintsCount = 0;
+      List<String> countedComplaintIds = [];
+      try {
+        final complaints = await DmeComplaintService.instance
+            .getAssignedComplaints(userId: uid, status: 'raised');
+        
+        // Filter out complaints that have been marked as seen by this user
+        for (final complaint in complaints) {
+          final isSeen = await DmeComplaintService.instance
+              .isComplaintSeen(complaintId: complaint.id ?? '', userId: uid);
+          if (!isSeen) {
+            count++;
+            unresolvedComplaintsCount++;
+            countedComplaintIds.add(complaint.id ?? '');
+          }
+        }
+      } catch (_) {}
+
+      // Also count branch complaints for managers (avoid duplicates)
+      try {
+        if (_role == 'manager' || _role == 'asst_manager') {
+          final branchName = _userCache.branch ?? '';
+          if (branchName.isNotEmpty) {
+            final branchId = await DmeComplaintService.instance
+                .getBranchIdByName(branchName);
+            
+            if (branchId != null) {
+              final branchComplaints = await DmeComplaintService.instance
+                  .getComplaintsForBranch(branchId: branchId, status: 'raised');
+              
+              for (final complaint in branchComplaints) {
+                // Skip if already counted in assigned complaints
+                if (countedComplaintIds.contains(complaint.id)) continue;
+                
+                // Only count if not already in assigned complaints and not seen by this user
+                final isSeen = await DmeComplaintService.instance
+                    .isComplaintSeen(complaintId: complaint.id ?? '', userId: uid);
+                if (!isSeen) {
+                  count++;
+                  unresolvedComplaintsCount++;
+                }
+              }
+            }
+          }
+        }
+      } catch (_) {}
+
+      int taskCount = 0;
+      // Count core tasks (pending for assigned users, completed-unseen for core team)
+      try {
+        if (_role == 'sales' || _role == 'manager' || _role == 'asst_manager' || _role == 'admin') {
+          final tasksSnap = await FirebaseFirestore.instance
+              .collection('core_tasks')
+              .where('assigned_to', isEqualTo: uid)
+              .where('status', isEqualTo: 'pending')
+              .get();
+          taskCount = tasksSnap.docs.length;
+          count += taskCount;
+        } else if (_role == 'core_team') {
+          final tasksSnap = await FirebaseFirestore.instance
+              .collection('core_tasks')
+              .where('assigned_by', isEqualTo: uid)
+              .where('status', isEqualTo: 'completed')
+              .get();
+
+          int unseenTasks = 0;
+          for (final doc in tasksSnap.docs) {
+            final data = doc.data();
+            if (data['is_mass_task'] == true) continue;
+            try {
+              final userSeenDoc = await FirebaseFirestore.instance
+                  .collection('user_seen_leads')
+                  .doc('${doc.id}__${uid}')
+                  .get();
+              if (!userSeenDoc.exists) {
+                unseenTasks++;
+              }
+            } catch (_) {
+              unseenTasks++;
+            }
+          }
+          taskCount = unseenTasks;
+          count += taskCount;
+        }
+      } catch (_) {}
+
+      if (mounted) {
+        setState(() {
+          _otherCount = count;
+          _taskCount = taskCount;
+          _complaintCount = unresolvedComplaintsCount;
+        });
+      }
+    } finally {
+      // Always release the guard so future calls are never permanently blocked.
+      _isUpdatingCount = false;
     }
   }
 
@@ -468,60 +503,20 @@ class _HomePageState extends State<HomePage>
   @override
   void didPopNext() {
     _checkTodoWarning();
-    _updateOtherCountFromListeners();
+    _scheduleDebouncedCountUpdate();
   }
 
   @override
   void didPush() {
-    _fetchAndCacheContacts();
+    // Do NOT re-fetch contacts here — they are already fetched in initState.
+    // Re-fetching on every push was causing unnecessary I/O on low-spec devices.
     _checkTodoWarning();
-    _updateOtherCountFromListeners();
+    _scheduleDebouncedCountUpdate();
   }
 
   // ==================== Helper Methods ====================
 
 
-
-  Future<void> _loadProfileImage() async {
-    final prefs = await SharedPreferences.getInstance();
-    final path = prefs.getString('profile_image_path');
-    if (path != null && File(path).existsSync()) {
-      setState(() {
-        _profileImagePath = path;
-        _profileImage = File(path);
-      });
-    } else if (path != null) {
-      await prefs.remove('profile_image_path');
-      setState(() {
-        _profileImagePath = null;
-        _profileImage = null;
-      });
-    }
-  }
-
-  bool _isPickingImage = false;
-
-  Future<void> _pickProfileImage() async {
-    if (_isPickingImage) return;
-    _isPickingImage = true;
-    try {
-      final picker = ImagePicker();
-      final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-      if (pickedFile != null) {
-        if (!mounted) return;
-        setState(() {
-          _profileImage = File(pickedFile.path);
-          _profileImagePath = pickedFile.path;
-        });
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('profile_image_path', pickedFile.path);
-      }
-    } catch (e) {
-      debugPrint('Image picker error: $e');
-    } finally {
-      _isPickingImage = false;
-    }
-  }
 
   Future<void> _checkTodoWarning() async {
     // Debounce: skip if checked less than 2 minutes ago
@@ -697,8 +692,6 @@ class _HomePageState extends State<HomePage>
           role: role,
           username: username,
           branch: branch,
-          profileImage: _profileImage,
-          onPickProfileImage: _pickProfileImage,
         ),
         body: Stack(
           children: [

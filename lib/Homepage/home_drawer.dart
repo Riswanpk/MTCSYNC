@@ -1,4 +1,4 @@
-import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:mtcsync/DME/screens/dme_user_complaints.dart';
@@ -21,16 +21,12 @@ class HomeDrawer extends StatelessWidget {
   final String? role;
   final String? username;
   final String? branch;
-  final File? profileImage;
-  final VoidCallback onPickProfileImage;
 
   const HomeDrawer({
     super.key,
     required this.role,
     required this.username,
     required this.branch,
-    required this.profileImage,
-    required this.onPickProfileImage,
   });
 
   @override
@@ -121,56 +117,42 @@ class HomeDrawer extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Profile',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-            ),
-          ),
-          const SizedBox(height: 12),
-          GestureDetector(
-            onTap: onPickProfileImage,
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 22,
-                  backgroundColor: Colors.white,
-                  backgroundImage:
-                      (profileImage != null) ? FileImage(profileImage!) : null,
-                  child: (profileImage == null)
-                      ? const Icon(Icons.account_circle,
-                          size: 38, color: Color(0xFF005BAC))
-                      : null,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        username ?? '',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const CircleAvatar(
+                radius: 22,
+                backgroundColor: Colors.white,
+                child: Icon(Icons.account_circle,
+                    size: 38, color: Color(0xFF005BAC)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      username ?? '',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
                       ),
-                      Text(
-                        branch ?? '',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w400,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      branch ?? '',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
                       ),
-                    ],
-                  ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),
