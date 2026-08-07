@@ -334,11 +334,18 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
             floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
             floatingActionButton: FloatingActionButton.extended(
               onPressed: isBookingOpen
-                  ? () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const SupersaleUserFormPage()),
-                      );
+                  ? () async {
+                      final saleType = await _showSaleTypeDialog(context);
+                      if (saleType != null && context.mounted) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => SupersaleUserFormPage(
+                              isSpotSale: saleType == 'spot_sale',
+                            ),
+                          ),
+                        );
+                      }
                     }
                   : null,
               backgroundColor: isBookingOpen ? primaryBlue : Colors.grey,
@@ -347,6 +354,100 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
               label: const Text('Add Booking', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
+        );
+      },
+    );
+  }
+
+  Future<String?> _showSaleTypeDialog(BuildContext context) async {
+    String selectedType = 'booking';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return showDialog<String>(
+      context: context,
+      builder: (BuildContext ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Text(
+                'Select Sale Type',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RadioListTile<String>(
+                    title: Text(
+                      'Booking',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'Standard booking (Default)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.white60 : Colors.black54,
+                      ),
+                    ),
+                    value: 'booking',
+                    groupValue: selectedType,
+                    activeColor: primaryBlue,
+                    onChanged: (val) {
+                      if (val != null) {
+                        setDialogState(() => selectedType = val);
+                      }
+                    },
+                  ),
+                  RadioListTile<String>(
+                    title: Text(
+                      'Spot-sale',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'Directly delivered, advance disabled & same day delivery date',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.white60 : Colors.black54,
+                      ),
+                    ),
+                    value: 'spot_sale',
+                    groupValue: selectedType,
+                    activeColor: primaryBlue,
+                    onChanged: (val) {
+                      if (val != null) {
+                        setDialogState(() => selectedType = val);
+                      }
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, null),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, selectedType),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryBlue,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('Continue'),
+                ),
+              ],
+            );
+          },
         );
       },
     );

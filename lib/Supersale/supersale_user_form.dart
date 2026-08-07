@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
+import '../Misc/notification_permission_service.dart';
 import '../Navigation/user_cache_service.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
@@ -9,8 +11,13 @@ const Color primaryGreen = Color(0xFF8CC63F);
 
 class SupersaleUserFormPage extends StatefulWidget {
   final QueryDocumentSnapshot? bookingDoc; // Present in edit mode
+  final bool isSpotSale;
 
-  const SupersaleUserFormPage({Key? key, this.bookingDoc}) : super(key: key);
+  const SupersaleUserFormPage({
+    Key? key,
+    this.bookingDoc,
+    this.isSpotSale = false,
+  }) : super(key: key);
 
   @override
   State<SupersaleUserFormPage> createState() => _SupersaleUserFormPageState();
@@ -29,6 +36,10 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
   String? _userBranch;
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isSpotSale = false;
+
+  // Delivery reminder timestamp for normal bookings
+  DateTime? _deliveryReminderDateTime;
 
   // Local state variables representing the selected item properties
   String? _itemName;
@@ -42,6 +53,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
   @override
   void initState() {
     super.initState();
+    _isSpotSale = widget.isSpotSale;
     _loadData();
   }
 
@@ -57,18 +69,35 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
 
       if (_isEditMode) {
         final data = widget.bookingDoc!.data() as Map<String, dynamic>;
+        _isSpotSale = data['isSpotSale'] == true || data['saleType'] == 'spot_sale';
         _customerController.text = data['customerName'] ?? '';
         _phoneController.text = data['phone'] ?? '';
         _quantityController.text = (data['quantity'] ?? '').toString();
         _rateController.text = (data['rate'] ?? '').toString();
-        _advanceController.text = (data['advance'] ?? '').toString();
+        if (_isSpotSale) {
+          _advanceController.text = '0';
+        } else {
+          _advanceController.text = (data['advance'] ?? '').toString();
+        }
 
         _itemName = widget.bookingDoc!.reference.parent.id; // subcollection name is item name
         _bookingStart = data['bookingStart'] as Timestamp?;
         _bookingEnd = data['bookingEnd'] as Timestamp?;
-        _deliveryStart = data['deliveryStart'] as Timestamp?;
-        _deliveryEnd = data['deliveryEnd'] as Timestamp?;
+        if (_isSpotSale) {
+          _deliveryStart = _bookingStart;
+          _deliveryEnd = _bookingEnd;
+        } else {
+          _deliveryStart = data['deliveryStart'] as Timestamp?;
+          _deliveryEnd = data['deliveryEnd'] as Timestamp?;
+        }
+
+        if (data['deliveryReminder'] != null && data['deliveryReminder'] is Timestamp) {
+          _deliveryReminderDateTime = (data['deliveryReminder'] as Timestamp).toDate();
+        }
       } else {
+        if (_isSpotSale) {
+          _advanceController.text = '0';
+        }
         // Create mode: Fetch active postings
         final now = DateTime.now();
         final snap = await FirebaseFirestore.instance
@@ -109,8 +138,14 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
     _itemName = data['item'];
     _bookingStart = data['bookingStart'] as Timestamp?;
     _bookingEnd = data['bookingEnd'] as Timestamp?;
-    _deliveryStart = data['deliveryStart'] as Timestamp?;
-    _deliveryEnd = data['deliveryEnd'] as Timestamp?;
+    if (_isSpotSale) {
+      _deliveryStart = _bookingStart;
+      _deliveryEnd = _bookingEnd;
+      _advanceController.text = '0';
+    } else {
+      _deliveryStart = data['deliveryStart'] as Timestamp?;
+      _deliveryEnd = data['deliveryEnd'] as Timestamp?;
+    }
   }
 
   @override
@@ -129,6 +164,43 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
     return '${formatter.format(start.toDate().toLocal())} - ${formatter.format(end.toDate().toLocal())}';
   }
 
+  Future<void> _scheduleDeliveryReminder(String docId) async {
+    if (_deliveryReminderDateTime == null) return;
+    try {
+      final notifId = docId.hashCode & 0x7FFFFFFF;
+      final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
+      await NotificationPermissionService.instance.safeCreateNotification(
+        content: NotificationContent(
+          id: notifId,
+          channelKey: 'delivery_reminder_channel',
+          title: 'Delivery Reminder',
+          body: 'Delivery reminder for customer ${_customerController.text.trim()} (${_itemName ?? ""})',
+          notificationLayout: NotificationLayout.Default,
+          customSound: 'resource://raw/delivery_reminder',
+          payload: {
+            'type': 'supersale_delivery_reminder',
+            'docId': docId,
+            'branch': _userBranch ?? '',
+            'item': _itemName ?? '',
+          },
+        ),
+        schedule: NotificationCalendar(
+          year: _deliveryReminderDateTime!.year,
+          month: _deliveryReminderDateTime!.month,
+          day: _deliveryReminderDateTime!.day,
+          hour: _deliveryReminderDateTime!.hour,
+          minute: _deliveryReminderDateTime!.minute,
+          second: 0,
+          millisecond: 0,
+          timeZone: tz,
+          repeats: false,
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error creating delivery reminder notification: $e');
+    }
+  }
+
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -145,20 +217,36 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('No authenticated user found');
 
+      final advanceValue = _isSpotSale
+          ? 0.0
+          : (double.tryParse(_advanceController.text.trim()) ?? 0.0);
+
       if (_isEditMode) {
-        // Edit Mode: update existing document fields only
-        await widget.bookingDoc!.reference.update({
+        // Edit Mode: update existing document fields
+        final updateData = <String, dynamic>{
           'customerName': _customerController.text.trim(),
           'phone': _phoneController.text.trim(),
           'quantity': int.parse(_quantityController.text.trim()),
           'rate': double.parse(_rateController.text.trim()),
-          'advance': double.parse(_advanceController.text.trim()),
-        });
+          'advance': advanceValue,
+        };
+
+        if (!_isSpotSale && _deliveryReminderDateTime != null) {
+          updateData['deliveryReminder'] = Timestamp.fromDate(_deliveryReminderDateTime!);
+        }
+
+        await widget.bookingDoc!.reference.update(updateData);
+
+        if (!_isSpotSale &&
+            _deliveryReminderDateTime != null &&
+            _deliveryReminderDateTime!.isAfter(DateTime.now())) {
+          await _scheduleDeliveryReminder(widget.bookingDoc!.reference.id);
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Booking entry updated successfully'),
+              content: Text('Entry updated successfully'),
               backgroundColor: Colors.green,
             ),
           );
@@ -169,34 +257,48 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
         final cache = UserCacheService.instance;
         await cache.ensureLoaded();
 
-        final newEntry = {
+        final newEntry = <String, dynamic>{
           'bookingStart': _bookingStart,
           'bookingEnd': _bookingEnd,
-          'deliveryStart': _deliveryStart,
-          'deliveryEnd': _deliveryEnd,
+          'deliveryStart': _isSpotSale ? _bookingStart : _deliveryStart,
+          'deliveryEnd': _isSpotSale ? _bookingEnd : _deliveryEnd,
           'customerName': _customerController.text.trim(),
           'phone': _phoneController.text.trim(),
           'quantity': int.parse(_quantityController.text.trim()),
           'rate': double.parse(_rateController.text.trim()),
-          'advance': double.parse(_advanceController.text.trim()),
+          'advance': advanceValue,
           'userId': user.uid,
           'email': cache.email ?? user.email,
           'username': cache.username ?? 'User',
           'created_at': FieldValue.serverTimestamp(),
           'adminPostingId': _selectedPosting!.id,
-          'status': 'pending',
+          'status': _isSpotSale ? 'delivered' : 'pending',
+          'isSpotSale': _isSpotSale,
+          'saleType': _isSpotSale ? 'spot_sale' : 'booking',
+          if (!_isSpotSale && _deliveryReminderDateTime != null)
+            'deliveryReminder': Timestamp.fromDate(_deliveryReminderDateTime!),
         };
 
-        await FirebaseFirestore.instance
+        final docRef = await FirebaseFirestore.instance
             .collection('supersale_user_entries')
             .doc(_userBranch)
             .collection(_itemName!)
             .add(newEntry);
 
+        if (!_isSpotSale &&
+            _deliveryReminderDateTime != null &&
+            _deliveryReminderDateTime!.isAfter(DateTime.now())) {
+          await _scheduleDeliveryReminder(docRef.id);
+        }
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Supersale entry submitted successfully'),
+            SnackBar(
+              content: Text(
+                _isSpotSale
+                    ? 'Spot-sale entry submitted and marked delivered'
+                    : 'Supersale booking submitted successfully',
+              ),
               backgroundColor: Colors.green,
             ),
           );
@@ -224,11 +326,15 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textTheme = Theme.of(context).textTheme;
 
+    final titleText = _isEditMode
+        ? 'Edit Entry'
+        : (_isSpotSale ? 'Add Spot-sale' : 'Add Supersale Booking');
+
     if (_isLoading) {
       return Scaffold(
         backgroundColor: isDark ? const Color(0xFF0A1628) : Colors.grey[50],
         appBar: AppBar(
-          title: Text(_isEditMode ? 'Edit Booking' : 'Add Supersale Bookings'),
+          title: Text(titleText),
           backgroundColor: primaryBlue,
         ),
         body: const Center(child: CircularProgressIndicator()),
@@ -239,7 +345,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
       return Scaffold(
         backgroundColor: isDark ? const Color(0xFF0A1628) : Colors.grey[50],
         appBar: AppBar(
-          title: const Text('Add Supersale Bookings'),
+          title: Text(titleText),
           backgroundColor: primaryBlue,
           foregroundColor: Colors.white,
         ),
@@ -282,7 +388,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
       backgroundColor: isDark ? const Color(0xFF0A1628) : Colors.grey[50],
       appBar: AppBar(
         title: Text(
-          _isEditMode ? 'Edit Booking' : 'Supersale Booking',
+          titleText,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
         ),
         elevation: 0,
@@ -299,7 +405,36 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Item Selection (Dropdown in create mode, read-only field in edit mode)
+                    // Spot-sale Banner indicator
+                    if (_isSpotSale)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 20),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: primaryGreen.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: primaryGreen, width: 1.5),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.flash_on_rounded, color: primaryGreen, size: 24),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Spot-sale Mode: Advance amount disabled, delivery date same as booking date, auto-marked as Delivered upon submit.',
+                                style: TextStyle(
+                                  color: isDark ? Colors.white : Colors.black87,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    // Item Selection
                     Text(
                       'Item',
                       style: textTheme.titleMedium?.copyWith(
@@ -405,7 +540,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
 
                     // Read-only Delivery Date Period Display
                     Text(
-                      'Delivery Date Period',
+                      _isSpotSale ? 'Delivery Date Period (Same as Booking Date)' : 'Delivery Date Period',
                       style: textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: isDark ? Colors.white70 : Colors.black87,
@@ -538,21 +673,36 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Advance
+                    // Advance Paid (Disabled if Spot-sale)
                     Text(
-                      'Advance Paid',
+                      _isSpotSale ? 'Advance Paid (Disabled for Spot-sale)' : 'Advance Paid',
                       style: textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white70 : Colors.black87,
+                        color: _isSpotSale
+                            ? (isDark ? Colors.white38 : Colors.black38)
+                            : (isDark ? Colors.white70 : Colors.black87),
                       ),
                     ),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _advanceController,
+                      enabled: !_isSpotSale,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-                      decoration: _buildInputDecoration(isDark, 'Enter advance amount'),
+                      style: TextStyle(
+                        color: _isSpotSale
+                            ? (isDark ? Colors.white38 : Colors.black38)
+                            : (isDark ? Colors.white : Colors.black87),
+                      ),
+                      decoration: _buildInputDecoration(
+                        isDark,
+                        _isSpotSale ? 'Disabled (Spot-sale)' : 'Enter advance amount',
+                      ).copyWith(
+                        fillColor: _isSpotSale
+                            ? (isDark ? const Color(0xFF0F172A) : Colors.grey[200])
+                            : (isDark ? const Color(0xFF1E293B) : Colors.white),
+                      ),
                       validator: (value) {
+                        if (_isSpotSale) return null;
                         if (value == null || value.trim().isEmpty) {
                           return 'Please enter advance amount';
                         }
@@ -562,7 +712,15 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 36),
+                    const SizedBox(height: 20),
+
+                    // Delivery Reminder field (Only for normal booking)
+                    if (!_isSpotSale) ...[
+                      _buildDeliveryReminderPicker(isDark, textTheme),
+                      const SizedBox(height: 20),
+                    ],
+
+                    const SizedBox(height: 16),
 
                     // Submit Button
                     SizedBox(
@@ -579,7 +737,9 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
                           elevation: 2,
                         ),
                         child: Text(
-                          _isEditMode ? 'Update Booking' : 'Submit Booking',
+                          _isEditMode
+                              ? 'Update Entry'
+                              : (_isSpotSale ? 'Submit Spot-sale' : 'Submit Booking'),
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -593,6 +753,106 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
                 ),
               ),
             ),
+    );
+  }
+
+  Widget _buildDeliveryReminderPicker(bool isDark, TextTheme textTheme) {
+    final DateFormat formatter = DateFormat('dd MMM yyyy, hh:mm a');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Delivery Reminder (Optional)',
+          style: textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.white70 : Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: () async {
+            final now = DateTime.now();
+            final initialDate = _deliveryStart != null && _deliveryStart!.toDate().isAfter(now)
+                ? _deliveryStart!.toDate()
+                : now;
+            final pickedDate = await showDatePicker(
+              context: context,
+              initialDate: _deliveryReminderDateTime ?? initialDate,
+              firstDate: now.subtract(const Duration(days: 1)),
+              lastDate: now.add(const Duration(days: 365)),
+            );
+
+            if (pickedDate != null && mounted) {
+              final pickedTime = await showTimePicker(
+                context: context,
+                initialTime: _deliveryReminderDateTime != null
+                    ? TimeOfDay.fromDateTime(_deliveryReminderDateTime!)
+                    : const TimeOfDay(hour: 9, minute: 0),
+              );
+
+              if (pickedTime != null) {
+                setState(() {
+                  _deliveryReminderDateTime = DateTime(
+                    pickedDate.year,
+                    pickedDate.month,
+                    pickedDate.day,
+                    pickedTime.hour,
+                    pickedTime.minute,
+                  );
+                });
+              }
+            }
+          },
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark ? Colors.white24 : Colors.grey[300]!,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _deliveryReminderDateTime != null
+                      ? Icons.notifications_active_rounded
+                      : Icons.alarm_add_rounded,
+                  color: _deliveryReminderDateTime != null ? primaryGreen : Colors.grey,
+                  size: 22,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _deliveryReminderDateTime != null
+                        ? formatter.format(_deliveryReminderDateTime!)
+                        : 'Select date & time for delivery reminder',
+                    style: TextStyle(
+                      color: _deliveryReminderDateTime != null
+                          ? (isDark ? Colors.white : Colors.black87)
+                          : Colors.grey,
+                      fontSize: 15,
+                      fontWeight: _deliveryReminderDateTime != null ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                  ),
+                ),
+                if (_deliveryReminderDateTime != null)
+                  IconButton(
+                    icon: const Icon(Icons.clear_rounded, size: 20, color: Colors.grey),
+                    onPressed: () {
+                      setState(() {
+                        _deliveryReminderDateTime = null;
+                      });
+                    },
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 

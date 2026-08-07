@@ -137,6 +137,18 @@ Future<void> _initializeNotifications() async {
         channelShowBadge: true,
         criticalAlerts: true,
       ),
+      NotificationChannel(
+        channelKey: 'delivery_reminder_channel',
+        channelName: 'Delivery Reminder Notifications',
+        channelDescription: 'Channel for supersale delivery reminders',
+        defaultColor: const Color(0xFF005BAC),
+        ledColor: Colors.blue,
+        soundSource: 'resource://raw/delivery_reminder',
+        importance: NotificationImportance.High,
+        channelShowBadge: true,
+        criticalAlerts: true,
+        playSound: true,
+      ),
     ],
     debug: false, // Set to false for production
   );
