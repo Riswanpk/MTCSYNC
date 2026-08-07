@@ -179,36 +179,39 @@ class _TodoFormPageState extends State<TodoFormPage> {
       );
 
       // Cancel old notification and reschedule with updated time
-      final notifId = widget.docId!.hashCode & 0x7FFFFFFF;
-      await AwesomeNotifications().cancel(notifId);
-      final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
-      await AwesomeNotifications().createNotification(
-        content: NotificationContent(
-          id: notifId,
-          channelKey: 'reminder_channel',
-          title: 'To-Do Reminder',
-          body: 'Reminder: $title',
-          notificationLayout: NotificationLayout.Default,
-          payload: {
-            'type': 'todo',
-            'docId': widget.docId!,
-          },
-        ),
-        schedule: NotificationCalendar(
-          year: scheduledDate.year,
-          month: scheduledDate.month,
-          day: scheduledDate.day,
-          hour: scheduledDate.hour,
-          minute: scheduledDate.minute,
-          second: 0,
-          millisecond: 0,
-          timeZone: tz,
-          repeats: false,
-          preciseAlarm: true,
-          allowWhileIdle: true,
-        ),
-      );
-
+      try {
+        final notifId = widget.docId!.hashCode & 0x7FFFFFFF;
+        await AwesomeNotifications().cancel(notifId);
+        final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
+        await NotificationPermissionService.instance.safeCreateNotification(
+          content: NotificationContent(
+            id: notifId,
+            channelKey: 'reminder_channel',
+            title: 'To-Do Reminder',
+            body: 'Reminder: $title',
+            notificationLayout: NotificationLayout.Default,
+            payload: {
+              'type': 'todo',
+              'docId': widget.docId!,
+            },
+          ),
+          schedule: NotificationCalendar(
+            year: scheduledDate.year,
+            month: scheduledDate.month,
+            day: scheduledDate.day,
+            hour: scheduledDate.hour,
+            minute: scheduledDate.minute,
+            second: 0,
+            millisecond: 0,
+            timeZone: tz,
+            repeats: false,
+            preciseAlarm: true,
+            allowWhileIdle: true,
+          ),
+        );
+      } catch (e) {
+        debugPrint('Warning: Failed to reschedule todo notification: $e');
+      }
 
       if (mounted) Navigator.pop(context);
       return;
@@ -226,34 +229,38 @@ class _TodoFormPageState extends State<TodoFormPage> {
     });
 
     // Schedule local notification for the exact reminder time
-    final notifId = todoRef.id.hashCode & 0x7FFFFFFF;
-    final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
-    await AwesomeNotifications().createNotification(
-      content: NotificationContent(
-        id: notifId,
-        channelKey: 'reminder_channel',
-        title: 'To-Do Reminder',
-        body: 'Reminder: $title',
-        notificationLayout: NotificationLayout.Default,
-        payload: {
-          'type': 'todo',
-          'docId': todoRef.id,
-        },
-      ),
-      schedule: NotificationCalendar(
-        year: scheduledDate.year,
-        month: scheduledDate.month,
-        day: scheduledDate.day,
-        hour: scheduledDate.hour,
-        minute: scheduledDate.minute,
-        second: 0,
-        millisecond: 0,
-        timeZone: tz,
-        repeats: false,
-        preciseAlarm: true,
-        allowWhileIdle: true,
-      ),
-    );
+    try {
+      final notifId = todoRef.id.hashCode & 0x7FFFFFFF;
+      final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
+      await NotificationPermissionService.instance.safeCreateNotification(
+        content: NotificationContent(
+          id: notifId,
+          channelKey: 'reminder_channel',
+          title: 'To-Do Reminder',
+          body: 'Reminder: $title',
+          notificationLayout: NotificationLayout.Default,
+          payload: {
+            'type': 'todo',
+            'docId': todoRef.id,
+          },
+        ),
+        schedule: NotificationCalendar(
+          year: scheduledDate.year,
+          month: scheduledDate.month,
+          day: scheduledDate.day,
+          hour: scheduledDate.hour,
+          minute: scheduledDate.minute,
+          second: 0,
+          millisecond: 0,
+          timeZone: tz,
+          repeats: false,
+          preciseAlarm: true,
+          allowWhileIdle: true,
+        ),
+      );
+    } catch (e) {
+      debugPrint('Warning: Failed to schedule todo notification: $e');
+    }
 
     await _clearDraft();
 

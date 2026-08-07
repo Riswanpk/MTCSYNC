@@ -82,9 +82,8 @@ class NotificationPermissionService {
         print('PlatformException creating notification: ${e.code} - ${e.message}');
       }
 
-      // Handle specific permission error
-      if (e.code == 'INSUFFICIENT_PERMISSIONS' ||
-          e.message?.contains('disabled') == true) {
+      // Handle specific permission or disabled channel error
+      if (e.code == 'INSUFFICIENT_PERMISSIONS') {
         _notificationPermissionGranted = false;
         // Try requesting permission and retry once
         final permitted = await requestNotificationPermission();

@@ -384,8 +384,12 @@ class _TodoPageState extends State<TodoPage>
       if (confirm != true) return;
 
       // Cancel the notification using the same ID calculation from todoform.dart
-      final notificationId = doc.id.hashCode & 0x7FFFFFFF;
-      await AwesomeNotifications().cancel(notificationId);
+      try {
+        final notificationId = doc.id.hashCode & 0x7FFFFFFF;
+        await AwesomeNotifications().cancel(notificationId);
+      } catch (e) {
+        debugPrint('Warning: Failed to cancel todo notification: $e');
+      }
 
       final today = _dateOnly(DateTime.now());
       await _firestore.collection('todo').doc(doc.id).update({
@@ -403,8 +407,12 @@ class _TodoPageState extends State<TodoPage>
 
   Future<void> _deleteTodo(String docId) async {
     // Cancel the notification using the same ID calculation from todoform.dart
-    final notificationId = docId.hashCode & 0x7FFFFFFF;
-    await AwesomeNotifications().cancel(notificationId);
+    try {
+      final notificationId = docId.hashCode & 0x7FFFFFFF;
+      await AwesomeNotifications().cancel(notificationId);
+    } catch (e) {
+      debugPrint('Warning: Failed to cancel todo notification: $e');
+    }
     
     await _firestore.collection('todo').doc(docId).delete();
 

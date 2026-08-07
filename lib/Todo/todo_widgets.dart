@@ -2,6 +2,7 @@ import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:mtcsync/Misc/notification_permission_service.dart';
 import 'task_detail_widgets.dart';
 
 
@@ -220,35 +221,39 @@ class TodoListItem extends StatelessWidget {
                 });
 
                 // Reschedule local notification on phone
-                final notifId = doc.id.hashCode & 0x7FFFFFFF;
-                await AwesomeNotifications().cancel(notifId);
-                final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
-                await AwesomeNotifications().createNotification(
-                  content: NotificationContent(
-                    id: notifId,
-                    channelKey: 'reminder_channel',
-                    title: 'To-Do Reminder',
-                    body: 'Reminder: ${doc['title'] ?? 'Task'}',
-                    notificationLayout: NotificationLayout.Default,
-                    payload: {
-                      'type': 'todo',
-                      'docId': doc.id,
-                    },
-                  ),
-                  schedule: NotificationCalendar(
-                    year: newReminder.year,
-                    month: newReminder.month,
-                    day: newReminder.day,
-                    hour: newReminder.hour,
-                    minute: newReminder.minute,
-                    second: 0,
-                    millisecond: 0,
-                    timeZone: tz,
-                    repeats: false,
-                    preciseAlarm: true,
-                    allowWhileIdle: true,
-                  ),
-                );
+                try {
+                  final notifId = doc.id.hashCode & 0x7FFFFFFF;
+                  await AwesomeNotifications().cancel(notifId);
+                  final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
+                  await NotificationPermissionService.instance.safeCreateNotification(
+                    content: NotificationContent(
+                      id: notifId,
+                      channelKey: 'reminder_channel',
+                      title: 'To-Do Reminder',
+                      body: 'Reminder: ${doc['title'] ?? 'Task'}',
+                      notificationLayout: NotificationLayout.Default,
+                      payload: {
+                        'type': 'todo',
+                        'docId': doc.id,
+                      },
+                    ),
+                    schedule: NotificationCalendar(
+                      year: newReminder.year,
+                      month: newReminder.month,
+                      day: newReminder.day,
+                      hour: newReminder.hour,
+                      minute: newReminder.minute,
+                      second: 0,
+                      millisecond: 0,
+                      timeZone: tz,
+                      repeats: false,
+                      preciseAlarm: true,
+                      allowWhileIdle: true,
+                    ),
+                  );
+                } catch (e) {
+                  debugPrint('Warning: Failed to reschedule todo notification: $e');
+                }
 
 
 

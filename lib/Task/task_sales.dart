@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../Misc/firebase_storage_helper.dart';
+import '../Misc/notification_permission_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -29,32 +30,40 @@ Future<void> syncTaskReminders(String userId) async {
       final int notifId = doc.id.hashCode & 0x7FFFFFFF;
 
       if (status == 'pending') {
-        // Schedule recurring daily reminder at 9:00 AM
-        await AwesomeNotifications().createNotification(
-          content: NotificationContent(
-            id: notifId,
-            channelKey: 'reminder_channel',
-            title: 'Daily Task Reminder',
-            body: 'Pending task: "$title"',
-            notificationLayout: NotificationLayout.Default,
-            payload: {
-              'type': 'core_task',
-              'docId': doc.id,
-            },
-          ),
-          schedule: NotificationCalendar(
-            hour: 9,
-            minute: 0,
-            second: 0,
-            millisecond: 0,
-            timeZone: tz,
-            repeats: true,
-            preciseAlarm: true,
-          ),
-        );
+        try {
+          // Schedule recurring daily reminder at 9:00 AM
+          await NotificationPermissionService.instance.safeCreateNotification(
+            content: NotificationContent(
+              id: notifId,
+              channelKey: 'reminder_channel',
+              title: 'Daily Task Reminder',
+              body: 'Pending task: "$title"',
+              notificationLayout: NotificationLayout.Default,
+              payload: {
+                'type': 'core_task',
+                'docId': doc.id,
+              },
+            ),
+            schedule: NotificationCalendar(
+              hour: 9,
+              minute: 0,
+              second: 0,
+              millisecond: 0,
+              timeZone: tz,
+              repeats: true,
+              preciseAlarm: true,
+            ),
+          );
+        } catch (e) {
+          debugPrint('Warning: Failed to schedule task reminder: $e');
+        }
       } else {
-        // If task is completed, ensure any scheduled reminder is cancelled
-        await AwesomeNotifications().cancel(notifId);
+        try {
+          // If task is completed, ensure any scheduled reminder is cancelled
+          await AwesomeNotifications().cancel(notifId);
+        } catch (e) {
+          debugPrint('Warning: Failed to cancel task reminder: $e');
+        }
       }
     }
   } catch (e) {
@@ -240,8 +249,12 @@ class _UserTaskPageState extends State<UserTaskPage> {
       });
 
       // 2. Cancel the 9 AM local daily reminder notification
-      final notifId = docId.hashCode & 0x7FFFFFFF;
-      await AwesomeNotifications().cancel(notifId);
+      try {
+        final notifId = docId.hashCode & 0x7FFFFFFF;
+        await AwesomeNotifications().cancel(notifId);
+      } catch (e) {
+        debugPrint('Warning: Failed to cancel task reminder: $e');
+      }
 
       // 3. Send Completion FCM Notification to Core Team member
       if (!isMassTask) {

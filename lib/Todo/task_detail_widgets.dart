@@ -91,8 +91,12 @@ class TaskDetailPage extends StatelessWidget {
                           );
                           if (confirm == true && data['docId'] != null) {
                             // Cancel the notification using the same ID calculation from todoform.dart
-                            final notificationId = data['docId'].hashCode & 0x7FFFFFFF;
-                            await AwesomeNotifications().cancel(notificationId);
+                            try {
+                              final notificationId = data['docId'].hashCode & 0x7FFFFFFF;
+                              await AwesomeNotifications().cancel(notificationId);
+                            } catch (e) {
+                              debugPrint('Warning: Failed to cancel todo notification: $e');
+                            }
                             
                             await FirebaseFirestore.instance
                                 .collection('todo')
