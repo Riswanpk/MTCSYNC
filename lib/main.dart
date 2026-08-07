@@ -54,33 +54,49 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
 
   // Enable Firebase Crashlytics
-  await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
-  
-  // Pass all uncaught errors from the Flutter framework to Crashlytics
-  FlutterError.onError = (errorDetails) {
-    FirebaseCrashlytics.instance.recordFlutterError(errorDetails);
-  };
-  
-  // Pass all uncaught asynchronous errors that aren't handled by the Flutter framework
-  PlatformDispatcher.instance.onError = (error, stack) {
-    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-    return true;
-  };
+  try {
+    await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
+    
+    // Pass all uncaught errors from the Flutter framework to Crashlytics
+    FlutterError.onError = (errorDetails) {
+      FirebaseCrashlytics.instance.recordFlutterError(errorDetails);
+    };
+    
+    // Pass all uncaught asynchronous errors that aren't handled by the Flutter framework
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+  } catch (e) {
+    debugPrint('Crashlytics init error: $e');
+  }
 
   // Enable Firestore offline persistence
-  FirebaseFirestore.instance.settings = const Settings(
-    persistenceEnabled: true,
-  );
+  try {
+    FirebaseFirestore.instance.settings = const Settings(
+      persistenceEnabled: true,
+    );
+  } catch (e) {
+    debugPrint('Firestore settings error: $e');
+  }
 
   // Supabase is initialized lazily via DmeSupabaseService.ensureInitialized()
   // — only when a dme_admin or dme_user makes the first DME service call.
 
   // CRITICAL: Initialize AwesomeNotifications BEFORE runApp() 
   // This ensures scheduled notifications work even when app is killed
-  await _initializeNotifications();
+  try {
+    await _initializeNotifications();
+  } catch (e) {
+    debugPrint('Notification init error: $e');
+  }
 
   // Initialize SoundService for audio playback
-  await SoundService.instance.initialize();
+  try {
+    await SoundService.instance.initialize();
+  } catch (e) {
+    debugPrint('SoundService init error: $e');
+  }
 
   // Run the app
   runApp(

@@ -107,7 +107,7 @@ class SettingsPage extends StatelessWidget {
               decoration: const InputDecoration(
                 labelText: 'Minimum Build Number (versionCode)',
                 border: OutlineInputBorder(),
-                hintText: 'e.g. 170',
+                hintText: 'e.g. 171',
               ),
             ),
           ],
