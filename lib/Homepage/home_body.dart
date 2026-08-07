@@ -711,31 +711,41 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
         textColor: Colors.white,
         icon: Icons.dashboard_rounded,
       ),
-      NeumorphicButton(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const LoadingOverlayPage(
-                child: CustomerAdminViewerPage(),
-              ),
-            ),
+      StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('customer_deletion_requests')
+            .where('status', isEqualTo: 'pending')
+            .snapshots(),
+        builder: (context, snapshot) {
+          final pendingCount = snapshot.data?.docs.length ?? 0;
+          return NeumorphicButton(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const LoadingOverlayPage(
+                    child: CustomerAdminViewerPage(),
+                  ),
+                ),
+              );
+            },
+            onLongPress: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const LoadingOverlayPage(
+                    child: SyncHeadCustomerListDeletionApprovalPage(),
+                  ),
+                ),
+              );
+            },
+            text: 'Customer Calling',
+            color: isDark ? const Color(0xFF23272A) : Colors.white,
+            textColor: isDark ? Colors.white70 : const Color(0xFF607D8B),
+            icon: Icons.phone_rounded,
+            badgeCount: pendingCount > 0 ? pendingCount : null,
           );
         },
-        onLongPress: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const LoadingOverlayPage(
-                child: SyncHeadCustomerListDeletionApprovalPage(),
-              ),
-            ),
-          );
-        },
-        text: 'Customer Calling',
-        color: isDark ? const Color(0xFF23272A) : Colors.white,
-        textColor: isDark ? Colors.white70 : const Color(0xFF607D8B),
-        icon: Icons.phone_rounded,
       ),
     ];
     return _buildButtonGrid(buttons);

@@ -76,6 +76,7 @@ dependencies:
   supabase_flutter: ^2.8.4
   video_player: ^2.9.2
   chewie: ^1.8.5
+  firebase_functions: ^0.6.0
   
 
   # The following adds the Cupertino Icons font to your application.

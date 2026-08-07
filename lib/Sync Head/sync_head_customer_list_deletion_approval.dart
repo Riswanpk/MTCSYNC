@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import '../Navigation/user_cache_service.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);
 const Color _primaryGreen = Color(0xFF8CC63F);
@@ -16,9 +17,64 @@ class SyncHeadCustomerListDeletionApprovalPage extends StatefulWidget {
 class _SyncHeadCustomerListDeletionApprovalPageState
     extends State<SyncHeadCustomerListDeletionApprovalPage> {
   final Map<String, bool> _processingIds = {};
+  List<Map<String, dynamic>> _allUsers = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsers();
+  }
+
+  Future<void> _loadUsers() async {
+    try {
+      final users = await UserCacheService.instance.getAllUsers();
+      if (mounted) {
+        setState(() {
+          _allUsers = users;
+        });
+      }
+    } catch (_) {}
+  }
+
+  String _resolveUserBranch(Map<String, dynamic> data) {
+    String name = (data['userName'] as String?)?.trim() ?? '';
+    String branch = (data['userBranch'] as String?)?.trim() ?? '';
+    final email = (data['userEmail'] as String?)?.trim().toLowerCase() ?? '';
+    final userDocId = (data['userDocId'] as String?)?.trim().toLowerCase() ?? '';
+
+    if (_allUsers.isNotEmpty && (name.isEmpty || name.contains('@') || branch.isEmpty)) {
+      final matched = _allUsers.firstWhere(
+        (u) =>
+            (u['email'] as String? ?? '').toLowerCase() == email ||
+            (u['email'] as String? ?? '').toLowerCase() == userDocId ||
+            (u['uid'] as String? ?? '').toLowerCase() == userDocId,
+        orElse: () => {},
+      );
+      if (matched.isNotEmpty) {
+        if (name.isEmpty || name.contains('@')) {
+          final matchedName = (matched['username'] as String? ?? '').trim();
+          if (matchedName.isNotEmpty) {
+            name = matchedName;
+          }
+        }
+        if (branch.isEmpty) {
+          branch = (matched['branch'] as String? ?? '').trim();
+        }
+      }
+    }
+
+    if (name.isEmpty) {
+      name = email.isNotEmpty ? email : 'Unknown User';
+    }
+
+    if (branch.isNotEmpty) {
+      return '$name-$branch';
+    }
+    return name;
+  }
 
   Future<void> _approveDeletion(
-      BuildContext context, String reqId, Map<String, dynamic> data) async {
+      String reqId, Map<String, dynamic> data) async {
     setState(() => _processingIds[reqId] = true);
     try {
       final monthYear = data['monthYear'] as String?;
@@ -71,7 +127,7 @@ class _SyncHeadCustomerListDeletionApprovalPageState
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('Customer deletion approved & removed.'),
             backgroundColor: Colors.green,
@@ -80,7 +136,7 @@ class _SyncHeadCustomerListDeletionApprovalPageState
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Error approving request: $e'),
             backgroundColor: Colors.red,
@@ -95,7 +151,7 @@ class _SyncHeadCustomerListDeletionApprovalPageState
   }
 
   Future<void> _rejectDeletion(
-      BuildContext context, String reqId, Map<String, dynamic> data) async {
+      String reqId, Map<String, dynamic> data) async {
     setState(() => _processingIds[reqId] = true);
     try {
       final monthYear = data['monthYear'] as String?;
@@ -148,7 +204,7 @@ class _SyncHeadCustomerListDeletionApprovalPageState
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('Deletion request rejected.'),
             backgroundColor: Colors.orange,
@@ -157,7 +213,7 @@ class _SyncHeadCustomerListDeletionApprovalPageState
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Error rejecting request: $e'),
             backgroundColor: Colors.red,
@@ -304,7 +360,7 @@ class _SyncHeadCustomerListDeletionApprovalPageState
                     final reqId = doc.id;
                     final data = doc.data() as Map<String, dynamic>;
                     final customerData = (data['customerData'] as Map<String, dynamic>?) ?? {};
-                    final userName = data['userName'] ?? data['userEmail'] ?? 'Unknown User';
+                    final userBranchStr = _resolveUserBranch(data);
                     final monthYear = data['monthYear'] ?? '';
                     final requestedAtTS = data['requestedAt'] as Timestamp?;
                     final requestedAtStr = requestedAtTS != null
@@ -460,7 +516,7 @@ class _SyncHeadCustomerListDeletionApprovalPageState
                                   radius: 12,
                                   backgroundColor: Colors.blue.shade100,
                                   child: Text(
-                                    userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+                                    userBranchStr.isNotEmpty ? userBranchStr[0].toUpperCase() : 'U',
                                     style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _primaryBlue),
                                   ),
                                 ),
@@ -470,7 +526,7 @@ class _SyncHeadCustomerListDeletionApprovalPageState
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'Requested by $userName',
+                                        'Requested by $userBranchStr',
                                         style: TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w600,
@@ -502,7 +558,7 @@ class _SyncHeadCustomerListDeletionApprovalPageState
                                     children: [
                                       Expanded(
                                         child: OutlinedButton.icon(
-                                          onPressed: () => _rejectDeletion(context, reqId, data),
+                                          onPressed: () => _rejectDeletion(reqId, data),
                                           icon: const Icon(Icons.close_rounded, size: 18, color: Colors.red),
                                           label: const Text('Reject', style: TextStyle(color: Colors.red)),
                                           style: OutlinedButton.styleFrom(
@@ -517,7 +573,7 @@ class _SyncHeadCustomerListDeletionApprovalPageState
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: ElevatedButton.icon(
-                                          onPressed: () => _approveDeletion(context, reqId, data),
+                                          onPressed: () => _approveDeletion(reqId, data),
                                           icon: const Icon(Icons.check_rounded, size: 18, color: Colors.white),
                                           label: const Text('Approve', style: TextStyle(color: Colors.white)),
                                           style: ElevatedButton.styleFrom(

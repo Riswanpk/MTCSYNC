@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -9,6 +11,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 
 import '../Misc/theme_notifier.dart';
+import '../Navigation/user_cache_service.dart';
 import 'customer_target_customer_tile_viewer.dart';
 import 'add_customer.dart';
 
@@ -1252,18 +1255,54 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                                       final now = DateTime.now();
                                       final monthYear = "${_monthName(now.month)} ${now.year}";
 
-                                      await FirebaseFirestore.instance
+                                      await UserCacheService.instance.ensureLoaded();
+                                      final reqUsername = UserCacheService.instance.username ?? user?.displayName ?? user?.email ?? '';
+                                      final reqBranch = UserCacheService.instance.branch ?? '';
+
+                                      final docRef = await FirebaseFirestore.instance
                                           .collection('customer_deletion_requests')
                                           .add({
                                         'monthYear': monthYear,
                                         'userDocId': _docId,
                                         'userEmail': user?.email ?? '',
-                                        'userName': user?.displayName ?? user?.email ?? '',
+                                        'userName': reqUsername,
+                                        'userBranch': reqBranch,
                                         'customerData': customer,
                                         'reason': reasonResult,
                                         'requestedAt': FieldValue.serverTimestamp(),
                                         'status': 'pending',
                                       });
+
+                                      unawaited(() async {
+                                        try {
+                                          final syncHeadQuery = await FirebaseFirestore.instance
+                                              .collection('users')
+                                              .where('role', whereIn: ['sync_head', 'Sync Head'])
+                                              .get();
+
+                                          final custName = (customer['name'] ?? 'Customer').toString();
+                                          final reqUserBranchStr = reqBranch.isNotEmpty ? '$reqUsername ($reqBranch)' : reqUsername;
+
+                                          for (final doc in syncHeadQuery.docs) {
+                                            final recipientUid = doc.id;
+                                            try {
+                                              await FirebaseFunctions.instanceFor(region: 'asia-south1')
+                                                  .httpsCallable('sendLeadAssignmentNotification')
+                                                  .call(<String, dynamic>{
+                                                'recipientUid': recipientUid,
+                                                'title': 'Customer Deletion Request',
+                                                'body': '$reqUserBranchStr requested deletion of customer "$custName".',
+                                                'notifType': 'customer_deletion_request',
+                                                'leadDocId': docRef.id,
+                                              });
+                                            } catch (e) {
+                                              debugPrint('FCM Warning: failed to send deletion notification to $recipientUid: $e');
+                                            }
+                                          }
+                                        } catch (e) {
+                                          debugPrint('Error triggering deletion request notifications: $e');
+                                        }
+                                      }());
 
                                       if (mounted) {
                                         showDialog(
