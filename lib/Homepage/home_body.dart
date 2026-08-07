@@ -22,6 +22,7 @@ import '../Sync Head/sync_head_todos_page.dart';
 import '../Sync Head/sync_head_customer_list_deletion_approval.dart';
 import '../SME/sme_leads_page.dart';
 import '../SME/sme_dashboard.dart';
+import '../SME/sme_ads_page.dart';
 import '../DME/services/dme_supabase_service.dart';
 import '../DME/screens/dme_sales_upload.dart';
 import '../DME/screens/dme_customer_list.dart';
@@ -685,77 +686,57 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   /// Builds the Sync Head-specific home tiles.
   Widget _buildSyncHeadTiles(BuildContext context) {
     final isDark = widget.isDark;
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: NeumorphicButton(
-                onTap: () => _navigateToLeads(context),
-                onLongPress: () => _navigateToSyncHeadLeads(context),
-                text: 'Leads',
-                color: primaryBlue,
-                textColor: Colors.white,
-                icon: Icons.people_alt_rounded,
+    final List<Widget> buttons = [
+      NeumorphicButton(
+        onTap: () => _navigateToLeads(context),
+        onLongPress: () => _navigateToSyncHeadLeads(context),
+        text: 'Leads',
+        color: primaryBlue,
+        textColor: Colors.white,
+        icon: Icons.people_alt_rounded,
+      ),
+      NeumorphicButton(
+        onTap: () => _navigateToSyncHeadTodos(context),
+        text: 'Todos',
+        color: primaryGreen,
+        textColor: Colors.white,
+        icon: Icons.checklist_rounded,
+      ),
+      NeumorphicButton(
+        onTap: () => _navigateToDashboard(context),
+        text: 'Dashboard',
+        color: primaryGreen,
+        textColor: Colors.white,
+        icon: Icons.dashboard_rounded,
+      ),
+      NeumorphicButton(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const LoadingOverlayPage(
+                child: CustomerAdminViewerPage(),
               ),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: NeumorphicButton(
-                onTap: () => _navigateToSyncHeadTodos(context),
-                text: 'Todos',
-                color: primaryGreen,
-                textColor: Colors.white,
-                icon: Icons.checklist_rounded,
+          );
+        },
+        onLongPress: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const LoadingOverlayPage(
+                child: SyncHeadCustomerListDeletionApprovalPage(),
               ),
             ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(
-              child: NeumorphicButton(
-                onTap: () => _navigateToDashboard(context),
-                text: 'Dashboard',
-                color: primaryGreen,
-                textColor: Colors.white,
-                icon: Icons.dashboard_rounded,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: NeumorphicButton(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const LoadingOverlayPage(
-                        child: CustomerAdminViewerPage(),
-                      ),
-                    ),
-                  );
-                },
-                onLongPress: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const LoadingOverlayPage(
-                        child: SyncHeadCustomerListDeletionApprovalPage(),
-                      ),
-                    ),
-                  );
-                },
-                text: 'Customer Calling',
-                color: isDark ? const Color(0xFF23272A) : Colors.white,
-                textColor: isDark ? Colors.white70 : const Color(0xFF607D8B),
-                icon: Icons.phone_rounded,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
+          );
+        },
+        text: 'Customer Calling',
+        color: isDark ? const Color(0xFF23272A) : Colors.white,
+        textColor: isDark ? Colors.white70 : const Color(0xFF607D8B),
+        icon: Icons.phone_rounded,
+      ),
+    ];
+    return _buildButtonGrid(buttons);
   }
 
   /// Builds the DME-specific home tiles.
@@ -763,174 +744,133 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     final role = widget.role;
     // dme_admin sees Dashboard, Customer DB Upload, and Complaints
     if (role == 'dme_admin') {
-      return Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: NeumorphicButton(
-                  onTap: () => _navigateToDmeDashboard(context),
-                  text: 'Dashboard',
-                  color: const Color(0xFFB2EBF2),
-                  textColor: const Color(0xFF00695C),
-                  icon: Icons.analytics_rounded,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: NeumorphicButton(
-                  onTap: () => _navigateToDmeCustomerDbUpload(context),
-                  text: 'Customer DB Upload',
-                  color: const Color(0xFFC8E6C9),
-                  textColor: const Color(0xFF1B5E20),
-                  icon: Icons.storage_rounded,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: NeumorphicButton(
-                  onTap: () => _navigateToDmeCustomerList(context),
-                  text: 'Customer List',
-                  color: const Color(0xFFFFD580),
-                  textColor: const Color(0xFFE65100),
-                  icon: Icons.groups_rounded,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: NeumorphicButton(
-                  onTap: () => _navigateToDmeComplaints(context),
-                  text: 'Complaints',
-                  color: const Color(0xFFFFE0B2),
-                  textColor: const Color(0xFFE65100),
-                  icon: Icons.warning_rounded,
-                ),
-              ),
-            ],
-          ),
-        ],
-      );
+      final List<Widget> buttons = [
+        NeumorphicButton(
+          onTap: () => _navigateToDmeDashboard(context),
+          text: 'Dashboard',
+          color: const Color(0xFFB2EBF2),
+          textColor: const Color(0xFF00695C),
+          icon: Icons.analytics_rounded,
+        ),
+        NeumorphicButton(
+          onTap: () => _navigateToDmeCustomerDbUpload(context),
+          text: 'Customer DB Upload',
+          color: const Color(0xFFC8E6C9),
+          textColor: const Color(0xFF1B5E20),
+          icon: Icons.storage_rounded,
+        ),
+        NeumorphicButton(
+          onTap: () => _navigateToDmeCustomerList(context),
+          text: 'Customer List',
+          color: const Color(0xFFFFD580),
+          textColor: const Color(0xFFE65100),
+          icon: Icons.groups_rounded,
+        ),
+        NeumorphicButton(
+          onTap: () => _navigateToDmeComplaints(context),
+          text: 'Complaints',
+          color: const Color(0xFFFFE0B2),
+          textColor: const Color(0xFFE65100),
+          icon: Icons.warning_rounded,
+        ),
+      ];
+      return _buildButtonGrid(buttons);
     }
 
     // dme_user sees Upload Sales, Customers, Reminders, Call Customers
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: NeumorphicButton(
-                onTap: () => _navigateToDmeSalesUpload(context),
-                text: 'Upload Sales',
-                color: const Color(0xFF1E88E5),
-                textColor: Colors.white,
-                icon: Icons.upload_file,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: NeumorphicButton(
-                onTap: () => _navigateToDmeCustomerList(context),
-                text: 'Customers',
-                color: const Color(0xFF8CC63F),
-                textColor: Colors.white,
-                icon: Icons.groups_rounded,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(
-              child: NeumorphicButton(
-                onTap: () => _navigateToDmeRemindersAndCalls(context),
-                text: 'Reminders & Calls',
-                color: const Color(0xFFE65100),
-                textColor: Colors.white,
-                icon: Icons.phone_in_talk_rounded,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: NeumorphicButton(
-                onTap: () => _navigateToDmeUserDashboard(context),
-                text: 'My Dashboard',
-                color: const Color(0xFFFFA000),
-                textColor: Colors.white,
-                icon: Icons.bar_chart_rounded,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(
-              child: NeumorphicButton(
-                onTap: () => _navigateToDmeLeads(context),
-                text: 'Leads',
-                color: const Color(0xFF00897B),
-                textColor: Colors.white,
-                icon: Icons.people_alt_rounded,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
+    final List<Widget> buttons = [
+      NeumorphicButton(
+        onTap: () => _navigateToDmeSalesUpload(context),
+        text: 'Upload Sales',
+        color: const Color(0xFF1E88E5),
+        textColor: Colors.white,
+        icon: Icons.upload_file,
+      ),
+      NeumorphicButton(
+        onTap: () => _navigateToDmeCustomerList(context),
+        text: 'Customers',
+        color: const Color(0xFF8CC63F),
+        textColor: Colors.white,
+        icon: Icons.groups_rounded,
+      ),
+      NeumorphicButton(
+        onTap: () => _navigateToDmeRemindersAndCalls(context),
+        text: 'Reminders & Calls',
+        color: const Color(0xFFE65100),
+        textColor: Colors.white,
+        icon: Icons.phone_in_talk_rounded,
+      ),
+      NeumorphicButton(
+        onTap: () => _navigateToDmeUserDashboard(context),
+        text: 'My Dashboard',
+        color: const Color(0xFFFFA000),
+        textColor: Colors.white,
+        icon: Icons.bar_chart_rounded,
+      ),
+      NeumorphicButton(
+        onTap: () => _navigateToDmeLeads(context),
+        text: 'Leads',
+        color: const Color(0xFF00897B),
+        textColor: Colors.white,
+        icon: Icons.people_alt_rounded,
+      ),
+    ];
+    return _buildButtonGrid(buttons);
   }
 
   /// Builds the SME-specific home tiles.
   Widget _buildSmeTiles(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: NeumorphicButton(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const LoadingOverlayPage(
-                        child: SmeLeadsPage(),
-                      ),
-                    ),
-                  );
-                },
-                text: 'Leads',
-                color: primaryBlue,
-                textColor: Colors.white,
-                icon: Icons.people_alt_rounded,
+    final List<Widget> buttons = [
+      NeumorphicButton(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const LoadingOverlayPage(
+                child: SmeLeadsPage(),
               ),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: NeumorphicButton(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const LoadingOverlayPage(
-                        child: SmeDashboard(),
-                      ),
-                    ),
-                  );
-                },
-                text: 'Dashboard',
-                color: Colors.teal,
-                textColor: Colors.white,
-                icon: Icons.dashboard_rounded,
+          );
+        },
+        text: 'Leads',
+        color: primaryBlue,
+        textColor: Colors.white,
+        icon: Icons.people_alt_rounded,
+      ),
+      NeumorphicButton(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const LoadingOverlayPage(
+                child: SmeDashboard(),
               ),
             ),
-          ],
-        ),
-      ],
-    );
+          );
+        },
+        text: 'Dashboard',
+        color: Colors.teal,
+        textColor: Colors.white,
+        icon: Icons.dashboard_rounded,
+      ),
+      NeumorphicButton(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const LoadingOverlayPage(
+                child: SmeAdsPage(),
+              ),
+            ),
+          );
+        },
+        text: 'Ads',
+        color: primaryGreen,
+        textColor: Colors.white,
+        icon: Icons.campaign_rounded,
+      ),
+    ];
+    return _buildButtonGrid(buttons);
   }
 
   Future<void> _navigateToSyncHeadLeads(BuildContext context) async {

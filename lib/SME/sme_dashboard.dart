@@ -4,6 +4,8 @@ import 'sme_daily_dashboard.dart';
 import 'sme_user_stats_dashboard.dart';
 import 'sme_all_leads_page.dart';
 import 'sme_report.dart';
+import 'sme_ad_wise_report.dart';
+import 'sme_ads_page.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);
 
@@ -307,11 +309,29 @@ class _SmeDashboardState extends State<SmeDashboard>
                   const SizedBox(height: 12),
                   _navButton(
                     context,
+                    'Ad-Wise Reports',
+                    Icons.bar_chart_rounded,
+                    'View lead analytics and stats based on Ad campaigns',
+                    isDark,
+                    () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SmeAdWiseReportPage())),
+                  ),
+                  const SizedBox(height: 12),
+                  _navButton(
+                    context,
                     'SME Reports & Exports',
                     Icons.assessment_rounded,
                     'Generate and share detailed Excel reports branchwise',
                     isDark,
                     () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SmeReportPage())),
+                  ),
+                  const SizedBox(height: 12),
+                  _navButton(
+                    context,
+                    'Ads',
+                    Icons.campaign_rounded,
+                    'Manage list of Ads for lead assignment and tracking',
+                    isDark,
+                    () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SmeAdsPage())),
                   ),
                   const SizedBox(height: 24),
                 ]),

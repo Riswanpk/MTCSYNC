@@ -747,14 +747,43 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                                   : null,
                         ),
                       ],
-                    const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _adNameController,
-                      decoration: _inputDecoration(
-                        label: 'Ad Name',
-                        icon: Icons.campaign,
-                        hint: 'Enter ad name',
-                      ),
+                    StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('sme_ads')
+                          .orderBy('name')
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        final ads = (snapshot.data?.docs ?? [])
+                            .map((doc) => (doc.data() as Map<String, dynamic>)['name']?.toString() ?? '')
+                            .where((name) => name.isNotEmpty)
+                            .toList();
+
+                        // If current text is non-empty and not in list (e.g. legacy/custom), include it
+                        final currentVal = _adNameController.text.trim();
+                        if (currentVal.isNotEmpty && !ads.contains(currentVal)) {
+                          ads.insert(0, currentVal);
+                        }
+
+                        return DropdownButtonFormField<String>(
+                          value: currentVal.isEmpty ? null : currentVal,
+                          items: ads
+                              .map((ad) => DropdownMenuItem(
+                                    value: ad,
+                                    child: Text(ad),
+                                  ))
+                              .toList(),
+                          onChanged: (val) {
+                            setState(() {
+                              _adNameController.text = val ?? '';
+                            });
+                          },
+                          decoration: _inputDecoration(
+                            label: 'Ad Name',
+                            icon: Icons.campaign,
+                            hint: ads.isEmpty ? 'No Ads available (manage in Ads menu)' : 'Select Ad',
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 14),
                     TextFormField(
