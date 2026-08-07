@@ -30,6 +30,7 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
   final Map<String, List<QueryDocumentSnapshot>> _entriesMap = {};
   List<QueryDocumentSnapshot> _allUserEntries = [];
   List<String> _lastItemNames = [];
+  bool _hasInitializedBookings = false;
 
   @override
   void initState() {
@@ -77,15 +78,24 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
     _entriesMap.clear();
 
     if (itemNames.isEmpty) {
-      setState(() {
-        _allUserEntries = [];
-        _isLoadingEntries = false;
-      });
+      if (mounted) {
+        setState(() {
+          _allUserEntries = [];
+          _isLoadingEntries = false;
+        });
+      }
       return;
     }
 
     final uid = _auth.currentUser?.uid;
-    if (uid == null || _userBranch == null) return;
+    if (uid == null || _userBranch == null) {
+      if (mounted) {
+        setState(() {
+          _isLoadingEntries = false;
+        });
+      }
+      return;
+    }
 
     setState(() => _isLoadingEntries = true);
 
@@ -229,8 +239,9 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
             .toSet()
             .toList();
 
-        // 2. Trigger multi-stream listener if item list changes
-        if (!_areListsEqual(_lastItemNames, itemNames)) {
+        // 2. Trigger multi-stream listener on initial load or if item list changes
+        if (!_hasInitializedBookings || !_areListsEqual(_lastItemNames, itemNames)) {
+          _hasInitializedBookings = true;
           _lastItemNames = itemNames;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _listenToUserBookings(itemNames);

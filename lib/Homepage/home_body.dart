@@ -402,6 +402,9 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     if (role == 'core_team') {
       return _buildCoreTeamTiles(context);
     }
+    if (role == 'sync_head' || role == 'sme' || role == 'dme_admin' || role == 'dme_user') {
+      return _buildOriginalHomePage(context);
+    }
 
     // Height to accommodate 3 rows of buttons + spacing + shadows
     const double pageViewHeight = 280.0;

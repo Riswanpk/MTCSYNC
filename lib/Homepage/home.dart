@@ -667,12 +667,18 @@ class _HomePageState extends State<HomePage>
             ),
             if (_showTodoWarning)
               TodoWarningBanner(onTap: _handleTodoWarningTap),
-            // Page scroll indicator dots kept near the bottom just above the todo warning banner
-            Positioned(
-              bottom: _showTodoWarning ? 54 : 16,
-              left: 0,
-              right: 0,
-              child: Row(
+            // Page scroll indicator dots shown only for roles with multiple pages
+            if (_role != 'supersale_admin' &&
+                _role != 'core_team' &&
+                _role != 'sync_head' &&
+                _role != 'sme' &&
+                _role != 'dme_admin' &&
+                _role != 'dme_user')
+              Positioned(
+                bottom: _showTodoWarning ? 54 : 16,
+                left: 0,
+                right: 0,
+                child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: List.generate(2, (index) {
                   final active = (_currentPageIndex % 2) == index;
