@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../Navigation/user_cache_service.dart';
+import 'sync_head_report_todo.dart';
 import 'package:intl/intl.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz_pkg;
@@ -189,6 +190,19 @@ class _SyncHeadTodosPageState extends State<SyncHeadTodosPage> {
         backgroundColor: _primaryGreen,
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download_rounded),
+            tooltip: 'Export Pending Todos Report',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const SyncHeadReportTodoPage()),
+              );
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [

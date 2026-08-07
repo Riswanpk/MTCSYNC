@@ -19,6 +19,7 @@ import '../Navigation/loading_page.dart';
 import 'home_widgets.dart';
 import '../Sync Head/sync_head_leads_page.dart';
 import '../Sync Head/sync_head_todos_page.dart';
+import '../Sync Head/sync_head_report_todo.dart';
 import '../Sync Head/sync_head_customer_list_deletion_approval.dart';
 import '../SME/sme_leads_page.dart';
 import '../SME/sme_dashboard.dart';
@@ -697,6 +698,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       ),
       NeumorphicButton(
         onTap: () => _navigateToSyncHeadTodos(context),
+        onLongPress: () => _navigateToSyncHeadReportTodo(context),
         text: 'Todos',
         color: primaryGreen,
         textColor: Colors.white,
@@ -888,6 +890,16 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       MaterialPageRoute(
         builder: (_) => const LoadingOverlayPage(
           child: SyncHeadTodosPage(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _navigateToSyncHeadReportTodo(BuildContext context) async {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const LoadingOverlayPage(
+          child: SyncHeadReportTodoPage(),
         ),
       ),
     );
