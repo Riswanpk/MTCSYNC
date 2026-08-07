@@ -524,10 +524,11 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
             bookingEnd != null &&
             now.isAfter(bookingStart.toDate()) &&
             now.isBefore(bookingEnd.toDate());
+        final bool isDelivered = status == 'delivered';
 
         return Dismissible(
           key: Key(docId),
-          direction: DismissDirection.horizontal,
+          direction: isDelivered ? DismissDirection.none : DismissDirection.horizontal,
           background: Container(
             alignment: Alignment.centerLeft,
             padding: const EdgeInsets.only(left: 20),
@@ -636,7 +637,7 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
               return false; // Slides back, will be removed from lists dynamically by status filters
             } else {
               // Mark as Delivered (Left-to-right swipe)
-              final phoneController = TextEditingController();
+              final phoneController = TextEditingController(text: (data['phone'] ?? '').toString());
               final formKey = GlobalKey<FormState>();
 
               final confirmed = await showDialog<bool>(
@@ -649,7 +650,7 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Enter billed phone number (mandatory):'),
+                        const Text('Confirm/Enter billed phone number:'),
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: phoneController,

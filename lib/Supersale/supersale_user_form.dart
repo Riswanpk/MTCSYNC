@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import '../Misc/notification_permission_service.dart';
@@ -610,11 +611,21 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
                     TextFormField(
                       controller: _phoneController,
                       keyboardType: TextInputType.phone,
+                      maxLength: 10,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(10),
+                      ],
                       style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-                      decoration: _buildInputDecoration(isDark, 'Enter phone number'),
+                      decoration: _buildInputDecoration(isDark, 'Enter 10-digit phone number').copyWith(
+                        counterText: '',
+                      ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
                           return 'Please enter phone number';
+                        }
+                        if (value.trim().length != 10) {
+                          return 'Phone number must be exactly 10 digits';
                         }
                         return null;
                       },
