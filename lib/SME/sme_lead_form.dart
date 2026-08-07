@@ -323,6 +323,158 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
     );
   }
 
+  Widget _customSelectField<T>({
+    required String label,
+    required IconData icon,
+    required String? hint,
+    required T? selectedValue,
+    required List<Map<String, dynamic>> items, // Each map has 'value', 'label', and optional 'subtitle'
+    required ValueChanged<T> onSelected,
+    String? Function(T?)? validator,
+    bool isLoading = false,
+  }) {
+    final itemMatch = items.where((item) => item['value'] == selectedValue);
+    final displayLabel = (itemMatch.isNotEmpty
+            ? itemMatch.first['label']
+            : (hint ?? 'Select option'))
+        .toString();
+
+    return FormField<T>(
+      initialValue: selectedValue,
+      validator: validator,
+      builder: (state) {
+        final hasError = state.hasError;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InkWell(
+              onTap: isLoading || items.isEmpty
+                  ? null
+                  : () {
+                      showModalBottomSheet(
+                        context: context,
+                        backgroundColor: Colors.transparent,
+                        isScrollControlled: true,
+                        builder: (context) {
+                          return Container(
+                            constraints: BoxConstraints(
+                              maxHeight: MediaQuery.of(context).size.height * 0.6,
+                            ),
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const SizedBox(height: 12),
+                                Container(
+                                  width: 40,
+                                  height: 4,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade300,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Row(
+                                    children: [
+                                      Icon(icon, color: _brandPrimary, size: 20),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Select $label',
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF143A52),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Divider(height: 1),
+                                Flexible(
+                                  child: ListView.separated(
+                                    shrinkWrap: true,
+                                    itemCount: items.length,
+                                    separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
+                                    itemBuilder: (context, index) {
+                                      final item = items[index];
+                                      final val = item['value'] as T;
+                                      final itemText = item['label'] as String;
+                                      final subtitle = item['subtitle'] as String?;
+                                      final isSelected = val == selectedValue;
+
+                                      return ListTile(
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                                        title: Text(
+                                          itemText,
+                                          style: TextStyle(
+                                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                            color: isSelected ? _brandPrimary : Colors.black87,
+                                          ),
+                                        ),
+                                        subtitle: subtitle != null
+                                            ? Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey.shade600))
+                                            : null,
+                                        trailing: isSelected
+                                            ? const Icon(Icons.check_circle_rounded, color: _brandPrimary)
+                                            : null,
+                                        onTap: () {
+                                          Navigator.pop(context);
+                                          onSelected(val);
+                                          state.didChange(val);
+                                        },
+                                      );
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
+              borderRadius: BorderRadius.circular(14),
+              child: InputDecorator(
+                decoration: _inputDecoration(
+                  label: label,
+                  icon: icon,
+                  hint: hint,
+                  suffixIcon: isLoading
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.blueGrey),
+                ).copyWith(
+                  errorText: hasError ? state.errorText : null,
+                ),
+                child: Text(
+                  selectedValue != null && selectedValue.toString().isNotEmpty
+                      ? displayLabel
+                      : (hint ?? ''),
+                  style: TextStyle(
+                    color: selectedValue != null && selectedValue.toString().isNotEmpty
+                        ? Colors.black87
+                        : Colors.grey.shade600,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _sectionCard({
     required String title,
     required IconData icon,
@@ -440,66 +592,38 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                   title: 'Assignment',
                   icon: Icons.account_tree_rounded,
                   children: [
-                    DropdownButtonFormField<String>(
-                      initialValue: _selectedBranch,
-                      items: _branches
-                          .map(
-                              (b) => DropdownMenuItem(value: b, child: Text(b)))
-                          .toList(),
-                      onChanged: (val) {
+                    _customSelectField<String>(
+                      label: 'Assign to Branch *',
+                      icon: Icons.business,
+                      hint: 'Choose branch',
+                      selectedValue: _selectedBranch,
+                      items: _branches.map((b) => {'value': b, 'label': b}).toList(),
+                      onSelected: (val) {
                         setState(() => _selectedBranch = val);
-                        if (val != null) _loadUsersForBranch(val);
+                        _loadUsersForBranch(val);
                       },
-                      decoration: _inputDecoration(
-                        label: 'Assign to Branch *',
-                        icon: Icons.business,
-                        hint: 'Choose branch',
-                      ),
-                      validator: (v) => v == null ? 'Select a branch' : null,
+                      validator: (v) => v == null || v.isEmpty ? 'Select a branch' : null,
                     ),
                     const SizedBox(height: 14),
-                    DropdownButtonFormField<String>(
-                      initialValue: _selectedUserId,
-                      items: _branchUsers
-                          .map((u) => DropdownMenuItem(
-                                value: u['id'] as String,
-                                child: Text('${u['username']} (${u['role']})'),
-                              ))
-                          .toList(),
-                      onChanged: (val) {
-                        if (val == null) {
-                          setState(() {
-                            _selectedUserId = null;
-                            _selectedUserName = null;
-                          });
-                          return;
-                        }
-                        final user =
-                            _branchUsers.firstWhere((u) => u['id'] == val);
+                    _customSelectField<String>(
+                      label: 'Assign to User *',
+                      icon: Icons.person_add,
+                      hint: _selectedBranch == null ? 'Pick branch first' : 'Select user',
+                      selectedValue: _selectedUserId,
+                      isLoading: _loadingUsers,
+                      items: _branchUsers.map((u) => {
+                        'value': u['id'] as String,
+                        'label': u['username'] as String,
+                        'subtitle': 'Role: ${u['role']}',
+                      }).toList(),
+                      onSelected: (val) {
+                        final user = _branchUsers.firstWhere((u) => u['id'] == val);
                         setState(() {
                           _selectedUserId = val;
                           _selectedUserName = user['username'] as String;
                         });
                       },
-                      decoration: _inputDecoration(
-                        label: 'Assign to User *',
-                        icon: Icons.person_add,
-                        hint: _selectedBranch == null
-                            ? 'Pick branch first'
-                            : 'Select user',
-                        suffixIcon: _loadingUsers
-                            ? const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                ),
-                              )
-                            : null,
-                      ),
-                      validator: (v) => v == null ? 'Select a user' : null,
+                      validator: (v) => v == null || v.isEmpty ? 'Select a user' : null,
                     ),
                   ],
                 ),
@@ -717,36 +841,32 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                       },
                     ),
                     const SizedBox(height: 14),
-                    DropdownButtonFormField<String>(
-                      initialValue: _selectedPlatform,
+                    _customSelectField<String>(
+                      label: 'Platform',
+                      icon: Icons.share_rounded,
+                      hint: 'Select platform',
+                      selectedValue: _selectedPlatform,
                       items: ['Instagram', 'Facebook', 'Youtube', 'DME', 'Other']
-                          .map((p) =>
-                              DropdownMenuItem(value: p, child: Text(p)))
+                          .map((p) => {'value': p, 'label': p})
                           .toList(),
-                      onChanged: (val) =>
-                          setState(() => _selectedPlatform = val),
-                      decoration: _inputDecoration(
-                        label: 'Platform',
-                        icon: Icons.share_rounded,
-                        hint: 'Select platform',
-                      ),
+                      onSelected: (val) => setState(() => _selectedPlatform = val),
                     ),
-                    if (_selectedPlatform == 'Other') ...
-                      [
-                        const SizedBox(height: 14),
-                        TextFormField(
-                          controller: _otherPlatformController,
-                          decoration: _inputDecoration(
-                            label: 'Specify Platform *',
-                            icon: Icons.edit_rounded,
-                          ),
-                          validator: (v) =>
-                              (_selectedPlatform == 'Other' &&
-                                      (v == null || v.trim().isEmpty))
-                                  ? 'Please specify the platform'
-                                  : null,
+                    if (_selectedPlatform == 'Other') ...[
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _otherPlatformController,
+                        decoration: _inputDecoration(
+                          label: 'Specify Platform *',
+                          icon: Icons.edit_rounded,
                         ),
-                      ],
+                        validator: (v) =>
+                            (_selectedPlatform == 'Other' &&
+                                    (v == null || v.trim().isEmpty))
+                                ? 'Please specify the platform'
+                                : null,
+                      ),
+                    ],
+                    const SizedBox(height: 14),
                     StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
                           .collection('sme_ads')
@@ -764,24 +884,17 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                           ads.insert(0, currentVal);
                         }
 
-                        return DropdownButtonFormField<String>(
-                          value: currentVal.isEmpty ? null : currentVal,
-                          items: ads
-                              .map((ad) => DropdownMenuItem(
-                                    value: ad,
-                                    child: Text(ad),
-                                  ))
-                              .toList(),
-                          onChanged: (val) {
+                        return _customSelectField<String>(
+                          label: 'Ad Name',
+                          icon: Icons.campaign,
+                          hint: ads.isEmpty ? 'No Ads available (manage in Ads menu)' : 'Select Ad',
+                          selectedValue: currentVal.isEmpty ? null : currentVal,
+                          items: ads.map((ad) => {'value': ad, 'label': ad}).toList(),
+                          onSelected: (val) {
                             setState(() {
-                              _adNameController.text = val ?? '';
+                              _adNameController.text = val;
                             });
                           },
-                          decoration: _inputDecoration(
-                            label: 'Ad Name',
-                            icon: Icons.campaign,
-                            hint: ads.isEmpty ? 'No Ads available (manage in Ads menu)' : 'Select Ad',
-                          ),
                         );
                       },
                     ),
@@ -798,18 +911,15 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                           : null,
                     ),
                     const SizedBox(height: 14),
-                    DropdownButtonFormField<String>(
-                      initialValue: _priority,
+                    _customSelectField<String>(
+                      label: 'Priority',
+                      icon: Icons.flag,
+                      hint: 'Select priority',
+                      selectedValue: _priority,
                       items: ['High', 'Medium', 'Low']
-                          .map(
-                              (p) => DropdownMenuItem(value: p, child: Text(p)))
+                          .map((p) => {'value': p, 'label': p})
                           .toList(),
-                      onChanged: (val) =>
-                          setState(() => _priority = val ?? 'High'),
-                      decoration: _inputDecoration(
-                        label: 'Priority',
-                        icon: Icons.flag,
-                      ),
+                      onSelected: (val) => setState(() => _priority = val),
                     ),
                     const SizedBox(height: 14),
                     TextFormField(
