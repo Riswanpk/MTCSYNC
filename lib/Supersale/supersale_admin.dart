@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'supersale_admin_form.dart';
 import 'supersale_admin_dashboard.dart';
 
@@ -34,6 +35,11 @@ class _SupersalePageState extends State<SupersalePage> {
 
   Future<void> _deleteSupersale(String docId) async {
     try {
+      final openNotifId = (docId + '_open').hashCode & 0x7FFFFFFF;
+      final closedNotifId = (docId + '_closed').hashCode & 0x7FFFFFFF;
+      await AwesomeNotifications().cancel(openNotifId);
+      await AwesomeNotifications().cancel(closedNotifId);
+
       await _firestore.collection('supersales').doc(docId).delete();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

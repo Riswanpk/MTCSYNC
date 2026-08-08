@@ -318,6 +318,8 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
       final isNewBookingOpen = nowUtc.isAfter(bookingStart) && nowUtc.isBefore(bookingEnd);
       final itemName = _itemController.text.trim();
 
+      String notifSubType = '';
+
       if (widget.docId == null) {
         data['created_by'] = user.uid;
         data['created_at'] = FieldValue.serverTimestamp();
@@ -328,11 +330,13 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
         if (isNewBookingOpen) {
           notifTitle = 'Booking Opened';
           notifBody = 'Supersale booking for "$itemName" is now open for your branch.';
+          notifSubType = 'booking_open';
         } else if (nowUtc.isBefore(bookingStart)) {
           notifTitle = 'Booking Scheduled';
           final localStart = bookingStart.toLocal();
           final formattedTime = DateFormat('dd MMM yyyy, hh:mm a').format(localStart);
           notifBody = 'Supersale booking for "$itemName" is scheduled to start on $formattedTime.';
+          notifSubType = 'booking_scheduled';
         }
       } else {
         await FirebaseFirestore.instance.collection('supersales').doc(widget.docId).update(data);
@@ -344,9 +348,11 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
           if (isOldBookingOpen && !isNewBookingOpen) {
             notifTitle = 'Booking Closed';
             notifBody = 'Supersale booking for "$itemName" has been closed.';
+            notifSubType = 'booking_closed';
           } else if (!isOldBookingOpen && isNewBookingOpen) {
             notifTitle = 'Booking Opened';
             notifBody = 'Supersale booking for "$itemName" is now open for your branch.';
+            notifSubType = 'booking_open';
           } else if (oldBookingRange.start.toUtc() != bookingStart || oldBookingRange.end.toUtc() != bookingEnd) {
             notifTitle = 'Booking Time Updated';
             final localStart = bookingStart.toLocal();
@@ -354,6 +360,7 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
             final formattedStart = DateFormat('dd MMM, hh:mm a').format(localStart);
             final formattedEnd = DateFormat('dd MMM, hh:mm a').format(localEnd);
             notifBody = 'Booking time for "$itemName" has been updated: $formattedStart to $formattedEnd.';
+            notifSubType = 'booking_updated';
           }
         }
       }
@@ -364,6 +371,7 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
           title: notifTitle,
           body: notifBody,
           docId: targetDocId,
+          subType: notifSubType,
         );
       }
 
@@ -397,6 +405,7 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
     required String title,
     required String body,
     required String docId,
+    String? subType,
   }) async {
     try {
       final List<String> recipientUids = [];
@@ -422,6 +431,7 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
             'title': title,
             'body': body,
             'notifType': 'supersale_notification',
+            'subType': subType ?? '',
             'leadDocId': docId,
           });
         } catch (error) {

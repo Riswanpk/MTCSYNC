@@ -68,7 +68,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
     await NotificationPermissionService.instance.safeCreateNotification(
       content: NotificationContent(
         id: DateTime.now().millisecondsSinceEpoch.remainder(100000), // unique ID
-        channelKey: 'reminder_channel',
+        channelKey: 'basic_channel',
         title: 'Follow-up Reminder',
         body: 'You have a follow-up scheduled.',
         notificationLayout: NotificationLayout.Default,

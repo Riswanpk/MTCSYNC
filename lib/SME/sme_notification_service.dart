@@ -30,7 +30,8 @@ class SmeNotificationService {
         'lead_transfer',
         'core_task_assignment',
         'core_task_completion',
-        'todo'
+        'todo',
+        'supersale_notification'
       };
       if (!handled.contains(type)) return;
 
@@ -41,24 +42,41 @@ class SmeNotificationService {
       final isCoreTaskAssigned = type == 'core_task_assignment';
       final isCoreTaskCompleted = type == 'core_task_completion';
       final isTodo = type == 'todo';
+      final isSupersale = type == 'supersale_notification';
+      final subType = data['subType'] ?? '';
+
+      String targetChannel = 'basic_channel';
+      if (isSupersale) {
+        if (subType == 'booking_open') {
+          targetChannel = 'supersale_open_channel';
+        } else if (subType == 'booking_closed') {
+          targetChannel = 'supersale_closed_channel';
+        } else {
+          targetChannel = 'delivery_reminder_channel';
+        }
+      } else if (isTodo) {
+        targetChannel = 'reminder_channel';
+      } else if (isCoreTaskAssigned) {
+        targetChannel = 'task_assignment_channel';
+      }
 
       // Show local notification so AwesomeNotifications action buttons work
       await NotificationPermissionService.instance.safeCreateNotification(
         content: NotificationContent(
           id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-          channelKey: isTodo
-              ? 'reminder_channel'
-              : (isCoreTaskAssigned ? 'task_assignment_channel' : 'basic_channel'),
+          channelKey: targetChannel,
           title: title,
           body: body,
           notificationLayout: NotificationLayout.Default,
           payload: {
             'docId': leadDocId,
-            'type': isCoreTaskAssigned
-                ? 'core_task'
-                : isCoreTaskCompleted
-                    ? 'core_task_complete'
-                    : (isTodo ? 'todo' : 'sme_lead_assignment'),
+            'type': isSupersale
+                ? 'supersale'
+                : (isCoreTaskAssigned
+                    ? 'core_task'
+                    : (isCoreTaskCompleted
+                        ? 'core_task_complete'
+                        : (isTodo ? 'todo' : 'sme_lead_assignment'))),
           },
         ),
       );

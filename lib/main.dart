@@ -30,6 +30,7 @@ import 'DME/models/dme_reminder.dart';
 import 'DME/services/dme_supabase_service.dart';
 import 'Task/task_sales.dart';
 import 'Task/task_admin.dart';
+import 'Supersale/supersale_user_mainpage.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -122,25 +123,27 @@ Future<void> _initializeNotifications() async {
     [
       NotificationChannel(
         channelKey: 'basic_channel',
-        channelName: 'Basic Notifications',
-        channelDescription: 'Notification channel for basic tests',
+        channelName: 'Leads Notifications',
+        channelDescription: 'Notification channel for leads and follow-ups',
         defaultColor: const Color(0xFF005BAC),
         ledColor: Colors.white,
         soundSource: 'resource://raw/leadsreminder',
         importance: NotificationImportance.High,
         channelShowBadge: true,
         criticalAlerts: true,
+        playSound: true,
       ),
       NotificationChannel(
         channelKey: 'reminder_channel',
-        channelName: 'Reminder Notifications',
-        channelDescription: 'Channel for task reminders',
+        channelName: 'Todo & Task Reminders',
+        channelDescription: 'Channel for todo and task reminders',
         defaultColor: const Color(0xFF8CC63F),
         ledColor: Colors.green,
         soundSource: 'resource://raw/todo_reminder',
         importance: NotificationImportance.High,
         channelShowBadge: true,
         criticalAlerts: true,
+        playSound: true,
       ),
       NotificationChannel(
         channelKey: 'task_assignment_channel',
@@ -152,6 +155,7 @@ Future<void> _initializeNotifications() async {
         importance: NotificationImportance.High,
         channelShowBadge: true,
         criticalAlerts: true,
+        playSound: true,
       ),
       NotificationChannel(
         channelKey: 'delivery_reminder_channel',
@@ -160,6 +164,30 @@ Future<void> _initializeNotifications() async {
         defaultColor: const Color(0xFF005BAC),
         ledColor: Colors.blue,
         soundSource: 'resource://raw/delivery_reminder',
+        importance: NotificationImportance.High,
+        channelShowBadge: true,
+        criticalAlerts: true,
+        playSound: true,
+      ),
+      NotificationChannel(
+        channelKey: 'supersale_open_channel',
+        channelName: 'Supersale Booking Open',
+        channelDescription: 'Channel for supersale booking open notifications',
+        defaultColor: const Color(0xFF005BAC),
+        ledColor: Colors.blue,
+        soundSource: 'resource://raw/supersale_bookings_open',
+        importance: NotificationImportance.High,
+        channelShowBadge: true,
+        criticalAlerts: true,
+        playSound: true,
+      ),
+      NotificationChannel(
+        channelKey: 'supersale_closed_channel',
+        channelName: 'Supersale Booking Closed',
+        channelDescription: 'Channel for supersale booking closed notifications',
+        defaultColor: const Color(0xFF005BAC),
+        ledColor: Colors.red,
+        soundSource: 'resource://raw/supersale_bookins_closed',
         importance: NotificationImportance.High,
         channelShowBadge: true,
         criticalAlerts: true,
@@ -337,13 +365,29 @@ class NotificationController {
       return;
     }
 
+    // Handle supersale notifications navigation
+    final channelKey = receivedAction.channelKey;
+    final notifType = payload?['type'];
+    final isSupersaleOpen = channelKey == 'supersale_open_channel' ||
+        (notifType == 'supersale' && payload?['subType'] == 'booking_open');
+    final isSupersaleClosed = channelKey == 'supersale_closed_channel' ||
+        (notifType == 'supersale' && payload?['subType'] == 'booking_closed');
+
+    if (isSupersaleClosed) {
+      // No redirection for bookings closed
+      return;
+    }
+
+    if (isSupersaleOpen || notifType == 'supersale') {
+      _doPush((_) => const SupersaleUserMainPage());
+      return;
+    }
+
     if (payload?['docId'] != null) {
       final docId = payload!['docId']!;
       await markNotificationOpened(docId);
 
       final isEdit = receivedAction.buttonKeyPressed == 'EDIT_FOLLOWUP';
-      final channelKey = receivedAction.channelKey;
-      final notifType = payload['type'];
       final isTodo = notifType == 'todo';
       final isSmeLead = notifType == 'sme_lead' || notifType == 'sme_lead_assignment';
 

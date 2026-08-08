@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../Navigation/user_cache_service.dart';
 import 'supersale_user_form.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
+import '../Misc/notification_permission_service.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -213,6 +215,111 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
     return DateFormat('dd/MM/yyyy').format(dt.toLocal());
   }
 
+  Set<String> _scheduledDocIds = {};
+
+  Future<void> _syncScheduledNotifications(List<QueryDocumentSnapshot> postings) async {
+    final role = UserCacheService.instance.role ?? '';
+    final isTargetRole = ['sales', 'manager', 'asst_manager'].contains(role);
+    if (!isTargetRole || _userBranch == null) return;
+
+    final now = DateTime.now();
+    final activeDocIds = postings.map((d) => d.id).toSet();
+
+    // Cancel notifications for deleted supersales
+    final deletedDocIds = _scheduledDocIds.difference(activeDocIds);
+    for (final deletedId in deletedDocIds) {
+      final openNotifId = (deletedId + '_open').hashCode & 0x7FFFFFFF;
+      final closedNotifId = (deletedId + '_closed').hashCode & 0x7FFFFFFF;
+      await AwesomeNotifications().cancel(openNotifId);
+      await AwesomeNotifications().cancel(closedNotifId);
+    }
+    _scheduledDocIds = activeDocIds;
+
+    for (final doc in postings) {
+      final data = doc.data() as Map<String, dynamic>;
+      final List<dynamic> branches = data['branches'] ?? [];
+      final isEligible = branches.contains(_userBranch) || branches.contains('all');
+      if (!isEligible) {
+        final openNotifId = (doc.id + '_open').hashCode & 0x7FFFFFFF;
+        final closedNotifId = (doc.id + '_closed').hashCode & 0x7FFFFFFF;
+        await AwesomeNotifications().cancel(openNotifId);
+        await AwesomeNotifications().cancel(closedNotifId);
+        continue;
+      }
+
+      final itemName = data['item'] ?? 'Supersale';
+      final Timestamp? startTs = data['bookingStart'];
+      final Timestamp? endTs = data['bookingEnd'];
+      if (startTs == null || endTs == null) continue;
+
+      final startDt = startTs.toDate();
+      final endDt = endTs.toDate();
+
+      final openNotifId = (doc.id + '_open').hashCode & 0x7FFFFFFF;
+      final closedNotifId = (doc.id + '_closed').hashCode & 0x7FFFFFFF;
+
+      // Schedule Open notification if bookingStart is in the future
+      if (startDt.isAfter(now)) {
+        final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
+        await NotificationPermissionService.instance.safeCreateNotification(
+          content: NotificationContent(
+            id: openNotifId,
+            channelKey: 'supersale_open_channel',
+            title: 'Booking Opened',
+            body: 'Supersale booking for "$itemName" is now open for your branch.',
+            notificationLayout: NotificationLayout.Default,
+            payload: {
+              'type': 'supersale',
+              'subType': 'booking_open',
+              'docId': doc.id,
+            },
+          ),
+          schedule: NotificationCalendar(
+            year: startDt.year,
+            month: startDt.month,
+            day: startDt.day,
+            hour: startDt.hour,
+            minute: startDt.minute,
+            second: startDt.second,
+            timeZone: tz,
+            preciseAlarm: true,
+            allowWhileIdle: true,
+          ),
+        );
+      }
+
+      // Schedule Closed notification if bookingEnd is in the future
+      if (endDt.isAfter(now)) {
+        final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
+        await NotificationPermissionService.instance.safeCreateNotification(
+          content: NotificationContent(
+            id: closedNotifId,
+            channelKey: 'supersale_closed_channel',
+            title: 'Booking Closed',
+            body: 'Supersale booking for "$itemName" has been closed.',
+            notificationLayout: NotificationLayout.Default,
+            payload: {
+              'type': 'supersale',
+              'subType': 'booking_closed',
+              'docId': doc.id,
+            },
+          ),
+          schedule: NotificationCalendar(
+            year: endDt.year,
+            month: endDt.month,
+            day: endDt.day,
+            hour: endDt.hour,
+            minute: endDt.minute,
+            second: endDt.second,
+            timeZone: tz,
+            preciseAlarm: true,
+            allowWhileIdle: true,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -248,7 +355,10 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
           });
         }
 
-        // 3. Check if there's at least one active posting covering the user's branch right now
+        // 3. Sync local scheduled notifications for booking open & close times
+        _syncScheduledNotifications(postings);
+
+        // 4. Check if there's at least one active posting covering the user's branch right now
         final isBookingOpen = postings.any((doc) {
           final data = doc.data() as Map<String, dynamic>;
           final List<dynamic> branches = data['branches'] ?? [];
