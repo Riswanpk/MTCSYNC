@@ -276,6 +276,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
           'status': _isSpotSale ? 'delivered' : 'pending',
           'isSpotSale': _isSpotSale,
           'saleType': _isSpotSale ? 'spot_sale' : 'booking',
+          if (_isSpotSale) 'billedPhone': _phoneController.text.trim(),
           if (!_isSpotSale && _deliveryReminderDateTime != null)
             'deliveryReminder': Timestamp.fromDate(_deliveryReminderDateTime!),
         };
@@ -599,9 +600,9 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Phone Number
+                    // Phone Number / Billed Phone Number
                     Text(
-                      'Phone Number',
+                      _isSpotSale ? 'Billed Phone Number' : 'Phone Number',
                       style: textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: isDark ? Colors.white70 : Colors.black87,
@@ -617,12 +618,15 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
                         LengthLimitingTextInputFormatter(10),
                       ],
                       style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-                      decoration: _buildInputDecoration(isDark, 'Enter 10-digit phone number').copyWith(
+                      decoration: _buildInputDecoration(
+                        isDark,
+                        _isSpotSale ? 'Enter 10-digit billed phone number' : 'Enter 10-digit phone number',
+                      ).copyWith(
                         counterText: '',
                       ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
-                          return 'Please enter phone number';
+                          return _isSpotSale ? 'Please enter billed phone number' : 'Please enter phone number';
                         }
                         if (value.trim().length != 10) {
                           return 'Phone number must be exactly 10 digits';

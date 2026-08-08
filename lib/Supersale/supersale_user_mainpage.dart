@@ -747,7 +747,7 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
               return false; // Slides back, will be removed from lists dynamically by status filters
             } else {
               // Mark as Delivered (Left-to-right swipe)
-              final phoneController = TextEditingController(text: (data['phone'] ?? '').toString());
+              final phoneController = TextEditingController();
               final formKey = GlobalKey<FormState>();
 
               final confirmed = await showDialog<bool>(
