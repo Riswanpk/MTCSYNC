@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'supersale_admin_booking_report.dart';
 import 'supersale_admin_delivery_report.dart';
+import 'supersale_admin_full_report.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -20,7 +21,7 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
 
   List<String> _supersaleItems = [];
   String? _selectedItem;
-  String _selectedReportType = 'Booking Report'; // 'Booking Report' or 'Delivery Report'
+  String _selectedReportType = 'Booking Report'; // 'Booking Report', 'Delivery Report', 'Full Report'
 
   @override
   void initState() {
@@ -95,8 +96,13 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
           selectedItem: _selectedItem!,
           activeBranches: activeBranches,
         );
-      } else {
+      } else if (_selectedReportType == 'Delivery Report') {
         await generateDeliveryReport(
+          selectedItem: _selectedItem!,
+          activeBranches: activeBranches,
+        );
+      } else {
+        await generateFullReport(
           selectedItem: _selectedItem!,
           activeBranches: activeBranches,
         );
@@ -105,7 +111,7 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${_selectedReportType} generated successfully! Opening...'),
+            content: Text('$_selectedReportType generated successfully! Opening...'),
             backgroundColor: Colors.green,
           ),
         );
@@ -253,6 +259,10 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
                           DropdownMenuItem<String>(
                             value: 'Delivery Report',
                             child: Text('Delivery Report'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'Full Report',
+                            child: Text('Full Report'),
                           ),
                         ],
                         onChanged: (val) {
