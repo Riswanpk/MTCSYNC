@@ -271,7 +271,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
       String? c1 = customer['contact1'] ?? customer['contact'];
       String? c2 = customer['contact2'];
 
-      bool _numberMatches(String logNumber, String? contact) {
+      bool numberMatches(String logNumber, String? contact) {
         if (contact == null || contact.isEmpty) return false;
         String clean = contact.replaceAll(RegExp(r'\D'), '');
         return logNumber.endsWith(clean) || clean.endsWith(logNumber);
@@ -283,7 +283,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
         if (entry.callType != CallType.outgoing) continue;
         String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
         if (logNumber.isEmpty) continue;
-        if (_numberMatches(logNumber, c1) || _numberMatches(logNumber, c2)) {
+        if (numberMatches(logNumber, c1) || numberMatches(logNumber, c2)) {
           if (entry.timestamp != null && entry.timestamp! > latestOutgoingTime) {
             latestOutgoingTime = entry.timestamp!;
           }
@@ -291,15 +291,15 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
       }
       if (latestOutgoingTime == -1) return; // No outgoing call found
 
-      // Step 2: Find any call (incoming or outgoing) > 15s AFTER the outgoing call
-      bool hasLongCallAfter = entries.any((entry) {
-        if (entry.timestamp == null || entry.timestamp! <= latestOutgoingTime) return false;
+      // Step 2: Check if there is ANY call (outgoing itself or subsequent callback) with duration > 15s
+      bool hasLongCall = entries.any((entry) {
+        if (entry.timestamp == null || entry.timestamp! < latestOutgoingTime) return false;
         String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
         if (logNumber.isEmpty) return false;
         bool longEnough = (entry.duration ?? 0) > 15;
-        return (_numberMatches(logNumber, c1) || _numberMatches(logNumber, c2)) && longEnough;
+        return (numberMatches(logNumber, c1) || numberMatches(logNumber, c2)) && longEnough;
       });
-      if (hasLongCallAfter) {
+      if (hasLongCall) {
         customer['callMade'] = true;
         customer['callDate'] = Timestamp.now();
         if (mounted) {
@@ -756,7 +756,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     }
 
     customer.forEach((key, value) {
-      if (key == 'slno' || key == 'remarks' || key == 'callMade' || key == 'contact' || key == 'contact1' || key == 'contact2' || key == 'address' || key == 'lastCalledNumber' || key == 'lastRemarks') return;
+      if (key == 'slno' || key == 'remarks' || key == 'callMade' || key == 'callDate' || key == 'contact' || key == 'contact1' || key == 'contact2' || key == 'address' || key == 'lastCalledNumber' || key == 'lastRemarks') return;
       if (key == 'name') {
         // handled separately
       } else {
