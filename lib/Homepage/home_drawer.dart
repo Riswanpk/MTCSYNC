@@ -1,6 +1,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mtcsync/DME/screens/dme_user_complaints.dart';
 import 'package:mtcsync/DME/screens/dme_customer_variants_page.dart';
 import 'package:provider/provider.dart';
@@ -238,6 +239,16 @@ class HomeDrawer extends StatelessWidget {
       leading: const Icon(Icons.logout, color: Colors.red),
       title: const Text('Log Out'),
       onTap: () async {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          try {
+            await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+              'fcm_token': FieldValue.delete(),
+            });
+          } catch (e) {
+            debugPrint('Failed to clear FCM token on logout: $e');
+          }
+        }
         UserCacheService.instance.clear();
         await FirebaseAuth.instance.signOut();
         Navigator.pushAndRemoveUntil(

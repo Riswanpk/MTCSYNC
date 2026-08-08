@@ -404,6 +404,7 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
         final usersSnap = await FirebaseFirestore.instance
             .collection('users')
             .where('branch', isEqualTo: branch)
+            .where('role', whereIn: ['sales', 'manager', 'asst_manager'])
             .get();
         for (final doc in usersSnap.docs) {
           if (doc.id.isNotEmpty && !recipientUids.contains(doc.id)) {
