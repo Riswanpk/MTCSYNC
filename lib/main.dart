@@ -3,19 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:mtcsync/Navigation/user_cache_service.dart';
 import 'package:mtcsync/Misc/sound_service.dart';
 import 'package:provider/provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:in_app_update/in_app_update.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'Misc/constant.dart';
-import 'DME/dme_config.dart';
-import 'Login/login.dart';
-import '../Homepage/home.dart';
 import 'Misc/notification_permission_service.dart';
 import 'Navigation/splash_screen.dart';
 import 'Misc/theme_notifier.dart'; // Now imports ThemeProvider
@@ -31,6 +27,28 @@ import 'DME/services/dme_supabase_service.dart';
 import 'Task/task_sales.dart';
 import 'Task/task_admin.dart';
 import 'Supersale/supersale_user_mainpage.dart';
+
+/// Top-level background message handler for FCM Push Notifications
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp(
+      options: FirebaseOptions(
+        apiKey: firebaseApiKey,
+        appId: firebaseAppId,
+        messagingSenderId: firebaseMessagingSenderId,
+        projectId: firebaseProjectId,
+        authDomain: firebaseAuthDomain,
+        storageBucket: firebaseStorageBucket,
+        measurementId: firebaseMeasurementId,
+      ),
+    );
+  } on FirebaseException catch (e) {
+    if (e.code != 'duplicate-app') rethrow;
+  }
+  debugPrint("FCM Background Message received: ${message.messageId}");
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,6 +69,9 @@ void main() async {
   } on FirebaseException catch (e) {
     if (e.code != 'duplicate-app') rethrow;
   }
+
+  // Register FCM background message handler BEFORE runApp()
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   final prefs = await SharedPreferences.getInstance();
 
@@ -81,15 +102,25 @@ void main() async {
     debugPrint('Firestore settings error: $e');
   }
 
-  // Supabase is initialized lazily via DmeSupabaseService.ensureInitialized()
-  // — only when a dme_admin or dme_user makes the first DME service call.
-
   // CRITICAL: Initialize AwesomeNotifications BEFORE runApp() 
-  // This ensures scheduled notifications work even when app is killed
   try {
     await _initializeNotifications();
   } catch (e) {
     debugPrint('Notification init error: $e');
+  }
+
+  // Request AwesomeNotifications permissions (exact alarms + POST_NOTIFICATIONS)
+  try {
+    await NotificationPermissionService.instance.requestNotificationPermission();
+  } catch (e) {
+    debugPrint('Notification permission error: $e');
+  }
+
+  // Request FCM permissions & listen to foreground messages
+  try {
+    await _setupFirebaseMessaging();
+  } catch (e) {
+    debugPrint('FirebaseMessaging setup error: $e');
   }
 
   // Initialize SoundService for audio playback
@@ -112,8 +143,35 @@ void main() async {
     ),
   );
 
-  // Deferred services init (non-blocking)
+  // Deferred services init & reliability prompts (non-blocking)
   _initializeDeferredServices(prefs);
+}
+
+/// Setup FCM permissions and foreground listeners
+Future<void> _setupFirebaseMessaging() async {
+  final messaging = FirebaseMessaging.instance;
+  await messaging.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+    provisional: false,
+  );
+
+  // Foreground notification handler: display banner via awesome_notifications
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    final notification = message.notification;
+    if (notification != null) {
+      AwesomeNotifications().createNotification(
+        content: NotificationContent(
+          id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+          channelKey: 'basic_channel',
+          title: notification.title ?? 'Notification',
+          body: notification.body ?? '',
+          payload: message.data.map((key, value) => MapEntry(key, value.toString())),
+        ),
+      );
+    }
+  });
 }
 
 /// Initialize AwesomeNotifications - MUST be called before runApp for scheduled notifications
@@ -212,9 +270,6 @@ Future<void> _initializeNotifications() async {
 /// All non-essential initialization that can happen after UI is visible
 void _initializeDeferredServices(SharedPreferences prefs) {
   Future.microtask(() async {
-    // Initialize Flutter Local Notifications (for assignment notifications etc.)
-    _initializeFlutterLocalNotifications();
-
     // Listen for auth state changes
     FirebaseAuth.instance.authStateChanges().listen((user) {
       if (user != null) {
@@ -553,17 +608,4 @@ class NotificationController {
       }
     }
   }
-}
-
-/// Initialize Flutter Local Notifications in background (non-blocking)
-void _initializeFlutterLocalNotifications() {
-  Future.microtask(() async {
-    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-        FlutterLocalNotificationsPlugin();
-    const AndroidInitializationSettings androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-    const InitializationSettings initSettings =
-        InitializationSettings(android: androidSettings);
-    await flutterLocalNotificationsPlugin.initialize(settings: initSettings);
-  });
 }

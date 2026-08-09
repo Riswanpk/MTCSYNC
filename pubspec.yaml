@@ -52,7 +52,6 @@ dependencies:
   dio: ^5.8.0+1
   mailer: ^6.5.0
   in_app_update: ^4.2.3
-  flutter_local_notifications: ^20.1.0
   firebase_storage: ^13.0.6
   google_maps_flutter: ^2.12.3
   geolocator: ^14.0.2
@@ -76,6 +75,7 @@ dependencies:
   supabase_flutter: ^2.8.4
   video_player: ^2.9.2
   chewie: ^1.8.5
+  timezone: ^0.9.4
   
 
   # The following adds the Cupertino Icons font to your application.

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:android_intent_plus/android_intent.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -16,32 +17,23 @@ class NotificationPermissionService {
   NotificationPermissionService._internal();
 
   /// Check if notifications permission is granted
-  /// For Android 13+, this checks POST_NOTIFICATIONS permission
-  /// For Android 12 and below, always returns true
   Future<bool> isNotificationPermissionGranted() async {
-    if (!Platform.isAndroid) {
-      // iOS and other platforms don't have strict notification permissions
-      return true;
-    }
-
-    // Request permission and cache the result
-    final status = await Permission.notification.request();
-    _notificationPermissionGranted =
-        status.isGranted || status.isDenied == false;
-
+    final isAllowed = await AwesomeNotifications().isNotificationAllowed();
+    _notificationPermissionGranted = isAllowed;
     return _notificationPermissionGranted;
   }
 
   /// Request notification permission from user
-  /// Returns true if granted, false otherwise
+  /// AwesomeNotifications requestPermissionToSendNotifications covers both
+  /// POST_NOTIFICATIONS and exact alarm permissions in one call.
   Future<bool> requestNotificationPermission() async {
-    if (!Platform.isAndroid) {
-      return true;
-    }
-
     try {
-      final status = await Permission.notification.request();
-      _notificationPermissionGranted = status.isGranted;
+      final isAllowed = await AwesomeNotifications().isNotificationAllowed();
+      if (!isAllowed) {
+        _notificationPermissionGranted = await AwesomeNotifications().requestPermissionToSendNotifications();
+      } else {
+        _notificationPermissionGranted = true;
+      }
       return _notificationPermissionGranted;
     } catch (e) {
       if (kDebugMode) {
@@ -108,6 +100,36 @@ class NotificationPermissionService {
         print('Error creating notification: $e');
       }
       return false;
+    }
+  }
+
+  /// Request Battery Optimization exemption on Android
+  Future<void> requestBatteryOptimizationExemption() async {
+    if (!Platform.isAndroid) return;
+    try {
+      final isIgnoring = await Permission.ignoreBatteryOptimizations.isGranted;
+      if (!isIgnoring) {
+        await Permission.ignoreBatteryOptimizations.request();
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Battery optimization exemption request failed: $e');
+      }
+    }
+  }
+
+  /// Prompt OEM Autostart setting screen for Xiaomi / Oppo / Vivo / Huawei devices
+  Future<void> openOemAutostartSettings() async {
+    if (!Platform.isAndroid) return;
+    try {
+      const intent = AndroidIntent(
+        action: 'android.settings.SETTINGS',
+      );
+      await intent.launch();
+    } catch (e) {
+      if (kDebugMode) {
+        print('Could not launch settings intent: $e');
+      }
     }
   }
 }
