@@ -8,6 +8,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../Navigation/user_cache_service.dart';
 import '../Leads/leadsform.dart';
+import 'sme_call_scanner_service.dart';
+import 'sme_call_detected_remarks_dialog.dart';
 
 /// Page for sales/manager/asst_manager users to screen SME-assigned leads.
 /// Users tap a card -> detail page -> call button -> call detection -> promote/reject.
@@ -18,7 +20,8 @@ class SmeAssignedLeadsPage extends StatefulWidget {
   State<SmeAssignedLeadsPage> createState() => _SmeAssignedLeadsPageState();
 }
 
-class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage> {
+class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
+    with WidgetsBindingObserver {
   static const Color _brandPrimary = Color(0xFF005BAC);
   static const Color _brandAccent = Color(0xFF008BD6);
 
@@ -26,6 +29,7 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage> {
   String _searchQuery = '';
   bool _isSearching = false;
   bool _isLoading = false;
+  bool _isDetailPageOpen = false;
 
   List<DocumentSnapshot> _leads = [];
   DocumentSnapshot? _lastDocument;
@@ -49,7 +53,133 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initialize();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (_isDetailPageOpen) return;
+      _autoScanCallLog();
+    }
+  }
+
+  /// Silently scans today's call log and detects called SME leads
+  Future<void> _autoScanCallLog() async {
+    if (_leads.isEmpty) return;
+
+    List<Map<String, dynamic>> leadMaps = _leads.map((doc) {
+      final map = Map<String, dynamic>.from(doc.data() as Map<String, dynamic>);
+      map['_docSnapshot'] = doc;
+      map['_assignerName'] = _assignerNameCache[map['assigned_by'] ?? ''] ?? 'SME User';
+      return map;
+    }).toList();
+
+    final newlyCalled = await SmeCallScannerService.scanTodayCallLog(leadMaps);
+    if (newlyCalled.isNotEmpty && mounted) {
+      _showRemarksPromptDialog(newlyCalled);
+    }
+  }
+
+  void _showRemarksPromptDialog(List<Map<String, dynamic>> leads) {
+    showDialog(
+      context: context,
+      builder: (ctx) => SmeCallDetectedRemarksDialog(
+        leads: leads,
+        currentUid: _currentUid ?? '',
+        titleText: 'Call Detected!',
+        onLeadSelected: () {
+          _isDetailPageOpen = true;
+        },
+        onRefreshNeeded: () {
+          _isDetailPageOpen = false;
+          _resetAndFetch();
+        },
+      ),
+    );
+  }
+
+  Future<void> _scanCallLogAndShowMatches() async {
+    if (_leads.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No leads to check.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    var status = await Permission.phone.request();
+    if (!status.isGranted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Phone permission denied')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      List<Map<String, dynamic>> leadMaps = _leads.map((doc) {
+        final map = Map<String, dynamic>.from(doc.data() as Map<String, dynamic>);
+        map['_docSnapshot'] = doc;
+        map['_assignerName'] = _assignerNameCache[map['assigned_by'] ?? ''] ?? 'SME User';
+        return map;
+      }).toList();
+
+      List<Map<String, dynamic>> matchedLeads =
+          await SmeCallScannerService.scanTodayCallLog(leadMaps);
+
+      if (!mounted) return;
+      Navigator.of(context).pop();
+
+      if (matchedLeads.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No new calls detected for today.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      if (mounted) {
+        await showDialog(
+          context: context,
+          builder: (ctx) => SmeCallDetectedRemarksDialog(
+            leads: matchedLeads,
+            currentUid: _currentUid ?? '',
+            titleText: 'Calls Detected',
+            onLeadSelected: () {
+              _isDetailPageOpen = true;
+            },
+            onRefreshNeeded: () {
+              _isDetailPageOpen = false;
+              _resetAndFetch();
+            },
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.of(context).pop();
+      debugPrint('Error scanning call log: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error scanning call log: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   Future<void> _initialize() async {
@@ -189,6 +319,11 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Scan Call Log',
+            onPressed: _scanCallLogAndShowMatches,
+          ),
           IconButton(
             icon: Icon(_isSearching ? Icons.close : Icons.search),
             onPressed: () {
@@ -1253,7 +1388,7 @@ class _SmeCallDetectionPageState extends State<SmeCallDetectionPage>
       CallLogEntry? matchedEntry;
       for (final entry in entries) {
         final logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
-        final wasConnected = (entry.duration ?? 0) > 15;
+        final wasConnected = (entry.duration ?? 0) > 5;
         if (logNumber.endsWith(normalizedPending) && wasConnected) {
           matchedEntry = entry;
           break;

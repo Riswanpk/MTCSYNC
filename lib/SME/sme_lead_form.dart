@@ -33,16 +33,13 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _commentsController = TextEditingController();
-  final TextEditingController _reminderController = TextEditingController();
   final TextEditingController _adNameController = TextEditingController();
-
   // FocusNode for RawAutocomplete widget
   late FocusNode _nameFieldFocusNode;
 
   String _priority = 'High';
   String? _selectedPlatform;
   final TextEditingController _otherPlatformController = TextEditingController();
-  TimeOfDay? _selectedReminderTime;
   List<Contact>? _deviceContacts;
   bool _deviceContactsLoading = false;
   bool _isSaving = false;
@@ -71,7 +68,6 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
     _addressController.dispose();
     _phoneController.dispose();
     _commentsController.dispose();
-    _reminderController.dispose();
     _otherPlatformController.dispose();
     _adNameController.dispose();
     super.dispose();
@@ -176,7 +172,6 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
         'status': 'In Progress',
         'priority': _priority,
         'comments': _commentsController.text.trim(),
-        'reminder': _reminderController.text.trim(),
         'ad_name': _adNameController.text.trim(),
         'branch': _selectedBranch,
         'created_by': user.uid,
@@ -200,22 +195,6 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
         'branch': _selectedBranch,
       }, SetOptions(merge: true));
 
-      // Build the reminder Timestamp (if set) so the assigned user's device can schedule it
-      Timestamp? reminderTimestamp;
-      if (_selectedReminderTime != null &&
-          _reminderController.text.isNotEmpty) {
-        final reminderParts = _reminderController.text.split(' ');
-        final datePart = reminderParts[0].split('-');
-        final scheduledDate = DateTime(
-          int.parse(datePart[2]),
-          int.parse(datePart[1]),
-          int.parse(datePart[0]),
-          _selectedReminderTime!.hour,
-          _selectedReminderTime!.minute,
-        );
-        reminderTimestamp = Timestamp.fromDate(scheduledDate);
-      }
-
       // Call Cloud Function to send FCM push notification to assigned user (non-blocking)
       final notifPayload = <String, dynamic>{
         'recipientUid': _selectedUserId,
@@ -226,9 +205,6 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
         'leadDocId': followUpRef.id,
         'leadName': _nameController.text.trim(),
       };
-      if (reminderTimestamp != null) {
-        notifPayload['reminderAt'] = reminderTimestamp.millisecondsSinceEpoch;
-      }
       
       // Non-blocking call to Cloud Function (fire and forget with error logging)
       unawaited(() async {
@@ -263,38 +239,6 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
     }
   }
 
-  Future<void> _pickReminderDateTime() async {
-    final now = DateTime.now();
-    final initialDate = now;
-    final initialTime = TimeOfDay(
-      hour: now.add(const Duration(minutes: 1)).hour,
-      minute: now.add(const Duration(minutes: 1)).minute,
-    );
-    final pickedDate = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: initialDate,
-      lastDate: initialDate.add(const Duration(days: 365)),
-    );
-    if (pickedDate == null) return;
-
-    final pickedTime = await showTimePicker(
-      context: context,
-      initialTime: initialTime,
-    );
-    if (pickedTime == null) return;
-
-    setState(() {
-      _selectedReminderTime = pickedTime;
-      final dt = DateTime(pickedDate.year, pickedDate.month, pickedDate.day,
-          pickedTime.hour, pickedTime.minute);
-      final hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
-      final period = dt.hour >= 12 ? 'PM' : 'AM';
-      _reminderController.text =
-          '${dt.day.toString().padLeft(2, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.year} '
-          '${hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')} $period';
-    });
-  }
 
   InputDecoration _inputDecoration({
     required String label,
@@ -922,28 +866,6 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                           .map((p) => {'value': p, 'label': p})
                           .toList(),
                       onSelected: (val) => setState(() => _priority = val),
-                    ),
-                    const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _reminderController,
-                      readOnly: true,
-                      onTap: _pickReminderDateTime,
-                      decoration: _inputDecoration(
-                        label: 'Reminder',
-                        icon: Icons.alarm,
-                        hint: 'Select date and time',
-                        suffixIcon: _reminderController.text.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear),
-                                onPressed: () {
-                                  setState(() {
-                                    _reminderController.clear();
-                                    _selectedReminderTime = null;
-                                  });
-                                },
-                              )
-                            : null,
-                      ),
                     ),
                   ],
                 ),
