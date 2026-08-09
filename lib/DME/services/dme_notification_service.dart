@@ -17,29 +17,27 @@ class DmeNotificationService {
 
   /// Initialize notification channels for DME reminders and complaints
   static Future<void> initialize() async {
-    await AwesomeNotifications().initialize(
-      null, // Default icon
-      [
-        NotificationChannel(
-          channelKey: _reminderChannelKey,
-          channelName: _reminderChannelName,
-          channelDescription: 'Notifications for DME customer reminders',
-          defaultColor: const Color.fromARGB(255, 9, 201, 100),
-          ledColor: const Color.fromARGB(255, 9, 201, 100),
-          importance: NotificationImportance.Max,
-          enableVibration: true,
-        ),
-        NotificationChannel(
-          channelKey: _complaintChannelKey,
-          channelName: _complaintChannelName,
-          channelDescription: 'Notifications for DME complaints',
-          defaultColor: const Color(0xFFFFA500),
-          ledColor: const Color(0xFFFFA500),
-          importance: NotificationImportance.Max,
-          enableVibration: true,
-        ),
-      ],
-      debug: false,
+    await AwesomeNotifications().setChannel(
+      NotificationChannel(
+        channelKey: _reminderChannelKey,
+        channelName: _reminderChannelName,
+        channelDescription: 'Notifications for DME customer reminders',
+        defaultColor: const Color.fromARGB(255, 9, 201, 100),
+        ledColor: const Color.fromARGB(255, 9, 201, 100),
+        importance: NotificationImportance.Max,
+        enableVibration: true,
+      ),
+    );
+    await AwesomeNotifications().setChannel(
+      NotificationChannel(
+        channelKey: _complaintChannelKey,
+        channelName: _complaintChannelName,
+        channelDescription: 'Notifications for DME complaints',
+        defaultColor: const Color(0xFFFFA500),
+        ledColor: const Color(0xFFFFA500),
+        importance: NotificationImportance.Max,
+        enableVibration: true,
+      ),
     );
   }
 

@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../models/dme_complaint.dart';
 import '../models/dme_customer.dart';
 import '../models/dme_user.dart';
@@ -231,6 +233,47 @@ class _DmeCreateComplaintPageState extends State<DmeCreateComplaintPage> {
       debugPrint(
           '[CreateComplaint] Complaint created successfully with ID: $complaintId');
 
+      // Dispatch Push Notifications to assigned user and/or branch manager(s)
+      final assigneeRole = _selectedAssignee?.role.toLowerCase() ?? '';
+      final isAssigneeManager = assigneeRole == 'manager' || assigneeRole == 'asst_manager';
+
+      final assignedUid = _selectedAssignee!.id;
+      final customerName = _selectedCustomer!.name;
+      final branchName = _selectedCustomer!.branchName ?? '';
+
+      // Send push notification to assigned user
+      _sendDmeComplaintNotification(
+        recipientUid: assignedUid,
+        title: 'New Complaint Raised',
+        body: 'Complaint for $customerName is assigned to you',
+        complaintId: complaintId,
+      );
+
+      // If to user (not manager), push notification to both manager and user
+      if (!isAssigneeManager && branchName.isNotEmpty) {
+        try {
+          final managerDocs = await FirebaseFirestore.instance
+              .collection('users')
+              .where('branch', isEqualTo: branchName)
+              .where('role', whereIn: ['manager', 'asst_manager'])
+              .get();
+
+          for (final doc in managerDocs.docs) {
+            final managerUid = doc.data()['uid'] as String? ?? doc.id;
+            if (managerUid != assignedUid) {
+              _sendDmeComplaintNotification(
+                recipientUid: managerUid,
+                title: 'New Complaint Raised',
+                body: 'Complaint raised for $customerName in $branchName',
+                complaintId: complaintId,
+              );
+            }
+          }
+        } catch (e) {
+          debugPrint('[CreateComplaint] Error notifying manager: $e');
+        }
+      }
+
       if (mounted) {
         // Call callback first to refresh parent data
         widget.onSubmitted();
@@ -257,6 +300,29 @@ class _DmeCreateComplaintPageState extends State<DmeCreateComplaintPage> {
         setState(() => _submitting = false);
       }
     }
+  }
+
+  void _sendDmeComplaintNotification({
+    required String recipientUid,
+    required String title,
+    required String body,
+    required String complaintId,
+  }) {
+    unawaited(() async {
+      try {
+        await FirebaseFunctions.instanceFor(region: 'asia-south1')
+            .httpsCallable('sendLeadAssignmentNotification')
+            .call(<String, dynamic>{
+          'recipientUid': recipientUid,
+          'title': title,
+          'body': body,
+          'notifType': 'dme_complaint',
+          'leadDocId': complaintId,
+        });
+      } catch (error) {
+        debugPrint('FCM Warning: failed to send DME complaint notification: $error');
+      }
+    }());
   }
 
   @override

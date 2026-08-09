@@ -74,7 +74,26 @@ class NotificationPermissionService {
         print('PlatformException creating notification: ${e.code} - ${e.message}');
       }
 
-      // Handle specific permission or disabled channel error
+      // Handle missing channel error dynamically by setting channel and retrying
+      if (e.code == 'INVALID_ARGUMENTS' || (e.message?.contains('does not exist') ?? false)) {
+        if (content.channelKey != null) {
+          await ensureChannelExists(content.channelKey!);
+        }
+        try {
+          await AwesomeNotifications().createNotification(
+            content: content,
+            schedule: schedule,
+          );
+          return true;
+        } catch (retryErr) {
+          if (kDebugMode) {
+            print('Channel auto-creation retry failed: $retryErr');
+          }
+          return false;
+        }
+      }
+
+      // Handle specific permission error
       if (e.code == 'INSUFFICIENT_PERMISSIONS') {
         _notificationPermissionGranted = false;
         // Try requesting permission and retry once
@@ -100,6 +119,61 @@ class NotificationPermissionService {
         print('Error creating notification: $e');
       }
       return false;
+    }
+  }
+
+  /// Ensure a notification channel exists dynamically
+  Future<void> ensureChannelExists(String channelKey) async {
+    try {
+      final soundSourceMap = <String, String>{
+        'basic_channel_v2': 'resource://raw/leadsreminder',
+        'basic_channel': 'resource://raw/leadsreminder',
+        'todo_reminder_channel': 'resource://raw/todo_reminder',
+        'todos_pending_channel': 'resource://raw/you_have_todos_pending',
+        'reminder_channel_v2': 'resource://raw/you_have_todos_pending',
+        'task_assignment_channel': 'resource://raw/you_have_been_assigned_a_task',
+        'sme_lead_channel': 'resource://raw/sme_leads_assigned',
+        'task_completion_channel': 'resource://raw/task_completed',
+        'dme_complaints_channel': 'resource://raw/complaint_raised',
+        'delivery_reminder_channel': 'resource://raw/delivery_reminder',
+        'supersale_open_channel': 'resource://raw/supersale_bookings_open',
+        'supersale_closed_channel': 'resource://raw/supersale_bookins_closed',
+      };
+
+      final sound = soundSourceMap[channelKey] ?? 'resource://raw/leadsreminder';
+      try {
+        await AwesomeNotifications().setChannel(
+          NotificationChannel(
+            channelKey: channelKey,
+            channelName: channelKey.replaceAll('_', ' ').toUpperCase(),
+            channelDescription: 'Notification channel for $channelKey',
+            soundSource: sound,
+            importance: NotificationImportance.High,
+            channelShowBadge: true,
+            criticalAlerts: true,
+            playSound: true,
+          ),
+        );
+      } catch (soundErr) {
+        if (kDebugMode) {
+          print('Setting channel $channelKey with sound $sound failed: $soundErr. Retrying without custom sound.');
+        }
+        await AwesomeNotifications().setChannel(
+          NotificationChannel(
+            channelKey: channelKey,
+            channelName: channelKey.replaceAll('_', ' ').toUpperCase(),
+            channelDescription: 'Notification channel for $channelKey',
+            importance: NotificationImportance.High,
+            channelShowBadge: true,
+            criticalAlerts: true,
+            playSound: true,
+          ),
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error ensuring channel $channelKey exists: $e');
+      }
     }
   }
 

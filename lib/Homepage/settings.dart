@@ -37,7 +37,7 @@ class SettingsPage extends StatelessWidget {
 
   void _openNotificationToneSettings(BuildContext context) async {
     if (Platform.isAndroid) {
-      const channelId = 'reminder_channel';
+      const channelId = 'todo_reminder_channel';
       final intent = AndroidIntent(
         action: 'android.settings.CHANNEL_NOTIFICATION_SETTINGS',
         arguments: <String, dynamic>{

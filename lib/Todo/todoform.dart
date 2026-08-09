@@ -190,7 +190,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
         await NotificationPermissionService.instance.safeCreateNotification(
           content: NotificationContent(
             id: notifId,
-            channelKey: 'reminder_channel',
+            channelKey: 'todo_reminder_channel',
             title: 'To-Do Reminder',
             body: 'Reminder: $title',
             notificationLayout: NotificationLayout.Default,
@@ -239,7 +239,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
       await NotificationPermissionService.instance.safeCreateNotification(
         content: NotificationContent(
           id: notifId,
-          channelKey: 'reminder_channel',
+          channelKey: 'todo_reminder_channel',
           title: 'To-Do Reminder',
           body: 'Reminder: $title',
           notificationLayout: NotificationLayout.Default,

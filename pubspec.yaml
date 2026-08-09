@@ -112,6 +112,10 @@ flutter:
      - assets/sounds/leadsreminder.mp3
      - assets/sounds/taskreminder.mp3
      - assets/sounds/you_have_been_assigned_a_task.mp3
+     - assets/sounds/complaint_raised.mp3
+     - assets/sounds/sme_leads_assigned.mp3
+     - assets/sounds/you_have_todos_pending.mp3
+     - assets/sounds/task_completed.mp3
      - assets/fonts/NotoSans-Regular.ttf
      - assets/fonts/Electrolize-Regular.ttf
      - assets/fonts/Montserrat-Regular.ttf

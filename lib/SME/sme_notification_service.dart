@@ -45,7 +45,10 @@ class SmeNotificationService {
       final isSupersale = type == 'supersale_notification';
       final subType = data['subType'] ?? '';
 
-      String targetChannel = 'basic_channel';
+      final isDmeComplaint = type == 'dme_complaint' || type == 'complaint_assigned' || type == 'complaint_raised';
+      final isSmeLead = type == 'sme_lead_assignment' || type == 'sme_lead';
+
+      String targetChannel = 'basic_channel_v2';
       if (isSupersale) {
         if (subType == 'booking_open') {
           targetChannel = 'supersale_open_channel';
@@ -55,9 +58,15 @@ class SmeNotificationService {
           targetChannel = 'delivery_reminder_channel';
         }
       } else if (isTodo) {
-        targetChannel = 'reminder_channel';
+        targetChannel = 'todo_reminder_channel';
       } else if (isCoreTaskAssigned) {
         targetChannel = 'task_assignment_channel';
+      } else if (isCoreTaskCompleted) {
+        targetChannel = 'task_completion_channel';
+      } else if (isSmeLead) {
+        targetChannel = 'sme_lead_channel';
+      } else if (isDmeComplaint) {
+        targetChannel = 'dme_complaints_channel';
       }
 
       // Show local notification so AwesomeNotifications action buttons work
@@ -109,7 +118,7 @@ class SmeNotificationService {
     await NotificationPermissionService.instance.safeCreateNotification(
       content: NotificationContent(
         id: ('sme_reminder_$leadDocId').hashCode.abs().remainder(2000000000),
-        channelKey: 'reminder_channel',
+        channelKey: 'todo_reminder_channel',
         title: 'Follow-Up Reminder',
         body: 'Reminder for $leadName',
         notificationLayout: NotificationLayout.Default,

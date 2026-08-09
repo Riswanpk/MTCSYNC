@@ -35,7 +35,7 @@ Future<void> syncTaskReminders(String userId) async {
           await NotificationPermissionService.instance.safeCreateNotification(
             content: NotificationContent(
               id: notifId,
-              channelKey: 'reminder_channel',
+              channelKey: 'todo_reminder_channel',
               title: 'Daily Task Reminder',
               body: 'Pending task: "$title"',
               notificationLayout: NotificationLayout.Default,

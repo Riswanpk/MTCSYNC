@@ -228,7 +228,7 @@ class TodoListItem extends StatelessWidget {
                   await NotificationPermissionService.instance.safeCreateNotification(
                     content: NotificationContent(
                       id: notifId,
-                      channelKey: 'reminder_channel',
+                      channelKey: 'todo_reminder_channel',
                       title: 'To-Do Reminder',
                       body: 'Reminder: ${doc['title'] ?? 'Task'}',
                       notificationLayout: NotificationLayout.Default,

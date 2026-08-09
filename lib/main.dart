@@ -22,6 +22,7 @@ import 'SME/sme_assigned_leads_page.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'Version/user_version_helper.dart'; // <-- Add this import
 import 'DME/screens/dme_customer_tile_viewer.dart';
+import 'DME/screens/dme_assigned_complaints.dart';
 import 'DME/models/dme_reminder.dart';
 import 'DME/services/dme_supabase_service.dart';
 import 'Task/task_sales.dart';
@@ -162,10 +163,26 @@ Future<void> _setupFirebaseMessaging() async {
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
     final notification = message.notification;
     if (notification != null) {
+      final type = message.data['type'] ?? message.data['notifType'];
+      String channelKey = 'basic_channel_v2';
+      if (type == 'dme_complaint' || type == 'complaint_assigned' || type == 'complaint_raised') {
+        channelKey = 'dme_complaints_channel';
+      } else if (type == 'sme_lead_assignment' || type == 'sme_lead') {
+        channelKey = 'sme_lead_channel';
+      } else if (type == 'todo' || type == 'todo_reminder') {
+        channelKey = 'todo_reminder_channel';
+      } else if (type == 'todos_pending' || type == 'pending_todos') {
+        channelKey = 'todos_pending_channel';
+      } else if (type == 'core_task_completion') {
+        channelKey = 'task_completion_channel';
+      } else if (type == 'core_task_assignment' || type == 'core_task') {
+        channelKey = 'task_assignment_channel';
+      }
+
       AwesomeNotifications().createNotification(
         content: NotificationContent(
           id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-          channelKey: 'basic_channel',
+          channelKey: channelKey,
           title: notification.title ?? 'Notification',
           body: notification.body ?? '',
           payload: message.data.map((key, value) => MapEntry(key, value.toString())),
@@ -177,84 +194,184 @@ Future<void> _setupFirebaseMessaging() async {
 
 /// Initialize AwesomeNotifications - MUST be called before runApp for scheduled notifications
 Future<void> _initializeNotifications() async {
-  await AwesomeNotifications().initialize(
-    null, // Use default app icon
-    [
-      NotificationChannel(
-        channelKey: 'basic_channel',
-        channelName: 'Leads Notifications',
-        channelDescription: 'Notification channel for leads and follow-ups',
-        defaultColor: const Color(0xFF005BAC),
-        ledColor: Colors.white,
-        soundSource: 'resource://raw/leadsreminder',
-        importance: NotificationImportance.High,
-        channelShowBadge: true,
-        criticalAlerts: true,
-        playSound: true,
-      ),
-      NotificationChannel(
-        channelKey: 'reminder_channel',
-        channelName: 'Todo & Task Reminders',
-        channelDescription: 'Channel for todo and task reminders',
-        defaultColor: const Color(0xFF8CC63F),
-        ledColor: Colors.green,
-        soundSource: 'resource://raw/todo_reminder',
-        importance: NotificationImportance.High,
-        channelShowBadge: true,
-        criticalAlerts: true,
-        playSound: true,
-      ),
-      NotificationChannel(
-        channelKey: 'task_assignment_channel',
-        channelName: 'Task Assignment Notifications',
-        channelDescription: 'Channel for when you are assigned a new task',
-        defaultColor: const Color(0xFF005BAC),
-        ledColor: Colors.blue,
-        soundSource: 'resource://raw/you_have_been_assigned_a_task',
-        importance: NotificationImportance.High,
-        channelShowBadge: true,
-        criticalAlerts: true,
-        playSound: true,
-      ),
-      NotificationChannel(
-        channelKey: 'delivery_reminder_channel',
-        channelName: 'Delivery Reminder Notifications',
-        channelDescription: 'Channel for supersale delivery reminders',
-        defaultColor: const Color(0xFF005BAC),
-        ledColor: Colors.blue,
-        soundSource: 'resource://raw/delivery_reminder',
-        importance: NotificationImportance.High,
-        channelShowBadge: true,
-        criticalAlerts: true,
-        playSound: true,
-      ),
-      NotificationChannel(
-        channelKey: 'supersale_open_channel',
-        channelName: 'Supersale Booking Open',
-        channelDescription: 'Channel for supersale booking open notifications',
-        defaultColor: const Color(0xFF005BAC),
-        ledColor: Colors.blue,
-        soundSource: 'resource://raw/supersale_bookings_open',
-        importance: NotificationImportance.High,
-        channelShowBadge: true,
-        criticalAlerts: true,
-        playSound: true,
-      ),
-      NotificationChannel(
-        channelKey: 'supersale_closed_channel',
-        channelName: 'Supersale Booking Closed',
-        channelDescription: 'Channel for supersale booking closed notifications',
-        defaultColor: const Color(0xFF005BAC),
-        ledColor: Colors.red,
-        soundSource: 'resource://raw/supersale_bookins_closed',
-        importance: NotificationImportance.High,
-        channelShowBadge: true,
-        criticalAlerts: true,
-        playSound: true,
-      ),
-    ],
-    debug: false, // Set to false for production
-  );
+  // 1. Initialize plugin core
+  try {
+    await AwesomeNotifications().initialize(
+      null, // Use default app icon
+      [
+        NotificationChannel(
+          channelKey: 'basic_channel_v2',
+          channelName: 'Leads Notifications',
+          channelDescription: 'Notification channel for leads and follow-ups',
+          importance: NotificationImportance.High,
+        ),
+      ],
+      debug: false,
+    );
+  } catch (e) {
+    debugPrint('AwesomeNotifications base init error: $e');
+  }
+
+  // 2. Register each channel individually with custom sound and per-channel fallback protection
+  final channelsToRegister = [
+    NotificationChannel(
+      channelKey: 'basic_channel_v2',
+      channelName: 'Leads Notifications',
+      channelDescription: 'Notification channel for leads and follow-ups',
+      defaultColor: const Color(0xFF005BAC),
+      ledColor: Colors.white,
+      soundSource: 'resource://raw/leadsreminder',
+      importance: NotificationImportance.High,
+      channelShowBadge: true,
+      criticalAlerts: true,
+      playSound: true,
+    ),
+    NotificationChannel(
+      channelKey: 'todo_reminder_channel',
+      channelName: 'Todo Reminders',
+      channelDescription: 'Channel for scheduled todo reminders',
+      defaultColor: const Color(0xFF8CC63F),
+      ledColor: Colors.green,
+      soundSource: 'resource://raw/todo_reminder',
+      importance: NotificationImportance.High,
+      channelShowBadge: true,
+      criticalAlerts: true,
+      playSound: true,
+    ),
+    NotificationChannel(
+      channelKey: 'todos_pending_channel',
+      channelName: 'Pending Todos Notifications',
+      channelDescription: 'Channel for pending todos notifications',
+      defaultColor: const Color(0xFF8CC63F),
+      ledColor: Colors.orange,
+      soundSource: 'resource://raw/you_have_todos_pending',
+      importance: NotificationImportance.High,
+      channelShowBadge: true,
+      criticalAlerts: true,
+      playSound: true,
+    ),
+    NotificationChannel(
+      channelKey: 'task_assignment_channel',
+      channelName: 'Task Assignment Notifications',
+      channelDescription: 'Channel for when you are assigned a new task',
+      defaultColor: const Color(0xFF005BAC),
+      ledColor: Colors.blue,
+      soundSource: 'resource://raw/you_have_been_assigned_a_task',
+      importance: NotificationImportance.High,
+      channelShowBadge: true,
+      criticalAlerts: true,
+      playSound: true,
+    ),
+    NotificationChannel(
+      channelKey: 'sme_lead_channel',
+      channelName: 'SME Assigned Leads',
+      channelDescription: 'Channel for SME leads assigned to user',
+      defaultColor: const Color(0xFF005BAC),
+      ledColor: Colors.blue,
+      soundSource: 'resource://raw/sme_leads_assigned',
+      importance: NotificationImportance.High,
+      channelShowBadge: true,
+      criticalAlerts: true,
+      playSound: true,
+    ),
+    NotificationChannel(
+      channelKey: 'task_completion_channel',
+      channelName: 'Task Completion Notifications',
+      channelDescription: 'Channel for when an assigned task is completed',
+      defaultColor: const Color(0xFF005BAC),
+      ledColor: Colors.green,
+      soundSource: 'resource://raw/task_completed',
+      importance: NotificationImportance.High,
+      channelShowBadge: true,
+      criticalAlerts: true,
+      playSound: true,
+    ),
+    NotificationChannel(
+      channelKey: 'dme_complaints_channel',
+      channelName: 'DME Complaints',
+      channelDescription: 'Channel for DME complaints raised and assigned',
+      defaultColor: const Color(0xFFFFA500),
+      ledColor: Colors.orange,
+      soundSource: 'resource://raw/complaint_raised',
+      importance: NotificationImportance.Max,
+      channelShowBadge: true,
+      criticalAlerts: true,
+      playSound: true,
+    ),
+    NotificationChannel(
+      channelKey: 'delivery_reminder_channel',
+      channelName: 'Delivery Reminder Notifications',
+      channelDescription: 'Channel for supersale delivery reminders',
+      defaultColor: const Color(0xFF005BAC),
+      ledColor: Colors.blue,
+      soundSource: 'resource://raw/delivery_reminder',
+      importance: NotificationImportance.High,
+      channelShowBadge: true,
+      criticalAlerts: true,
+      playSound: true,
+    ),
+    NotificationChannel(
+      channelKey: 'supersale_open_channel',
+      channelName: 'Supersale Booking Open',
+      channelDescription: 'Channel for supersale booking open notifications',
+      defaultColor: const Color(0xFF005BAC),
+      ledColor: Colors.blue,
+      soundSource: 'resource://raw/supersale_bookings_open',
+      importance: NotificationImportance.High,
+      channelShowBadge: true,
+      criticalAlerts: true,
+      playSound: true,
+    ),
+    NotificationChannel(
+      channelKey: 'dme_reminder_channel',
+      channelName: 'DME Reminders',
+      channelDescription: 'Notifications for DME customer reminders',
+      defaultColor: const Color.fromARGB(255, 9, 201, 100),
+      ledColor: const Color.fromARGB(255, 9, 201, 100),
+      importance: NotificationImportance.Max,
+      enableVibration: true,
+    ),
+    NotificationChannel(
+      channelKey: 'supersale_closed_channel',
+      channelName: 'Supersale Booking Closed',
+      channelDescription: 'Channel for supersale booking closed notifications',
+      defaultColor: const Color(0xFF005BAC),
+      ledColor: Colors.red,
+      soundSource: 'resource://raw/supersale_bookins_closed',
+      importance: NotificationImportance.High,
+      channelShowBadge: true,
+      criticalAlerts: true,
+      playSound: true,
+    ),
+  ];
+
+  for (final ch in channelsToRegister) {
+    try {
+      await AwesomeNotifications().setChannel(ch);
+    } catch (e) {
+      debugPrint('Custom sound for ${ch.channelKey} unavailable ($e). Fallback to default sound.');
+      try {
+        await AwesomeNotifications().setChannel(
+          NotificationChannel(
+            channelKey: ch.channelKey!,
+            channelName: ch.channelName!,
+            channelDescription: ch.channelDescription!,
+            defaultColor: ch.defaultColor,
+            ledColor: ch.ledColor,
+            importance: ch.importance ?? NotificationImportance.High,
+            channelShowBadge: ch.channelShowBadge ?? true,
+            criticalAlerts: ch.criticalAlerts ?? false,
+            playSound: true,
+          ),
+        );
+      } catch (fallbackErr) {
+        debugPrint('Channel creation fallback error for ${ch.channelKey}: $fallbackErr');
+      }
+    }
+  }
+
+  // Run channel migration for existing scheduled notifications
+  await _migrateNotificationChannels();
 
   // Setup notification listeners - required for background handling
   AwesomeNotifications().setListeners(
@@ -266,6 +383,45 @@ Future<void> _initializeNotifications() async {
 
   // Get initial notification action (for when app is opened from notification)
   initialNotificationAction = await AwesomeNotifications().getInitialNotificationAction();
+}
+
+/// Migrate old local scheduled notifications from 'reminder_channel' to 'reminder_channel_v2'
+Future<void> _migrateNotificationChannels() async {
+  try {
+    final activeSchedules = await AwesomeNotifications().listScheduledNotifications();
+    for (final model in activeSchedules) {
+      final oldContent = model.content;
+      if (oldContent != null && (oldContent.channelKey == 'reminder_channel' || oldContent.channelKey == 'reminder_channel_v2')) {
+        final newContent = NotificationContent(
+          id: oldContent.id ?? DateTime.now().millisecondsSinceEpoch.remainder(100000),
+          channelKey: 'todo_reminder_channel',
+          title: oldContent.title,
+          body: oldContent.body,
+          summary: oldContent.summary,
+          showWhen: oldContent.showWhen ?? true,
+          payload: oldContent.payload,
+          icon: oldContent.icon,
+          largeIcon: oldContent.largeIcon,
+          bigPicture: oldContent.bigPicture,
+          customSound: oldContent.customSound,
+          wakeUpScreen: oldContent.wakeUpScreen ?? false,
+          fullScreenIntent: oldContent.fullScreenIntent ?? false,
+          criticalAlert: oldContent.criticalAlert ?? false,
+          category: oldContent.category,
+          notificationLayout: oldContent.notificationLayout ?? NotificationLayout.Default,
+          actionType: oldContent.actionType ?? ActionType.Default,
+        );
+        await AwesomeNotifications().createNotification(
+          content: newContent,
+          schedule: model.schedule,
+        );
+      }
+    }
+    await AwesomeNotifications().removeChannel('reminder_channel');
+    await AwesomeNotifications().removeChannel('reminder_channel_v2');
+  } catch (e) {
+    debugPrint('Channel migration warning: $e');
+  }
 }
 
 /// All non-essential initialization that can happen after UI is visible
@@ -402,6 +558,8 @@ class NotificationController {
 
   static Future<void> handleNotificationAction(ReceivedAction receivedAction) async {
     final payload = receivedAction.payload;
+    final channelKey = receivedAction.channelKey;
+    final notifType = payload?['type'] ?? payload?['notifType'];
 
     // Handle overdue tasks notification
     if (payload?['page'] == 'todo') {
@@ -409,25 +567,30 @@ class NotificationController {
       return;
     }
 
-    // Handle core tasks notifications navigation
-    if (payload?['type'] == 'core_task') {
+    // Handle core tasks / task assignment notifications navigation (User Task View Page)
+    if (notifType == 'core_task' || notifType == 'core_task_assignment' || channelKey == 'task_assignment_channel' || notifType == 'task') {
       _doPush((_) => const UserTaskPage());
       return;
     }
-    if (payload?['type'] == 'core_task_complete') {
+    // Handle core task completion notifications navigation (Core Team / Admin Task Page)
+    if (notifType == 'core_task_complete' || notifType == 'core_task_completion' || channelKey == 'task_completion_channel') {
       _doPush((_) => const CoreTeamTaskPage());
       return;
     }
 
+    // Handle DME complaint notifications navigation
+    if (notifType == 'dme_complaint' || notifType == 'complaint_assigned' || notifType == 'complaint_raised' || channelKey == 'dme_complaints_channel') {
+      _doPush((_) => const DmeAssignedComplaintsPage());
+      return;
+    }
+
     // Handle DME reminder notification
-    if (payload?['type'] == 'dme_reminder') {
+    if (notifType == 'dme_reminder') {
       _handleDmeReminder(receivedAction);
       return;
     }
 
     // Handle supersale notifications navigation
-    final channelKey = receivedAction.channelKey;
-    final notifType = payload?['type'];
     final isSupersaleOpen = channelKey == 'supersale_open_channel' ||
         (notifType == 'supersale' && payload?['subType'] == 'booking_open');
     final isSupersaleClosed = channelKey == 'supersale_closed_channel' ||
@@ -455,7 +618,7 @@ class NotificationController {
         _doPush((_) => const SmeAssignedLeadsPage());
       } else if (isEdit) {
         _doPush((_) => PresentFollowUp(docId: docId, editMode: true));
-      } else if (isTodo || ((channelKey == 'reminder_channel' || channelKey == 'basic_channel') && isTodo)) {
+      } else if (isTodo || ((channelKey == 'todo_reminder_channel' || channelKey == 'todos_pending_channel' || channelKey == 'reminder_channel_v2' || channelKey == 'reminder_channel' || channelKey == 'basic_channel' || channelKey == 'basic_channel_v2') && isTodo)) {
         _doPush((_) => TaskDetailPageFromId(docId: docId));
       } else {
         _doPush((_) => PresentFollowUp(docId: docId));
@@ -479,17 +642,7 @@ class NotificationController {
     if (customerId != null && reminderId != null && reminderId.isNotEmpty) {
       try {
         WidgetsFlutterBinding.ensureInitialized();
-        await Firebase.initializeApp(
-          options: FirebaseOptions(
-            apiKey: firebaseApiKey,
-            appId: firebaseAppId,
-            messagingSenderId: firebaseMessagingSenderId,
-            projectId: firebaseProjectId,
-            authDomain: firebaseAuthDomain,
-            storageBucket: firebaseStorageBucket,
-            measurementId: firebaseMeasurementId,
-          ),
-        );
+        await Firebase.initializeApp();
         
         final svc = DmeSupabaseService.instance;
         final reminder = await svc.getReminderDetail(int.parse(reminderId as String));
@@ -597,7 +750,7 @@ class NotificationController {
             // If fetching fails (e.g., no network), reschedule with default 30 mins
         }
 
-        final channelKey = type == 'todo' ? 'reminder_channel' : 'basic_channel';
+        final channelKey = type == 'todo' ? 'reminder_channel_v2' : 'basic_channel';
         await NotificationPermissionService.instance.safeCreateNotification(
           content: NotificationContent(
             id: DateTime.now().millisecondsSinceEpoch.remainder(100000),

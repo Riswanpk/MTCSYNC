@@ -553,7 +553,7 @@ class _HomePageState extends State<HomePage>
         await NotificationPermissionService.instance.safeCreateNotification(
           content: NotificationContent(
             id: 2003,
-            channelKey: 'reminder_channel',
+            channelKey: 'todos_pending_channel',
             title: 'Overdue Tasks!',
             body:
                 'You have pending tasks that are more than a day old. Please complete them.',
