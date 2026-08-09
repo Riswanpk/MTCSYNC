@@ -148,7 +148,8 @@ class SmeCallDetectedRemarksDialog extends StatelessWidget {
                           onLeadSelected!();
                         }
                         if (docSnapshot != null) {
-                          final needRefresh = await Navigator.push<bool>(
+                          leadData['screening_status'] = 'called';
+                          await Navigator.push<bool>(
                             context,
                             MaterialPageRoute(
                               builder: (_) => SmeLeadDetailPage(
@@ -159,7 +160,7 @@ class SmeCallDetectedRemarksDialog extends StatelessWidget {
                               ),
                             ),
                           );
-                          if (needRefresh == true && onRefreshNeeded != null) {
+                          if (onRefreshNeeded != null) {
                             onRefreshNeeded!();
                           }
                         }

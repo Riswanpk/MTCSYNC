@@ -1,4 +1,5 @@
 import 'package:call_log/call_log.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -12,7 +13,7 @@ class SmeCallScannerService {
   /// Scans today's call logs and returns a list of SME leads that match the call criteria
   /// (outgoing call initiated today, and any call >= outgoing call time lasting >5 seconds).
   static Future<List<Map<String, dynamic>>> scanTodayCallLog(
-      List<Map<String, dynamic>> leads) async {
+      List<Map<String, dynamic>> leads, {String? currentUid}) async {
     final permStatus = await Permission.phone.status;
     if (!permStatus.isGranted) return [];
 
@@ -48,16 +49,46 @@ class SmeCallScannerService {
         }
         if (latestOutgoingTime == -1) continue;
 
-        bool hasLongCall = entries.any((entry) {
-          if (entry.timestamp == null || entry.timestamp! < latestOutgoingTime) return false;
+        CallLogEntry? matchedEntry;
+        for (final entry in entries) {
+          if (entry.timestamp == null || entry.timestamp! < latestOutgoingTime) continue;
           String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
-          if (logNumber.isEmpty) return false;
+          if (logNumber.isEmpty) continue;
           bool longEnough = (entry.duration ?? 0) > 5;
-          return (numberMatches(logNumber, c1) || numberMatches(logNumber, c2)) && longEnough;
-        });
+          if ((numberMatches(logNumber, c1) || numberMatches(logNumber, c2)) && longEnough) {
+            matchedEntry = entry;
+            break;
+          }
+        }
 
-        if (hasLongCall) {
+        if (matchedEntry != null) {
+          lead['screening_status'] = 'called';
+          lead['screening_call_duration'] = matchedEntry.duration ?? 0;
+          if (matchedEntry.timestamp != null) {
+            lead['screening_call_time'] = Timestamp.fromMillisecondsSinceEpoch(matchedEntry.timestamp!);
+          }
           matchedLeads.add(lead);
+
+          final docId = (lead['_docSnapshot'] as DocumentSnapshot?)?.id ?? lead['docId'] ?? lead['doc_id'] ?? lead['id'];
+          if (docId != null && docId.toString().isNotEmpty) {
+            final updateData = <String, dynamic>{
+              'screening_status': 'called',
+              'screening_call_duration': matchedEntry.duration ?? 0,
+            };
+            if (matchedEntry.timestamp != null) {
+              updateData['screening_call_time'] = Timestamp.fromMillisecondsSinceEpoch(matchedEntry.timestamp!);
+            } else {
+              updateData['screening_call_time'] = FieldValue.serverTimestamp();
+            }
+            if (currentUid != null && currentUid.isNotEmpty) {
+              updateData['screened_by'] = currentUid;
+            }
+            try {
+              await FirebaseFirestore.instance.collection('follow_ups').doc(docId.toString()).update(updateData);
+            } catch (e) {
+              debugPrint('Error updating lead screening_status to called: $e');
+            }
+          }
         }
       }
 

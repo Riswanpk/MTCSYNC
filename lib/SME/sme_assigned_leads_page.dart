@@ -82,7 +82,7 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
       return map;
     }).toList();
 
-    final newlyCalled = await SmeCallScannerService.scanTodayCallLog(leadMaps);
+    final newlyCalled = await SmeCallScannerService.scanTodayCallLog(leadMaps, currentUid: _currentUid);
     if (newlyCalled.isNotEmpty && mounted) {
       _showRemarksPromptDialog(newlyCalled);
     }
@@ -137,7 +137,7 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
       }).toList();
 
       List<Map<String, dynamic>> matchedLeads =
-          await SmeCallScannerService.scanTodayCallLog(leadMaps);
+          await SmeCallScannerService.scanTodayCallLog(leadMaps, currentUid: _currentUid);
 
       if (!mounted) return;
       Navigator.of(context).pop();
@@ -787,6 +787,7 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
   void initState() {
     super.initState();
     _data = Map<String, dynamic>.from(widget.data);
+    _refreshData();
   }
 
   Future<void> _refreshData() async {
