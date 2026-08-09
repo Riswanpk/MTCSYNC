@@ -886,6 +886,9 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
         'screened_at': FieldValue.serverTimestamp(),
       });
       if (!mounted) return;
+      setState(() {
+        _data['screening_status'] = 'promoted';
+      });
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Lead promoted successfully!'), backgroundColor: Color(0xFF4CAF50)));
       Navigator.of(context).pop(true);
@@ -903,6 +906,10 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
       'screened_at': FieldValue.serverTimestamp(),
     });
     if (mounted) {
+      setState(() {
+        _data['screening_status'] = 'rejected';
+        _data['rejection_reason'] = reason;
+      });
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Lead rejected'), backgroundColor: Color(0xFFF44336)));
       Navigator.of(context).pop(true);

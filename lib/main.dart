@@ -164,11 +164,12 @@ Future<void> _setupFirebaseMessaging() async {
     final notification = message.notification;
     if (notification != null) {
       final type = message.data['type'] ?? message.data['notifType'];
+      if (type == 'sme_lead_assignment' || type == 'sme_lead') {
+        return; // Handled by SmeNotificationService to prevent duplicate notifications
+      }
       String channelKey = 'basic_channel_v2';
       if (type == 'dme_complaint' || type == 'complaint_assigned' || type == 'complaint_raised') {
         channelKey = 'dme_complaints_channel';
-      } else if (type == 'sme_lead_assignment' || type == 'sme_lead') {
-        channelKey = 'sme_lead_channel';
       } else if (type == 'todo' || type == 'todo_reminder') {
         channelKey = 'todo_reminder_channel';
       } else if (type == 'todos_pending' || type == 'pending_todos') {
@@ -606,8 +607,8 @@ class NotificationController {
       return;
     }
 
-    if (payload?['docId'] != null) {
-      final docId = payload!['docId']!;
+    final docId = payload?['docId'] ?? payload?['leadDocId'];
+    if (docId != null && docId.isNotEmpty) {
       await markNotificationOpened(docId);
 
       final isEdit = receivedAction.buttonKeyPressed == 'EDIT_FOLLOWUP';
