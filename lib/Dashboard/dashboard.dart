@@ -10,6 +10,7 @@ import 'daily.dart';
 import 'insights.dart';
 import '../Navigation/user_cache_service.dart';
 import '../SME/sme_dashboard.dart';
+import '../Sync Head/sync_head_all_leads_page.dart';
 
 // Theme colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -254,13 +255,22 @@ class _DashboardPageState extends State<DashboardPage>
                           Icons.leaderboard_rounded,
                           0,
                           () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => LeadsPage(
-                                    branch: (role == 'manager' || role == 'asst_manager') ? branch : ""),
-                              ),
-                            );
+                            if (role == 'sync_head' || role == 'Sync Head') {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const SyncHeadAllLeadsPage(),
+                                ),
+                              );
+                            } else {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => LeadsPage(
+                                      branch: (role == 'manager' || role == 'asst_manager') ? branch : ""),
+                                ),
+                              );
+                            }
                           },
                         ),
                         _CardData(
