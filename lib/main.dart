@@ -27,6 +27,7 @@ import 'DME/services/dme_supabase_service.dart';
 import 'Task/task_sales.dart';
 import 'Task/task_admin.dart';
 import 'Supersale/supersale_user_mainpage.dart';
+import 'Misc/network_guard.dart';
 
 /// Top-level background message handler for FCM Push Notifications
 @pragma('vm:entry-point')
@@ -283,6 +284,7 @@ final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 bool isAppReady = false;
+
 ReceivedAction? initialNotificationAction;
 
 class MyApp extends StatelessWidget {
@@ -307,12 +309,14 @@ class MyApp extends StatelessWidget {
           ),
           navigatorObservers: [routeObserver],
           navigatorKey: navigatorKey,
-          // Ensure content stays above system navigation bar
+          // Ensure content stays above system navigation bar & protected by NetworkGuard
           builder: (context, child) {
-            return SafeArea(
-              top: false, // keep existing top behaviour, but protect bottom
-              bottom: true,
-              child: child ?? const SizedBox.shrink(),
+            return NetworkGuard(
+              child: SafeArea(
+                top: false, // keep existing top behaviour, but protect bottom
+                bottom: true,
+                child: child ?? const SizedBox.shrink(),
+              ),
             );
           },
 
@@ -322,6 +326,7 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});

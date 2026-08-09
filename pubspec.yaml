@@ -76,6 +76,7 @@ dependencies:
   video_player: ^2.9.2
   chewie: ^1.8.5
   timezone: ^0.9.4
+  connectivity_plus: ^6.1.0
   
 
   # The following adds the Cupertino Icons font to your application.

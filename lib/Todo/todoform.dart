@@ -114,10 +114,14 @@ class _TodoFormPageState extends State<TodoFormPage> {
   }
 
   Future<void> _saveTodo() async {
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
+
     final title = _titleController.text.trim();
     final desc = _descController.text.trim();
 
     if (title.isEmpty || desc.isEmpty) {
+      setState(() => _isSaving = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all required fields')),
       );
@@ -126,13 +130,13 @@ class _TodoFormPageState extends State<TodoFormPage> {
 
     // 🔴 Make reminder mandatory
     if (_selectedReminderDate == null || _selectedReminderTime == null) {
+      setState(() => _isSaving = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a reminder date & time')),
       );
       return;
     }
 
-    setState(() => _isSaving = true);
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
