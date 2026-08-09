@@ -66,6 +66,7 @@ Future<void> generateFullReport({
       'Sl.No',
       'Customer Name',
       'Phone No.',
+      'Description',
       'Quantity',
       'Rate',
       'Source',
@@ -100,6 +101,7 @@ Future<void> generateFullReport({
 
         final String customerName = data['customerName']?.toString() ?? '';
         final String phone = data['phone']?.toString() ?? '';
+        final String description = data['description']?.toString() ?? '';
         final double quantity = (data['quantity'] ?? 0).toDouble();
         final double rate = (data['rate'] ?? 0).toDouble();
 
@@ -124,12 +126,13 @@ Future<void> generateFullReport({
         sheet.getRangeByIndex(currentRow, 1).setNumber(slNo.toDouble());
         sheet.getRangeByIndex(currentRow, 2).setText(customerName);
         sheet.getRangeByIndex(currentRow, 3).setText(phone);
-        sheet.getRangeByIndex(currentRow, 4).setNumber(quantity);
-        sheet.getRangeByIndex(currentRow, 5).setNumber(rate);
-        sheet.getRangeByIndex(currentRow, 6).setText(sourceStr);
-        sheet.getRangeByIndex(currentRow, 7).setText(bookedDate);
-        sheet.getRangeByIndex(currentRow, 8).setText(deliverDate);
-        sheet.getRangeByIndex(currentRow, 9).setText(deliveryStatus);
+        sheet.getRangeByIndex(currentRow, 4).setText(description);
+        sheet.getRangeByIndex(currentRow, 5).setNumber(quantity);
+        sheet.getRangeByIndex(currentRow, 6).setNumber(rate);
+        sheet.getRangeByIndex(currentRow, 7).setText(sourceStr);
+        sheet.getRangeByIndex(currentRow, 8).setText(bookedDate);
+        sheet.getRangeByIndex(currentRow, 9).setText(deliverDate);
+        sheet.getRangeByIndex(currentRow, 10).setText(deliveryStatus);
 
         // Highlight non-delivered rows in yellow
         if (!isDelivered) {

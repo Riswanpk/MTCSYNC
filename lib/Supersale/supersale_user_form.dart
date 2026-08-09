@@ -31,6 +31,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
   final TextEditingController _quantityController = TextEditingController();
   final TextEditingController _rateController = TextEditingController();
   final TextEditingController _advanceController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
 
   List<QueryDocumentSnapshot> _activeAdminPostings = [];
   QueryDocumentSnapshot? _selectedPosting;
@@ -75,6 +76,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
         _phoneController.text = data['phone'] ?? '';
         _quantityController.text = (data['quantity'] ?? '').toString();
         _rateController.text = (data['rate'] ?? '').toString();
+        _descriptionController.text = data['description'] ?? '';
         if (_isSpotSale) {
           _advanceController.text = '0';
         } else {
@@ -156,6 +158,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
     _quantityController.dispose();
     _rateController.dispose();
     _advanceController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
@@ -230,6 +233,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
           'quantity': int.parse(_quantityController.text.trim()),
           'rate': double.parse(_rateController.text.trim()),
           'advance': advanceValue,
+          'description': _descriptionController.text.trim(),
         };
 
         if (!_isSpotSale && _deliveryReminderDateTime != null) {
@@ -268,6 +272,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
           'quantity': int.parse(_quantityController.text.trim()),
           'rate': double.parse(_rateController.text.trim()),
           'advance': advanceValue,
+          'description': _descriptionController.text.trim(),
           'userId': user.uid,
           'email': cache.email ?? user.email,
           'username': cache.username ?? 'User',
@@ -500,6 +505,22 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
                               ),
                             ),
                           ),
+                    const SizedBox(height: 20),
+
+                    // Description Field
+                    Text(
+                      'Description',
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white70 : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _descriptionController,
+                      style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                      decoration: _buildInputDecoration(isDark, 'Model,Size,Colour...'),
+                    ),
                     const SizedBox(height: 20),
 
                     // Read-only Booking Interval Display
