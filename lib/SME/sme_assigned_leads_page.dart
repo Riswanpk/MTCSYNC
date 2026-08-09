@@ -215,7 +215,7 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
       }
     }
 
-    if (_selectedFilter != 'All') {
+    if (_selectedFilter != 'All' && _selectedFilter != 'Pending') {
       query = query.where('screening_status', isEqualTo: _selectedFilter.toLowerCase());
     }
 
@@ -245,12 +245,21 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
       _lastDocument = null;
     }
 
+    List<DocumentSnapshot> docs = snapshot.docs;
+    if (_selectedFilter == 'Pending') {
+      docs = docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        final status = (data['screening_status'] ?? 'pending').toString().toLowerCase();
+        return status == 'pending';
+      }).toList();
+    }
+
     if (!mounted) return;
     setState(() {
-      _leads = snapshot.docs;
+      _leads = docs;
       _isLoading = false;
     });
-    await _prefetchAssignerNames(snapshot.docs);
+    await _prefetchAssignerNames(docs);
   }
 
   Future<void> _prefetchAssignerNames(List<DocumentSnapshot> docs) async {

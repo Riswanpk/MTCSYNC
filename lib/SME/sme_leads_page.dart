@@ -137,6 +137,81 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
     await SoundService.instance.playClickSound(volume: 0.5);
   }
 
+  Future<void> _confirmAndDeleteLead(String docId, String leadName) async {
+    await _playClickSound();
+    if (!mounted) return;
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1C2C3C) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 24),
+            const SizedBox(width: 8),
+            Text(
+              'Delete Lead',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : const Color(0xFF0D2B40),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete "$leadName"? This action cannot be undone.',
+          style: TextStyle(
+            color: isDark ? Colors.white70 : Colors.black87,
+            fontSize: 14,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade700),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await FirebaseFirestore.instance.collection('follow_ups').doc(docId).delete();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lead "$leadName" deleted successfully'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        _fetchLeadsPage();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete lead: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -372,15 +447,18 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                           return GestureDetector(
                             onTap: () async {
                               await _playClickSound();
-                              if (!mounted) return;
+                              if (!context.mounted) return;
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) =>
                                       PresentFollowUp(docId: doc.id),
                                 ),
-                              ).then((_) => _fetchLeadsPage());
+                              ).then((_) {
+                                if (mounted) _fetchLeadsPage();
+                              });
                             },
+                            onLongPress: () => _confirmAndDeleteLead(doc.id, name),
                             child: Container(
                               margin: const EdgeInsets.only(bottom: 12),
                               decoration: BoxDecoration(
