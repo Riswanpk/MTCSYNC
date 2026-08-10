@@ -34,6 +34,8 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
   List<String> _lastItemNames = [];
   bool _hasInitializedBookings = false;
 
+  String? _lastPostingsSignature;
+
   @override
   void initState() {
     super.initState();
@@ -355,8 +357,17 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
           });
         }
 
-        // 3. Sync local scheduled notifications for booking open & close times
-        _syncScheduledNotifications(postings);
+        // 3. Sync local scheduled notifications for booking open & close times safely post-frame
+        final postingsSignature = postings.map((d) {
+          final data = d.data() as Map<String, dynamic>;
+          return '${d.id}_${data['item']}_${data['bookingStart']}_${data['bookingEnd']}';
+        }).join(';');
+        if (_lastPostingsSignature != postingsSignature) {
+          _lastPostingsSignature = postingsSignature;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _syncScheduledNotifications(postings);
+          });
+        }
 
         // 4. Check if there's at least one active posting covering the user's branch right now
         final isBookingOpen = postings.any((doc) {

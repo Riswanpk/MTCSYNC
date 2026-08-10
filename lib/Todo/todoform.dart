@@ -78,6 +78,14 @@ class _TodoFormPageState extends State<TodoFormPage> {
   bool _isSaving = false;
   TimeOfDay? _selectedReminderTime;
   DateTime? _selectedReminderDate;
+  Timer? _draftTimer;
+
+  void _onDraftChanged() {
+    _draftTimer?.cancel();
+    _draftTimer = Timer(const Duration(milliseconds: 500), () {
+      _saveDraft();
+    });
+  }
 
   @override
   void initState() {
@@ -342,6 +350,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
 
   @override
   void dispose() {
+    _draftTimer?.cancel();
     _titleController.dispose();
     _descController.dispose();
     _reminderController.dispose();
@@ -377,7 +386,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
               TextField(
                 controller: _titleController,
                 style: TextStyle(color: inputTextColor),
-                onChanged: (_) => _saveDraft(),
+                onChanged: (_) => _onDraftChanged(),
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: inputFillColor,
@@ -393,7 +402,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
               TextField(
                 controller: _descController,
                 style: TextStyle(color: inputTextColor),
-                onChanged: (_) => _saveDraft(),
+                onChanged: (_) => _onDraftChanged(),
                 maxLines: 3,
                 decoration: InputDecoration(
                   filled: true,

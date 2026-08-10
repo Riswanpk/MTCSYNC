@@ -290,11 +290,18 @@ class TodoListItemReadOnly extends StatelessWidget {
     required this.getUsernameByEmail,
   }) : super(key: key);
 
+  static final Map<String, Future<String>> _usernameCache = {};
+
+  Future<String> _getCachedUsername(String email) {
+    if (email.isEmpty) return Future.value('');
+    return _usernameCache.putIfAbsent(email, () => getUsernameByEmail(email));
+  }
+
   @override
   Widget build(BuildContext context) {
     final email = data['email'] as String? ?? '';
     return FutureBuilder<String>(
-      future: email.isNotEmpty ? getUsernameByEmail(email) : Future.value(''),
+      future: _getCachedUsername(email),
       builder: (context, snapshot) {
         final username = snapshot.data ?? '';
         return Stack(

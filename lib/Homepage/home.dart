@@ -299,29 +299,27 @@ class _HomePageState extends State<HomePage>
             .collection('follow_ups')
             .where('assigned_to', isEqualTo: uid)
             .get();
-        
-        for (final doc in snap.docs) {
-          final source =
-              (doc.data()['source'] as String? ?? '').toLowerCase().trim();
+
+        final eligibleDocs = snap.docs.where((doc) {
+          final source = (doc.data()['source'] as String? ?? '').toLowerCase().trim();
           final status = doc.data()['status'] as String? ?? '';
-          
-          if ((source != 'sme' && source != 'dme') || status != 'In Progress') {
-            continue;
+          return (source == 'sme' || source == 'dme') && status == 'In Progress';
+        }).toList();
+
+        if (eligibleDocs.isNotEmpty) {
+          final docIds = eligibleDocs.map((d) => '${d.id}__$uid').toList();
+          final seenIds = <String>{};
+          for (var i = 0; i < docIds.length; i += 30) {
+            final chunk = docIds.sublist(i, i + 30 > docIds.length ? docIds.length : i + 30);
+            try {
+              final seenSnap = await FirebaseFirestore.instance
+                  .collection('user_seen_leads')
+                  .where(FieldPath.documentId, whereIn: chunk)
+                  .get();
+              seenIds.addAll(seenSnap.docs.map((d) => d.id));
+            } catch (_) {}
           }
-          
-          // Check if this user has seen this lead
-          try {
-            final userSeenDoc = await FirebaseFirestore.instance
-                .collection('user_seen_leads')
-                .doc('${doc.id}__${uid}')
-                .get();
-            if (!userSeenDoc.exists) {
-              count++;
-            }
-          } catch (_) {
-            // If there's an error, assume it hasn't been seen
-            count++;
-          }
+          count += docIds.where((id) => !seenIds.contains(id)).length;
         }
       } catch (_) {}
 
@@ -331,15 +329,20 @@ class _HomePageState extends State<HomePage>
       try {
         final complaints = await DmeComplaintService.instance
             .getAssignedComplaints(userId: uid, status: 'raised');
-        
-        // Filter out complaints that have been marked as seen by this user
-        for (final complaint in complaints) {
-          final isSeen = await DmeComplaintService.instance
-              .isComplaintSeen(complaintId: complaint.id ?? '', userId: uid);
-          if (!isSeen) {
-            count++;
-            unresolvedComplaintsCount++;
-            countedComplaintIds.add(complaint.id ?? '');
+
+        if (complaints.isNotEmpty) {
+          final results = await Future.wait(complaints.map((complaint) async {
+            final isSeen = await DmeComplaintService.instance
+                .isComplaintSeen(complaintId: complaint.id ?? '', userId: uid);
+            return MapEntry(complaint, isSeen);
+          }));
+
+          for (final entry in results) {
+            if (!entry.value) {
+              count++;
+              unresolvedComplaintsCount++;
+              countedComplaintIds.add(entry.key.id ?? '');
+            }
           }
         }
       } catch (_) {}
@@ -351,21 +354,27 @@ class _HomePageState extends State<HomePage>
           if (branchName.isNotEmpty) {
             final branchId = await DmeComplaintService.instance
                 .getBranchIdByName(branchName);
-            
+
             if (branchId != null) {
               final branchComplaints = await DmeComplaintService.instance
                   .getComplaintsForBranch(branchId: branchId, status: 'raised');
-              
-              for (final complaint in branchComplaints) {
-                // Skip if already counted in assigned complaints
-                if (countedComplaintIds.contains(complaint.id)) continue;
-                
-                // Only count if not already in assigned complaints and not seen by this user
-                final isSeen = await DmeComplaintService.instance
-                    .isComplaintSeen(complaintId: complaint.id ?? '', userId: uid);
-                if (!isSeen) {
-                  count++;
-                  unresolvedComplaintsCount++;
+
+              final uncounted = branchComplaints
+                  .where((c) => !countedComplaintIds.contains(c.id))
+                  .toList();
+
+              if (uncounted.isNotEmpty) {
+                final results = await Future.wait(uncounted.map((complaint) async {
+                  final isSeen = await DmeComplaintService.instance
+                      .isComplaintSeen(complaintId: complaint.id ?? '', userId: uid);
+                  return isSeen;
+                }));
+
+                for (final isSeen in results) {
+                  if (!isSeen) {
+                    count++;
+                    unresolvedComplaintsCount++;
+                  }
                 }
               }
             }
@@ -391,24 +400,26 @@ class _HomePageState extends State<HomePage>
               .where('status', isEqualTo: 'completed')
               .get();
 
-          int unseenTasks = 0;
-          for (final doc in tasksSnap.docs) {
-            final data = doc.data();
-            if (data['is_mass_task'] == true) continue;
-            try {
-              final userSeenDoc = await FirebaseFirestore.instance
-                  .collection('user_seen_leads')
-                  .doc('${doc.id}__${uid}')
-                  .get();
-              if (!userSeenDoc.exists) {
-                unseenTasks++;
-              }
-            } catch (_) {
-              unseenTasks++;
+          final nonMassDocs = tasksSnap.docs
+              .where((d) => d.data()['is_mass_task'] != true)
+              .toList();
+
+          if (nonMassDocs.isNotEmpty) {
+            final docIds = nonMassDocs.map((d) => '${d.id}__$uid').toList();
+            final seenIds = <String>{};
+            for (var i = 0; i < docIds.length; i += 30) {
+              final chunk = docIds.sublist(i, i + 30 > docIds.length ? docIds.length : i + 30);
+              try {
+                final seenSnap = await FirebaseFirestore.instance
+                    .collection('user_seen_leads')
+                    .where(FieldPath.documentId, whereIn: chunk)
+                    .get();
+                seenIds.addAll(seenSnap.docs.map((d) => d.id));
+              } catch (_) {}
             }
+            taskCount = docIds.where((id) => !seenIds.contains(id)).length;
+            count += taskCount;
           }
-          taskCount = unseenTasks;
-          count += taskCount;
         }
       } catch (_) {}
 
