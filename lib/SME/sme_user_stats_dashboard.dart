@@ -47,6 +47,7 @@ class _SmeUserStatsDashboardState extends State<SmeUserStatsDashboard> {
       final assignedName = data['assigned_to_name'] as String? ?? 'Unknown';
       final branch = data['branch'] as String? ?? '';
       final status = data['status'] as String? ?? 'In Progress';
+      final screeningStatus = (data['screening_status'] ?? 'pending').toString().toLowerCase();
 
       if (!statMap.containsKey(assignedTo)) {
         statMap[assignedTo] = _UserStat(
@@ -58,6 +59,14 @@ class _SmeUserStatsDashboardState extends State<SmeUserStatsDashboard> {
 
       final stat = statMap[assignedTo]!;
       stat.total++;
+      if (screeningStatus == 'promoted') {
+        stat.promoted++;
+      } else if (screeningStatus == 'rejected') {
+        stat.rejected++;
+      } else {
+        stat.pending++;
+      }
+
       switch (status) {
         case 'In Progress':
           stat.inProgress++;
@@ -225,13 +234,18 @@ class _SmeUserStatsDashboardState extends State<SmeUserStatsDashboard> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     color: isDark ? const Color(0xFF1A1B22) : Colors.white,
-                    child: Row(
-                      children: [
-                        _summaryChip('Total', _filteredUserStats.fold(0, (s, u) => s + u.total), const Color(0xFF005BAC)),
-                        _summaryChip('In Progress', _filteredUserStats.fold(0, (s, u) => s + u.inProgress), Colors.orange),
-                        _summaryChip('Sold', _filteredUserStats.fold(0, (s, u) => s + u.sold), Colors.green),
-                        _summaryChip('Cancelled', _filteredUserStats.fold(0, (s, u) => s + u.cancelled), Colors.red),
-                      ],
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _summaryChip('Total', _filteredUserStats.fold(0, (s, u) => s + u.total), const Color(0xFF005BAC)),
+                          _summaryChip('Pending', _filteredUserStats.fold(0, (s, u) => s + u.pending), Colors.orange),
+                          _summaryChip('Promoted', _filteredUserStats.fold(0, (s, u) => s + u.promoted), Colors.teal),
+                          _summaryChip('Rejected', _filteredUserStats.fold(0, (s, u) => s + u.rejected), Colors.red),
+                          _summaryChip('Sold', _filteredUserStats.fold(0, (s, u) => s + u.sold), Colors.green),
+                          _summaryChip('Cancelled', _filteredUserStats.fold(0, (s, u) => s + u.cancelled), Colors.blueGrey),
+                        ],
+                      ),
                     ),
                   ),
                 if (_selectedBranch != null) const Divider(height: 1),
@@ -244,9 +258,9 @@ class _SmeUserStatsDashboardState extends State<SmeUserStatsDashboard> {
                       children: [
                         Expanded(flex: 3, child: Text('User', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
                         Expanded(flex: 1, child: Text('Total', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12), textAlign: TextAlign.center)),
-                        Expanded(flex: 1, child: Text('Active', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.orange), textAlign: TextAlign.center)),
-                        Expanded(flex: 1, child: Text('Sold', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.green), textAlign: TextAlign.center)),
-                        Expanded(flex: 1, child: Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.red), textAlign: TextAlign.center)),
+                        Expanded(flex: 1, child: Text('Promoted', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.teal), textAlign: TextAlign.center)),
+                        Expanded(flex: 1, child: Text('Sold', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.green), textAlign: TextAlign.center)),
+                        Expanded(flex: 1, child: Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.red), textAlign: TextAlign.center)),
                       ],
                     ),
                   ),
@@ -303,7 +317,7 @@ class _SmeUserStatsDashboardState extends State<SmeUserStatsDashboard> {
                                           ),
                                         ),
                                         Expanded(flex: 1, child: Text('${stat.total}', style: const TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
-                                        Expanded(flex: 1, child: Text('${stat.inProgress}', style: const TextStyle(color: Colors.orange), textAlign: TextAlign.center)),
+                                        Expanded(flex: 1, child: Text('${stat.promoted}', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.w600), textAlign: TextAlign.center)),
                                         Expanded(flex: 1, child: Text('${stat.sold}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600), textAlign: TextAlign.center)),
                                         Expanded(flex: 1, child: Text('${stat.cancelled}', style: const TextStyle(color: Colors.red), textAlign: TextAlign.center)),
                                       ],
@@ -319,20 +333,19 @@ class _SmeUserStatsDashboardState extends State<SmeUserStatsDashboard> {
   }
 
   Widget _summaryChip(String label, int count, Color color) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Column(
-          children: [
-            Text('$count', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: color)),
-            Text(label, style: TextStyle(fontSize: 10, color: color.withValues(alpha: 0.8))),
-          ],
-        ),
+    return Container(
+      constraints: const BoxConstraints(minWidth: 70),
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          Text('$count', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: color)),
+          Text(label, style: TextStyle(fontSize: 10, color: color.withValues(alpha: 0.8))),
+        ],
       ),
     );
   }
@@ -343,6 +356,9 @@ class _UserStat {
   final String name;
   final String branch;
   int total = 0;
+  int pending = 0;
+  int promoted = 0;
+  int rejected = 0;
   int inProgress = 0;
   int sold = 0;
   int cancelled = 0;
@@ -425,7 +441,6 @@ class _UserLeadsDetailPageState extends State<_UserLeadsDetailPage> {
                     final lead = _leads[index];
                     final name = lead['name'] ?? 'Unknown';
                     final status = lead['status'] ?? 'Unknown';
-                    final priority = lead['priority'] ?? 'High';
 
                     Color statusColor;
                     switch (status) {
@@ -499,8 +514,31 @@ class _UserLeadsDetailPageState extends State<_UserLeadsDetailPage> {
                                   ),
                                   child: Text(status, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: statusColor)),
                                 ),
-                                const SizedBox(height: 4),
-                                Text(priority, style: TextStyle(fontSize: 11, color: isDark ? Colors.white38 : Colors.black38)),
+                                 const SizedBox(height: 4),
+                                 Builder(builder: (context) {
+                                   final screening = (lead['screening_status'] ?? 'pending').toString().toLowerCase();
+                                   final String label = screening == 'promoted'
+                                       ? 'Promoted'
+                                       : screening == 'rejected'
+                                           ? 'Rejected'
+                                           : 'Pending';
+                                   final Color color = screening == 'promoted'
+                                       ? Colors.teal
+                                       : screening == 'rejected'
+                                           ? Colors.red
+                                           : Colors.orange;
+                                   return Container(
+                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                     decoration: BoxDecoration(
+                                       color: color.withValues(alpha: 0.12),
+                                       borderRadius: BorderRadius.circular(6),
+                                     ),
+                                     child: Text(
+                                       label,
+                                       style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color),
+                                     ),
+                                   );
+                                 }),
                               ],
                             ),
                           ],
