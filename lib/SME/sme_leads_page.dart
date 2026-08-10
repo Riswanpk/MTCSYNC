@@ -21,7 +21,6 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
   static const Color _successGreen = Color(0xFF8CC63F);
 
   String selectedStatus = 'All';
-  String selectedPriority = 'All';
   String selectedBranch = 'All';
   String searchQuery = '';
   bool sortAscending = false;
@@ -40,7 +39,6 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
     'Sold',
     'Cancelled'
   ];
-  final List<String> priorityOptions = ['All', 'High', 'Medium', 'Low'];
   List<String> branchOptions = [];
 
   @override
@@ -83,9 +81,6 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
       if (selectedStatus != 'All') {
         final statusValue = selectedStatus == 'Sold' ? 'Sale' : selectedStatus;
         query = query.where('status', isEqualTo: statusValue);
-      }
-      if (selectedPriority != 'All') {
-        query = query.where('priority', isEqualTo: selectedPriority);
       }
     }
 
@@ -311,22 +306,6 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                       selectedStatus,
                       (val) {
                         setState(() => selectedStatus = val);
-                        _resetAndFetch();
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _buildFilterChip(
-                    label: 'Priority',
-                    value: selectedPriority,
-                    icon: Icons.flag_rounded,
-                    color: const Color(0xFFE53935),
-                    onTap: () => _showFilterSheet(
-                      'Select Priority',
-                      priorityOptions,
-                      selectedPriority,
-                      (val) {
-                        setState(() => selectedPriority = val);
                         _resetAndFetch();
                       },
                     ),

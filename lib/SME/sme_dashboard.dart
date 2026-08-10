@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'sme_daily_dashboard.dart';
 import 'sme_user_stats_dashboard.dart';
-import 'sme_all_leads_page.dart';
+import 'sme_dashboard_total_leads_page.dart';
 import 'sme_report.dart';
 import 'sme_ad_wise_report.dart';
 

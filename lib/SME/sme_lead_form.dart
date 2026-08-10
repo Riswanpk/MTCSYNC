@@ -856,17 +856,6 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                           ? 'Enter comments'
                           : null,
                     ),
-                    const SizedBox(height: 14),
-                    _customSelectField<String>(
-                      label: 'Priority',
-                      icon: Icons.flag,
-                      hint: 'Select priority',
-                      selectedValue: _priority,
-                      items: ['High', 'Medium', 'Low']
-                          .map((p) => {'value': p, 'label': p})
-                          .toList(),
-                      onSelected: (val) => setState(() => _priority = val),
-                    ),
                   ],
                 ),
                 const SizedBox(height: 2),

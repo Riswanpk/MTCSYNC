@@ -27,10 +27,12 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
   String? _selectedBranch;
   String? _selectedUser;
   String? _selectedStatus;
+  String? _selectedScreeningStatus;
 
   List<String> _branches = [];
   List<String> _users = [];
   final List<String> _statuses = ['In Progress', 'Sale', 'Cancelled'];
+  final List<String> _screeningStatuses = ['Pending', 'Promoted', 'Rejected'];
 
   @override
   void initState() {
@@ -94,6 +96,7 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
     _selectedBranch = null;
     _selectedUser = null;
     _selectedStatus = null;
+    _selectedScreeningStatus = null;
     _isReady = false;
     _filteredLeads = [];
 
@@ -105,9 +108,21 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
     final filtered = _leads.where((lead) {
       if (_selectedBranch != null &&
           _selectedBranch != 'All Branches' &&
-          (lead['branch'] ?? '') != _selectedBranch) return false;
-      if (_selectedUser != null && (lead['assigned_to_name'] ?? '') != _selectedUser) return false;
-      if (_selectedStatus != null && (lead['status'] ?? '') != _selectedStatus) return false;
+          (lead['branch'] ?? '') != _selectedBranch) {
+        return false;
+      }
+      if (_selectedUser != null && (lead['assigned_to_name'] ?? '') != _selectedUser) {
+        return false;
+      }
+      if (_selectedStatus != null && (lead['status'] ?? '') != _selectedStatus) {
+        return false;
+      }
+      if (_selectedScreeningStatus != null) {
+        final screening = (lead['screening_status'] ?? 'pending').toString().toLowerCase();
+        if (screening != _selectedScreeningStatus!.toLowerCase()) {
+          return false;
+        }
+      }
       return true;
     }).toList();
 
@@ -146,7 +161,9 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
         '${DateFormat('dd MMM').format(_startDate)} – ${DateFormat('dd MMM yyyy').format(_endDate)}';
 
     final total = _filteredLeads.length;
-    final inProgress = _filteredLeads.where((l) => l['status'] == 'In Progress').length;
+    final pending = _filteredLeads.where((l) => (l['screening_status'] ?? 'pending').toString().toLowerCase() == 'pending').length;
+    final promoted = _filteredLeads.where((l) => (l['screening_status'] ?? '').toString().toLowerCase() == 'promoted').length;
+    final rejected = _filteredLeads.where((l) => (l['screening_status'] ?? '').toString().toLowerCase() == 'rejected').length;
     final sold = _filteredLeads.where((l) => l['status'] == 'Sale').length;
     final cancelled = _filteredLeads.where((l) => l['status'] == 'Cancelled').length;
 
@@ -219,6 +236,17 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
                         ),
                         const SizedBox(width: 8),
                         _FilterChip(
+                          label: 'Screening',
+                          current: _selectedScreeningStatus,
+                          options: _screeningStatuses,
+                          isDark: isDark,
+                          onChanged: (val) {
+                            setState(() => _selectedScreeningStatus = val.isEmpty ? null : val);
+                            _applyFilters();
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        _FilterChip(
                           label: 'Status',
                           current: _selectedStatus,
                           options: _statuses,
@@ -235,7 +263,7 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
                 // ── Summary row (shown only after first filter selection) ──
                 if (_isReady)
                   Container(
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                    padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
                     decoration: BoxDecoration(
                       color: isDark ? const Color(0xFF1A1B22) : const Color(0xFFF0F4FF),
                       border: Border(
@@ -244,13 +272,18 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
                         ),
                       ),
                     ),
-                    child: Row(
-                      children: [
-                        _SummaryChip(label: 'Total', count: total, color: _primaryBlue),
-                        _SummaryChip(label: 'Active', count: inProgress, color: Colors.orange),
-                        _SummaryChip(label: 'Sold', count: sold, color: Colors.green),
-                        _SummaryChip(label: 'Cancelled', count: cancelled, color: Colors.red),
-                      ],
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _SummaryChip(label: 'Total', count: total, color: _primaryBlue),
+                          _SummaryChip(label: 'Pending', count: pending, color: Colors.orange),
+                          _SummaryChip(label: 'Promoted', count: promoted, color: Colors.teal),
+                          _SummaryChip(label: 'Rejected', count: rejected, color: Colors.red),
+                          _SummaryChip(label: 'Sold', count: sold, color: Colors.green),
+                          _SummaryChip(label: 'Cancelled', count: cancelled, color: Colors.blueGrey),
+                        ],
+                      ),
                     ),
                   ),
                 // ── Leads list / prompt ────────────────────────────────────
@@ -502,29 +535,28 @@ class _SummaryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            Text(
-              '$count',
-              style: TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 18, color: color),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style:
-                  TextStyle(fontSize: 10, color: color.withValues(alpha: 0.8)),
-            ),
-          ],
-        ),
+    return Container(
+      constraints: const BoxConstraints(minWidth: 70),
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            '$count',
+            style: TextStyle(
+                fontWeight: FontWeight.bold, fontSize: 16, color: color),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color.withValues(alpha: 0.9)),
+          ),
+        ],
       ),
     );
   }
@@ -546,7 +578,6 @@ class _LeadCard extends StatelessWidget {
     final status = lead['status'] ?? 'Unknown';
     final assignedTo = lead['assigned_to_name'] as String? ?? '';
     final branch = lead['branch'] as String? ?? '';
-    final priority = lead['priority'] as String? ?? 'High';
 
     DateTime? createdAt;
     if (lead['created_at'] is Timestamp) {
@@ -669,14 +700,30 @@ class _LeadCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          priority,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color:
-                                isDark ? Colors.white38 : Colors.black38,
-                          ),
-                        ),
+                        Builder(builder: (context) {
+                          final screening = (lead['screening_status'] ?? 'pending').toString().toLowerCase();
+                          final String label = screening == 'promoted'
+                              ? 'Promoted'
+                              : screening == 'rejected'
+                                  ? 'Rejected'
+                                  : 'Pending';
+                          final Color color = screening == 'promoted'
+                              ? Colors.teal
+                              : screening == 'rejected'
+                                  ? Colors.red
+                                  : Colors.orange;
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              label,
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color),
+                            ),
+                          );
+                        }),
                       ],
                     ),
                   ],

@@ -24,6 +24,7 @@ import '../Sync Head/sync_head_customer_list_deletion_approval.dart';
 import '../SME/sme_leads_page.dart';
 import '../SME/sme_dashboard.dart';
 import '../SME/sme_ads_page.dart';
+import '../SME/sme_deletion_approval.dart';
 import '../DME/services/dme_supabase_service.dart';
 import '../DME/screens/dme_sales_upload.dart';
 import '../DME/screens/dme_customer_list.dart';
@@ -560,6 +561,14 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           icon: Icons.warning_rounded,
           badgeCount: widget.complaintCount,
         ),
+      if (role == 'manager' || role == 'asst_manager')
+        NeumorphicButton(
+          onTap: () => _navigateToDashboard(context),
+          text: 'Dashboard',
+          color: primaryBlue,
+          textColor: Colors.white,
+          icon: Icons.dashboard_rounded,
+        ),
     ];
 
     return _buildButtonGrid(buttons);
@@ -643,14 +652,22 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
         textColor: Colors.white,
         icon: Icons.assignment_ind_rounded,
       ),
-      // Button 5 (Row 3 Left): Dashboard (admin/manager/asst_manager) or Tasks (sales)
-      if (role == 'admin' || role == 'manager' || role == 'asst_manager')
+      // Button 5 (Row 3 Left): Dashboard (admin) or SME Leads (manager/asst_manager) or Tasks (sales)
+      if (role == 'admin')
         NeumorphicButton(
           onTap: () => _navigateToDashboard(context),
           text: 'Dashboard',
           color: primaryBlue,
           textColor: Colors.white,
           icon: Icons.dashboard_rounded,
+        )
+      else if (role == 'manager' || role == 'asst_manager')
+        NeumorphicButton(
+          onTap: () => _navigateToSmeAssignedLeads(context),
+          text: 'SME Leads',
+          color: primaryBlue,
+          textColor: Colors.white,
+          icon: Icons.support_agent_rounded,
         )
       else if (role == 'sales')
         NeumorphicButton(
@@ -849,21 +866,41 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
         textColor: Colors.white,
         icon: Icons.people_alt_rounded,
       ),
-      NeumorphicButton(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const LoadingOverlayPage(
-                child: SmeDashboard(),
-              ),
-            ),
+      StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('sme_deletion_requests')
+            .where('status', isEqualTo: 'pending')
+            .snapshots(),
+        builder: (context, snapshot) {
+          final pendingCount = snapshot.data?.docs.length ?? 0;
+          return NeumorphicButton(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const LoadingOverlayPage(
+                    child: SmeDashboard(),
+                  ),
+                ),
+              );
+            },
+            onLongPress: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const LoadingOverlayPage(
+                    child: SmeDeletionApprovalPage(),
+                  ),
+                ),
+              );
+            },
+            text: 'Dashboard',
+            color: Colors.teal,
+            textColor: Colors.white,
+            icon: Icons.dashboard_rounded,
+            badgeCount: pendingCount > 0 ? pendingCount : null,
           );
         },
-        text: 'Dashboard',
-        color: Colors.teal,
-        textColor: Colors.white,
-        icon: Icons.dashboard_rounded,
       ),
       NeumorphicButton(
         onTap: () {

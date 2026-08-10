@@ -564,6 +564,20 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
                                       height: 1.3)),
                             ),
                             const SizedBox(width: 8),
+                            if (data['pendingDeletion'] == true) ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Text(
+                                  'PENDING DELETION',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.red),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                            ],
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
@@ -837,6 +851,131 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
     }
   }
 
+  Future<void> _requestDeletion() async {
+    if (_data['pendingDeletion'] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Deletion request is already pending approval.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final reasonController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    final reason = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_forever_rounded, color: Colors.red, size: 24),
+            SizedBox(width: 8),
+            Text('Request Lead Deletion', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Are you sure you want to request deletion of this lead? It will require approval from an SME team lead.',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: reasonController,
+                autofocus: true,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText: 'Enter reason for deletion...',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                ),
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'Reason is required' : null,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(null),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.of(ctx).pop(reasonController.text.trim());
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Submit Request', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (reason == null || reason.isEmpty || !mounted) return;
+
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
+      );
+
+      final cache = UserCacheService.instance;
+      await cache.ensureLoaded();
+
+      final leadRef = FirebaseFirestore.instance.collection('follow_ups').doc(widget.doc.id);
+      final reqRef = FirebaseFirestore.instance.collection('sme_deletion_requests').doc();
+
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        transaction.update(leadRef, {'pendingDeletion': true});
+        transaction.set(reqRef, {
+          'leadId': widget.doc.id,
+          'leadData': _data,
+          'reason': reason,
+          'requestedBy': widget.currentUid,
+          'userName': cache.username ?? '',
+          'userBranch': cache.branch ?? '',
+          'userEmail': FirebaseAuth.instance.currentUser?.email ?? '',
+          'status': 'pending',
+          'requestedAt': FieldValue.serverTimestamp(),
+        });
+      });
+
+      if (!mounted) return;
+      Navigator.of(context).pop(); // dismiss loading indicator
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Deletion request submitted for SME approval.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) Navigator.of(context).pop(); // dismiss loading indicator
+      debugPrint('Error requesting lead deletion: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error requesting deletion: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   Future<void> _onCallPressed() async {
     final phone = _data['phone'] ?? '';
     final screeningStatus = _data['screening_status'] ?? 'pending';
@@ -1020,6 +1159,11 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
             onPressed: () => Navigator.of(context).pop(_needRefresh),
           ),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded, color: Colors.white),
+              tooltip: 'Delete Lead',
+              onPressed: _requestDeletion,
+            ),
             IconButton(icon: const Icon(Icons.edit_note_rounded), tooltip: 'Add Notes', onPressed: _addScreeningNotes),
           ],
         ),
