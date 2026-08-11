@@ -74,11 +74,12 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
     try {
       final workbook = syncfusion.Workbook();
 
-      // Fetch username map from cached users
-      final allUsers = await UserCacheService.instance.getAllUsers();
+      // Fetch username map from cached users (force refresh to ensure deleted users are excluded)
+      final allUsers =
+          await UserCacheService.instance.getAllUsers(forceRefresh: true);
       final Map<String, String> emailToUsername = {};
       for (final u in allUsers) {
-        final email = (u['email'] as String? ?? '').toLowerCase();
+        final email = (u['email'] as String? ?? '').toLowerCase().trim();
         final username = u['username'] as String? ?? '';
         if (email.isNotEmpty) emailToUsername[email] = username;
       }
@@ -95,7 +96,12 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
       for (final doc in usersSnapshot.docs) {
         final data = doc.data();
         final branch = data['branch'] ?? 'Unknown';
-        final userEmail = (data['user'] ?? doc.id).toString().toLowerCase();
+        final userEmail =
+            (data['user'] ?? doc.id).toString().toLowerCase().trim();
+
+        // Skip users deleted from the app (not in active users list)
+        if (!emailToUsername.containsKey(userEmail)) continue;
+
         final customers = (data['customers'] as List<dynamic>? ?? [])
             .map((e) => Map<String, dynamic>.from(e))
             .toList();

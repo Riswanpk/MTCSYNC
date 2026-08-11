@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -190,6 +190,7 @@ class _DmeUserComplaintsPageState extends State<DmeUserComplaintsPage> {
   }
 
   Widget _buildFilterBar() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final statuses = [
       {'label': 'All', 'value': null},
       {'label': 'Raised', 'value': 'raised'},
@@ -197,7 +198,7 @@ class _DmeUserComplaintsPageState extends State<DmeUserComplaintsPage> {
       {'label': 'Closed', 'value': 'verified_closed'},
     ];
     return Container(
-      color: Colors.grey[100],
+      color: isDark ? Theme.of(context).cardColor : Colors.grey[100],
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -216,15 +217,23 @@ class _DmeUserComplaintsPageState extends State<DmeUserComplaintsPage> {
                     _applyFilter();
                   });
                 },
-                backgroundColor: Colors.white,
-                selectedColor: _primary.withValues(alpha: 0.15),
+                backgroundColor: isDark
+                    ? Theme.of(context).colorScheme.surface
+                    : Colors.white,
+                selectedColor: isDark
+                    ? _primary.withValues(alpha: 0.4)
+                    : _primary.withValues(alpha: 0.15),
                 labelStyle: TextStyle(
-                  color: isSelected ? _primary : Colors.grey[600],
+                  color: isSelected
+                      ? (isDark ? Colors.white : _primary)
+                      : (isDark ? Colors.grey[300] : Colors.grey[600]),
                   fontWeight:
                       isSelected ? FontWeight.w600 : FontWeight.normal,
                 ),
                 side: BorderSide(
-                    color: isSelected ? _primary : Colors.grey[300]!),
+                    color: isSelected
+                        ? _primary
+                        : (isDark ? Colors.grey[700]! : Colors.grey[300]!)),
               ),
             );
           }).toList(),
@@ -234,6 +243,7 @@ class _DmeUserComplaintsPageState extends State<DmeUserComplaintsPage> {
   }
 
   void _showDeleteConfirmation(DmeComplaint complaint) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -242,28 +252,33 @@ class _DmeUserComplaintsPageState extends State<DmeUserComplaintsPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'Are you sure you want to delete this complaint?',
-              style: const TextStyle(fontSize: 14),
+              style: TextStyle(fontSize: 14),
             ),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.grey[100],
+                color: isDark ? Colors.grey[850] : Colors.grey[100],
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 complaint.complaintText,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                style: TextStyle(
+                    fontSize: 12,
+                    fontStyle: FontStyle.italic,
+                    color: isDark ? Colors.white70 : null),
               ),
             ),
             const SizedBox(height: 8),
             Text(
               'Customer: ${complaint.customerName}',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600]),
             ),
           ],
         ),
@@ -305,6 +320,7 @@ class _DmeUserComplaintsPageState extends State<DmeUserComplaintsPage> {
   }
 
   Widget _buildCard(DmeComplaint c) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final hasRemarks = c.remarks != null && c.remarks!.isNotEmpty;
     final statusColor = _statusColor(c.status);
     final dateFormat = DateFormat('dd MMM yyyy');
@@ -319,71 +335,78 @@ class _DmeUserComplaintsPageState extends State<DmeUserComplaintsPage> {
           borderRadius: BorderRadius.circular(12),
           onTap: () => _openDetail(c),
           child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border(left: BorderSide(color: statusColor, width: 4)),
-          ),
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(c.customerName,
-                            style: const TextStyle(
-                                fontSize: 15, fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 2),
-                        Text(c.customerPhone,
-                            style: TextStyle(
-                                fontSize: 12, color: Colors.grey[600])),
-                      ],
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border(left: BorderSide(color: statusColor, width: 4)),
+            ),
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(c.customerName,
+                              style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? Colors.white : null)),
+                          const SizedBox(height: 2),
+                          Text(c.customerPhone,
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: isDark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[600])),
+                        ],
+                      ),
                     ),
-                  ),
-                  _buildStatusBadge(c.status),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                c.complaintText,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF2C3E50),
-                    height: 1.4),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Branch: ${c.branchName}',
-                      style:
-                          TextStyle(fontSize: 11, color: Colors.grey[600])),
-                  Text(dateFormat.format(c.createdAt),
-                      style:
-                          TextStyle(fontSize: 11, color: Colors.grey[600])),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (hasRemarks)
-                _buildRow(
-                  icon: Icons.comment,
-                  color: Colors.green,
-                  text: c.remarks!,
-                )
-              else
-                _buildRow(
-                  icon: Icons.pending_actions,
-                  color: Colors.orange,
-                  text: 'Not Resolved',
+                    _buildStatusBadge(c.status),
+                  ],
                 ),
-            ],
+                const SizedBox(height: 10),
+                Text(
+                  c.complaintText,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? Colors.white70 : const Color(0xFF2C3E50),
+                      height: 1.4),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Branch: ${c.branchName}',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                    Text(dateFormat.format(c.createdAt),
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? Colors.grey[400] : Colors.grey[600])),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (hasRemarks)
+                  _buildRow(
+                    icon: Icons.comment,
+                    color: isDark ? Colors.green[300]! : Colors.green,
+                    text: c.remarks!,
+                  )
+                else
+                  _buildRow(
+                    icon: Icons.pending_actions,
+                    color: isDark ? Colors.orange[300]! : Colors.orange,
+                    text: 'Not Resolved',
+                  ),
+              ],
+            ),
           ),
-        ),
         ),
       ),
     );
@@ -393,12 +416,18 @@ class _DmeUserComplaintsPageState extends State<DmeUserComplaintsPage> {
       {required IconData icon,
       required Color color,
       required String text}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.07),
+        color: isDark
+            ? color.withValues(alpha: 0.15)
+            : color.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+        border: Border.all(
+            color: isDark
+                ? color.withValues(alpha: 0.3)
+                : color.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [

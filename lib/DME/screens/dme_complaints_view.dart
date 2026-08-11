@@ -143,12 +143,14 @@ class _DmeComplaintsViewPageState extends State<DmeComplaintsViewPage> {
   }
 
   Widget _buildComplaintsView() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final filtered = _getFilteredComplaints();
 
     return Column(
       children: [
         // Status filter chips
-        Padding(
+        Container(
+          color: isDark ? Theme.of(context).cardColor : Colors.grey[100],
           padding: const EdgeInsets.all(12),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -159,22 +161,42 @@ class _DmeComplaintsViewPageState extends State<DmeComplaintsViewPage> {
                 'case_resolved',
                 'verified_closed',
               ]
-                  .map((status) => Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: FilterChip(
-                          label: Text(status == 'All'
-                              ? 'All (${_complaints.length})'
-                              : status == 'raised'
-                                  ? 'Raised (${_complaints.where((c) => c.status == 'raised').length})'
-                                  : status == 'case_resolved'
-                                      ? 'Resolved (${_complaints.where((c) => c.status == 'case_resolved').length})'
-                                      : 'Closed (${_complaints.where((c) => c.status == 'verified_closed').length})'),
-                          selected: _selectedStatus == status,
-                          onSelected: (_) {
-                            setState(() => _selectedStatus = status);
-                          },
+                  .map((status) {
+                    final isSelected = _selectedStatus == status;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        label: Text(status == 'All'
+                            ? 'All (${_complaints.length})'
+                            : status == 'raised'
+                                ? 'Raised (${_complaints.where((c) => c.status == 'raised').length})'
+                                : status == 'case_resolved'
+                                    ? 'Resolved (${_complaints.where((c) => c.status == 'case_resolved').length})'
+                                    : 'Closed (${_complaints.where((c) => c.status == 'verified_closed').length})'),
+                        selected: isSelected,
+                        onSelected: (_) {
+                          setState(() => _selectedStatus = status);
+                        },
+                        backgroundColor: isDark
+                            ? Theme.of(context).colorScheme.surface
+                            : Colors.white,
+                        selectedColor: isDark
+                            ? const Color(0xFF005BAC).withValues(alpha: 0.4)
+                            : const Color(0xFF005BAC).withValues(alpha: 0.15),
+                        labelStyle: TextStyle(
+                          color: isSelected
+                              ? (isDark ? Colors.white : const Color(0xFF005BAC))
+                              : (isDark ? Colors.grey[300] : Colors.grey[600]),
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.normal,
                         ),
-                      ))
+                        side: BorderSide(
+                            color: isSelected
+                                ? const Color(0xFF005BAC)
+                                : (isDark ? Colors.grey[700]! : Colors.grey[300]!)),
+                      ),
+                    );
+                  })
                   .toList(),
             ),
           ),

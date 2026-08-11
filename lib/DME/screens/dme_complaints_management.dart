@@ -246,14 +246,16 @@ class _DmeComplaintsManagementPageState
                         child: _filtered.isEmpty
                             ? _buildEmpty()
                             : ListView.builder(
-                            padding: const EdgeInsets.all(12),
-                            itemCount: _filtered.length,
+                                padding: const EdgeInsets.all(12),
+                                itemCount: _filtered.length,
                                 itemBuilder: (_, i) {
-                                final complaint = _filtered[i];
-                                final username = _usernameCache[complaint.assignedToId] ?? complaint.assignedToId;
-                                return _buildCard(complaint, username);
-                              },
-                            ),
+                                  final complaint = _filtered[i];
+                                  final username =
+                                      _usernameCache[complaint.assignedToId] ??
+                                          complaint.assignedToId;
+                                  return _buildCard(complaint, username);
+                                },
+                              ),
                       ),
                     ],
                   ),
@@ -263,6 +265,7 @@ class _DmeComplaintsManagementPageState
   }
 
   Widget _buildFilterBar() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final statuses = [
       {'label': 'All', 'value': null},
       {'label': 'Raised', 'value': 'raised'},
@@ -278,7 +281,7 @@ class _DmeComplaintsManagementPageState
       ..sort((a, b) => a.value.compareTo(b.value));
 
     return Container(
-      color: Colors.grey[100],
+      color: isDark ? Theme.of(context).cardColor : Colors.grey[100],
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -291,14 +294,21 @@ class _DmeComplaintsManagementPageState
                 const SizedBox(width: 4),
                 Text(
                   '${DateFormat('dd MMM yy').format(_dateFrom)} – ${DateFormat('dd MMM yy').format(_dateTo)}',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _primary),
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.blue[300] : _primary),
                 ),
                 const SizedBox(width: 10),
-                const Icon(Icons.location_on, size: 14, color: Colors.teal),
+                Icon(Icons.location_on,
+                    size: 14, color: isDark ? Colors.tealAccent : Colors.teal),
                 const SizedBox(width: 2),
                 Text(
                   _filterBranchName,
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.teal),
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.tealAccent : Colors.teal),
                 ),
                 const Spacer(),
                 TextButton(
@@ -333,15 +343,23 @@ class _DmeComplaintsManagementPageState
                         _applyFilter();
                       });
                     },
-                    backgroundColor: Colors.white,
-                    selectedColor: _primary.withValues(alpha: 0.15),
+                    backgroundColor: isDark
+                        ? Theme.of(context).colorScheme.surface
+                        : Colors.white,
+                    selectedColor: isDark
+                        ? _primary.withValues(alpha: 0.4)
+                        : _primary.withValues(alpha: 0.15),
                     labelStyle: TextStyle(
-                      color: isSelected ? _primary : Colors.grey[600],
+                      color: isSelected
+                          ? (isDark ? Colors.white : _primary)
+                          : (isDark ? Colors.grey[300] : Colors.grey[600]),
                       fontWeight:
                           isSelected ? FontWeight.w600 : FontWeight.normal,
                     ),
                     side: BorderSide(
-                        color: isSelected ? _primary : Colors.grey[300]!),
+                        color: isSelected
+                            ? _primary
+                            : (isDark ? Colors.grey[700]! : Colors.grey[300]!)),
                   ),
                 );
               }).toList(),
@@ -367,10 +385,16 @@ class _DmeComplaintsManagementPageState
                             _applyFilter();
                           });
                         },
-                        backgroundColor: Colors.white,
-                        selectedColor: Colors.teal.withValues(alpha: 0.15),
+                        backgroundColor: isDark
+                            ? Theme.of(context).colorScheme.surface
+                            : Colors.white,
+                        selectedColor: isDark
+                            ? Colors.teal.withValues(alpha: 0.4)
+                            : Colors.teal.withValues(alpha: 0.15),
                         labelStyle: TextStyle(
-                          color: _selectedAssignedTo == null ? Colors.teal : Colors.grey[600],
+                          color: _selectedAssignedTo == null
+                              ? (isDark ? Colors.tealAccent : Colors.teal)
+                              : (isDark ? Colors.grey[300] : Colors.grey[600]),
                           fontWeight: _selectedAssignedTo == null
                               ? FontWeight.w600
                               : FontWeight.normal,
@@ -378,7 +402,9 @@ class _DmeComplaintsManagementPageState
                         side: BorderSide(
                             color: _selectedAssignedTo == null
                                 ? Colors.teal
-                                : Colors.grey[300]!),
+                                : (isDark
+                                    ? Colors.grey[700]!
+                                    : Colors.grey[300]!)),
                       ),
                     ),
                     ...assignedUsers.map((entry) {
@@ -395,10 +421,18 @@ class _DmeComplaintsManagementPageState
                               _applyFilter();
                             });
                           },
-                          backgroundColor: Colors.white,
-                          selectedColor: Colors.teal.withValues(alpha: 0.15),
+                          backgroundColor: isDark
+                              ? Theme.of(context).colorScheme.surface
+                              : Colors.white,
+                          selectedColor: isDark
+                              ? Colors.teal.withValues(alpha: 0.4)
+                              : Colors.teal.withValues(alpha: 0.15),
                           labelStyle: TextStyle(
-                            color: isSelected ? Colors.teal : Colors.grey[600],
+                            color: isSelected
+                                ? (isDark ? Colors.tealAccent : Colors.teal)
+                                : (isDark
+                                    ? Colors.grey[300]
+                                    : Colors.grey[600]),
                             fontWeight: isSelected
                                 ? FontWeight.w600
                                 : FontWeight.normal,
@@ -406,7 +440,9 @@ class _DmeComplaintsManagementPageState
                           side: BorderSide(
                               color: isSelected
                                   ? Colors.teal
-                                  : Colors.grey[300]!),
+                                  : (isDark
+                                      ? Colors.grey[700]!
+                                      : Colors.grey[300]!)),
                         ),
                       );
                     }),
@@ -420,6 +456,7 @@ class _DmeComplaintsManagementPageState
   }
 
   Widget _buildAdminFilterPrompt() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final dateFmt = DateFormat('dd MMM yyyy');
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -436,12 +473,15 @@ class _DmeComplaintsManagementPageState
           const SizedBox(height: 4),
           Text(
             'Select a date range and optionally a branch, then tap Search.',
-            style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+            style: TextStyle(
+                fontSize: 13,
+                color: isDark ? Colors.grey[400] : Colors.grey[600]),
           ),
           const SizedBox(height: 24),
           // Date range card
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: ListTile(
               leading: const Icon(Icons.date_range, color: _primary),
               title: const Text('Date Range',
@@ -458,7 +498,8 @@ class _DmeComplaintsManagementPageState
           const SizedBox(height: 12),
           // Branch filter card
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: DropdownButtonFormField<int?>(
@@ -469,7 +510,8 @@ class _DmeComplaintsManagementPageState
                   border: InputBorder.none,
                 ),
                 items: [
-                  const DropdownMenuItem<int?>(value: null, child: Text('All Branches')),
+                  const DropdownMenuItem<int?>(
+                      value: null, child: Text('All Branches')),
                   ..._branchesForFilter.map((b) => DropdownMenuItem<int?>(
                         value: b['id'] as int?,
                         child: Text(b['name'] as String? ?? ''),
@@ -527,17 +569,18 @@ class _DmeComplaintsManagementPageState
   }
 
   Widget _buildCard(DmeComplaint c, String assignedUsername) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final hasRemarks = c.remarks != null && c.remarks!.isNotEmpty;
     final isAssigned = c.assignedToId == _currentUserId;
     final statusColor = _statusColor(c.status);
     final dateFormat = DateFormat('dd MMM yyyy');
-    final complaintTypeLabel = c.complaintTypes.isEmpty ? null : c.complaintTypeLabel;
+    final complaintTypeLabel =
+        c.complaintTypes.isEmpty ? null : c.complaintTypeLabel;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       elevation: 2,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () => _openDetail(c),
@@ -560,13 +603,17 @@ class _DmeComplaintsManagementPageState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(c.customerName,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 15,
-                                  fontWeight: FontWeight.w700)),
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? Colors.white : null)),
                           const SizedBox(height: 2),
                           Text(c.customerPhone,
                               style: TextStyle(
-                                  fontSize: 12, color: Colors.grey[600])),
+                                  fontSize: 12,
+                                  color: isDark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[600])),
                         ],
                       ),
                     ),
@@ -574,7 +621,8 @@ class _DmeComplaintsManagementPageState
                       flex: 2,
                       child: Center(
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: Colors.red.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(10),
@@ -621,13 +669,17 @@ class _DmeComplaintsManagementPageState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(c.customerName,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 15,
-                                  fontWeight: FontWeight.w700)),
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? Colors.white : null)),
                           const SizedBox(height: 2),
                           Text(c.customerPhone,
                               style: TextStyle(
-                                  fontSize: 12, color: Colors.grey[600])),
+                                  fontSize: 12,
+                                  color: isDark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[600])),
                         ],
                       ),
                     ),
@@ -662,9 +714,9 @@ class _DmeComplaintsManagementPageState
                 c.complaintText,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 13,
-                    color: Color(0xFF2C3E50),
+                    color: isDark ? Colors.white70 : const Color(0xFF2C3E50),
                     height: 1.4),
               ),
               const SizedBox(height: 10),
@@ -674,10 +726,12 @@ class _DmeComplaintsManagementPageState
                 children: [
                   Text('Branch: ${c.branchName}',
                       style: TextStyle(
-                          fontSize: 11, color: Colors.grey[600])),
+                          fontSize: 11,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600])),
                   Text(dateFormat.format(c.createdAt),
                       style: TextStyle(
-                          fontSize: 11, color: Colors.grey[600])),
+                          fontSize: 11,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600])),
                 ],
               ),
               const SizedBox(height: 6),
@@ -685,12 +739,15 @@ class _DmeComplaintsManagementPageState
                 children: [
                   Text('Assigned: ',
                       style: TextStyle(
-                          fontSize: 11, color: Colors.grey[600])),
+                          fontSize: 11,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600])),
                   Expanded(
                     child: Text(
                       assignedUsername,
-                      style: const TextStyle(
-                          fontSize: 11, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.grey[200] : null),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -703,22 +760,30 @@ class _DmeComplaintsManagementPageState
                   padding: const EdgeInsets.symmetric(
                       horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withValues(alpha: 0.07),
+                    color: isDark
+                        ? Colors.blue.withValues(alpha: 0.2)
+                        : Colors.blue.withValues(alpha: 0.07),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                        color: Colors.blue.withValues(alpha: 0.2)),
+                        color: isDark
+                            ? Colors.blue.withValues(alpha: 0.4)
+                            : Colors.blue.withValues(alpha: 0.2)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.comment,
-                          size: 14, color: Colors.blue),
+                      Icon(Icons.comment,
+                          size: 14,
+                          color: isDark ? Colors.blue[300] : Colors.blue),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(c.remarks!,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontSize: 12, color: Colors.blue)),
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: isDark
+                                    ? Colors.blue[200]
+                                    : Colors.blue)),
                       ),
                     ],
                   ),

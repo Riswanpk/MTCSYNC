@@ -93,6 +93,7 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
     final remarksController =
         TextEditingController(text: complaint.remarks ?? '');
     bool isSubmitting = false;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     showDialog(
       context: context,
@@ -110,21 +111,21 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: Colors.grey[700],
+                    color: isDark ? Colors.grey[300] : Colors.grey[700],
                   ),
                 ),
                 const SizedBox(height: 6),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
+                    color: isDark ? Colors.grey[850] : Colors.grey[100],
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     complaint.complaintText,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
-                      color: Color(0xFF2C3E50),
+                      color: isDark ? Colors.white70 : const Color(0xFF2C3E50),
                       height: 1.4,
                     ),
                   ),
@@ -137,7 +138,7 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: Colors.grey[700],
+                    color: isDark ? Colors.grey[300] : Colors.grey[700],
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -227,6 +228,7 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
   void _showCallResolutionDialog(DmeComplaint complaint) {
     bool isSubmitting = false;
     bool hasCalledCustomer = false;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     showDialog(
       context: context,
@@ -252,31 +254,35 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: Colors.blue[50],
+                    color: isDark ? const Color(0xFF1E293B) : Colors.blue[50],
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.blue[200]!),
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF334155) : Colors.blue[200]!,
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         complaint.customerName,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
-                          color: Color(0xFF2C3E50),
+                          color: isDark ? Colors.white : const Color(0xFF2C3E50),
                         ),
                       ),
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          Icon(Icons.phone, size: 14, color: Colors.blue[600]),
+                          Icon(Icons.phone,
+                              size: 14,
+                              color: isDark ? Colors.blue[300] : Colors.blue[600]),
                           const SizedBox(width: 6),
                           Text(
                             complaint.customerPhone,
                             style: TextStyle(
                               fontSize: 14,
-                              color: Colors.blue[700],
+                              color: isDark ? Colors.blue[300] : Colors.blue[700],
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -441,6 +447,8 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Assigned Complaints',
@@ -463,17 +471,21 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                 children: [
                   // Filter Section
                   Container(
-                    color: Colors.grey[100],
+                    color: isDark
+                        ? Theme.of(context).cardColor
+                        : Colors.grey[100],
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Status Filter',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF2C3E50),
+                            color: isDark
+                                ? Colors.white
+                                : const Color(0xFF2C3E50),
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -501,12 +513,14 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const SizedBox(height: 12),
-                              const Text(
+                              Text(
                                 'Branch',
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFF2C3E50),
+                                  color: isDark
+                                      ? Colors.white
+                                      : const Color(0xFF2C3E50),
                                 ),
                               ),
                               const SizedBox(height: 8),
@@ -531,6 +545,7 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                     child: _filteredComplaints.isEmpty
                         ? Center(
                             child: Column(
+                              mainAxisSize: MainAxisSize.min,
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(
@@ -565,6 +580,7 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
   }
 
   Widget _buildFilterChip(String label, String? value) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isSelected = _selectedStatus == value;
     return Padding(
       padding: const EdgeInsets.only(right: 6),
@@ -572,20 +588,29 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
         label: Text(label),
         selected: isSelected,
         onSelected: (_) => _onStatusChanged(value),
-        backgroundColor: Colors.white,
-        selectedColor: primaryColor.withValues(alpha: 0.2),
+        backgroundColor: isDark
+            ? Theme.of(context).colorScheme.surface
+            : Colors.white,
+        selectedColor: isDark
+            ? primaryColor.withValues(alpha: 0.4)
+            : primaryColor.withValues(alpha: 0.2),
         labelStyle: TextStyle(
-          color: isSelected ? primaryColor : Colors.grey[600],
+          color: isSelected
+              ? (isDark ? Colors.white : primaryColor)
+              : (isDark ? Colors.grey[300] : Colors.grey[600]),
           fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
         ),
         side: BorderSide(
-          color: isSelected ? primaryColor : Colors.grey[300]!,
+          color: isSelected
+              ? primaryColor
+              : (isDark ? Colors.grey[700]! : Colors.grey[300]!),
         ),
       ),
     );
   }
 
   Widget _buildBranchFilterChip(String label, String? value) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isSelected = _selectedBranch == value;
     return Padding(
       padding: const EdgeInsets.only(right: 6),
@@ -598,20 +623,29 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
             _applyFilters();
           });
         },
-        backgroundColor: Colors.white,
-        selectedColor: Colors.teal.withValues(alpha: 0.2),
+        backgroundColor: isDark
+            ? Theme.of(context).colorScheme.surface
+            : Colors.white,
+        selectedColor: isDark
+            ? Colors.teal.withValues(alpha: 0.4)
+            : Colors.teal.withValues(alpha: 0.2),
         labelStyle: TextStyle(
-          color: isSelected ? Colors.teal : Colors.grey[600],
+          color: isSelected
+              ? (isDark ? Colors.tealAccent : Colors.teal)
+              : (isDark ? Colors.grey[300] : Colors.grey[600]),
           fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
         ),
         side: BorderSide(
-          color: isSelected ? Colors.teal : Colors.grey[300]!,
+          color: isSelected
+              ? Colors.teal
+              : (isDark ? Colors.grey[700]! : Colors.grey[300]!),
         ),
       ),
     );
   }
 
   Widget _buildComplaintCard(DmeComplaint complaint) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final dateFormat = DateFormat('dd MMM yyyy, hh:mm a');
     final needsRemarks = complaint.status == 'raised';
     final hasRemarks =
@@ -653,10 +687,12 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                         children: [
                           Text(
                             complaint.customerName,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFF2C3E50),
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF2C3E50),
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -664,7 +700,9 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                             complaint.customerPhone,
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey[600],
+                              color: isDark
+                                  ? Colors.grey[400]
+                                  : Colors.grey[600],
                             ),
                           ),
                         ],
@@ -727,10 +765,12 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                         children: [
                           Text(
                             complaint.customerName,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFF2C3E50),
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF2C3E50),
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -738,7 +778,9 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                             complaint.customerPhone,
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey[600],
+                              color: isDark
+                                  ? Colors.grey[400]
+                                  : Colors.grey[600],
                             ),
                           ),
                         ],
@@ -780,7 +822,7 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                 'Branch: ${complaint.branchName}',
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey[700],
+                  color: isDark ? Colors.grey[300] : Colors.grey[700],
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -789,9 +831,9 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
               // Complaint Text
               Text(
                 complaint.complaintText,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
-                  color: Color(0xFF2C3E50),
+                  color: isDark ? Colors.white70 : const Color(0xFF2C3E50),
                   height: 1.5,
                 ),
               ),
@@ -808,16 +850,18 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                         'Created By',
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.grey[600],
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                       Text(
                         complaint.createdByUsername ?? 'N/A',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF2C3E50),
+                          color: isDark
+                              ? Colors.white
+                              : const Color(0xFF2C3E50),
                         ),
                       ),
                     ],
@@ -829,16 +873,18 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                         'Created On',
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.grey[600],
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                       Text(
                         dateFormat.format(complaint.createdAt),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
-                          color: Color(0xFF2C3E50),
+                          color: isDark
+                              ? Colors.white70
+                              : const Color(0xFF2C3E50),
                         ),
                       ),
                     ],
@@ -852,9 +898,14 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.05),
-                    border:
-                        Border.all(color: Colors.green.withValues(alpha: 0.2)),
+                    color: isDark
+                        ? Colors.green.withValues(alpha: 0.15)
+                        : Colors.green.withValues(alpha: 0.05),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.green.withValues(alpha: 0.3)
+                          : Colors.green.withValues(alpha: 0.2),
+                    ),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Column(
@@ -865,15 +916,19 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: Colors.green[700],
+                          color: isDark
+                              ? Colors.green[300]
+                              : Colors.green[700],
                         ),
                       ),
                       const SizedBox(height: 6),
                       Text(
                         complaint.remarks!,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
-                          color: Color(0xFF2C3E50),
+                          color: isDark
+                              ? Colors.white70
+                              : const Color(0xFF2C3E50),
                           height: 1.4,
                         ),
                       ),
@@ -883,7 +938,9 @@ class _DmeAssignedComplaintsPageState extends State<DmeAssignedComplaintsPage> {
                           dateFormat.format(complaint.remarkedAt!),
                           style: TextStyle(
                             fontSize: 10,
-                            color: Colors.grey[600],
+                            color: isDark
+                                ? Colors.grey[400]
+                                : Colors.grey[600],
                           ),
                         ),
                       ],
