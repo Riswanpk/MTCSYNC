@@ -450,99 +450,6 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
     }
   }
 
-  void _confirmUppercaseAllUsernames() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Uppercase All Usernames'),
-        content: const Text(
-            'Are you sure you want to convert ALL usernames to UPPERCASE? This action will update all user records in Firestore.'),
-        actions: [
-          TextButton(
-            child: const Text('Cancel'),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF005BAC),
-            ),
-            child: const Text('Uppercase All',
-                style: TextStyle(color: Colors.white)),
-            onPressed: () async {
-              Navigator.of(context).pop();
-              await _uppercaseAllUsernames();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _uppercaseAllUsernames() async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(),
-      ),
-    );
-
-    try {
-      final snapshot = await FirebaseFirestore.instance.collection('users').get();
-      int updateCount = 0;
-      WriteBatch batch = FirebaseFirestore.instance.batch();
-      int batchSize = 0;
-
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final currentName = (data['username'] ?? '').toString();
-        final upperName = currentName.toUpperCase();
-        if (currentName != upperName && upperName.isNotEmpty) {
-          batch.update(doc.reference, {'username': upperName});
-          updateCount++;
-          batchSize++;
-          if (batchSize >= 450) {
-            await batch.commit();
-            batch = FirebaseFirestore.instance.batch();
-            batchSize = 0;
-          }
-        }
-      }
-
-      if (batchSize > 0) {
-        await batch.commit();
-      }
-
-      await UserCacheService.instance.refreshAllUsers();
-
-      if (mounted) Navigator.of(context).pop();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Updated $updateCount usernames to ALL CAPS.'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-        _loadUsers();
-      }
-    } catch (e) {
-      if (mounted && Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
-      }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error updating usernames: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final currentUser = FirebaseAuth.instance.currentUser;
@@ -564,11 +471,6 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.text_fields),
-            tooltip: 'Uppercase All Usernames',
-            onPressed: _confirmUppercaseAllUsernames,
-          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh Users',

@@ -108,7 +108,7 @@ class _RegisterPageState extends State<RegisterPage>
           .doc(userCredential.user!.uid)
           .set({
         'email': _emailController.text.trim(),
-        'username': _usernameController.text.trim(),
+        'username': _usernameController.text.trim().toUpperCase(),
         'role': 'sales',
         'branch': _selectedBranch,
         'createdAt': FieldValue.serverTimestamp(),
@@ -363,6 +363,8 @@ class _RegisterPageState extends State<RegisterPage>
                                 // Username
                                 TextFormField(
                                   controller: _usernameController,
+                                  textCapitalization:
+                                      TextCapitalization.characters,
                                   decoration: _inputDecoration(
                                       'Username', Icons.person_outline_rounded),
                                   style: TextStyle(
