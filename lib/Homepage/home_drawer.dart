@@ -45,11 +45,99 @@ class HomeDrawer extends StatelessWidget {
           if (role == 'admin' || role == 'sync_head' || role == 'Sync Head')
             _buildManageUsersTile(context),
           if (role == 'dme_admin') _buildDmeUsersTile(context),
+          _buildSyncSmeUserNamesTile(context),
 
           _buildInstructionsTile(context),
           _buildLogoutTile(context),
         ],
       ),
+    );
+  }
+
+  Widget _buildSyncSmeUserNamesTile(BuildContext context) {
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: const Icon(Icons.sync_alt_rounded, color: Color(0xFF005BAC)),
+      title: const Text('Fix SME Unassigned Names'),
+      subtitle: const Text('One-time sync assigned_to_name from users collection',
+          style: TextStyle(fontSize: 10)),
+      onTap: () async {
+        Navigator.pop(context);
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 16),
+                Expanded(child: Text('Syncing assigned user names...')),
+              ],
+            ),
+          ),
+        );
+
+        int updatedCount = 0;
+        try {
+          // Query all SME follow_ups
+          final snap = await FirebaseFirestore.instance
+              .collection('follow_ups')
+              .where('source', whereIn: ['sme', 'SME'])
+              .get();
+
+          final userCache = <String, String>{};
+
+          for (final doc in snap.docs) {
+            final data = doc.data();
+            final assignedTo = data['assigned_to'] as String?;
+            final currentName = data['assigned_to_name'] as String?;
+
+            if (assignedTo != null &&
+                assignedTo.isNotEmpty &&
+                (currentName == null || currentName.isEmpty || currentName == 'Unknown')) {
+              
+              if (!userCache.containsKey(assignedTo)) {
+                final userSnap = await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(assignedTo)
+                    .get();
+                if (userSnap.exists) {
+                  final udata = userSnap.data();
+                  userCache[assignedTo] =
+                      udata?['username'] as String? ?? udata?['name'] as String? ?? '';
+                }
+              }
+
+              final nameToSet = userCache[assignedTo];
+              if (nameToSet != null && nameToSet.isNotEmpty) {
+                await doc.reference.update({'assigned_to_name': nameToSet});
+                updatedCount++;
+              }
+            }
+          }
+
+          if (context.mounted) {
+            Navigator.pop(context); // Dismiss loading dialog
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Successfully updated $updatedCount SME leads with assigned names!'),
+                backgroundColor: const Color(0xFF4CAF50),
+              ),
+            );
+          }
+        } catch (e) {
+          if (context.mounted) {
+            Navigator.pop(context); // Dismiss loading dialog
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error syncing user names: $e'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      },
     );
   }
 

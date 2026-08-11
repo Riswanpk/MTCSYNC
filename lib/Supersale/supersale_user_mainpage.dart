@@ -171,7 +171,7 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
         'cancelReason': reason,
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('Booking entry cancelled successfully'),
             backgroundColor: Colors.orange,
@@ -181,7 +181,7 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Failed to cancel booking: $e'),
             backgroundColor: Colors.red,
@@ -694,7 +694,7 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
             if (direction == DismissDirection.endToStart) {
               // Swipe to Cancel booking (only allowed during booking interval)
               if (!isActionAllowed) {
-                ScaffoldMessenger.of(context).showSnackBar(
+                ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                   const SnackBar(
                     content: Text('Booking period has ended. You cannot cancel this entry.'),
                     backgroundColor: Colors.red,
@@ -815,7 +815,7 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
                     'billedPhone': phoneController.text.trim(),
                   });
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                       const SnackBar(
                         content: Text('Booking marked as Delivered successfully'),
                         backgroundColor: Colors.green,
@@ -824,7 +824,7 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
                   }
                 } catch (e) {
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                       SnackBar(content: Text('Failed to update status: $e'), backgroundColor: Colors.red),
                     );
                   }
@@ -857,7 +857,7 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
                 onTap: () {
                   // Edit Booking (only allowed during booking interval)
                   if (!isActionAllowed) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                       const SnackBar(
                         content: Text('Booking period has ended. You cannot edit this entry.'),
                         backgroundColor: Colors.red,
