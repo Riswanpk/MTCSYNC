@@ -389,11 +389,18 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(_complaint.customerName,
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w700)),
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white
+                              : null)),
                   const SizedBox(height: 4),
                   Text(_complaint.customerPhone,
-                      style: TextStyle(color: Colors.grey[600])),
+                      style: TextStyle(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.grey[400]
+                              : Colors.grey[600])),
                 ],
               ),
             ),
@@ -403,7 +410,12 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
             _buildSection(
               title: 'Complaint',
               child: Text(_complaint.complaintText,
-                  style: const TextStyle(fontSize: 14, height: 1.5)),
+                  style: TextStyle(
+                      fontSize: 14,
+                      height: 1.5,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white70
+                          : null)),
             ),
             const SizedBox(height: 12),
 
@@ -485,7 +497,10 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
                                     _seekComplaintVoice(value)
                                 : null,
                             activeColor: Colors.blue[600],
-                            inactiveColor: Colors.grey[300],
+                            inactiveColor:
+                                Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.grey[700]
+                                    : Colors.grey[300],
                           ),
                         ),
                         // Time display
@@ -499,14 +514,20 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
                                 _formatDuration(_complaintVoicePosition),
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: Colors.grey[600],
+                                  color: Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[600],
                                 ),
                               ),
                               Text(
                                 _formatDuration(_complaintVoiceDuration),
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: Colors.grey[600],
+                                  color: Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[600],
                                 ),
                               ),
                             ],
@@ -527,8 +548,12 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
                   child: _buildSection(
                     title: 'Branch',
                     child: Text(_complaint.branchName,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w600)),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.white
+                                    : null)),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -537,7 +562,11 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
                     title: 'Assigned To',
                     child: Text(
                       _assignedToUsername ?? _complaint.assignedToId,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white
+                              : null),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -550,7 +579,11 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
             _buildSection(
               title: 'Raised On',
               child: Text(fmt.format(_complaint.createdAt),
-                  style: const TextStyle(fontSize: 13)),
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white70
+                          : null)),
             ),
             const SizedBox(height: 24),
 
@@ -638,7 +671,9 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: Colors.grey[700],
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey[300]
+                        : Colors.grey[700],
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -781,13 +816,15 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
 
   Widget _buildSection(
       {required String title, required Widget child}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: isDark ? Theme.of(context).cardColor : Colors.grey.shade50,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(
+            color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -797,7 +834,7 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w700,
-              color: Colors.grey[500],
+              color: isDark ? Colors.grey[400] : Colors.grey[500],
               letterSpacing: 0.8,
             ),
           ),
@@ -809,12 +846,13 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
   }
 
   Widget _buildSectionHeader(String title) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Text(
       title.toUpperCase(),
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 12,
         fontWeight: FontWeight.w700,
-        color: _primary,
+        color: isDark ? Colors.blue[300] : _primary,
         letterSpacing: 0.8,
       ),
     );
@@ -826,17 +864,29 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
     required String label,
     required String? subtitle,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bannerColor = isDark
+        ? (color == Colors.grey
+            ? Colors.grey[400]!
+            : (color == Colors.green ? Colors.green[300]! : color))
+        : color;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.07),
+        color: isDark
+            ? bannerColor.withValues(alpha: 0.15)
+            : color.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+        border: Border.all(
+          color: isDark
+              ? bannerColor.withValues(alpha: 0.3)
+              : color.withValues(alpha: 0.2),
+        ),
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 22),
+          Icon(icon, color: bannerColor, size: 22),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -844,14 +894,16 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
               children: [
                 Text(label,
                     style: TextStyle(
-                        color: color,
+                        color: bannerColor,
                         fontWeight: FontWeight.w700,
                         fontSize: 14)),
                 if (subtitle != null) ...[
                   const SizedBox(height: 4),
                   Text(subtitle,
                       style: TextStyle(
-                          color: color.withValues(alpha: 0.7),
+                          color: isDark
+                              ? Colors.grey[400]
+                              : color.withValues(alpha: 0.7),
                           fontSize: 12)),
                 ],
               ],
@@ -868,13 +920,25 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
     required String? date,
     required Color color,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bannerColor = isDark
+        ? (color == Colors.blue
+            ? Colors.blue[300]!
+            : (color == Colors.green ? Colors.green[300]! : color))
+        : color;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.06),
+        color: isDark
+            ? bannerColor.withValues(alpha: 0.15)
+            : color.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+        border: Border.all(
+          color: isDark
+              ? bannerColor.withValues(alpha: 0.3)
+              : color.withValues(alpha: 0.2),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -883,14 +947,19 @@ class _DmeComplaintDetailPageState extends State<DmeComplaintDetailPage> {
               style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: color.withValues(alpha: 0.8))),
+                  color: isDark ? bannerColor : color.withValues(alpha: 0.8))),
           const SizedBox(height: 8),
           Text(body,
-              style: const TextStyle(fontSize: 14, height: 1.5)),
+              style: TextStyle(
+                  fontSize: 14,
+                  height: 1.5,
+                  color: isDark ? Colors.white70 : null)),
           if (date != null) ...[
             const SizedBox(height: 6),
             Text(date,
-                style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? Colors.grey[400] : Colors.grey[500])),
           ],
         ],
       ),
