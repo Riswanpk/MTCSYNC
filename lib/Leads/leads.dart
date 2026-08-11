@@ -205,11 +205,12 @@ class _LeadsPageState extends State<LeadsPage> {
 
     // Apply filters — always applied, including during search
     if (selectedUser != null) {
-      // Include leads created by OR assigned to the selected user
+      // Include leads created by, assigned to, OR screened by the selected user
       query = query.where(
         Filter.or(
           Filter('created_by', isEqualTo: selectedUser),
           Filter('assigned_to', isEqualTo: selectedUser),
+          Filter('screened_by', isEqualTo: selectedUser),
         ),
       );
     }
@@ -233,55 +234,72 @@ class _LeadsPageState extends State<LeadsPage> {
     // Apply sorting
     query = query.orderBy('created_at', descending: !sortAscending);
 
-    QuerySnapshot snapshot;
+    try {
+      QuerySnapshot snapshot;
 
-    if (isSearch && searchQuery.isNotEmpty) {
-      // For search, fetch all matching documents and filter locally by name
-      snapshot = await query.get();
-    } else {
-      // For normal browsing, use pagination
-      DocumentSnapshot? cursor;
-      if (nextPage) {
-        cursor = _lastDocument;
-        _currentPage++;
-      } else if (prevPage) {
-        if (_currentPage > 1) {
-          _currentPage--;
+      if (isSearch && searchQuery.isNotEmpty) {
+        // For search, fetch all matching documents and filter locally by name
+        snapshot = await query.get();
+      } else {
+        // For normal browsing, use pagination
+        DocumentSnapshot? cursor;
+        if (nextPage) {
+          cursor = _lastDocument;
+          _currentPage++;
+        } else if (prevPage) {
+          if (_currentPage > 1) {
+            _currentPage--;
+          }
+          cursor = _pageStartCursors[_currentPage];
         }
-        cursor = _pageStartCursors[_currentPage];
+
+        if (cursor != null) {
+          query = query.startAfterDocument(cursor);
+        }
+
+        snapshot = await query.limit(_leadsPerPage).get();
       }
 
-      if (cursor != null) {
-        query = query.startAfterDocument(cursor);
-      }
-
-      snapshot = await query.limit(_leadsPerPage).get();
-    }
-
-    if (snapshot.docs.isNotEmpty) {
-      // Only update pagination cursors if not in search mode
-      if (!isSearch || searchQuery.isEmpty) {
-        _lastDocument = snapshot.docs.last;
-        _pageStartCursors[_currentPage + 1] = _lastDocument;
+      if (snapshot.docs.isNotEmpty) {
+        // Only update pagination cursors if not in search mode
+        if (!isSearch || searchQuery.isEmpty) {
+          _lastDocument = snapshot.docs.last;
+          _pageStartCursors[_currentPage + 1] = _lastDocument;
+        } else {
+          _lastDocument = null;
+        }
       } else {
         _lastDocument = null;
       }
-    } else {
-      _lastDocument = null;
+
+      if (!mounted) return;
+      setState(() {
+        // Exclude SME/DME screening leads — they are managed in SME/DME screening pages until promoted
+        _leads = snapshot.docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final screening = data['screening_status']?.toString().toLowerCase();
+          return screening == null || screening == 'promoted';
+        }).toList();
+        _isLoading = false;
+      });
+
+      // Batch-fetch creator usernames to avoid N+1 reads in itemBuilder
+      await _prefetchCreatorUsernames(snapshot.docs);
+    } catch (e, stack) {
+      debugPrint('Error fetching leads in leads.dart: $e\n$stack');
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _leads = [];
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error loading leads: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 8),
+        ),
+      );
     }
-
-    if (!mounted) return;
-    setState(() {
-      // Exclude SME/DME screening leads — they are managed in SME/DME screening pages until promoted
-      _leads = snapshot.docs.where((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        return data['screening_status'] == null;
-      }).toList();
-      _isLoading = false;
-    });
-
-    // Batch-fetch creator usernames to avoid N+1 reads in itemBuilder
-    await _prefetchCreatorUsernames(snapshot.docs);
   }
 
   Future<void> _prefetchCreatorUsernames(List<DocumentSnapshot> docs) async {

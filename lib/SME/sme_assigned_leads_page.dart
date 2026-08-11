@@ -1209,6 +1209,9 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
         'screened_by': widget.currentUid,
         'screened_at': FieldValue.serverTimestamp(),
       };
+      if (_data['created_at'] == null) {
+        updateMap['created_at'] = FieldValue.serverTimestamp();
+      }
       if (_data['assigned_to'] != null && (_data['assigned_to_name'] == null || _data['assigned_to_name'] == 'Unknown' || _data['assigned_to_name'] == '')) {
         updateMap['assigned_to'] = _data['assigned_to'];
       }
