@@ -16,6 +16,7 @@ import 'contact_picker_modal.dart';
 class FollowUpForm extends StatefulWidget {
   static const String DRAFT_KEY = 'leads_form_draft';
 
+  final String? docId;
   final String? initialName;
   final String? initialPhone;
   final String? initialAddress;
@@ -27,6 +28,7 @@ class FollowUpForm extends StatefulWidget {
 
   const FollowUpForm({
     super.key,
+    this.docId,
     this.initialName,
     this.initialPhone,
     this.initialAddress,
@@ -122,8 +124,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
         }
       }
 
-      final followUpRef = await FirebaseFirestore.instance.collection('follow_ups').add({
-        'date': DateTime.now(),
+      final payload = <String, dynamic>{
         'name': _nameController.text.trim(),
         'address': _addressController.text.trim(),
         'phone': _phoneController.text.trim(),
@@ -132,15 +133,23 @@ class _FollowUpFormState extends State<FollowUpForm> {
         'comments': _commentsController.text.trim(),
         'reminder': _reminderController.text.trim(),
         'branch': branch,
-        'created_by': user.uid,
-        'created_at': FieldValue.serverTimestamp(),
         'source': widget.source,
         if (widget.initialPlatform != null && widget.initialPlatform!.isNotEmpty) 'platform': widget.initialPlatform,
         if (widget.initialAdName != null && widget.initialAdName!.isNotEmpty) 'ad_name': widget.initialAdName,
-        // Track original reminder date for auto-reschedule logic
         if (parsedReminderDate != null) 'original_reminder_date': Timestamp.fromDate(parsedReminderDate),
-        'reminder_date_changed': false, // Flag for manual reschedule
-      });
+        'reminder_date_changed': false,
+      };
+
+      DocumentReference followUpRef;
+      if (widget.docId != null && widget.docId!.isNotEmpty) {
+        followUpRef = FirebaseFirestore.instance.collection('follow_ups').doc(widget.docId);
+        await followUpRef.update(payload);
+      } else {
+        payload['date'] = DateTime.now();
+        payload['created_by'] = user.uid;
+        payload['created_at'] = FieldValue.serverTimestamp();
+        followUpRef = await FirebaseFirestore.instance.collection('follow_ups').add(payload);
+      }
 
       await _clearDraft(); // Clear draft on successful save
 
@@ -196,22 +205,18 @@ class _FollowUpFormState extends State<FollowUpForm> {
         );
       }
 
-      Navigator.pop(context);
-
-      // Store daily_report (deduplicated per 12PM–12PM IST window)
-      await createDailyReportIfNeededLeads(
-        userId: user.uid,
-        documentId: followUpRef.id,
-        type: 'leads',
-      );
-
-      // After saving, navigate to LeadsPage
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => LeadsPage(branch: branch),
-          ),
-        );
+      if (widget.source == 'SME') {
+        if (mounted) Navigator.pop(context, true);
+      } else {
+        Navigator.pop(context);
+        // After saving, navigate to LeadsPage
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => LeadsPage(branch: branch),
+            ),
+          );
+        }
       }
     } catch (e) {
       // Handle error, show snackbar, etc.

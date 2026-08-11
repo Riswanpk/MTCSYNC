@@ -79,6 +79,12 @@ class _SmeDashboardState extends State<SmeDashboard>
 
       for (var doc in snapshot.docs) {
         final data = doc.data();
+        final branch = (data['branch'] ?? '').toString().trim().toLowerCase();
+        if (branch == 'admin') {
+          totalLeads--;
+          continue;
+        }
+
         final createdAt = data['created_at'] as Timestamp?;
         final screeningStatus = (data['screening_status'] ?? '').toString();
         final status = (data['status'] ?? '').toString();

@@ -37,6 +37,9 @@ class _SmeAdWiseReportPageState extends State<SmeAdWiseReportPage> {
 
       for (var doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
+        final branch = (data['branch'] ?? '').toString().trim().toLowerCase();
+        if (branch == 'admin') continue;
+
         String adName = (data['ad_name'] ?? '').toString().trim();
         if (adName.isEmpty) {
           adName = 'Unspecified / No Ad';

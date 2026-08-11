@@ -45,7 +45,7 @@ class _SmeDailyDashboardState extends State<SmeDailyDashboard> {
     final branches = <String>{};
     for (final doc in snapshot.docs) {
       final branch = doc.data()['branch'];
-      if (branch != null && branch.toString().trim().isNotEmpty) {
+      if (branch != null && branch.toString().trim().isNotEmpty && branch.toString().trim().toLowerCase() != 'admin') {
         branches.add(branch.toString());
       }
     }
@@ -80,6 +80,9 @@ class _SmeDailyDashboardState extends State<SmeDailyDashboard> {
       final rawData = doc.data();
       if (rawData == null) continue;
       final data = Map<String, dynamic>.from(rawData as Map);
+      final branch = (data['branch'] ?? '').toString().trim().toLowerCase();
+      if (branch == 'admin') continue;
+
       data['docId'] = doc.id;
       leads.add(data);
 

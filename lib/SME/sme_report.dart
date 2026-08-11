@@ -102,7 +102,12 @@ class _SmeReportPageState extends State<SmeReportPage> {
 
       final leadsSnap = await leadsQuery.get();
 
-      if (leadsSnap.docs.isEmpty) {
+      final allDocs = leadsSnap.docs.where((d) {
+        final b = (d.data() as Map<String, dynamic>)['branch'] ?? '';
+        return b.toString().trim().toLowerCase() != 'admin';
+      }).toList();
+
+      if (allDocs.isEmpty) {
         messenger.showSnackBar(
           const SnackBar(content: Text('No SME leads found for this selection.')),
         );
@@ -112,10 +117,10 @@ class _SmeReportPageState extends State<SmeReportPage> {
 
       // Build Excel
       if (_selectedBranch == 'All Branches') {
-        await _buildAllBranchesExcel(leadsSnap.docs, rangeStart, rangeEnd, messenger);
+        await _buildAllBranchesExcel(allDocs, rangeStart, rangeEnd, messenger);
       } else {
         await _buildSingleBranchExcel(
-            leadsSnap.docs, _selectedBranch!, rangeStart, rangeEnd, messenger);
+            allDocs, _selectedBranch!, rangeStart, rangeEnd, messenger);
       }
     } catch (e) {
       messenger.showSnackBar(

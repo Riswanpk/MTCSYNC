@@ -43,9 +43,11 @@ class _SmeUserStatsDashboardState extends State<SmeUserStatsDashboard> {
 
     for (final doc in snapshot.docs) {
       final data = doc.data();
+      final branch = data['branch'] as String? ?? '';
+      if (branch.trim().toLowerCase() == 'admin') continue;
+
       final assignedTo = data['assigned_to'] as String? ?? 'unknown';
       final assignedName = data['assigned_to_name'] as String? ?? 'Unknown';
-      final branch = data['branch'] as String? ?? '';
       final status = data['status'] as String? ?? 'In Progress';
       final screeningStatus = (data['screening_status'] ?? 'pending').toString().toLowerCase();
 

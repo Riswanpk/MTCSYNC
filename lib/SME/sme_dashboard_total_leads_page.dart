@@ -71,7 +71,7 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
       final data = doc.data();
       data['docId'] = doc.id;
       return data;
-    }).toList();
+    }).where((d) => (d['branch'] ?? '').toString().trim().toLowerCase() != 'admin').toList();
 
     _leads = leads;
 

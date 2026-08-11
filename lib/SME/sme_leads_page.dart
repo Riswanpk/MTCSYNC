@@ -114,10 +114,49 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
       _lastDocument = null;
     }
 
+    final missingUserIds = <String>{};
+    for (final doc in snapshot.docs) {
+      final d = doc.data() as Map<String, dynamic>;
+      final assignedName = d['assigned_to_name'] as String?;
+      final assignedToId = d['assigned_to'] as String?;
+      if ((assignedName == null || assignedName.isEmpty || assignedName == 'Unknown') &&
+          assignedToId != null &&
+          assignedToId.isNotEmpty &&
+          !_userNameCache.containsKey(assignedToId)) {
+        missingUserIds.add(assignedToId);
+      }
+    }
+
+    if (missingUserIds.isNotEmpty) {
+      _fetchUserNames(missingUserIds.toList());
+    }
+
     setState(() {
       _leads = snapshot.docs;
       _isLoading = false;
     });
+  }
+
+  final Map<String, String> _userNameCache = {};
+
+  Future<void> _fetchUserNames(List<String> ids) async {
+    for (var i = 0; i < ids.length; i += 30) {
+      final batch = ids.sublist(i, i + 30 > ids.length ? ids.length : i + 30);
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('users')
+            .where(FieldPath.documentId, whereIn: batch)
+            .get();
+        final map = <String, String>{};
+        for (final doc in snap.docs) {
+          final data = doc.data();
+          map[doc.id] = data['username'] as String? ?? data['name'] as String? ?? 'Unknown';
+        }
+        if (mounted) setState(() => _userNameCache.addAll(map));
+      } catch (e) {
+        debugPrint('Error fetching user names: $e');
+      }
+    }
   }
 
   void _resetAndFetch() {
@@ -372,8 +411,11 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                           final data = doc.data() as Map<String, dynamic>;
                           final name = data['name'] ?? 'No Name';
                           final priority = data['priority'] ?? 'High';
-                          final assignedToName =
-                              data['assigned_to_name'] ?? 'Unknown';
+                          final assignedToUid = data['assigned_to'] as String? ?? '';
+                          final rawAssignedName = data['assigned_to_name'] as String?;
+                          final assignedToName = (rawAssignedName != null && rawAssignedName.isNotEmpty && rawAssignedName != 'Unknown')
+                              ? rawAssignedName
+                              : (_userNameCache[assignedToUid] ?? 'Unassigned');
                           final branch = data['branch'] ?? '';
 
                           if (searchQuery.isNotEmpty &&

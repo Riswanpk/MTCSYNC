@@ -1192,6 +1192,7 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
       context,
       MaterialPageRoute(
         builder: (_) => FollowUpForm(
+          docId: widget.doc.id,
           initialName: _data['name'] ?? '',
           initialPhone: _data['phone'] ?? '',
           initialAddress: _data['address'] ?? '',
@@ -1203,14 +1204,18 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
       ),
     );
     if (result == true && mounted) {
-      await FirebaseFirestore.instance
-          .collection('follow_ups')
-          .doc(widget.doc.id)
-          .update({
+      final updateMap = <String, dynamic>{
         'screening_status': 'promoted',
         'screened_by': widget.currentUid,
         'screened_at': FieldValue.serverTimestamp(),
-      });
+      };
+      if (_data['assigned_to'] != null && (_data['assigned_to_name'] == null || _data['assigned_to_name'] == 'Unknown' || _data['assigned_to_name'] == '')) {
+        updateMap['assigned_to'] = _data['assigned_to'];
+      }
+      await FirebaseFirestore.instance
+          .collection('follow_ups')
+          .doc(widget.doc.id)
+          .update(updateMap);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Lead promoted successfully!'),
