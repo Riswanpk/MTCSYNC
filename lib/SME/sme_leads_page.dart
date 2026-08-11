@@ -170,6 +170,126 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
     }
   }
 
+  Future<void> _syncDisplayedLeadsUserNames() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final statusNotifier = ValueNotifier<String>('Scanning current leads...');
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        content: Row(
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(width: 16),
+            Expanded(
+              child: ValueListenableBuilder<String>(
+                valueListenable: statusNotifier,
+                builder: (_, msg, __) => Text(msg, style: const TextStyle(fontSize: 13)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    int updatedCount = 0;
+    try {
+      final missingDocs = <DocumentSnapshot>[];
+      final neededUserIds = <String>{};
+
+      for (final doc in _leads) {
+        final data = doc.data() as Map<String, dynamic>?;
+        if (data == null) continue;
+        final assignedTo = data['assigned_to'] as String?;
+        final currentName = data['assigned_to_name'] as String?;
+
+        if (assignedTo != null &&
+            assignedTo.isNotEmpty &&
+            (currentName == null || currentName.isEmpty || currentName == 'Unknown')) {
+          missingDocs.add(doc);
+          neededUserIds.add(assignedTo);
+        }
+      }
+
+      if (missingDocs.isEmpty) {
+        if (mounted) {
+          Navigator.pop(context);
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('All currently displayed leads already have assigned names!'),
+              backgroundColor: Color(0xFF005BAC),
+            ),
+          );
+        }
+        return;
+      }
+
+      statusNotifier.value = 'Fetching names for ${neededUserIds.length} users...';
+
+      final userMap = <String, String>{};
+      final idsList = neededUserIds.toList();
+      for (var i = 0; i < idsList.length; i += 30) {
+        final batch = idsList.sublist(i, i + 30 > idsList.length ? idsList.length : i + 30);
+        final userSnap = await FirebaseFirestore.instance
+            .collection('users')
+            .where(FieldPath.documentId, whereIn: batch)
+            .get();
+        for (final udoc in userSnap.docs) {
+          final udata = udoc.data();
+          userMap[udoc.id] = udata['username'] as String? ?? udata['name'] as String? ?? '';
+        }
+      }
+
+      statusNotifier.value = 'Saving assigned names to Firestore...';
+
+      WriteBatch batch = FirebaseFirestore.instance.batch();
+      int batchCount = 0;
+
+      for (final doc in missingDocs) {
+        final data = doc.data() as Map<String, dynamic>?;
+        final assignedTo = data?['assigned_to'] as String?;
+        final nameToSet = userMap[assignedTo];
+        if (nameToSet != null && nameToSet.isNotEmpty) {
+          batch.update(doc.reference, {'assigned_to_name': nameToSet});
+          batchCount++;
+          updatedCount++;
+
+          if (batchCount == 450) {
+            await batch.commit();
+            batch = FirebaseFirestore.instance.batch();
+            batchCount = 0;
+          }
+        }
+      }
+
+      if (batchCount > 0) {
+        await batch.commit();
+      }
+
+      if (mounted) {
+        Navigator.pop(context);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Successfully updated $updatedCount lead document(s) in Firestore!'),
+            backgroundColor: const Color(0xFF4CAF50),
+          ),
+        );
+        _fetchLeadsPage();
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Error updating leads: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   void _resetAndFetch() {
     _pageStartCursors.clear();
     _pageStartCursors[1] = null;
@@ -293,6 +413,11 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.sync_alt_rounded),
+            tooltip: 'Fix Unassigned Names',
+            onPressed: _syncDisplayedLeadsUserNames,
+          ),
           IconButton(
             icon: Icon(_isSearching ? Icons.close : Icons.search),
             onPressed: () {
