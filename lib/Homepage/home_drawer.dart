@@ -45,7 +45,7 @@ class HomeDrawer extends StatelessWidget {
           if (role == 'admin' || role == 'sync_head' || role == 'Sync Head')
             _buildManageUsersTile(context),
           if (role == 'dme_admin') _buildDmeUsersTile(context),
-          _buildSyncSmeUserNamesTile(context),
+          if (role == 'sme_user') _buildSyncSmeUserNamesTile(context),
 
           _buildInstructionsTile(context),
           _buildLogoutTile(context),
