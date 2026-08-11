@@ -115,12 +115,45 @@ class _SmeReportPageState extends State<SmeReportPage> {
         return;
       }
 
+      // Fetch and cache missing assigned user names if assigned_to_name is null/empty/'Unknown'
+      final missingUserIds = <String>{};
+      for (final doc in allDocs) {
+        final d = doc.data() as Map<String, dynamic>;
+        final assignedName = d['assigned_to_name'] as String?;
+        final assignedToId = d['assigned_to'] as String?;
+        if ((assignedName == null || assignedName.isEmpty || assignedName == 'Unknown') &&
+            assignedToId != null &&
+            assignedToId.isNotEmpty) {
+          missingUserIds.add(assignedToId);
+        }
+      }
+
+      final Map<String, String> userCache = {};
+      if (missingUserIds.isNotEmpty) {
+        final idsList = missingUserIds.toList();
+        for (var i = 0; i < idsList.length; i += 30) {
+          final batch = idsList.sublist(i, i + 30 > idsList.length ? idsList.length : i + 30);
+          try {
+            final snap = await FirebaseFirestore.instance
+                .collection('users')
+                .where(FieldPath.documentId, whereIn: batch)
+                .get();
+            for (final doc in snap.docs) {
+              final udata = doc.data();
+              userCache[doc.id] = udata['username'] as String? ?? udata['name'] as String? ?? 'Unknown';
+            }
+          } catch (e) {
+            debugPrint('Error fetching user names for report: $e');
+          }
+        }
+      }
+
       // Build Excel
       if (_selectedBranch == 'All Branches') {
-        await _buildAllBranchesExcel(allDocs, rangeStart, rangeEnd, messenger);
+        await _buildAllBranchesExcel(allDocs, rangeStart, rangeEnd, messenger, userCache);
       } else {
         await _buildSingleBranchExcel(
-            allDocs, _selectedBranch!, rangeStart, rangeEnd, messenger);
+            allDocs, _selectedBranch!, rangeStart, rangeEnd, messenger, userCache);
       }
     } catch (e) {
       messenger.showSnackBar(
@@ -343,6 +376,7 @@ class _SmeReportPageState extends State<SmeReportPage> {
     DateTime rangeStart,
     DateTime rangeEnd,
     ScaffoldMessengerState messenger,
+    Map<String, String> userCache,
   ) async {
     int promoted = 0;
     int rejected = 0;
@@ -374,7 +408,11 @@ class _SmeReportPageState extends State<SmeReportPage> {
         inProgress++;
       }
 
-      final assignedTo = d['assigned_to_name'] ?? 'Unknown';
+      final assignedToUid = d['assigned_to'] as String? ?? '';
+      final rawAssignedName = d['assigned_to_name'] as String?;
+      final assignedTo = (rawAssignedName != null && rawAssignedName.isNotEmpty && rawAssignedName != 'Unknown')
+          ? rawAssignedName
+          : (userCache[assignedToUid] ?? 'Unassigned');
       leadsByUser.putIfAbsent(assignedTo, () => []).add(lead);
     }
 
@@ -422,6 +460,7 @@ class _SmeReportPageState extends State<SmeReportPage> {
     DateTime rangeStart,
     DateTime rangeEnd,
     ScaffoldMessengerState messenger,
+    Map<String, String> userCache,
   ) async {
     final Map<String, List<QueryDocumentSnapshot>> leadsByBranch = {};
     for (final lead in leads) {
@@ -465,7 +504,11 @@ class _SmeReportPageState extends State<SmeReportPage> {
           inProgress++;
         }
 
-        final assignedTo = d['assigned_to_name'] ?? 'Unknown';
+        final assignedToUid = d['assigned_to'] as String? ?? '';
+        final rawAssignedName = d['assigned_to_name'] as String?;
+        final assignedTo = (rawAssignedName != null && rawAssignedName.isNotEmpty && rawAssignedName != 'Unknown')
+            ? rawAssignedName
+            : (userCache[assignedToUid] ?? 'Unassigned');
         leadsByUser.putIfAbsent(assignedTo, () => []).add(lead);
       }
 

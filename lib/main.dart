@@ -614,9 +614,23 @@ class NotificationController {
       final isEdit = receivedAction.buttonKeyPressed == 'EDIT_FOLLOWUP';
       final isTodo = notifType == 'todo';
       final isSmeLead = notifType == 'sme_lead' || notifType == 'sme_lead_assignment';
+      final isLeadTransfer = notifType == 'lead_transfer';
 
       if (isSmeLead) {
-        _doPush((_) => const SmeAssignedLeadsPage());
+        _doPush((_) => SmeLeadDetailPageFromId(docId: docId));
+      } else if (isLeadTransfer) {
+        // Check doc source to route to SME Lead Detail Page or PresentFollowUp
+        try {
+          final snap = await FirebaseFirestore.instance.collection('follow_ups').doc(docId).get();
+          final source = (snap.data()?['source'] ?? '').toString().toUpperCase();
+          if (source == 'SME') {
+            _doPush((_) => SmeLeadDetailPageFromId(docId: docId));
+          } else {
+            _doPush((_) => PresentFollowUp(docId: docId));
+          }
+        } catch (_) {
+          _doPush((_) => PresentFollowUp(docId: docId));
+        }
       } else if (isEdit) {
         _doPush((_) => PresentFollowUp(docId: docId, editMode: true));
       } else if (isTodo || ((channelKey == 'todo_reminder_channel' || channelKey == 'todos_pending_channel' || channelKey == 'reminder_channel_v2' || channelKey == 'reminder_channel' || channelKey == 'basic_channel' || channelKey == 'basic_channel_v2') && isTodo)) {

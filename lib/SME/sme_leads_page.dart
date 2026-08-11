@@ -48,9 +48,20 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
   }
 
   Future<void> _loadBranches() async {
-    final branches = await UserCacheService.instance.getBranches();
+    final snapshot = await FirebaseFirestore.instance
+        .collection('follow_ups')
+        .where('source', whereIn: ['sme', 'SME'])
+        .get();
+    final branches = <String>{};
+    for (final doc in snapshot.docs) {
+      final b = doc.data()['branch'];
+      if (b != null && b.toString().trim().isNotEmpty) {
+        branches.add(b.toString());
+      }
+    }
+    final sorted = branches.toList()..sort();
     setState(() {
-      branchOptions = ['All', ...branches];
+      branchOptions = ['All', ...sorted];
       selectedBranch = 'All';
       _leads = [];
     });

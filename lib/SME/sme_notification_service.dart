@@ -85,7 +85,11 @@ class SmeNotificationService {
                     ? 'core_task'
                     : (isCoreTaskCompleted
                         ? 'core_task_complete'
-                        : (isTodo ? 'todo' : 'sme_lead_assignment'))),
+                        : (isTodo
+                            ? 'todo'
+                            : (type == 'lead_transfer'
+                                ? 'lead_transfer'
+                                : 'sme_lead_assignment')))),
           },
         ),
       );
