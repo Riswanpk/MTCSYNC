@@ -92,7 +92,7 @@ class _SyncHeadAllLeadsPageState extends State<SyncHeadAllLeadsPage> {
         final data = doc.data() as Map<String, dynamic>;
         data['docId'] = doc.id;
         return data;
-      }).toList();
+      }).where((d) => (d['branch'] ?? '').toString().trim().toLowerCase() != 'admin').toList();
 
       // Sort by created_at descending
       leads.sort((a, b) {

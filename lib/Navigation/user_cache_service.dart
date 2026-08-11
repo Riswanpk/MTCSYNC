@@ -116,7 +116,7 @@ class UserCacheService {
     }).toList();
     _branches = _allUsers!
         .map((u) => u['branch'] as String)
-        .where((b) => b.isNotEmpty)
+        .where((b) => b.isNotEmpty && b.trim().toLowerCase() != 'admin')
         .toSet()
         .toList()
       ..sort();
