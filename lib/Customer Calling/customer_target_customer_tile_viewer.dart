@@ -206,7 +206,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     }
 
     customer.forEach((key, value) {
-      if (key == 'slno' || key == 'remarks' || key == 'callMade' || key == 'callDate' || key == 'contact' || key == 'contact1' || key == 'contact2' || key == 'address' || key == 'lastCalledNumber' || key == 'lastRemarks') return;
+      if (key == 'slno' || key == 'remarks' || key == 'callMade' || key == 'callDate' || key == 'contact' || key == 'contact1' || key == 'contact2' || key == 'address' || key == 'lastCalledNumber' || key == 'lastRemarks' || key == 'pendingDeletion') return;
       if (key != 'name') {
         fields.add(MapEntry(key, value));
       }
