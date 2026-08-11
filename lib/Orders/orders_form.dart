@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../Leads/leads_helpers.dart';
 import 'orders.dart';
@@ -296,9 +297,29 @@ class _OrderFormPageState extends State<OrderFormPage> {
                         controller: controller,
                         focusNode: focusNode,
                         keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Phone',
-                          prefixIcon: Icon(Icons.phone),
+                          prefixIcon: const Icon(Icons.phone),
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.paste_rounded, color: Color(0xFF005BAC), size: 19),
+                            tooltip: 'Paste from clipboard',
+                            onPressed: () async {
+                              final clipboardData = await Clipboard.getData('text/plain');
+                              if (clipboardData != null && clipboardData.text != null) {
+                                final digits = RegExp(r'\d').allMatches(clipboardData.text!).map((m) => m.group(0)).join();
+                                if (digits.length >= 10) {
+                                  final tenDigits = digits.substring(digits.length - 10);
+                                  final formatted = '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
+                                  _phoneController.text = formatted;
+                                  _phoneController.selection = TextSelection.fromPosition(TextPosition(offset: formatted.length));
+                                } else {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Clipboard does not contain 10 digits')));
+                                  }
+                                }
+                              }
+                            },
+                          ),
                         ),
                         validator: (value) {
                           if (value == null || value.isEmpty || !value.startsWith('+91 ')) {
