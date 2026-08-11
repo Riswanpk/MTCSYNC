@@ -379,17 +379,168 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
     );
   }
 
-  /// Fetches the branch for a user by matching their email in the users collection.
-  Future<String?> getBranchByEmail(String email) async {
-    final query = await FirebaseFirestore.instance
-        .collection('users')
-        .where('email', isEqualTo: email)
-        .limit(1)
-        .get();
-    if (query.docs.isNotEmpty) {
-      return query.docs.first.data()['branch'] as String?;
+  IconData _getRoleIconData(String role) {
+    switch (role) {
+      case 'admin':
+        return Icons.security;
+      case 'manager':
+        return Icons.supervisor_account;
+      case 'asst_manager':
+        return Icons.manage_accounts;
+      case 'sync_head':
+        return Icons.hub;
+      case 'core_team':
+        return Icons.group_work_rounded;
+      case 'dme_admin':
+        return Icons.admin_panel_settings;
+      case 'dme_user':
+        return Icons.person_outline;
+      case 'sme':
+        return Icons.work_outline;
+      case 'supersale_admin':
+        return Icons.star_border;
+      default:
+        return Icons.person;
     }
-    return null;
+  }
+
+  Color _getRoleColor(String role) {
+    switch (role) {
+      case 'admin':
+        return Colors.deepPurple;
+      case 'manager':
+        return Colors.orange;
+      case 'asst_manager':
+        return Colors.deepOrange;
+      case 'sync_head':
+        return Colors.blue;
+      case 'core_team':
+        return Colors.pink;
+      case 'dme_admin':
+        return Colors.indigo;
+      case 'dme_user':
+        return Colors.teal;
+      case 'sme':
+        return Colors.purple;
+      case 'supersale_admin':
+        return Colors.amber.shade700;
+      default:
+        return Colors.green;
+    }
+  }
+
+  String _formatRoleName(String role) {
+    switch (role) {
+      case 'core_team':
+        return 'Core Team';
+      case 'asst_manager':
+        return 'Asst Manager';
+      case 'sync_head':
+        return 'Sync Head';
+      case 'dme_admin':
+        return 'DME Admin';
+      case 'dme_user':
+        return 'DME User';
+      case 'supersale_admin':
+        return 'Supersale Admin';
+      case 'sme':
+        return 'SME';
+      default:
+        return role.isNotEmpty ? role[0].toUpperCase() + role.substring(1) : role;
+    }
+  }
+
+  void _confirmUppercaseAllUsernames() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Uppercase All Usernames'),
+        content: const Text(
+            'Are you sure you want to convert ALL usernames to UPPERCASE? This action will update all user records in Firestore.'),
+        actions: [
+          TextButton(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF005BAC),
+            ),
+            child: const Text('Uppercase All',
+                style: TextStyle(color: Colors.white)),
+            onPressed: () async {
+              Navigator.of(context).pop();
+              await _uppercaseAllUsernames();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _uppercaseAllUsernames() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      final snapshot = await FirebaseFirestore.instance.collection('users').get();
+      int updateCount = 0;
+      WriteBatch batch = FirebaseFirestore.instance.batch();
+      int batchSize = 0;
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final currentName = (data['username'] ?? '').toString();
+        final upperName = currentName.toUpperCase();
+        if (currentName != upperName && upperName.isNotEmpty) {
+          batch.update(doc.reference, {'username': upperName});
+          updateCount++;
+          batchSize++;
+          if (batchSize >= 450) {
+            await batch.commit();
+            batch = FirebaseFirestore.instance.batch();
+            batchSize = 0;
+          }
+        }
+      }
+
+      if (batchSize > 0) {
+        await batch.commit();
+      }
+
+      await UserCacheService.instance.refreshAllUsers();
+
+      if (mounted) Navigator.of(context).pop();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Updated $updateCount usernames to ALL CAPS.'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        _loadUsers();
+      }
+    } catch (e) {
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating usernames: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -413,6 +564,11 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.text_fields),
+            tooltip: 'Uppercase All Usernames',
+            onPressed: _confirmUppercaseAllUsernames,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh Users',
@@ -482,9 +638,9 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16)),
                     child: ListView.separated(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(12),
                       itemCount: users.length,
-                      separatorBuilder: (_, __) => const Divider(height: 24),
+                      separatorBuilder: (_, __) => const Divider(height: 16),
                       itemBuilder: (context, index) {
                         final user = users[index];
                         final username = user['username'] ?? '';
@@ -493,6 +649,9 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                         final docId = user.id; // <-- Use document ID
 
                         return ListTile(
+                          minLeadingWidth: 26,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           onTap: () async {
                             final result = await Navigator.push(
                               context,
@@ -506,6 +665,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                             if (result == true) _loadUsers();
                           },
                           leading: CircleAvatar(
+                            radius: 13,
                             backgroundColor: const Color(0xFF005BAC),
                             child: Text(
                               username.isNotEmpty
@@ -513,98 +673,79 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                   : '?',
                               style: const TextStyle(
                                   color: Colors.white,
-                                  fontWeight: FontWeight.bold),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11),
                             ),
                           ),
                           title: Text(
                             username,
                             style: const TextStyle(
-                                fontWeight: FontWeight.w600, fontSize: 13),
+                                fontWeight: FontWeight.w600, fontSize: 12.5),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           subtitle: Text(
                             email,
-                            style: TextStyle(color: Colors.grey[600]),
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 10.5,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               DropdownButton<String>(
-                                value: role,
+                                value: _roles.contains(role) ? role : _roles.first,
+                                isDense: true,
+                                underline: Container(),
                                 borderRadius: BorderRadius.circular(12),
                                 dropdownColor: isDark
                                     ? const Color(0xFF23272F)
                                     : Colors.white,
-                                style: TextStyle(
-                                  color: isDark ? Colors.white : Colors.black,
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: 13,
-                                ),
-                                underline: Container(),
+                                selectedItemBuilder: (context) {
+                                  return _roles.map((r) {
+                                    return Container(
+                                      alignment: Alignment.centerLeft,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            _getRoleIconData(r),
+                                            color: _getRoleColor(r),
+                                            size: 14,
+                                          ),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            _formatRoleName(r),
+                                            style: TextStyle(
+                                              color: isDark ? Colors.white : Colors.black87,
+                                              fontWeight: FontWeight.w500,
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList();
+                                },
                                 items: _roles
                                     .map((r) => DropdownMenuItem(
                                           value: r,
                                           child: Row(
+                                            mainAxisSize: MainAxisSize.min,
                                             children: [
                                               Icon(
-                                                r == 'admin'
-                                                    ? Icons.security
-                                                    : r == 'manager'
-                                                        ? Icons
-                                                            .supervisor_account
-                                                        : r == 'asst_manager'
-                                                            ? Icons
-                                                                .manage_accounts
-                                                            : r == 'sync_head'
-                                                                ? Icons.hub
-                                                                : r ==
-                                                                        'core_team'
-                                                                    ? Icons
-                                                                        .group_work_rounded
-                                                                    : r ==
-                                                                            'dme_admin'
-                                                                        ? Icons
-                                                                            .admin_panel_settings
-                                                                        : r == 'dme_user'
-                                                                            ? Icons.person_outline
-                                                                            : Icons.person,
-                                                color: r == 'admin'
-                                                    ? Colors.deepPurple
-                                                    : r == 'manager'
-                                                        ? Colors.orange
-                                                        : r == 'asst_manager'
-                                                            ? Colors.deepOrange
-                                                            : r == 'sync_head'
-                                                                ? Colors.blue
-                                                                : r ==
-                                                                        'core_team'
-                                                                    ? Colors
-                                                                        .pink
-                                                                    : r ==
-                                                                            'dme_admin'
-                                                                        ? Colors
-                                                                            .indigo
-                                                                        : r == 'dme_user'
-                                                                            ? Colors.teal
-                                                                            : Colors.green,
-                                                size: 20,
+                                                _getRoleIconData(r),
+                                                color: _getRoleColor(r),
+                                                size: 16,
                                               ),
-                                              const SizedBox(width: 8),
-                                              Text(r == 'core_team'
-                                                  ? 'Core Team'
-                                                  : r == 'asst_manager'
-                                                      ? 'Asst Manager'
-                                                      : r == 'sync_head'
-                                                          ? 'Sync Head'
-                                                          : r == 'dme_admin'
-                                                              ? 'DME Admin'
-                                                              : r == 'dme_user'
-                                                                  ? 'DME User'
-                                                                  : r ==
-                                                                          'supersale_admin'
-                                                                      ? 'Supersale Admin'
-                                                                      : r[0].toUpperCase() +
-                                                                          r.substring(
-                                                                              1)),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                _formatRoleName(r),
+                                                style: const TextStyle(fontSize: 12),
+                                              ),
                                             ],
                                           ),
                                         ))
@@ -615,10 +756,13 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                   }
                                 },
                               ),
+                              const SizedBox(width: 2),
                               IconButton(
-                                icon:
-                                    const Icon(Icons.delete, color: Colors.red),
+                                icon: const Icon(Icons.delete_outline,
+                                    color: Colors.red, size: 18),
                                 tooltip: 'Delete User',
+                                constraints: const BoxConstraints(),
+                                padding: const EdgeInsets.all(4),
                                 onPressed: () => _confirmDeleteUser(
                                     docId, email), // <-- Pass document ID
                               ),
@@ -629,8 +773,6 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                           tileColor: isDark
                               ? const Color(0xFF23272F)
                               : Colors.grey[100],
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 10),
                         );
                       },
                     ),

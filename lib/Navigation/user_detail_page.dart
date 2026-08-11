@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../DME/services/dme_supabase_service.dart';
+import 'user_cache_service.dart';
 
 class UserDetailPage extends StatefulWidget {
   final String userId;
@@ -35,11 +36,19 @@ class _UserDetailPageState extends State<UserDetailPage> {
 
   String? _selectedRole;
   String? _selectedBranch;
+  late TextEditingController _usernameController;
 
   @override
   void initState() {
     super.initState();
+    _usernameController = TextEditingController();
     _loadUserData();
+  }
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUserData() async {
@@ -58,6 +67,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
       if (mounted) {
         setState(() {
           _userData = userDoc.data();
+          _usernameController.text = _userData?['username'] ?? '';
           _selectedRole = _userData?['role'] ?? 'sales';
           _selectedBranch = _userData?['branch'];
           _appVersion = versionDoc.data()?['appVersion'];
@@ -82,9 +92,13 @@ class _UserDetailPageState extends State<UserDetailPage> {
 
     setState(() => _isSaving = true);
     try {
+      final newUsername = _usernameController.text.trim();
       final updates = <String, dynamic>{
         'role': _selectedRole,
       };
+      if (newUsername.isNotEmpty) {
+        updates['username'] = newUsername;
+      }
       if (_selectedBranch != null) {
         updates['branch'] = _selectedBranch;
       }
@@ -97,6 +111,11 @@ class _UserDetailPageState extends State<UserDetailPage> {
       // Handle DME role assignments
       if (_selectedRole == 'dme_admin' || _selectedRole == 'dme_user') {
         await _handleDmeRoleAssignment();
+      }
+
+      await UserCacheService.instance.refreshAllUsers();
+      if (widget.userId == FirebaseAuth.instance.currentUser?.uid) {
+        await UserCacheService.instance.refresh();
       }
 
       if (mounted) {
@@ -125,8 +144,11 @@ class _UserDetailPageState extends State<UserDetailPage> {
 
   bool get _hasChanges {
     if (_userData == null) return false;
+    final currentName = (_userData!['username'] ?? '').toString().trim();
+    final newName = _usernameController.text.trim();
     return _selectedRole != (_userData!['role'] ?? 'sales') ||
-        _selectedBranch != _userData!['branch'];
+        _selectedBranch != _userData!['branch'] ||
+        newName != currentName;
   }
 
   Future<void> _handleDmeRoleAssignment() async {
@@ -134,7 +156,9 @@ class _UserDetailPageState extends State<UserDetailPage> {
       final dmeService = DmeSupabaseService.instance;
       final firebaseUid = widget.userId;
       final email = _userData?['email'] ?? '';
-      final username = _userData?['username'] ?? '';
+      final username = _usernameController.text.trim().isNotEmpty
+          ? _usernameController.text.trim()
+          : (_userData?['username'] ?? '');
       final previousRole = _userData?['role'] ?? 'sales';
 
       // Check if user already exists in Supabase
@@ -215,6 +239,44 @@ class _UserDetailPageState extends State<UserDetailPage> {
         );
       }
     }
+  }
+
+  void _showEditUsernameDialog() {
+    final controller = TextEditingController(text: _usernameController.text);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Username'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Username',
+            border: OutlineInputBorder(),
+          ),
+          textCapitalization: TextCapitalization.words,
+        ),
+        actions: [
+          TextButton(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: _primaryBlue),
+            child: const Text('Update', style: TextStyle(color: Colors.white)),
+            onPressed: () {
+              final newName = controller.text.trim();
+              if (newName.isNotEmpty) {
+                setState(() {
+                  _usernameController.text = newName;
+                });
+              }
+              Navigator.of(context).pop();
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   Future<List<int>?> _showBranchSelectorDialog(
@@ -312,7 +374,9 @@ class _UserDetailPageState extends State<UserDetailPage> {
   }
 
   Widget _buildProfileHeader(bool isDark) {
-    final username = _userData?['username'] ?? 'Unknown';
+    final username = _usernameController.text.isNotEmpty
+        ? _usernameController.text
+        : (_userData?['username'] ?? 'Unknown');
     final email = _userData?['email'] ?? '';
 
     return Column(
@@ -330,13 +394,30 @@ class _UserDetailPageState extends State<UserDetailPage> {
           ),
         ),
         const SizedBox(height: 14),
-        Text(
-          username,
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: isDark ? Colors.white : Colors.black87,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                username,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 4),
+            IconButton(
+              icon: const Icon(Icons.edit, size: 20, color: _primaryBlue),
+              tooltip: 'Edit Username',
+              constraints: const BoxConstraints(),
+              padding: const EdgeInsets.all(4),
+              onPressed: _showEditUsernameDialog,
+            ),
+          ],
         ),
         const SizedBox(height: 4),
         GestureDetector(
@@ -470,6 +551,36 @@ class _UserDetailPageState extends State<UserDetailPage> {
                 fontWeight: FontWeight.bold,
                 color: isDark ? Colors.white : Colors.black87,
               ),
+            ),
+            const SizedBox(height: 16),
+            // Username field
+            Text(
+              'Username',
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                color: isDark ? Colors.white60 : Colors.grey[700],
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _usernameController,
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: isDark ? const Color(0xFF181A20) : Colors.grey[100],
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                prefixIcon: const Icon(Icons.person_outline, size: 20),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              ),
+              style: TextStyle(
+                color: isDark ? Colors.white : Colors.black87,
+                fontSize: 14,
+              ),
+              onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 16),
             // Role dropdown

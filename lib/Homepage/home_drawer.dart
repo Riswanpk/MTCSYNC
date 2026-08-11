@@ -45,7 +45,8 @@ class HomeDrawer extends StatelessWidget {
           if (role == 'admin' || role == 'sync_head' || role == 'Sync Head')
             _buildManageUsersTile(context),
           if (role == 'dme_admin') _buildDmeUsersTile(context),
-          if (role == 'sme_user') _buildSyncSmeUserNamesTile(context),
+          if (role != null && (role!.toLowerCase() == 'sme' || role!.toLowerCase() == 'sme_user'))
+            _buildSyncSmeUserNamesTile(context),
 
           _buildInstructionsTile(context),
           _buildLogoutTile(context),
@@ -88,13 +89,16 @@ class HomeDrawer extends StatelessWidget {
 
         int updatedCount = 0;
         try {
-          // Query all SME follow_ups
+          final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
+
+          // Query SME follow_ups created in the last 7 days
           final snap = await FirebaseFirestore.instance
               .collection('follow_ups')
               .where('source', whereIn: ['sme', 'SME'])
+              .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(sevenDaysAgo))
               .get();
 
-          statusNotifier.value = 'Analyzing ${snap.docs.length} SME leads...';
+          statusNotifier.value = 'Analyzing ${snap.docs.length} SME leads from past 7 days...';
 
           final missingDocs = <QueryDocumentSnapshot>[];
           final neededUserIds = <String>{};
