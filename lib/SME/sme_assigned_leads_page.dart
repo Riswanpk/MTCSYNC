@@ -29,7 +29,6 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
   String _searchQuery = '';
   bool _isSearching = false;
   bool _isLoading = false;
-  bool _isDetailPageOpen = false;
 
   List<DocumentSnapshot> _leads = [];
   DocumentSnapshot? _lastDocument;
@@ -65,51 +64,15 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      if (_isDetailPageOpen) return;
-      _autoScanCallLog();
-    }
-  }
-
-  /// Silently scans today's call log and detects called SME leads
-  Future<void> _autoScanCallLog() async {
-    if (_leads.isEmpty) return;
-
-    List<Map<String, dynamic>> leadMaps = _leads.map((doc) {
-      final map = Map<String, dynamic>.from(doc.data() as Map<String, dynamic>);
-      map['_docSnapshot'] = doc;
-      map['_assignerName'] = _assignerNameCache[map['assigned_by'] ?? ''] ?? 'SME User';
-      return map;
-    }).toList();
-
-    final newlyCalled = await SmeCallScannerService.scanTodayCallLog(leadMaps, currentUid: _currentUid);
-    if (newlyCalled.isNotEmpty && mounted) {
-      _showRemarksPromptDialog(newlyCalled);
-    }
-  }
-
-  void _showRemarksPromptDialog(List<Map<String, dynamic>> leads) {
-    showDialog(
-      context: context,
-      builder: (ctx) => SmeCallDetectedRemarksDialog(
-        leads: leads,
-        currentUid: _currentUid ?? '',
-        titleText: 'Call Detected!',
-        onLeadSelected: () {
-          _isDetailPageOpen = true;
-        },
-        onRefreshNeeded: () {
-          _isDetailPageOpen = false;
-          _resetAndFetch();
-        },
-      ),
-    );
+    // Auto-detection on app resume disabled. Users can tap the reload button to check for calls.
   }
 
   Future<void> _scanCallLogAndShowMatches() async {
     if (_leads.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No leads to check.'), backgroundColor: Colors.orange),
+        const SnackBar(
+            content: Text('No leads to check.'),
+            backgroundColor: Colors.orange),
       );
       return;
     }
@@ -130,14 +93,17 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
 
     try {
       List<Map<String, dynamic>> leadMaps = _leads.map((doc) {
-        final map = Map<String, dynamic>.from(doc.data() as Map<String, dynamic>);
+        final map =
+            Map<String, dynamic>.from(doc.data() as Map<String, dynamic>);
         map['_docSnapshot'] = doc;
-        map['_assignerName'] = _assignerNameCache[map['assigned_by'] ?? ''] ?? 'SME User';
+        map['_assignerName'] =
+            _assignerNameCache[map['assigned_by'] ?? ''] ?? 'SME User';
         return map;
       }).toList();
 
       List<Map<String, dynamic>> matchedLeads =
-          await SmeCallScannerService.scanTodayCallLog(leadMaps, currentUid: _currentUid);
+          await SmeCallScannerService.scanTodayCallLog(leadMaps,
+              currentUid: _currentUid);
 
       if (!mounted) return;
       Navigator.of(context).pop();
@@ -161,11 +127,7 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
             leads: matchedLeads,
             currentUid: _currentUid ?? '',
             titleText: 'Calls Detected',
-            onLeadSelected: () {
-              _isDetailPageOpen = true;
-            },
             onRefreshNeeded: () {
-              _isDetailPageOpen = false;
               _resetAndFetch();
             },
           ),
@@ -176,7 +138,9 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
       debugPrint('Error scanning call log: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error scanning call log: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error scanning call log: $e'),
+              backgroundColor: Colors.red),
         );
       }
     }
@@ -216,7 +180,8 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
     }
 
     if (_selectedFilter != 'All' && _selectedFilter != 'Pending') {
-      query = query.where('screening_status', isEqualTo: _selectedFilter.toLowerCase());
+      query = query.where('screening_status',
+          isEqualTo: _selectedFilter.toLowerCase());
     }
 
     query = query.orderBy('created_at', descending: true);
@@ -249,7 +214,8 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
     if (_selectedFilter == 'Pending') {
       docs = docs.where((doc) {
         final data = doc.data() as Map<String, dynamic>;
-        final status = (data['screening_status'] ?? 'pending').toString().toLowerCase();
+        final status =
+            (data['screening_status'] ?? 'pending').toString().toLowerCase();
         return status == 'pending';
       }).toList();
     }
@@ -264,7 +230,8 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
 
   Future<void> _prefetchAssignerNames(List<DocumentSnapshot> docs) async {
     final ids = docs
-        .map((d) => (d.data() as Map<String, dynamic>)['assigned_by'] as String?)
+        .map(
+            (d) => (d.data() as Map<String, dynamic>)['assigned_by'] as String?)
         .whereType<String>()
         .where((id) => id.isNotEmpty && !_assignerNameCache.containsKey(id))
         .toSet()
@@ -314,7 +281,8 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
               )
             : const Text(
                 'SME Leads',
-                style: TextStyle(fontWeight: FontWeight.w700, fontFamily: 'Montserrat'),
+                style: TextStyle(
+                    fontWeight: FontWeight.w700, fontFamily: 'Montserrat'),
               ),
         flexibleSpace: Container(
           decoration: const BoxDecoration(
@@ -356,7 +324,10 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
               color: isDark ? const Color(0xFF1A2A2A) : Colors.white,
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 12, offset: const Offset(0, 4)),
+                BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.07),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4)),
               ],
             ),
             child: SingleChildScrollView(
@@ -376,28 +347,41 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
                       },
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 180),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
                           color: isActive
                               ? color.withValues(alpha: 0.15)
-                              : (isDark ? Colors.white.withValues(alpha: 0.06) : Colors.grey.withValues(alpha: 0.08)),
+                              : (isDark
+                                  ? Colors.white.withValues(alpha: 0.06)
+                                  : Colors.grey.withValues(alpha: 0.08)),
                           borderRadius: BorderRadius.circular(22),
                           border: Border.all(
-                            color: isActive ? color.withValues(alpha: 0.6) : Colors.grey.withValues(alpha: 0.25),
+                            color: isActive
+                                ? color.withValues(alpha: 0.6)
+                                : Colors.grey.withValues(alpha: 0.25),
                             width: 1.5,
                           ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(icon, size: 14, color: isActive ? color : Colors.grey.shade500),
+                            Icon(icon,
+                                size: 14,
+                                color: isActive ? color : Colors.grey.shade500),
                             const SizedBox(width: 6),
                             Text(
                               filter,
                               style: TextStyle(
                                 fontSize: 13,
-                                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                                color: isActive ? color : (isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                                fontWeight: isActive
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                color: isActive
+                                    ? color
+                                    : (isDark
+                                        ? Colors.grey.shade400
+                                        : Colors.grey.shade600),
                               ),
                             ),
                           ],
@@ -426,10 +410,14 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
                                     width: 88,
                                     height: 88,
                                     decoration: BoxDecoration(
-                                      color: _brandPrimary.withValues(alpha: 0.08),
+                                      color:
+                                          _brandPrimary.withValues(alpha: 0.08),
                                       shape: BoxShape.circle,
                                     ),
-                                    child: Icon(Icons.inbox_rounded, size: 44, color: _brandPrimary.withValues(alpha: 0.45)),
+                                    child: Icon(Icons.inbox_rounded,
+                                        size: 44,
+                                        color: _brandPrimary.withValues(
+                                            alpha: 0.45)),
                                   ),
                                   const SizedBox(height: 20),
                                   Text(
@@ -437,12 +425,16 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
                                     style: TextStyle(
                                       fontSize: 17,
                                       fontWeight: FontWeight.w600,
-                                      color: isDark ? Colors.white70 : const Color(0xFF143A52),
+                                      color: isDark
+                                          ? Colors.white70
+                                          : const Color(0xFF143A52),
                                     ),
                                   ),
                                   const SizedBox(height: 6),
                                   Text('SME-assigned leads will appear here',
-                                      style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.grey.shade500)),
                                 ],
                               ),
                             ),
@@ -456,7 +448,8 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
                             final doc = _leads[index];
                             final data = doc.data() as Map<String, dynamic>;
                             final name = data['name'] ?? 'No Name';
-                            if (_searchQuery.isNotEmpty && !name.toLowerCase().contains(_searchQuery)) {
+                            if (_searchQuery.isNotEmpty &&
+                                !name.toLowerCase().contains(_searchQuery)) {
                               return const SizedBox.shrink();
                             }
                             return _buildLeadCard(doc, data, isDark);
@@ -471,24 +464,41 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1A2A2A) : Colors.white,
                 borderRadius: BorderRadius.circular(40),
-                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 8, offset: const Offset(0, 2))],
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.07),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2))
+                ],
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _paginationButton(icon: Icons.chevron_left_rounded, enabled: _currentPage > 1,
-                      onTap: () => _fetchLeadsPage(prevPage: true), isDark: isDark),
+                  _paginationButton(
+                      icon: Icons.chevron_left_rounded,
+                      enabled: _currentPage > 1,
+                      onTap: () => _fetchLeadsPage(prevPage: true),
+                      isDark: isDark),
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 14),
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
-                    decoration: BoxDecoration(color: _brandPrimary, borderRadius: BorderRadius.circular(20)),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+                    decoration: BoxDecoration(
+                        color: _brandPrimary,
+                        borderRadius: BorderRadius.circular(20)),
                     child: Text('Page $_currentPage',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white)),
                   ),
-                  _paginationButton(icon: Icons.chevron_right_rounded,
-                      enabled: _lastDocument != null && _leads.length == _leadsPerPage,
-                      onTap: () => _fetchLeadsPage(nextPage: true), isDark: isDark),
+                  _paginationButton(
+                      icon: Icons.chevron_right_rounded,
+                      enabled: _lastDocument != null &&
+                          _leads.length == _leadsPerPage,
+                      onTap: () => _fetchLeadsPage(nextPage: true),
+                      isDark: isDark),
                 ],
               ),
             ),
@@ -497,7 +507,8 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
     );
   }
 
-  Widget _buildLeadCard(DocumentSnapshot doc, Map<String, dynamic> data, bool isDark) {
+  Widget _buildLeadCard(
+      DocumentSnapshot doc, Map<String, dynamic> data, bool isDark) {
     final name = data['name'] ?? 'No Name';
     final phone = data['phone'] ?? '';
     final priority = data['priority'] ?? 'High';
@@ -537,7 +548,12 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF1C2C3C) : Colors.white,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.07), blurRadius: 10, offset: const Offset(0, 3))],
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.07),
+                blurRadius: 10,
+                offset: const Offset(0, 3))
+          ],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
@@ -560,72 +576,114 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
                                   style: TextStyle(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w700,
-                                      color: isDark ? Colors.white : const Color(0xFF0D2B40),
+                                      color: isDark
+                                          ? Colors.white
+                                          : const Color(0xFF0D2B40),
                                       height: 1.3)),
                             ),
                             const SizedBox(width: 8),
                             if (data['pendingDeletion'] == true) ...[
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: Colors.red.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: const Text(
                                   'PENDING DELETION',
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.red),
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.red),
                                 ),
                               ),
                               const SizedBox(width: 6),
                             ],
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                  color: statusColor.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(20)),
-                              child: Text(_screeningStatusLabel(screeningStatus),
-                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: statusColor, letterSpacing: 0.2)),
+                                  color: statusColor.withValues(alpha: 0.14),
+                                  borderRadius: BorderRadius.circular(20)),
+                              child: Text(
+                                  _screeningStatusLabel(screeningStatus),
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: statusColor,
+                                      letterSpacing: 0.2)),
                             ),
                           ],
                         ),
                         const SizedBox(height: 6),
                         if (phone.isNotEmpty)
                           Row(children: [
-                            Icon(Icons.phone_rounded, size: 12, color: Colors.grey.shade400),
+                            Icon(Icons.phone_rounded,
+                                size: 12, color: Colors.grey.shade400),
                             const SizedBox(width: 4),
                             Text(phone,
-                                style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600, fontWeight: FontWeight.w500)),
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDark
+                                        ? Colors.grey.shade400
+                                        : Colors.grey.shade600,
+                                    fontWeight: FontWeight.w500)),
                           ]),
                         const SizedBox(height: 4),
                         Row(children: [
-                          Icon(Icons.calendar_today_rounded, size: 11, color: Colors.grey.shade400),
+                          Icon(Icons.calendar_today_rounded,
+                              size: 11, color: Colors.grey.shade400),
                           const SizedBox(width: 4),
-                          Text(formattedDate, style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade400 : Colors.grey.shade500)),
+                          Text(formattedDate,
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: isDark
+                                      ? Colors.grey.shade400
+                                      : Colors.grey.shade500)),
                           const SizedBox(width: 12),
-                          Icon(Icons.person_outline_rounded, size: 12, color: Colors.grey.shade400),
+                          Icon(Icons.person_outline_rounded,
+                              size: 12, color: Colors.grey.shade400),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text('by $assignerName',
-                                style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontStyle: FontStyle.italic),
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade500,
+                                    fontStyle: FontStyle.italic),
                                 overflow: TextOverflow.ellipsis),
                           ),
                         ]),
                         const SizedBox(height: 8),
                         Row(children: [
                           if (branch.isNotEmpty) ...[
-                            _infoChip(icon: Icons.business_rounded, value: branch, isDark: isDark),
+                            _infoChip(
+                                icon: Icons.business_rounded,
+                                value: branch,
+                                isDark: isDark),
                             const SizedBox(width: 6),
                           ],
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                            decoration: BoxDecoration(color: priorityColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-                            child: Row(mainAxisSize: MainAxisSize.min, children: [
-                              Icon(Icons.flag_rounded, size: 12, color: priorityColor),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 5),
+                            decoration: BoxDecoration(
+                                color: priorityColor.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(10)),
+                            child:
+                                Row(mainAxisSize: MainAxisSize.min, children: [
+                              Icon(Icons.flag_rounded,
+                                  size: 12, color: priorityColor),
                               const SizedBox(width: 3),
-                              Text(priority, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: priorityColor)),
+                              Text(priority,
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: priorityColor)),
                             ]),
                           ),
                           const Spacer(),
-                          Icon(Icons.chevron_right_rounded, size: 18, color: Colors.grey.shade400),
+                          Icon(Icons.chevron_right_rounded,
+                              size: 18, color: Colors.grey.shade400),
                         ]),
                       ],
                     ),
@@ -639,81 +697,120 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
     );
   }
 
-  Widget _infoChip({required IconData icon, required String value, required bool isDark}) {
+  Widget _infoChip(
+      {required IconData icon, required String value, required bool isDark}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-          color: isDark ? Colors.grey.shade800 : Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
+          color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(8)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(icon, size: 12, color: _brandPrimary),
         const SizedBox(width: 4),
-        Text(value, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
+        Text(value,
+            style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : Colors.black87)),
       ]),
     );
   }
 
-  Widget _paginationButton({required IconData icon, required bool enabled, required VoidCallback onTap, required bool isDark}) {
+  Widget _paginationButton(
+      {required IconData icon,
+      required bool enabled,
+      required VoidCallback onTap,
+      required bool isDark}) {
     return GestureDetector(
       onTap: enabled ? onTap : null,
       child: Container(
         width: 38,
         height: 38,
         decoration: BoxDecoration(
-            color: enabled ? _brandPrimary.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.07),
+            color: enabled
+                ? _brandPrimary.withValues(alpha: 0.1)
+                : Colors.grey.withValues(alpha: 0.07),
             borderRadius: BorderRadius.circular(19)),
-        child: Icon(icon, size: 22, color: enabled ? _brandPrimary : Colors.grey.shade400),
+        child: Icon(icon,
+            size: 22, color: enabled ? _brandPrimary : Colors.grey.shade400),
       ),
     );
   }
 
   String _screeningStatusLabel(String status) {
     switch (status) {
-      case 'pending': return 'Pending';
-      case 'called': return 'Called';
-      case 'promoted': return 'Promoted';
-      case 'rejected': return 'Rejected';
-      default: return 'Pending';
+      case 'pending':
+        return 'Pending';
+      case 'called':
+        return 'Called';
+      case 'promoted':
+        return 'Promoted';
+      case 'rejected':
+        return 'Rejected';
+      default:
+        return 'Pending';
     }
   }
 
   Color _getScreeningStatusColor(String status) {
     switch (status) {
-      case 'pending': return const Color(0xFFFFC107);
-      case 'called': return const Color(0xFF2196F3);
-      case 'promoted': return const Color(0xFF4CAF50);
-      case 'rejected': return const Color(0xFFF44336);
-      default: return Colors.grey;
+      case 'pending':
+        return const Color(0xFFFFC107);
+      case 'called':
+        return const Color(0xFF2196F3);
+      case 'promoted':
+        return const Color(0xFF4CAF50);
+      case 'rejected':
+        return const Color(0xFFF44336);
+      default:
+        return Colors.grey;
     }
   }
 
   Color _getPriorityColor(String priority) {
     switch (priority) {
-      case 'High': return const Color(0xFFF44336);
-      case 'Medium': return const Color(0xFFFFA500);
-      case 'Low': return const Color(0xFF4CAF50);
-      default: return Colors.grey;
+      case 'High':
+        return const Color(0xFFF44336);
+      case 'Medium':
+        return const Color(0xFFFFA500);
+      case 'Low':
+        return const Color(0xFF4CAF50);
+      default:
+        return Colors.grey;
     }
   }
 
   Color _getFilterColor(String filter) {
     switch (filter) {
-      case 'Pending': return const Color(0xFFFFC107);
-      case 'Called': return const Color(0xFF2196F3);
-      case 'Promoted': return const Color(0xFF4CAF50);
-      case 'Rejected': return const Color(0xFFF44336);
-      case 'All': return _brandPrimary;
-      default: return Colors.grey;
+      case 'Pending':
+        return const Color(0xFFFFC107);
+      case 'Called':
+        return const Color(0xFF2196F3);
+      case 'Promoted':
+        return const Color(0xFF4CAF50);
+      case 'Rejected':
+        return const Color(0xFFF44336);
+      case 'All':
+        return _brandPrimary;
+      default:
+        return Colors.grey;
     }
   }
 
   IconData _getFilterIcon(String filter) {
     switch (filter) {
-      case 'Pending': return Icons.hourglass_empty_rounded;
-      case 'Called': return Icons.phone_callback_rounded;
-      case 'Promoted': return Icons.check_circle_rounded;
-      case 'Rejected': return Icons.cancel_rounded;
-      case 'All': return Icons.all_inclusive_rounded;
-      default: return Icons.circle;
+      case 'Pending':
+        return Icons.hourglass_empty_rounded;
+      case 'Called':
+        return Icons.phone_callback_rounded;
+      case 'Promoted':
+        return Icons.check_circle_rounded;
+      case 'Rejected':
+        return Icons.cancel_rounded;
+      case 'All':
+        return Icons.all_inclusive_rounded;
+      default:
+        return Icons.circle;
     }
   }
 }
@@ -730,10 +827,12 @@ class SmeLeadDetailPageFromId extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
     return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance.collection('follow_ups').doc(docId).get(),
+      future:
+          FirebaseFirestore.instance.collection('follow_ups').doc(docId).get(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+              body: Center(child: CircularProgressIndicator()));
         }
         final doc = snapshot.data;
         if (doc == null || !doc.exists) {
@@ -747,12 +846,19 @@ class SmeLeadDetailPageFromId extends StatelessWidget {
 
         return FutureBuilder<DocumentSnapshot>(
           future: assignedByUid.isNotEmpty
-              ? FirebaseFirestore.instance.collection('users').doc(assignedByUid).get()
+              ? FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(assignedByUid)
+                  .get()
               : null,
           builder: (context, userSnap) {
             String assignerName = 'System';
-            if (userSnap.hasData && userSnap.data != null && userSnap.data!.exists) {
-              assignerName = (userSnap.data!.data() as Map<String, dynamic>?)?['username'] ?? 'Unknown';
+            if (userSnap.hasData &&
+                userSnap.data != null &&
+                userSnap.data!.exists) {
+              assignerName = (userSnap.data!.data()
+                      as Map<String, dynamic>?)?['username'] ??
+                  'Unknown';
             }
             return SmeLeadDetailPage(
               doc: doc,
@@ -805,10 +911,72 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
   }
 
   Future<void> _refreshData() async {
-    final snap = await FirebaseFirestore.instance.collection('follow_ups').doc(widget.doc.id).get();
-    if (snap.exists && mounted) setState(() => _data = snap.data() as Map<String, dynamic>);
+    final snap = await FirebaseFirestore.instance
+        .collection('follow_ups')
+        .doc(widget.doc.id)
+        .get();
+    if (snap.exists && mounted)
+      setState(() => _data = snap.data() as Map<String, dynamic>);
   }
 
+  Future<void> _scanCurrentLeadCallLog() async {
+    var status = await Permission.phone.request();
+    if (!status.isGranted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Phone permission denied')),
+        );
+      }
+      return;
+    }
+
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    try {
+      final map = Map<String, dynamic>.from(_data);
+      map['docId'] = widget.doc.id;
+
+      final matched = await SmeCallScannerService.scanTodayCallLog([map], currentUid: widget.currentUid);
+
+      if (mounted) Navigator.of(context).pop();
+
+      if (matched.isNotEmpty) {
+        _needRefresh = true;
+        await _refreshData();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Call detected! Lead marked as Called.'),
+              backgroundColor: Color(0xFF4CAF50),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No call detected for today.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) Navigator.of(context).pop();
+      debugPrint('Error scanning lead call log: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error scanning call log: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
 
   Future<void> _addScreeningNotes() async {
     final existingNotes = _data['screening_notes'] ?? '';
@@ -820,7 +988,8 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
         title: const Row(children: [
           Icon(Icons.edit_note_rounded, color: _brandPrimary, size: 24),
           SizedBox(width: 8),
-          Text('Screening Notes', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+          Text('Screening Notes',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
         ]),
         content: TextField(
           controller: controller,
@@ -833,19 +1002,25 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(null), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(null),
+              child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
             style: ElevatedButton.styleFrom(
                 backgroundColor: _brandPrimary,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10))),
             child: const Text('Save', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
     if (notes != null && mounted) {
-      await FirebaseFirestore.instance.collection('follow_ups').doc(widget.doc.id).update({'screening_notes': notes});
+      await FirebaseFirestore.instance
+          .collection('follow_ups')
+          .doc(widget.doc.id)
+          .update({'screening_notes': notes});
       _needRefresh = true;
       await _refreshData();
     }
@@ -874,7 +1049,8 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
           children: [
             Icon(Icons.delete_forever_rounded, color: Colors.red, size: 24),
             SizedBox(width: 8),
-            Text('Request Lead Deletion', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            Text('Request Lead Deletion',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Form(
@@ -894,11 +1070,14 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
                 maxLines: 3,
                 decoration: InputDecoration(
                   hintText: 'Enter reason for deletion...',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
                   filled: true,
                   fillColor: Colors.grey.shade50,
                 ),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Reason is required' : null,
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? 'Reason is required'
+                    : null,
               ),
             ],
           ),
@@ -916,9 +1095,11 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
             ),
-            child: const Text('Submit Request', style: TextStyle(color: Colors.white)),
+            child: const Text('Submit Request',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -936,8 +1117,11 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
       final cache = UserCacheService.instance;
       await cache.ensureLoaded();
 
-      final leadRef = FirebaseFirestore.instance.collection('follow_ups').doc(widget.doc.id);
-      final reqRef = FirebaseFirestore.instance.collection('sme_deletion_requests').doc();
+      final leadRef = FirebaseFirestore.instance
+          .collection('follow_ups')
+          .doc(widget.doc.id);
+      final reqRef =
+          FirebaseFirestore.instance.collection('sme_deletion_requests').doc();
 
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         transaction.update(leadRef, {'pendingDeletion': true});
@@ -970,7 +1154,9 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
       debugPrint('Error requesting lead deletion: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error requesting deletion: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error requesting deletion: $e'),
+              backgroundColor: Colors.red),
         );
       }
     }
@@ -978,27 +1164,26 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
 
   Future<void> _onCallPressed() async {
     final phone = _data['phone'] ?? '';
-    final screeningStatus = _data['screening_status'] ?? 'pending';
-    final result = await Navigator.push<_CallDetectionResult>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => SmeCallDetectionPage(
-          phone: phone,
-          docId: widget.doc.id,
-          currentUid: widget.currentUid,
-          screeningStatus: screeningStatus,
-        ),
-      ),
-    );
-    if (result != null && mounted) {
-      _needRefresh = true;
-      if (result.action == _CallAction.promote) {
-        await _promoteToLead();
-      } else if (result.action == _CallAction.reject) {
-        await _rejectLead();
-      } else {
-        await _refreshData();
-      }
+    if (phone.isEmpty) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No phone number available')));
+      return;
+    }
+    var status = await Permission.phone.request();
+    if (!status.isGranted) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Phone permission denied')));
+      return;
+    }
+    final uri = Uri(scheme: 'tel', path: phone);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not launch dialer')));
     }
   }
 
@@ -1012,46 +1197,44 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
           initialAddress: _data['address'] ?? '',
           initialPlatform: _data['platform'] ?? '',
           initialPriority: _data['priority'] ?? 'High',
-          initialComments: _data['comments'] ?? '',
           initialAdName: _data['ad_name'] ?? '',
           source: 'SME',
         ),
       ),
     );
     if (result == true && mounted) {
-      await FirebaseFirestore.instance.collection('follow_ups').doc(widget.doc.id).update({
+      await FirebaseFirestore.instance
+          .collection('follow_ups')
+          .doc(widget.doc.id)
+          .update({
         'screening_status': 'promoted',
         'screened_by': widget.currentUid,
         'screened_at': FieldValue.serverTimestamp(),
       });
       if (!mounted) return;
-      setState(() {
-        _data['screening_status'] = 'promoted';
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Lead promoted successfully!'), backgroundColor: Color(0xFF4CAF50)));
-      Navigator.of(context).pop(true);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Lead promoted successfully!'),
+          backgroundColor: Color(0xFF4CAF50)));
+      Navigator.of(context).popUntil((route) => route.isFirst);
     }
-
   }
 
   Future<void> _rejectLead() async {
     final reason = await _showRejectDialog();
     if (reason == null || reason.isEmpty) return;
-    await FirebaseFirestore.instance.collection('follow_ups').doc(widget.doc.id).update({
+    await FirebaseFirestore.instance
+        .collection('follow_ups')
+        .doc(widget.doc.id)
+        .update({
       'screening_status': 'rejected',
       'rejection_reason': reason,
       'screened_by': widget.currentUid,
       'screened_at': FieldValue.serverTimestamp(),
     });
     if (mounted) {
-      setState(() {
-        _data['screening_status'] = 'rejected';
-        _data['rejection_reason'] = reason;
-      });
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Lead rejected'), backgroundColor: Color(0xFFF44336)));
-      Navigator.of(context).pop(true);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Lead rejected'), backgroundColor: Color(0xFFF44336)));
+      Navigator.of(context).popUntil((route) => route.isFirst);
     }
   }
 
@@ -1066,7 +1249,8 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
         title: const Row(children: [
           Icon(Icons.cancel_rounded, color: Color(0xFFF44336), size: 24),
           SizedBox(width: 8),
-          Text('Reject Lead', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+          Text('Reject Lead',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
         ]),
         content: Form(
           key: formKey,
@@ -1076,22 +1260,28 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
             maxLines: 3,
             decoration: InputDecoration(
               hintText: 'Enter reason for rejection...',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               filled: true,
               fillColor: Colors.grey.shade50,
             ),
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Reason is required' : null,
+            validator: (v) =>
+                (v == null || v.trim().isEmpty) ? 'Reason is required' : null,
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(null), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(null),
+              child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () {
-              if (formKey.currentState!.validate()) Navigator.of(ctx).pop(controller.text.trim());
+              if (formKey.currentState!.validate())
+                Navigator.of(ctx).pop(controller.text.trim());
             },
             style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFF44336),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10))),
             child: const Text('Reject', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -1124,11 +1314,14 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
 
     String? callTimeStr;
     final callTime = _data['screening_call_time'];
-    if (callTime is Timestamp) callTimeStr = DateFormat('dd MMM yyyy, hh:mm a').format(callTime.toDate());
+    if (callTime is Timestamp)
+      callTimeStr =
+          DateFormat('dd MMM yyyy, hh:mm a').format(callTime.toDate());
 
     final statusColor = _getScreeningStatusColor(screeningStatus);
     final priorityColor = _getPriorityColor(priority);
-    final isFinalised = screeningStatus == 'promoted' || screeningStatus == 'rejected';
+    final isFinalised =
+        screeningStatus == 'promoted' || screeningStatus == 'rejected';
 
     final mustAct = screeningStatus == 'called';
 
@@ -1138,33 +1331,55 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
         if (mustAct && !didPop) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Please select Promote or Reject for the called lead.'), backgroundColor: Color(0xFFFFA500)),
+              const SnackBar(
+                  content: Text(
+                      'Please select Promote or Reject for the called lead.'),
+                  backgroundColor: Color(0xFFFFA500)),
             );
           }
         }
       },
       child: Scaffold(
-        backgroundColor: isDark ? const Color(0xFF0F1C2A) : const Color(0xFFF2F6FA),
+        backgroundColor:
+            isDark ? const Color(0xFF0F1C2A) : const Color(0xFFF2F6FA),
         appBar: AppBar(
-          title: Text(name, style: const TextStyle(fontWeight: FontWeight.w700, fontFamily: 'Montserrat', fontSize: 17)),
+          title: Text(name,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontFamily: 'Montserrat',
+                  fontSize: 17)),
           flexibleSpace: Container(
             decoration: const BoxDecoration(
-              gradient: LinearGradient(colors: [_brandPrimary, _brandAccent], begin: Alignment.topLeft, end: Alignment.bottomRight),
+              gradient: LinearGradient(
+                  colors: [_brandPrimary, _brandAccent],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight),
             ),
           ),
           foregroundColor: Colors.white,
           elevation: 0,
-          leading: mustAct ? const SizedBox() : IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded),
-            onPressed: () => Navigator.of(context).pop(_needRefresh),
-          ),
-          actions: [
+          leading: mustAct
+              ? const SizedBox()
+              : IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                  onPressed: () => Navigator.of(context).pop(_needRefresh),
+                ),
+          actions: mustAct ? [] : [
             IconButton(
-              icon: const Icon(Icons.delete_outline_rounded, color: Colors.white),
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Check Call Log',
+              onPressed: _scanCurrentLeadCallLog,
+            ),
+            IconButton(
+              icon:
+                  const Icon(Icons.delete_outline_rounded, color: Colors.white),
               tooltip: 'Delete Lead',
               onPressed: _requestDeletion,
             ),
-            IconButton(icon: const Icon(Icons.edit_note_rounded), tooltip: 'Add Notes', onPressed: _addScreeningNotes),
+            IconButton(
+                icon: const Icon(Icons.edit_note_rounded),
+                tooltip: 'Add Notes',
+                onPressed: _addScreeningNotes),
           ],
         ),
         body: SingleChildScrollView(
@@ -1175,7 +1390,8 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
               // Status Banner
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
                   color: statusColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(16),
@@ -1184,94 +1400,172 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
                 child: Row(children: [
                   Container(
                     padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.15), shape: BoxShape.circle),
-                    child: Icon(_getStatusIcon(screeningStatus), color: statusColor, size: 22),
+                    decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.15),
+                        shape: BoxShape.circle),
+                    child: Icon(_getStatusIcon(screeningStatus),
+                        color: statusColor, size: 22),
                   ),
                   const SizedBox(width: 14),
-                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(_screeningStatusLabel(screeningStatus),
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: statusColor)),
-                    if (callTimeStr != null)
-                      Text('Called on $callTimeStr', style: TextStyle(fontSize: 11, color: statusColor.withValues(alpha: 0.7))),
-                    if (callDuration != null)
-                      Text('Duration: ${callDuration}s', style: TextStyle(fontSize: 11, color: statusColor.withValues(alpha: 0.7))),
-                  ]),
+                  Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_screeningStatusLabel(screeningStatus),
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: statusColor)),
+                        if (callTimeStr != null)
+                          Text('Called on $callTimeStr',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: statusColor.withValues(alpha: 0.7))),
+                        if (callDuration != null)
+                          Text('Duration: ${callDuration}s',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: statusColor.withValues(alpha: 0.7))),
+                      ]),
                 ]),
               ),
               const SizedBox(height: 16),
 
               // Contact Card
-              _sectionCard(isDark: isDark, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                _sectionLabel('Contact Information', isDark),
-                const SizedBox(height: 12),
-                _detailRow(Icons.person_rounded, 'Name', name, isDark),
-                if (phone.isNotEmpty) _detailRow(Icons.phone_rounded, 'Phone', phone, isDark),
-                if (address.isNotEmpty) _detailRow(Icons.location_on_rounded, 'Address', address, isDark),
-                if (branch.isNotEmpty) _detailRow(Icons.business_rounded, 'Branch', branch, isDark),
-              ])),
+              _sectionCard(
+                  isDark: isDark,
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _sectionLabel('Contact Information', isDark),
+                        const SizedBox(height: 12),
+                        _detailRow(Icons.person_rounded, 'Name', name, isDark),
+                        if (phone.isNotEmpty)
+                          _detailRow(
+                              Icons.phone_rounded, 'Phone', phone, isDark),
+                        if (address.isNotEmpty)
+                          _detailRow(Icons.location_on_rounded, 'Address',
+                              address, isDark),
+                        if (branch.isNotEmpty)
+                          _detailRow(
+                              Icons.business_rounded, 'Branch', branch, isDark),
+                      ])),
               const SizedBox(height: 12),
 
               // Lead Info Card
-              _sectionCard(isDark: isDark, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                _sectionLabel('Lead Information', isDark),
-                const SizedBox(height: 12),
-                _detailRow(Icons.calendar_today_rounded, 'Date', formattedDate, isDark),
-                _detailRow(Icons.person_outline_rounded, 'Assigned By', widget.assignerName, isDark),
-                if (platform.isNotEmpty) _detailRow(Icons.share_rounded, 'Platform', platform, isDark),
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Row(children: [
-                    Icon(Icons.flag_rounded, size: 16, color: Colors.grey.shade500),
-                    const SizedBox(width: 10),
-                    Text('Priority', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
-                    const SizedBox(width: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                      decoration: BoxDecoration(color: priorityColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-                      child: Text(priority, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: priorityColor)),
-                    ),
-                  ]),
-                ),
-              ])),
+              _sectionCard(
+                  isDark: isDark,
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _sectionLabel('Lead Information', isDark),
+                        const SizedBox(height: 12),
+                        _detailRow(Icons.calendar_today_rounded, 'Date',
+                            formattedDate, isDark),
+                        _detailRow(Icons.person_outline_rounded, 'Assigned By',
+                            widget.assignerName, isDark),
+                        if (platform.isNotEmpty)
+                          _detailRow(Icons.share_rounded, 'Platform', platform,
+                              isDark),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Row(children: [
+                            Icon(Icons.flag_rounded,
+                                size: 16, color: Colors.grey.shade500),
+                            const SizedBox(width: 10),
+                            Text('Priority',
+                                style: TextStyle(
+                                    fontSize: 13, color: Colors.grey.shade500)),
+                            const SizedBox(width: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 5),
+                              decoration: BoxDecoration(
+                                  color: priorityColor.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(20)),
+                              child: Text(priority,
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: priorityColor)),
+                            ),
+                          ]),
+                        ),
+                      ])),
 
               if (comments.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                _sectionCard(isDark: isDark, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _sectionLabel('SME Notes', isDark),
-                  const SizedBox(height: 10),
-                  Text(comments, style: TextStyle(fontSize: 13, color: isDark ? Colors.white70 : Colors.black87, height: 1.5)),
-                ])),
+                _sectionCard(
+                    isDark: isDark,
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _sectionLabel('SME Notes', isDark),
+                          const SizedBox(height: 10),
+                          Text(comments,
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  color:
+                                      isDark ? Colors.white70 : Colors.black87,
+                                  height: 1.5)),
+                        ])),
               ],
 
               if (screeningNotes.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                _sectionCard(isDark: isDark, accentColor: _brandPrimary, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _sectionLabel('Your Screening Notes', isDark, color: _brandPrimary),
-                  const SizedBox(height: 10),
-                  Text(screeningNotes, style: TextStyle(fontSize: 13, color: isDark ? Colors.white70 : Colors.black87, height: 1.5)),
-                ])),
+                _sectionCard(
+                    isDark: isDark,
+                    accentColor: _brandPrimary,
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _sectionLabel('Your Screening Notes', isDark,
+                              color: _brandPrimary),
+                          const SizedBox(height: 10),
+                          Text(screeningNotes,
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  color:
+                                      isDark ? Colors.white70 : Colors.black87,
+                                  height: 1.5)),
+                        ])),
               ],
 
-              if (screeningStatus == 'rejected' && rejectionReason.isNotEmpty) ...[
+              if (screeningStatus == 'rejected' &&
+                  rejectionReason.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                _sectionCard(isDark: isDark, accentColor: const Color(0xFFF44336),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _sectionLabel('Rejection Reason', isDark, color: const Color(0xFFF44336)),
-                  const SizedBox(height: 10),
-                  Text(rejectionReason, style: TextStyle(fontSize: 13, color: isDark ? Colors.white70 : Colors.black87, height: 1.5)),
-                ])),
+                _sectionCard(
+                    isDark: isDark,
+                    accentColor: const Color(0xFFF44336),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _sectionLabel('Rejection Reason', isDark,
+                              color: const Color(0xFFF44336)),
+                          const SizedBox(height: 10),
+                          Text(rejectionReason,
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  color:
+                                      isDark ? Colors.white70 : Colors.black87,
+                                  height: 1.5)),
+                        ])),
               ],
             ],
           ),
         ),
         bottomNavigationBar: Container(
-          padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + MediaQuery.of(context).padding.bottom),
+          padding: EdgeInsets.fromLTRB(
+              16, 12, 16, 12 + MediaQuery.of(context).padding.bottom),
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF1A2A2A) : Colors.white,
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 16, offset: const Offset(0, -4))],
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 16,
+                  offset: const Offset(0, -4))
+            ],
           ),
           child: Row(children: [
-
             if (!isFinalised && screeningStatus != 'called')
               Expanded(
                 child: GestureDetector(
@@ -1279,15 +1573,30 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [_teal, Color(0xFF00BCD4)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                      gradient: const LinearGradient(
+                          colors: [_teal, Color(0xFF00BCD4)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight),
                       borderRadius: BorderRadius.circular(14),
-                      boxShadow: [BoxShadow(color: _teal.withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4))],
+                      boxShadow: [
+                        BoxShadow(
+                            color: _teal.withValues(alpha: 0.35),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4))
+                      ],
                     ),
-                    child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      Icon(Icons.phone_rounded, color: Colors.white, size: 20),
-                      SizedBox(width: 8),
-                      Text('Call Customer', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
-                    ]),
+                    child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.phone_rounded,
+                              color: Colors.white, size: 20),
+                          SizedBox(width: 8),
+                          Text('Call Customer',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700)),
+                        ]),
                   ),
                 ),
               ),
@@ -1300,13 +1609,26 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
                     decoration: BoxDecoration(
                       color: const Color(0xFF4CAF50),
                       borderRadius: BorderRadius.circular(14),
-                      boxShadow: [BoxShadow(color: const Color(0xFF4CAF50).withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4))],
+                      boxShadow: [
+                        BoxShadow(
+                            color:
+                                const Color(0xFF4CAF50).withValues(alpha: 0.35),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4))
+                      ],
                     ),
-                    child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      Icon(Icons.thumb_up_rounded, color: Colors.white, size: 20),
-                      SizedBox(width: 8),
-                      Text('Promote', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
-                    ]),
+                    child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.thumb_up_rounded,
+                              color: Colors.white, size: 20),
+                          SizedBox(width: 8),
+                          Text('Promote',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700)),
+                        ]),
                   ),
                 ),
               ),
@@ -1319,13 +1641,26 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
                     decoration: BoxDecoration(
                       color: const Color(0xFFF44336),
                       borderRadius: BorderRadius.circular(14),
-                      boxShadow: [BoxShadow(color: const Color(0xFFF44336).withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4))],
+                      boxShadow: [
+                        BoxShadow(
+                            color:
+                                const Color(0xFFF44336).withValues(alpha: 0.35),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4))
+                      ],
                     ),
-                    child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      Icon(Icons.thumb_down_rounded, color: Colors.white, size: 20),
-                      SizedBox(width: 8),
-                      Text('Reject', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
-                    ]),
+                    child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.thumb_down_rounded,
+                              color: Colors.white, size: 20),
+                          SizedBox(width: 8),
+                          Text('Reject',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700)),
+                        ]),
                   ),
                 ),
               ),
@@ -1337,14 +1672,21 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+                    border:
+                        Border.all(color: statusColor.withValues(alpha: 0.3)),
                   ),
-                  child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Icon(_getStatusIcon(screeningStatus), color: statusColor, size: 20),
-                    const SizedBox(width: 8),
-                    Text('Lead ${_screeningStatusLabel(screeningStatus)}',
-                        style: TextStyle(color: statusColor, fontSize: 15, fontWeight: FontWeight.w700)),
-                  ]),
+                  child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(_getStatusIcon(screeningStatus),
+                            color: statusColor, size: 20),
+                        const SizedBox(width: 8),
+                        Text('Lead ${_screeningStatusLabel(screeningStatus)}',
+                            style: TextStyle(
+                                color: statusColor,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700)),
+                      ]),
                 ),
               ),
           ]),
@@ -1353,16 +1695,23 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
     );
   }
 
-
-  Widget _sectionCard({required Widget child, required bool isDark, Color? accentColor}) {
+  Widget _sectionCard(
+      {required Widget child, required bool isDark, Color? accentColor}) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1C2C3C) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: accentColor != null ? Border.all(color: accentColor.withValues(alpha: 0.2)) : null,
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05), blurRadius: 10, offset: const Offset(0, 3))],
+        border: accentColor != null
+            ? Border.all(color: accentColor.withValues(alpha: 0.2))
+            : null,
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 3))
+        ],
       ),
       child: child,
     );
@@ -1375,7 +1724,8 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
         fontSize: 10,
         fontWeight: FontWeight.w800,
         letterSpacing: 1.2,
-        color: color?.withValues(alpha: 0.7) ?? (isDark ? Colors.grey.shade500 : Colors.grey.shade400),
+        color: color?.withValues(alpha: 0.7) ??
+            (isDark ? Colors.grey.shade500 : Colors.grey.shade400),
       ),
     );
   }
@@ -1386,48 +1736,75 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Icon(icon, size: 16, color: Colors.grey.shade400),
         const SizedBox(width: 10),
-        SizedBox(width: 80, child: Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade500))),
-        Expanded(child: Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isDark ? Colors.white : const Color(0xFF0D2B40)))),
+        SizedBox(
+            width: 80,
+            child: Text(label,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade500))),
+        Expanded(
+            child: Text(value,
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : const Color(0xFF0D2B40)))),
       ]),
     );
   }
 
   String _screeningStatusLabel(String status) {
     switch (status) {
-      case 'pending': return 'Pending';
-      case 'called': return 'Called';
-      case 'promoted': return 'Promoted';
-      case 'rejected': return 'Rejected';
-      default: return 'Pending';
+      case 'pending':
+        return 'Pending';
+      case 'called':
+        return 'Called';
+      case 'promoted':
+        return 'Promoted';
+      case 'rejected':
+        return 'Rejected';
+      default:
+        return 'Pending';
     }
   }
 
   Color _getScreeningStatusColor(String status) {
     switch (status) {
-      case 'pending': return const Color(0xFFFFC107);
-      case 'called': return const Color(0xFF2196F3);
-      case 'promoted': return const Color(0xFF4CAF50);
-      case 'rejected': return const Color(0xFFF44336);
-      default: return Colors.grey;
+      case 'pending':
+        return const Color(0xFFFFC107);
+      case 'called':
+        return const Color(0xFF2196F3);
+      case 'promoted':
+        return const Color(0xFF4CAF50);
+      case 'rejected':
+        return const Color(0xFFF44336);
+      default:
+        return Colors.grey;
     }
   }
 
   Color _getPriorityColor(String priority) {
     switch (priority) {
-      case 'High': return const Color(0xFFF44336);
-      case 'Medium': return const Color(0xFFFFA500);
-      case 'Low': return const Color(0xFF4CAF50);
-      default: return Colors.grey;
+      case 'High':
+        return const Color(0xFFF44336);
+      case 'Medium':
+        return const Color(0xFFFFA500);
+      case 'Low':
+        return const Color(0xFF4CAF50);
+      default:
+        return Colors.grey;
     }
   }
 
   IconData _getStatusIcon(String status) {
     switch (status) {
-      case 'pending': return Icons.hourglass_empty_rounded;
-      case 'called': return Icons.phone_callback_rounded;
-      case 'promoted': return Icons.check_circle_rounded;
-      case 'rejected': return Icons.cancel_rounded;
-      default: return Icons.circle;
+      case 'pending':
+        return Icons.hourglass_empty_rounded;
+      case 'called':
+        return Icons.phone_callback_rounded;
+      case 'promoted':
+        return Icons.check_circle_rounded;
+      case 'rejected':
+        return Icons.cancel_rounded;
+      default:
+        return Icons.circle;
     }
   }
 }
@@ -1479,8 +1856,11 @@ class _SmeCallDetectionPageState extends State<SmeCallDetectionPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000))..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
+    _pulseController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1000))
+      ..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
+        CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
   }
 
   @override
@@ -1492,22 +1872,21 @@ class _SmeCallDetectionPageState extends State<SmeCallDetectionPage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _state == _DetectionState.detecting) {
-      _checkCallLog();
-      Future.delayed(const Duration(seconds: 3), () {
-        if (mounted && _state == _DetectionState.detecting) _checkCallLog();
-      });
-    }
+    // Auto call log checking on app resume disabled.
   }
 
   Future<void> _initiateCall() async {
     if (widget.phone.isEmpty) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No phone number available')));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No phone number available')));
       return;
     }
     var status = await Permission.phone.request();
     if (!status.isGranted) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Phone permission denied')));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Phone permission denied')));
       return;
     }
     final uri = Uri(scheme: 'tel', path: widget.phone);
@@ -1519,14 +1898,17 @@ class _SmeCallDetectionPageState extends State<SmeCallDetectionPage>
       await _saveCallState();
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not launch dialer')));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not launch dialer')));
     }
   }
 
   Future<void> _saveCallState() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('sme_pending_call_number', widget.phone);
-    await prefs.setInt('sme_pending_call_time', _callStartTime?.millisecondsSinceEpoch ?? 0);
+    await prefs.setInt(
+        'sme_pending_call_time', _callStartTime?.millisecondsSinceEpoch ?? 0);
     await prefs.setString('sme_pending_call_docid', widget.docId);
   }
 
@@ -1543,8 +1925,9 @@ class _SmeCallDetectionPageState extends State<SmeCallDetectionPage>
     if (!permStatus.isGranted) return;
     try {
       final now = DateTime.now();
-      final Iterable<CallLogEntry> entries =
-          await CallLog.query(dateFrom: _callStartTime!.millisecondsSinceEpoch, dateTo: now.millisecondsSinceEpoch);
+      final Iterable<CallLogEntry> entries = await CallLog.query(
+          dateFrom: _callStartTime!.millisecondsSinceEpoch,
+          dateTo: now.millisecondsSinceEpoch);
       final normalizedPending = widget.phone.replaceAll(RegExp(r'\D'), '');
       CallLogEntry? matchedEntry;
       for (final entry in entries) {
@@ -1556,14 +1939,21 @@ class _SmeCallDetectionPageState extends State<SmeCallDetectionPage>
         }
       }
       if (matchedEntry != null && mounted) {
-        await FirebaseFirestore.instance.collection('follow_ups').doc(widget.docId).update({
+        await FirebaseFirestore.instance
+            .collection('follow_ups')
+            .doc(widget.docId)
+            .update({
           'screening_status': 'called',
           'screening_call_time': FieldValue.serverTimestamp(),
           'screening_call_duration': matchedEntry.duration ?? 0,
           'screened_by': widget.currentUid,
         });
         await _clearCallState();
-        if (mounted) setState(() { _state = _DetectionState.detected; _detectedDuration = matchedEntry!.duration; });
+        if (mounted)
+          setState(() {
+            _state = _DetectionState.detected;
+            _detectedDuration = matchedEntry!.duration;
+          });
       }
     } catch (e) {
       debugPrint('Error checking call log: $e');
@@ -1574,19 +1964,26 @@ class _SmeCallDetectionPageState extends State<SmeCallDetectionPage>
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F1C2A) : const Color(0xFFF2F6FA),
+      backgroundColor:
+          isDark ? const Color(0xFF0F1C2A) : const Color(0xFFF2F6FA),
       appBar: AppBar(
-        title: const Text('Call Customer', style: TextStyle(fontWeight: FontWeight.w700, fontFamily: 'Montserrat')),
+        title: const Text('Call Customer',
+            style: TextStyle(
+                fontWeight: FontWeight.w700, fontFamily: 'Montserrat')),
         flexibleSpace: Container(
           decoration: const BoxDecoration(
-            gradient: LinearGradient(colors: [_brandPrimary, Color(0xFF008BD6)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+            gradient: LinearGradient(
+                colors: [_brandPrimary, Color(0xFF008BD6)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight),
           ),
         ),
         foregroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.close_rounded),
-          onPressed: () => Navigator.of(context).pop(const _CallDetectionResult(_CallAction.none)),
+          onPressed: () => Navigator.of(context)
+              .pop(const _CallDetectionResult(_CallAction.none)),
         ),
       ),
       body: SafeArea(
@@ -1596,26 +1993,44 @@ class _SmeCallDetectionPageState extends State<SmeCallDetectionPage>
             children: [
               const SizedBox(height: 20),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                 decoration: BoxDecoration(
                   color: isDark ? const Color(0xFF1C2C3C) : Colors.white,
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 10, offset: const Offset(0, 3))],
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.07),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3))
+                  ],
                 ),
                 child: Row(children: [
                   Container(
                     padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: _teal.withValues(alpha: 0.1), shape: BoxShape.circle),
-                    child: const Icon(Icons.phone_rounded, color: _teal, size: 22),
+                    decoration: BoxDecoration(
+                        color: _teal.withValues(alpha: 0.1),
+                        shape: BoxShape.circle),
+                    child:
+                        const Icon(Icons.phone_rounded, color: _teal, size: 22),
                   ),
                   const SizedBox(width: 14),
-                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Customer Number', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-                    const SizedBox(height: 2),
-                    Text(widget.phone,
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800,
-                            color: isDark ? Colors.white : const Color(0xFF0D2B40), letterSpacing: 1)),
-                  ]),
+                  Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Customer Number',
+                            style: TextStyle(
+                                fontSize: 11, color: Colors.grey.shade500)),
+                        const SizedBox(height: 2),
+                        Text(widget.phone,
+                            style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: isDark
+                                    ? Colors.white
+                                    : const Color(0xFF0D2B40),
+                                letterSpacing: 1)),
+                      ]),
                 ]),
               ),
               const SizedBox(height: 40),
@@ -1631,9 +2046,12 @@ class _SmeCallDetectionPageState extends State<SmeCallDetectionPage>
 
   Widget _buildStateWidget(bool isDark) {
     switch (_state) {
-      case _DetectionState.idle: return _buildIdleState(isDark);
-      case _DetectionState.detecting: return _buildDetectingState(isDark);
-      case _DetectionState.detected: return _buildDetectedState(isDark);
+      case _DetectionState.idle:
+        return _buildIdleState(isDark);
+      case _DetectionState.detecting:
+        return _buildDetectingState(isDark);
+      case _DetectionState.detected:
+        return _buildDetectedState(isDark);
     }
   }
 
@@ -1641,15 +2059,23 @@ class _SmeCallDetectionPageState extends State<SmeCallDetectionPage>
     return ScaleTransition(
       scale: _pulseAnimation,
       child: Container(
-        width: 140, height: 140,
-        decoration: BoxDecoration(shape: BoxShape.circle,
-            gradient: RadialGradient(colors: [color.withValues(alpha: 0.3), color.withValues(alpha: 0.0)])),
+        width: 140,
+        height: 140,
+        decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(colors: [
+              color.withValues(alpha: 0.3),
+              color.withValues(alpha: 0.0)
+            ])),
         child: Center(
           child: Container(
-            width: 100, height: 100,
+            width: 100,
+            height: 100,
             decoration: BoxDecoration(
-                shape: BoxShape.circle, color: color.withValues(alpha: 0.15),
-                border: Border.all(color: color.withValues(alpha: 0.4), width: 2)),
+                shape: BoxShape.circle,
+                color: color.withValues(alpha: 0.15),
+                border:
+                    Border.all(color: color.withValues(alpha: 0.4), width: 2)),
             child: Icon(icon, color: color, size: 44),
           ),
         ),
@@ -1661,10 +2087,17 @@ class _SmeCallDetectionPageState extends State<SmeCallDetectionPage>
     return Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       _pulseCircle(color: _teal, icon: Icons.phone_rounded),
       const SizedBox(height: 28),
-      Text('Ready to Call', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: isDark ? Colors.white : const Color(0xFF0D2B40))),
+      Text('Ready to Call',
+          style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : const Color(0xFF0D2B40))),
       const SizedBox(height: 10),
-      Text('Tap the button below to call the customer.\nOnce the call ends, return to this app.',
-          textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.grey.shade500, height: 1.6)),
+      Text(
+          'Tap the button below to call the customer.\nOnce the call ends, return to this app.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+              fontSize: 13, color: Colors.grey.shade500, height: 1.6)),
     ]);
   }
 
@@ -1672,10 +2105,16 @@ class _SmeCallDetectionPageState extends State<SmeCallDetectionPage>
     return Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       _pulseCircle(color: Colors.orange, icon: Icons.phone_in_talk_rounded),
       const SizedBox(height: 28),
-      Text('Detecting Call\u2026', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: isDark ? Colors.white : const Color(0xFF0D2B40))),
+      Text('Detecting Call\u2026',
+          style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : const Color(0xFF0D2B40))),
       const SizedBox(height: 10),
       Text('Return here after your call.\nWe\'ll detect it automatically.',
-          textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.grey.shade500, height: 1.6)),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+              fontSize: 13, color: Colors.grey.shade500, height: 1.6)),
       const SizedBox(height: 20),
       const CircularProgressIndicator(strokeWidth: 2),
     ]);
@@ -1684,21 +2123,29 @@ class _SmeCallDetectionPageState extends State<SmeCallDetectionPage>
   Widget _buildDetectedState(bool isDark) {
     return Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       Container(
-        width: 120, height: 120,
+        width: 120,
+        height: 120,
         decoration: BoxDecoration(
-            shape: BoxShape.circle, color: _teal.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+            color: _teal.withValues(alpha: 0.12),
             border: Border.all(color: _teal.withValues(alpha: 0.4), width: 2)),
         child: const Icon(Icons.check_circle_rounded, color: _teal, size: 60),
       ),
       const SizedBox(height: 28),
-      const Text('Call Detected!', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: _teal)),
+      const Text('Call Detected!',
+          style: TextStyle(
+              fontSize: 24, fontWeight: FontWeight.w800, color: _teal)),
       if (_detectedDuration != null) ...[
         const SizedBox(height: 6),
-        Text('Duration: ${_detectedDuration}s', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
+        Text('Duration: ${_detectedDuration}s',
+            style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
       ],
       const SizedBox(height: 12),
-      Text('Lead has been marked as Called.\nNow you can promote or reject this lead.',
-          textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.grey.shade500, height: 1.6)),
+      Text(
+          'Lead has been marked as Called.\nNow you can promote or reject this lead.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+              fontSize: 13, color: Colors.grey.shade500, height: 1.6)),
     ]);
   }
 
@@ -1711,15 +2158,29 @@ class _SmeCallDetectionPageState extends State<SmeCallDetectionPage>
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 16),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [_teal, Color(0xFF00BCD4)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+              gradient: const LinearGradient(
+                  colors: [_teal, Color(0xFF00BCD4)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight),
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [BoxShadow(color: _teal.withValues(alpha: 0.4), blurRadius: 14, offset: const Offset(0, 6))],
+              boxShadow: [
+                BoxShadow(
+                    color: _teal.withValues(alpha: 0.4),
+                    blurRadius: 14,
+                    offset: const Offset(0, 6))
+              ],
             ),
-            child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.phone_rounded, color: Colors.white, size: 22),
-              SizedBox(width: 10),
-              Text('Start Call', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
-            ]),
+            child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.phone_rounded, color: Colors.white, size: 22),
+                  SizedBox(width: 10),
+                  Text('Start Call',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800)),
+                ]),
           ),
         ),
       );
@@ -1737,11 +2198,17 @@ class _SmeCallDetectionPageState extends State<SmeCallDetectionPage>
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: _brandPrimary.withValues(alpha: 0.3)),
             ),
-            child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.refresh_rounded, color: _brandPrimary, size: 20),
-              SizedBox(width: 8),
-              Text('Check Now', style: TextStyle(color: _brandPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
-            ]),
+            child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.refresh_rounded, color: _brandPrimary, size: 20),
+                  SizedBox(width: 8),
+                  Text('Check Now',
+                      style: TextStyle(
+                          color: _brandPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700)),
+                ]),
           ),
         ),
       );
@@ -1750,38 +2217,63 @@ class _SmeCallDetectionPageState extends State<SmeCallDetectionPage>
     return Row(children: [
       Expanded(
         child: GestureDetector(
-          onTap: () => Navigator.of(context).pop(const _CallDetectionResult(_CallAction.reject)),
+          onTap: () => Navigator.of(context)
+              .pop(const _CallDetectionResult(_CallAction.reject)),
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 14),
             decoration: BoxDecoration(
               color: const Color(0xFFF44336).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFF44336).withValues(alpha: 0.3)),
+              border: Border.all(
+                  color: const Color(0xFFF44336).withValues(alpha: 0.3)),
             ),
-            child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.cancel_rounded, color: Color(0xFFF44336), size: 20),
-              SizedBox(width: 6),
-              Text('Reject', style: TextStyle(color: Color(0xFFF44336), fontSize: 15, fontWeight: FontWeight.w700)),
-            ]),
+            child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.cancel_rounded,
+                      color: Color(0xFFF44336), size: 20),
+                  SizedBox(width: 6),
+                  Text('Reject',
+                      style: TextStyle(
+                          color: Color(0xFFF44336),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700)),
+                ]),
           ),
         ),
       ),
       const SizedBox(width: 12),
       Expanded(
         child: GestureDetector(
-          onTap: () => Navigator.of(context).pop(const _CallDetectionResult(_CallAction.promote)),
+          onTap: () => Navigator.of(context)
+              .pop(const _CallDetectionResult(_CallAction.promote)),
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 14),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+              gradient: const LinearGradient(
+                  colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight),
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [BoxShadow(color: const Color(0xFF4CAF50).withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4))],
+              boxShadow: [
+                BoxShadow(
+                    color: const Color(0xFF4CAF50).withValues(alpha: 0.35),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4))
+              ],
             ),
-            child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-              SizedBox(width: 6),
-              Text('Promote', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
-            ]),
+            child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.check_circle_rounded,
+                      color: Colors.white, size: 20),
+                  SizedBox(width: 6),
+                  Text('Promote',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700)),
+                ]),
           ),
         ),
       ),

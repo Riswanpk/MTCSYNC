@@ -136,7 +136,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
         'created_at': FieldValue.serverTimestamp(),
         'source': widget.source,
         if (widget.initialPlatform != null && widget.initialPlatform!.isNotEmpty) 'platform': widget.initialPlatform,
-        if (_adNameController.text.trim().isNotEmpty) 'ad_name': _adNameController.text.trim(),
+        if (widget.initialAdName != null && widget.initialAdName!.isNotEmpty) 'ad_name': widget.initialAdName,
         // Track original reminder date for auto-reschedule logic
         if (parsedReminderDate != null) 'original_reminder_date': Timestamp.fromDate(parsedReminderDate),
         'reminder_date_changed': false, // Flag for manual reschedule
@@ -400,96 +400,376 @@ class _FollowUpFormState extends State<FollowUpForm> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final primaryGradient = const LinearGradient(
+      colors: [Color(0xFF005BAC), Color(0xFF008BD6)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    );
+
+    InputDecoration buildInputDecoration({
+      required String label,
+      required IconData icon,
+      Widget? suffixIcon,
+    }) {
+      return InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(
+          color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+        prefixIcon: Icon(icon, color: const Color(0xFF005BAC), size: 20),
+        suffixIcon: suffixIcon,
+        filled: true,
+        fillColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(
+            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFF005BAC), width: 1.8),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+        ),
+      );
+    }
+
+    Widget buildCardSection({required String title, required IconData icon, required List<Widget> children}) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 20),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF0F172A) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
+            )
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF005BAC).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: const Color(0xFF005BAC), size: 18),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            ...children,
+          ],
+        ),
+      );
+    }
+
     return Stack(
       children: [
         Scaffold(
+          backgroundColor: isDark ? const Color(0xFF0B0F17) : const Color(0xFFF1F5F9),
           appBar: AppBar(
-            title: const Text('New Follow Up'),
-            backgroundColor: const Color(0xFF005BAC),
+            title: const Text(
+              'New Follow Up',
+              style: TextStyle(fontWeight: FontWeight.w700, fontFamily: 'Montserrat'),
+            ),
+            flexibleSpace: Container(decoration: BoxDecoration(gradient: primaryGradient)),
             foregroundColor: Colors.white,
+            elevation: 0,
           ),
-          body: Padding(
-            padding: const EdgeInsets.all(16),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
             child: Form(
               key: _formKey,
-              child: ListView(
+              child: Column(
                 children: [
-                  // REMOVE date field from form
-                  // TextFormField(
-                  //   controller: _dateController,
-                  //   readOnly: true,
-                  //   decoration: const InputDecoration(
-                  //     labelText: 'Date',
-                  //     prefixIcon: Icon(Icons.calendar_today),
-                  //   ),
-                  // ),
-                  // const SizedBox(height: 16),
-                  FutureBuilder<DocumentSnapshot>(
-                    future: FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(FirebaseAuth.instance.currentUser!.uid)
-                        .get(),
-                    builder: (context, userSnap) {
-                      if (!userSnap.hasData) return const SizedBox();
-                      final branch = userSnap.data!.get('branch') ?? '';
-                      return RawAutocomplete<Map<String, dynamic>>(
-                        textEditingController: _nameController,
-                        focusNode: _nameFieldFocusNode,
-                        optionsBuilder:
-                            (TextEditingValue textEditingValue) async {
-                          if (textEditingValue.text.isEmpty) {
-                            return const Iterable<Map<String, dynamic>>.empty();
-                          }
-                          // Check if widget is still mounted before making async call
-                          if (!mounted) {
+                  buildCardSection(
+                    title: 'Customer Details',
+                    icon: Icons.person_rounded,
+                    children: [
+                      FutureBuilder<DocumentSnapshot>(
+                        future: FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(FirebaseAuth.instance.currentUser!.uid)
+                            .get(),
+                        builder: (context, userSnap) {
+                          if (!userSnap.hasData) return const SizedBox();
+                          final branch = userSnap.data!.get('branch') ?? '';
+                          return RawAutocomplete<Map<String, dynamic>>(
+                            textEditingController: _nameController,
+                            focusNode: _nameFieldFocusNode,
+                            optionsBuilder: (TextEditingValue textEditingValue) async {
+                              if (textEditingValue.text.isEmpty || !mounted) {
+                                return const Iterable<Map<String, dynamic>>.empty();
+                              }
+                              try {
+                                return await fetchCustomerSuggestions(textEditingValue.text, branch);
+                              } catch (e) {
+                                debugPrint('Error in name autocomplete: $e');
+                                return const Iterable<Map<String, dynamic>>.empty();
+                              }
+                            },
+                            displayStringForOption: (option) => option['name'] ?? '',
+                            fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                              return TextFormField(
+                                controller: controller,
+                                focusNode: focusNode,
+                                decoration: buildInputDecoration(label: 'Customer Name', icon: Icons.person_outline_rounded),
+                                validator: (value) => value!.isEmpty ? 'Enter customer name' : null,
+                                onChanged: (_) {
+                                  if (mounted) _saveDraft();
+                                },
+                              );
+                            },
+                            optionsViewBuilder: (context, onSelected, options) {
+                              if (options.isEmpty) return const SizedBox.shrink();
+                              return Align(
+                                alignment: Alignment.topLeft,
+                                child: Material(
+                                  elevation: 8.0,
+                                  borderRadius: BorderRadius.circular(14),
+                                  child: Container(
+                                    constraints: const BoxConstraints(maxHeight: 200, maxWidth: 320),
+                                    decoration: BoxDecoration(
+                                      color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: ListView.separated(
+                                      padding: EdgeInsets.zero,
+                                      shrinkWrap: true,
+                                      itemCount: options.length,
+                                      separatorBuilder: (_, __) => Divider(height: 1, color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+                                      itemBuilder: (context, index) {
+                                        final option = options.elementAt(index);
+                                        return ListTile(
+                                          title: Text(option['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                          subtitle: Text(option['phone'] ?? '', style: const TextStyle(fontSize: 11)),
+                                          onTap: () => onSelected(option),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                            onSelected: (selectedCustomer) {
+                              if (mounted) {
+                                setState(() {
+                                  _nameController.text = selectedCustomer['name'] ?? '';
+                                  _addressController.text = selectedCustomer['address'] ?? '';
+                                  _phoneController.text = formatIndianPhone(selectedCustomer['phone'] ?? '');
+                                });
+                              }
+                            },
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _addressController,
+                        decoration: buildInputDecoration(label: 'Address', icon: Icons.location_on_outlined),
+                        validator: (value) => value!.isEmpty ? 'Enter address' : null,
+                        onChanged: (_) => _saveDraft(),
+                      ),
+                      const SizedBox(height: 14),
+                      RawAutocomplete<Map<String, dynamic>>(
+                        textEditingController: _phoneController,
+                        focusNode: _phoneFieldFocusNode,
+                        optionsBuilder: (TextEditingValue textEditingValue) async {
+                          if (textEditingValue.text.isEmpty || !mounted) {
                             return const Iterable<Map<String, dynamic>>.empty();
                           }
                           try {
-                            return await fetchCustomerSuggestions(
-                                textEditingValue.text, branch);
+                            final user = FirebaseAuth.instance.currentUser;
+                            if (user == null) return const Iterable<Map<String, dynamic>>.empty();
+                            final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+                            final branch = userDoc.data()?['branch'] ?? '';
+                            return await fetchCustomerSuggestions(textEditingValue.text, branch);
                           } catch (e) {
-                            debugPrint('Error in name autocomplete: $e');
+                            debugPrint('Error in phone autocomplete: $e');
                             return const Iterable<Map<String, dynamic>>.empty();
                           }
                         },
-                        displayStringForOption: (option) => option['name'] ?? '',
-                        fieldViewBuilder:
-                            (context, controller, focusNode, onFieldSubmitted) {
+                        displayStringForOption: (option) => option['phone'] ?? '',
+                        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
                           return TextFormField(
                             controller: controller,
                             focusNode: focusNode,
-                            decoration: const InputDecoration(
-                              labelText: 'Customer Name',
-                              prefixIcon: Icon(Icons.person),
+                            decoration: buildInputDecoration(
+                              label: 'Phone',
+                              icon: Icons.phone_outlined,
+                              suffixIcon: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.paste_rounded, color: Color(0xFF005BAC), size: 19),
+                                    tooltip: 'Paste from clipboard',
+                                    onPressed: () async {
+                                      final clipboardData = await Clipboard.getData('text/plain');
+                                      if (clipboardData != null && clipboardData.text != null) {
+                                        final digits = RegExp(r'\d').allMatches(clipboardData.text!).map((m) => m.group(0)).join();
+                                        if (digits.length >= 10) {
+                                          final tenDigits = digits.substring(digits.length - 10);
+                                          final formatted = '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
+                                          _phoneController.text = formatted;
+                                          _phoneController.selection = TextSelection.fromPosition(TextPosition(offset: formatted.length));
+                                        } else {
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Clipboard does not contain 10 digits')));
+                                          }
+                                        }
+                                      }
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.contacts_rounded, color: Color(0xFF005BAC), size: 19),
+                                    tooltip: 'Pick from contacts',
+                                    onPressed: () async {
+                                      if (_deviceContacts == null && !_deviceContactsLoading) {
+                                        _loadDeviceContacts();
+                                      }
+                                      var status = await Permission.contacts.status;
+                                      if (!status.isGranted) {
+                                        final granted = await FlutterContacts.requestPermission();
+                                        if (!granted) {
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text('Contact permission denied')),
+                                            );
+                                          }
+                                          return;
+                                        }
+                                      }
+                                      if (mounted) {
+                                        showModalBottomSheet(
+                                          context: context,
+                                          isScrollControlled: true,
+                                          backgroundColor: Colors.transparent,
+                                          builder: (context) {
+                                            return DraggableScrollableSheet(
+                                              initialChildSize: 0.85,
+                                              minChildSize: 0.4,
+                                              maxChildSize: 0.95,
+                                              expand: false,
+                                              builder: (context, scrollController) {
+                                                return ContactPickerModal(
+                                                  initialContacts: _deviceContacts,
+                                                  initialLoading: _deviceContactsLoading,
+                                                  scrollController: scrollController,
+                                                  onSelect: (name, phone) {
+                                                    final digits = RegExp(r'\d').allMatches(phone).map((m) => m.group(0)).join();
+                                                    if (digits.length >= 10) {
+                                                      final tenDigits = digits.substring(digits.length - 10);
+                                                      final formatted = '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
+                                                      if (mounted) {
+                                                        setState(() {
+                                                          _phoneController.text = formatted;
+                                                          _phoneController.selection = TextSelection.fromPosition(TextPosition(offset: formatted.length));
+                                                          if (name.isNotEmpty) _nameController.text = name;
+                                                        });
+                                                      }
+                                                    } else {
+                                                      if (mounted) {
+                                                        ScaffoldMessenger.of(context).showSnackBar(
+                                                          const SnackBar(content: Text('Contact does not contain a valid 10-digit phone number')),
+                                                        );
+                                                      }
+                                                    }
+                                                  },
+                                                );
+                                              },
+                                            );
+                                          },
+                                        );
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
                             ),
-                            validator: (value) =>
-                                value!.isEmpty ? 'Enter name' : null,
-                            onChanged: (_) {
-                              // Only save draft if widget is still mounted
-                              if (mounted) {
-                                _saveDraft();
+                            keyboardType: TextInputType.phone,
+                            validator: (value) {
+                              if (value == null || value.isEmpty || !value.startsWith('+91 ')) {
+                                return 'Phone must start with +91 ';
+                              }
+                              if (value.trim() == '+91') {
+                                return 'Enter phone number';
+                              }
+                              final digits = value.replaceAll(RegExp(r'\D'), '');
+                              if (digits.length != 12) {
+                                return 'Enter a valid 10-digit number after +91';
+                              }
+                              return null;
+                            },
+                            onChanged: (val) {
+                              if (mounted) _saveDraft();
+                              if (!val.startsWith('+91 ')) {
+                                controller.text = '+91 ';
+                                controller.selection = TextSelection.fromPosition(TextPosition(offset: controller.text.length));
+                                return;
+                              }
+                              String raw = val.replaceAll('+91 ', '').replaceAll(' ', '');
+                              if (raw.length > 10) raw = raw.substring(0, 10);
+                              String formatted = raw.length > 5 ? '+91 ${raw.substring(0, 5)} ${raw.substring(5)}' : '+91 $raw';
+                              if (controller.text != formatted) {
+                                controller.text = formatted;
+                                controller.selection = TextSelection.fromPosition(TextPosition(offset: formatted.length));
                               }
                             },
                           );
                         },
                         optionsViewBuilder: (context, onSelected, options) {
-                          if (options.isEmpty) {
-                            return const SizedBox.shrink();
-                          }
+                          if (options.isEmpty) return const SizedBox.shrink();
                           return Align(
                             alignment: Alignment.topLeft,
                             child: Material(
-                              elevation: 4.0,
-                              child: SizedBox(
-                                height: 200,
-                                child: ListView.builder(
+                              elevation: 8.0,
+                              borderRadius: BorderRadius.circular(14),
+                              child: Container(
+                                constraints: const BoxConstraints(maxHeight: 200, maxWidth: 320),
+                                decoration: BoxDecoration(
+                                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: ListView.separated(
                                   padding: EdgeInsets.zero,
+                                  shrinkWrap: true,
                                   itemCount: options.length,
+                                  separatorBuilder: (_, __) => Divider(height: 1, color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
                                   itemBuilder: (context, index) {
                                     final option = options.elementAt(index);
                                     return ListTile(
-                                      title: Text(option['name'] ?? ''),
-                                      subtitle: Text(option['phone'] ?? ''),
+                                      title: Text(option['phone'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                      subtitle: Text(option['name'] ?? '', style: const TextStyle(fontSize: 11)),
                                       onTap: () => onSelected(option),
                                     );
                                   },
@@ -499,368 +779,177 @@ class _FollowUpFormState extends State<FollowUpForm> {
                           );
                         },
                         onSelected: (selectedCustomer) {
-                          // Check if widget is still mounted before calling setState
                           if (mounted) {
                             setState(() {
-                              _nameController.text =
-                                  selectedCustomer['name'] ?? '';
-                              _addressController.text =
-                                  selectedCustomer['address'] ?? '';
-                              _phoneController.text =
-                                  formatIndianPhone(selectedCustomer['phone'] ?? '');
+                              _nameController.text = selectedCustomer['name'] ?? '';
+                              _addressController.text = selectedCustomer['address'] ?? '';
+                              _phoneController.text = formatIndianPhone(selectedCustomer['phone'] ?? '');
                             });
                           }
                         },
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _addressController,
-                    decoration: const InputDecoration(
-                      labelText: 'Address',
-                      prefixIcon: Icon(Icons.location_on),
-                    ),
-                    validator: (value) => value!.isEmpty ? 'Enter address' : null,
-                    onChanged: (_) => _saveDraft(),
-                  ),
-                  if (widget.source == 'SME' || widget.source == 'DME') ...[
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _adNameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Ad Name',
-                        prefixIcon: Icon(Icons.campaign),
                       ),
-                      onChanged: (_) => _saveDraft(),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  RawAutocomplete<Map<String, dynamic>>(
-                    textEditingController: _phoneController,
-                    focusNode: _phoneFieldFocusNode,
-                    optionsBuilder:
-                        (TextEditingValue textEditingValue) async {
-                      if (textEditingValue.text.isEmpty) {
-                        return const Iterable<Map<String, dynamic>>.empty();
-                      }
-                      // Check if widget is still mounted before making async call
-                      if (!mounted) {
-                        return const Iterable<Map<String, dynamic>>.empty();
-                      }
-                      try {
-                        final user = FirebaseAuth.instance.currentUser;
-                        if (user == null) return const Iterable<Map<String, dynamic>>.empty();
-                        final userDoc = await FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(user.uid)
-                            .get();
-                        final branch = userDoc.data()?['branch'] ?? '';
-                        return await fetchCustomerSuggestions(
-                            textEditingValue.text, branch);
-                      } catch (e) {
-                        debugPrint('Error in phone autocomplete: $e');
-                        return const Iterable<Map<String, dynamic>>.empty();
-                      }
-                    },
-                    displayStringForOption: (option) => option['phone'] ?? '',
-                    fieldViewBuilder:
-                        (context, controller, focusNode, onFieldSubmitted) {
-                      return TextFormField(
-                        controller: controller,
-                        focusNode: focusNode,
-                        decoration: InputDecoration(
-                          labelText: 'Phone',
-                          prefixIcon: const Icon(Icons.phone),
-                          suffixIcon: Row(
-                            mainAxisSize: MainAxisSize.min,
+                    ],
+                  ),
+
+                  buildCardSection(
+                    title: 'Follow-Up Info',
+                    icon: Icons.assignment_outlined,
+                    children: [
+                      TextFormField(
+                        controller: _commentsController,
+                        maxLines: 3,
+                        decoration: buildInputDecoration(label: 'Comments / Notes', icon: Icons.comment_outlined),
+                        validator: (value) => value!.isEmpty ? 'Enter comments' : null,
+                        onChanged: (_) => _saveDraft(),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Priority Level',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
                             children: [
-                              IconButton(
-                                icon: const Icon(Icons.paste),
-                                tooltip: 'Paste from clipboard',
-                                onPressed: () async {
-                                  final clipboardData =
-                                      await Clipboard.getData('text/plain');
-                                  if (clipboardData != null &&
-                                      clipboardData.text != null) {
-                                    final digits = RegExp(r'\d')
-                                        .allMatches(clipboardData.text!)
-                                        .map((m) => m.group(0))
-                                        .join();
-                                    if (digits.length >= 10) {
-                                      final tenDigits =
-                                          digits.substring(digits.length - 10);
-                                      final formatted =
-                                          '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
-                                      _phoneController.text = formatted;
-                                      _phoneController.selection =
-                                          TextSelection.fromPosition(
-                                        TextPosition(offset: formatted.length),
-                                      );
-                                    } else {
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(const SnackBar(
-                                                content: Text(
-                                                    'Clipboard does not contain 10 digits')));
-                                      }
-                                    }
-                                  }
-                                },
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.contacts),
-                                tooltip: 'Pick from contacts',
-                                onPressed: () async {
-                                  // Trigger background refresh if not already loading
-                                  if (_deviceContacts == null && !_deviceContactsLoading) {
-                                    _loadDeviceContacts(); // do not await - open modal immediately
-                                  }
+                              for (final p in ['High', 'Medium', 'Low']) ...[
+                                () {
+                                  final isSelected = _priority == p;
+                                  Color color;
+                                  if (p == 'High') color = const Color(0xFFEF4444);
+                                  else if (p == 'Medium') color = const Color(0xFFF59E0B);
+                                  else color = const Color(0xFF10B981);
 
-                                  var status = await Permission.contacts.status;
-                                  if (!status.isGranted) {
-                                    final granted = await FlutterContacts.requestPermission();
-                                    if (!granted) {
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('Contact permission denied')),
-                                        );
-                                      }
-                                      return;
-                                    }
-                                  }
-
-                                  // Open modal immediately with whatever we have in memory (may be cached)
-                                  if (mounted) {
-                                    showModalBottomSheet(
-                                      context: context,
-                                      isScrollControlled: true,
-                                      backgroundColor: Colors.transparent,
-                                      builder: (context) {
-                                        return DraggableScrollableSheet(
-                                          initialChildSize: 0.85,
-                                          minChildSize: 0.4,
-                                          maxChildSize: 0.95,
-                                          expand: false,
-                                          builder: (context, scrollController) {
-                                            return ContactPickerModal(
-                                              initialContacts: _deviceContacts,
-                                              initialLoading: _deviceContactsLoading,
-                                              scrollController: scrollController,
-                                              onSelect: (name, phone) {
-                                                final digits = RegExp(r'\d')
-                                                    .allMatches(phone)
-                                                    .map((m) => m.group(0))
-                                                    .join();
-                                                if (digits.length >= 10) {
-                                                  final tenDigits = digits.substring(digits.length - 10);
-                                                  final formatted =
-                                                      '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
-                                                  if (mounted) {
-                                                    setState(() {
-                                                      _phoneController.text = formatted;
-                                                      _phoneController.selection = TextSelection.fromPosition(
-                                                        TextPosition(offset: formatted.length),
-                                                      );
-                                                      if (name.isNotEmpty) _nameController.text = name;
-                                                    });
-                                                  }
-                                                } else {
-                                                  if (mounted) {
-                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                      const SnackBar(content: Text('Contact does not contain a valid 10-digit phone number')),
-                                                    );
-                                                  }
-                                                }
-                                              },
-                                            );
-                                          },
-                                        );
+                                  return Expanded(
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        setState(() => _priority = p);
+                                        _saveDraft();
                                       },
-                                    );
-                                  }
-                                },
+                                      child: AnimatedContainer(
+                                        duration: const Duration(milliseconds: 200),
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(
+                                          color: isSelected
+                                              ? color.withValues(alpha: 0.15)
+                                              : (isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC)),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: isSelected ? color : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                                            width: isSelected ? 1.8 : 1.0,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              Icons.flag_rounded,
+                                              size: 14,
+                                              color: isSelected ? color : (isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              p,
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                                color: isSelected ? color : (isDark ? Colors.grey.shade300 : Colors.grey.shade700),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }(),
+                                if (p != 'Low') const SizedBox(width: 8),
+                              ]
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _reminderController,
+                        readOnly: true,
+                        decoration: buildInputDecoration(label: 'Reminder', icon: Icons.alarm_outlined),
+                        onTap: () async {
+                          final now = DateTime.now();
+                          final initialDate = now;
+                          final initialTime = TimeOfDay(
+                            hour: now.add(const Duration(minutes: 1)).hour,
+                            minute: now.add(const Duration(minutes: 1)).minute,
+                          );
+                          final pickedDate = await showDatePicker(
+                            context: context,
+                            initialDate: initialDate,
+                            firstDate: initialDate,
+                            lastDate: initialDate.add(const Duration(days: 15)),
+                          );
+                          if (pickedDate == null) return;
+                          final pickedTime = await showTimePicker(
+                            context: context,
+                            initialTime: initialTime,
+                          );
+                          if (pickedTime != null) {
+                            _selectedReminderTime = pickedTime;
+                            final formatted = DateTime(
+                              pickedDate.year,
+                              pickedDate.month,
+                              pickedDate.day,
+                              pickedTime.hour,
+                              pickedTime.minute,
+                            );
+                            _reminderController.text =
+                                "${formatted.day.toString().padLeft(2, '0')}-${formatted.month.toString().padLeft(2, '0')}-${formatted.year} ${pickedTime.format(context)}";
+                            _saveDraft();
+                          }
+                        },
+                        validator: (value) => value!.isEmpty ? 'Select reminder' : null,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _saveFollowUp,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        elevation: 4,
+                        shadowColor: const Color(0xFF005BAC).withValues(alpha: 0.4),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        backgroundColor: Colors.transparent,
+                      ).copyWith(
+                        elevation: WidgetStateProperty.all(4),
+                      ),
+                      child: Ink(
+                        decoration: BoxDecoration(
+                          gradient: primaryGradient,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          alignment: Alignment.center,
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.save_rounded, color: Colors.white, size: 20),
+                              SizedBox(width: 8),
+                              Text(
+                                'Save Follow Up',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.3),
                               ),
                             ],
                           ),
                         ),
-                        keyboardType: TextInputType.phone,
-                        validator: (value) {
-                          if (value == null || value.isEmpty || !value.startsWith('+91 ')) {
-                            return 'Phone must start with +91 ';
-                          }
-                          if (value.trim() == '+91') {
-                            return 'Enter phone number';
-                          }
-                          final digits = value.replaceAll(RegExp(r'\D'), '');
-                          if (digits.length != 12) {
-                            return 'Enter a valid 10-digit number after +91';
-                          }
-                          return null;
-                        },
-                        onChanged: (val) {
-                          // Only save draft if widget is still mounted
-                          if (mounted) {
-                            _saveDraft();
-                          }
-                          if (!val.startsWith('+91 ')) {
-                            controller.text = '+91 ';
-                            controller.selection = TextSelection.fromPosition(
-                              TextPosition(offset: controller.text.length),
-                            );
-                            return;
-                          }
-                          String raw = val.replaceAll('+91 ', '').replaceAll(' ', '');
-                          if (raw.length > 10) raw = raw.substring(0, 10);
-                          String formatted = raw.length > 5
-                              ? '+91 ${raw.substring(0, 5)} ${raw.substring(5)}'
-                              : '+91 $raw';
-                          if (controller.text != formatted) {
-                            controller.text = formatted;
-                            controller.selection = TextSelection.fromPosition(
-                              TextPosition(offset: formatted.length),
-                            );
-                          }
-                        },
-                      );
-                    },
-                    optionsViewBuilder: (context, onSelected, options) {
-                      if (options.isEmpty) {
-                        return const SizedBox.shrink();
-                      }
-                      return Align(
-                        alignment: Alignment.topLeft,
-                        child: Material(
-                          elevation: 4.0,
-                          child: SizedBox(
-                            height: 200,
-                            child: ListView.builder(
-                              padding: EdgeInsets.zero,
-                              itemCount: options.length,
-                              itemBuilder: (context, index) {
-                                final option = options.elementAt(index);
-                                return ListTile(
-                                  title: Text(option['phone'] ?? ''),
-                                  subtitle: Text(option['name'] ?? ''),
-                                  onTap: () => onSelected(option),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                    onSelected: (selectedCustomer) {
-                      // Check if widget is still mounted before calling setState
-                      if (mounted) {
-                        setState(() {
-                          _nameController.text = selectedCustomer['name'] ?? '';
-                          _addressController.text = selectedCustomer['address'] ?? '';
-                          _phoneController.text = formatIndianPhone(selectedCustomer['phone'] ?? '');
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _commentsController,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      labelText: 'Comments',
-                      alignLabelWithHint: true,
-                      prefixIcon: Padding(
-                        padding: EdgeInsets.only(bottom: 60.0),
-                        child: Icon(Icons.comment),
                       ),
-                    ),
-                    validator: (value) => value!.isEmpty ? 'Enter comments' : null,
-                    onChanged: (_) => _saveDraft(),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: DropdownButtonFormField<String>(
-                          value: _priority,
-                          decoration: const InputDecoration(
-                            labelText: 'Priority',
-                            prefixIcon: Icon(Icons.flag),
-                          ),
-                          items: const [
-                            DropdownMenuItem(value: 'High', child: Text('High')),
-                            DropdownMenuItem(value: 'Medium', child: Text('Medium')),
-                            DropdownMenuItem(value: 'Low', child: Text('Low')),
-                          ],
-                          onChanged: (value) {
-                            setState(() => _priority = value!);
-                            _saveDraft();
-                          },
-                          validator: (value) => value == null || value.isEmpty ? 'Select priority' : null,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        flex: 3,
-                        child: TextFormField(
-                          controller: _reminderController,
-                          readOnly: true,
-                          decoration: const InputDecoration(
-                            labelText: 'Reminder',
-                            prefixIcon: Icon(Icons.alarm),
-                          ),
-                          onTap: () async {
-                            final now = DateTime.now();
-                            final initialDate = now;
-                            final initialTime = TimeOfDay(
-                              hour: now.add(const Duration(minutes: 1)).hour,
-                              minute: now.add(const Duration(minutes: 1)).minute,
-                            );
-                            final pickedDate = await showDatePicker(
-                              context: context,
-                              initialDate: initialDate,
-                              firstDate: initialDate,
-                              lastDate: initialDate.add(const Duration(days: 15)),
-                            );
-                            if (pickedDate == null) return;
-                            final pickedTime = await showTimePicker(
-                              context: context,
-                              initialTime: initialTime,
-                            );
-                            if (pickedTime != null) {
-                              _selectedReminderTime = pickedTime;
-                              final formatted = DateTime(
-                                pickedDate.year,
-                                pickedDate.month,
-                                pickedDate.day,
-                                pickedTime.hour,
-                                pickedTime.minute,
-                              );
-                              _reminderController.text =
-                                  "${formatted.day.toString().padLeft(2, '0')}-${formatted.month.toString().padLeft(2, '0')}-${formatted.year} ${pickedTime.format(context)}";
-                              _saveDraft();
-                            }
-                          },
-                          validator: (value) => value!.isEmpty ? 'Select reminder' : null,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 30),
-                  ElevatedButton(
-                    onPressed: _saveFollowUp,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF005BAC),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text(
-                      'Save Follow Up',
-                      style: TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
                   ),
                 ],
@@ -870,10 +959,8 @@ class _FollowUpFormState extends State<FollowUpForm> {
         ),
         if (_isSaving)
           Container(
-            color: Colors.black.withValues(alpha: 0.3),
-            child: const Center(
-              child: CircularProgressIndicator(),
-            ),
+            color: Colors.black.withValues(alpha: 0.4),
+            child: const Center(child: CircularProgressIndicator()),
           ),
       ],
     );
