@@ -1,12 +1,16 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:call_log/call_log.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../Leads/leadsform.dart';
+import 'tile_viewer/make_call.dart';
+import 'tile_viewer/check_call_log_helper.dart';
+import 'tile_viewer/fetch_last_remarks.dart';
+import 'tile_viewer/update_remarks_in_firestore.dart';
+import 'tile_viewer/edit_customer_dialog.dart';
+import 'tile_viewer/customer_header_card.dart';
+import 'tile_viewer/customer_status_indicator.dart';
+import 'tile_viewer/customer_details_section.dart';
+import 'tile_viewer/customer_last_remarks_section.dart';
+import 'tile_viewer/customer_remarks_section.dart';
+import 'tile_viewer/add_to_leads_button.dart';
 
 class SalesCustomerTileViewer extends StatefulWidget {
   final Map<String, dynamic> customer;
@@ -25,8 +29,8 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
   DateTime? _callStartTime;
   List<Map<String, String>> _pastRemarks = [];
   bool _loadingLastRemarks = false;
-  bool _remarksSaved = false; // Add this flag
-  bool _checkingCall = false; // Prevents concurrent call-log reads on slow phones
+  bool _remarksSaved = false;
+  bool _checkingCall = false;
 
   @override
   void initState() {
@@ -37,12 +41,12 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     remarksController.text = customer['remarks'] ?? '';
     remarksController.addListener(() {
       setState(() {
-        _remarksSaved = false; // Reset flag when remarks change
+        _remarksSaved = false;
       });
     });
     _restorePendingCallState();
     _checkForAnyRecentCall();
-    _fetchLastRemarks();
+    _fetchLastRemarksData();
   }
 
   @override
@@ -52,105 +56,112 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     super.dispose();
   }
 
-  /// Persist pending call state to SharedPreferences so it survives
-  /// app kills, widget rebuilds, and multi-app switching.
-  Future<void> _savePendingCallState() async {
-    final prefs = await SharedPreferences.getInstance();
-    final customerKey = _customerUniqueKey();
-    await prefs.setString('pending_call_number_$customerKey', _pendingCallNumber ?? '');
-    await prefs.setInt('pending_call_time_$customerKey', _callStartTime?.millisecondsSinceEpoch ?? 0);
-  }
-
-  Future<void> _clearPendingCallState() async {
-    final prefs = await SharedPreferences.getInstance();
-    final customerKey = _customerUniqueKey();
-    await prefs.remove('pending_call_number_$customerKey');
-    await prefs.remove('pending_call_time_$customerKey');
-  }
-
   Future<void> _restorePendingCallState() async {
-    if (called) return; // Already marked as called, no need to restore
+    if (called) return;
     final prefs = await SharedPreferences.getInstance();
-    final customerKey = _customerUniqueKey();
-    final savedNumber = prefs.getString('pending_call_number_$customerKey');
-    final savedTime = prefs.getInt('pending_call_time_$customerKey');
+    final key = customerUniqueKey(customer);
+    final savedNumber = prefs.getString('pending_call_number_$key');
+    final savedTime = prefs.getInt('pending_call_time_$key');
     if (savedNumber != null && savedNumber.isNotEmpty && savedTime != null && savedTime > 0) {
       _pendingCallNumber = savedNumber;
       _callStartTime = DateTime.fromMillisecondsSinceEpoch(savedTime);
-      // Immediately check if a call was already completed while we were away
       _checkIfCallWasMade();
     }
   }
 
-  /// Returns a unique key for this customer to scope SharedPreferences keys.
-  String _customerUniqueKey() {
-    final c1 = customer['contact1'] ?? customer['contact'] ?? '';
-    final name = customer['name'] ?? '';
-    return '${name}_$c1'.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
+  Future<void> _checkIfCallWasMade() async {
+    if (_pendingCallNumber == null || _callStartTime == null) return;
+    if (_checkingCall) return;
+    _checkingCall = true;
+    try {
+      await checkIfCallWasMade(
+        customer: customer,
+        pendingCallNumber: _pendingCallNumber,
+        callStartTime: _callStartTime,
+        context: context,
+        mounted: mounted,
+        onCallDetected: () {
+          if (mounted) {
+            setState(() {
+              called = true;
+            });
+          } else {
+            called = true;
+          }
+          _pendingCallNumber = null;
+          _callStartTime = null;
+
+          if (mounted) {
+            Future.delayed(const Duration(milliseconds: 300), () {
+              try {
+                if (mounted) {
+                  Scrollable.ensureVisible(
+                    context,
+                    alignment: 1.0,
+                    duration: const Duration(milliseconds: 500),
+                  );
+                }
+              } catch (_) {}
+            });
+          }
+        },
+      );
+    } finally {
+      _checkingCall = false;
+    }
   }
 
-  Future<void> _makeCall(BuildContext context, String contact1, [String? contact2]) async {
-    // If contact1 is absent, promote contact2 or abort – prevents tel: with no number
-    if (contact1.trim().isEmpty) {
-      if (contact2 == null || contact2.trim().isEmpty) {
+  Future<void> _checkForAnyRecentCall() async {
+    if (called) return;
+    await checkForAnyRecentCall(
+      customer: customer,
+      context: context,
+      mounted: mounted,
+      onCallDetected: () {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No contact number available')),
-          );
+          setState(() {
+            called = true;
+          });
+        } else {
+          called = true;
         }
-        return;
-      }
-      // Only contact2 is present – call it directly, skip the picker dialog
-      contact1 = contact2;
-      contact2 = null;
-    }
-    String? numberToCall = contact1;
-    if (contact2 != null && contact2.isNotEmpty) {
-      // Ask user which number to call
-      numberToCall = await showDialog<String>(
-        context: context,
-        builder: (ctx) => SimpleDialog(
-          title: const Text('Select Number to Call'),
-          children: [
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(ctx, contact1),
-              child: Text(contact1),
-            ),
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(ctx, contact2),
-              child: Text(contact2!),
-            ),
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(ctx, null),
-              child: const Text('Cancel', style: TextStyle(color: Colors.red)),
-            ),
-          ],
-        ),
-      );
-      if (numberToCall == null) return;
-    }
-    var status = await Permission.phone.request();
-    if (!status.isGranted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Phone permission denied')),
-      );
-      return;
-    }
-    final uri = Uri(scheme: 'tel', path: numberToCall);
-    if (await canLaunchUrl(uri)) {
-      _pendingCallNumber = numberToCall;
-      _callStartTime = DateTime.now();
-      // Persist pending call state so it survives app switching
-      await _savePendingCallState();
-      // Store the called number for leads
+        _pendingCallNumber = null;
+        _callStartTime = null;
+      },
+    );
+  }
+
+  Future<void> _reloadCallStatus() async {
+    await reloadCallStatus(
+      customer: customer,
+      called: called,
+      context: context,
+      mounted: mounted,
+      onCallDetected: () {
+        if (mounted) {
+          setState(() {
+            called = true;
+          });
+        } else {
+          called = true;
+        }
+        _pendingCallNumber = null;
+        _callStartTime = null;
+      },
+    );
+  }
+
+  Future<void> _fetchLastRemarksData() async {
+    if (!mounted) return;
+    setState(() {
+      _loadingLastRemarks = true;
+    });
+    final results = await fetchLastRemarks(customer: customer);
+    if (mounted) {
       setState(() {
-        customer['lastCalledNumber'] = numberToCall;
+        _pastRemarks = results;
+        _loadingLastRemarks = false;
       });
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not launch dialer')),
-      );
     }
   }
 
@@ -158,8 +169,6 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       if (_pendingCallNumber != null) {
-        // Call log may not be updated yet right after hang-up.
-        // Try immediately, then retry after a delay.
         _checkIfCallWasMade().then((_) {
           if (!called && _pendingCallNumber != null && mounted) {
             Future.delayed(const Duration(seconds: 3), () {
@@ -168,569 +177,13 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
           }
         });
       } else if (!called) {
-        // No pending call but still not called — scan today's log
         _checkForAnyRecentCall();
-      }
-    }
-  }
-
-  Future<void> _checkIfCallWasMade() async {
-    if (_pendingCallNumber == null || _callStartTime == null) return;
-    // Prevent two simultaneous call-log reads (e.g. immediate check + 3s retry)
-    if (_checkingCall) return;
-    _checkingCall = true;
-    final permStatus = await Permission.phone.status;
-    if (!permStatus.isGranted) {
-      _checkingCall = false;
-      return;
-    }
-    try {
-      final now = DateTime.now();
-      final Iterable<CallLogEntry> entries = await CallLog.query(
-        dateFrom: _callStartTime!.millisecondsSinceEpoch,
-        dateTo: now.millisecondsSinceEpoch,
-      );
-      // Accept call to either contact1 or contact2
-      String? c1 = customer['contact1'] ?? customer['contact'];
-      String? c2 = customer['contact2'];
-      bool callMade = entries.any((entry) {
-        String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
-        bool wasConnected = (entry.duration ?? 0) > 15; // Require call duration > 15 seconds
-        bool matches1 = c1 != null && logNumber.endsWith(c1.replaceAll(RegExp(r'\D'), ''));
-        bool matches2 = c2 != null && c2.isNotEmpty && logNumber.endsWith(c2.replaceAll(RegExp(r'\D'), ''));
-        return (matches1 || matches2) && wasConnected;
-      });
-      if (callMade) {
-        // Always update local map (used by _updateCallStatusInFirestore).
-        customer['callMade'] = true;
-        customer['callDate'] = Timestamp.now();
-        // Update UI only if still mounted; don't let a thrown setState
-        // exception block the Firestore write below.
-        if (mounted) {
-          setState(() {
-            called = true;
-          });
-        } else {
-          called = true;
-        }
-        // Clear persisted pending call state only after confirmed detection
-        _pendingCallNumber = null;
-        _callStartTime = null;
-        await _clearPendingCallState();
-        // Update Firestore to persist callMade status (always, regardless of mount)
-        await _updateCallStatusInFirestore();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Call detected! Please add remarks.'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
-          Future.delayed(const Duration(milliseconds: 300), () {
-            try {
-              if (mounted) {
-                Scrollable.ensureVisible(
-                  context,
-                  alignment: 1.0,
-                  duration: const Duration(milliseconds: 500),
-                );
-              }
-            } catch (_) {
-              // Ignore if widget is no longer in the tree (low-end phone GC)
-            }
-          });
-        }
-      }
-      // If call NOT detected, do NOT clear _pendingCallNumber/_callStartTime.
-      // They stay active so the next resume will re-check.
-    } catch (e) {
-      debugPrint('Error checking call log: $e');
-      // Don't clear pending state on error either — will retry on next resume.
-    } finally {
-      _checkingCall = false;
-    }
-  }
-
-  /// On tile open, scan today's call log for this customer.
-  /// Only counts as "called" if the user initiated an outgoing call to the
-  /// customer today (any duration), AND there is at least one call (incoming
-  /// or outgoing) with duration > 15 seconds. This handles callbacks after
-  /// rejected/short outgoing calls while ignoring customer-initiated-only calls.
-  Future<void> _checkForAnyRecentCall() async {
-    if (called) return; // Already ticked, nothing to do
-    final permStatus = await Permission.phone.status;
-    if (!permStatus.isGranted) return;
-    try {
-      final now = DateTime.now();
-      final startOfDay = DateTime(now.year, now.month, now.day);
-      final Iterable<CallLogEntry> entries = await CallLog.query(
-        dateFrom: startOfDay.millisecondsSinceEpoch,
-        dateTo: now.millisecondsSinceEpoch,
-      );
-      String? c1 = customer['contact1'] ?? customer['contact'];
-      String? c2 = customer['contact2'];
-
-      bool numberMatches(String logNumber, String? contact) {
-        if (contact == null || contact.isEmpty) return false;
-        String clean = contact.replaceAll(RegExp(r'\D'), '');
-        return logNumber.endsWith(clean) || clean.endsWith(logNumber);
-      }
-
-      // Step 1: Find the latest outgoing call to this customer today
-      int latestOutgoingTime = -1;
-      for (final entry in entries) {
-        if (entry.callType != CallType.outgoing) continue;
-        String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
-        if (logNumber.isEmpty) continue;
-        if (numberMatches(logNumber, c1) || numberMatches(logNumber, c2)) {
-          if (entry.timestamp != null && entry.timestamp! > latestOutgoingTime) {
-            latestOutgoingTime = entry.timestamp!;
-          }
-        }
-      }
-      if (latestOutgoingTime == -1) return; // No outgoing call found
-
-      // Step 2: Check if there is ANY call (outgoing itself or subsequent callback) with duration > 15s
-      bool hasLongCall = entries.any((entry) {
-        if (entry.timestamp == null || entry.timestamp! < latestOutgoingTime) return false;
-        String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
-        if (logNumber.isEmpty) return false;
-        bool longEnough = (entry.duration ?? 0) > 15;
-        return (numberMatches(logNumber, c1) || numberMatches(logNumber, c2)) && longEnough;
-      });
-      if (hasLongCall) {
-        customer['callMade'] = true;
-        customer['callDate'] = Timestamp.now();
-        if (mounted) {
-          setState(() {
-            called = true;
-          });
-        } else {
-          called = true;
-        }
-        // Clear any lingering pending call state
-        _pendingCallNumber = null;
-        _callStartTime = null;
-        await _clearPendingCallState();
-        await _updateCallStatusInFirestore();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Call detected! Please add remarks.'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      debugPrint('Error scanning today call log: $e');
-    }
-  }
-  /// Manual reload: checks if user made an outgoing call >15s to this customer today.
-  Future<void> _reloadCallStatus() async {
-    if (called) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Call already marked.'), backgroundColor: Colors.green),
-        );
-      }
-      return;
-    }
-    final permStatus = await Permission.phone.request();
-    if (!permStatus.isGranted) return;
-    try {
-      final now = DateTime.now();
-      final startOfDay = DateTime(now.year, now.month, now.day);
-      final Iterable<CallLogEntry> entries = await CallLog.query(
-        dateFrom: startOfDay.millisecondsSinceEpoch,
-        dateTo: now.millisecondsSinceEpoch,
-      );
-      String? c1 = customer['contact1'] ?? customer['contact'];
-      String? c2 = customer['contact2'];
-
-      bool numberMatches(String logNumber, String? contact) {
-        if (contact == null || contact.isEmpty) return false;
-        String clean = contact.replaceAll(RegExp(r'\D'), '');
-        return logNumber.endsWith(clean) || clean.endsWith(logNumber);
-      }
-
-      bool hasOutgoingLongCall = entries.any((entry) {
-        if (entry.callType != CallType.outgoing) return false;
-        String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
-        if (logNumber.isEmpty) return false;
-        bool longEnough = (entry.duration ?? 0) > 15;
-        return (numberMatches(logNumber, c1) || numberMatches(logNumber, c2)) && longEnough;
-      });
-
-      if (hasOutgoingLongCall) {
-        customer['callMade'] = true;
-        customer['callDate'] = Timestamp.now();
-        if (mounted) {
-          setState(() {
-            called = true;
-          });
-        } else {
-          called = true;
-        }
-        _pendingCallNumber = null;
-        _callStartTime = null;
-        await _clearPendingCallState();
-        await _updateCallStatusInFirestore();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Call detected! Please add remarks.'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No outgoing call (>15s) found today.'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      debugPrint('Error reloading call status: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error checking call log: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  Future<void> _updateCallStatusInFirestore() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null || user.email == null) return;
-      final now = DateTime.now();
-      final months = [
-        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-      ];
-      final monthYear = "${months[now.month - 1]} ${now.year}";
-      final docRef = FirebaseFirestore.instance
-          .collection('customer_target')
-          .doc(monthYear)
-          .collection('users')
-          .doc(user.email!.toLowerCase());
-      final doc = await docRef.get();
-      if (doc.exists && doc.data()?['customers'] != null) {
-        List customers = List.from(doc.data()!['customers']);
-        // Find the customer by contact1/contact
-        String? c1 = customer['contact1'] ?? customer['contact'];
-        String? c2 = customer['contact2'];
-        int idx = customers.indexWhere((c) =>
-          (c['contact'] == c1 || c['contact1'] == c1) ||
-          (c2 != null && c2.isNotEmpty && (c['contact'] == c2 || c['contact2'] == c2))
-        );
-        if (idx != -1) {
-          customers[idx]['callMade'] = true;
-          if (customers[idx]['callDate'] == null) {
-            customers[idx]['callDate'] = Timestamp.now();
-          }
-          await docRef.update({'customers': customers});
-        }
-      }
-    } catch (e) {
-      debugPrint('Failed to update callMade in Firestore: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to update call status in Firestore: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _updateRemarksInFirestore(String remarks) async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null || user.email == null) return;
-      final now = DateTime.now();
-      final months = [
-        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-      ];
-      final monthYear = "${months[now.month - 1]} ${now.year}";
-      final docRef = FirebaseFirestore.instance
-          .collection('customer_target')
-          .doc(monthYear)
-          .collection('users')
-          .doc(user.email!.toLowerCase());
-      final doc = await docRef.get();
-      if (doc.exists && doc.data()?['customers'] != null) {
-        List customers = List.from(doc.data()!['customers']);
-        // Find the customer by contact1/contact
-        String? c1 = customer['contact1'] ?? customer['contact'];
-        String? c2 = customer['contact2'];
-        int idx = customers.indexWhere((c) =>
-          (c['contact'] == c1 || c['contact1'] == c1) ||
-          (c2 != null && c2.isNotEmpty && (c['contact'] == c2 || c['contact2'] == c2))
-        );
-        if (idx != -1) {
-          customers[idx]['remarks'] = remarks;
-          if (customers[idx]['callDate'] == null) {
-            customers[idx]['callDate'] = Timestamp.now();
-          }
-          await docRef.update({'customers': customers});
-        }
-      }
-    } catch (e) {
-      debugPrint('Failed to update remarks in Firestore: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to save remarks: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  String _formatFieldName(String key) {
-    return key.split('_').map((word) => word[0].toUpperCase() + word.substring(1)).join(' ');
-  }
-
-  Future<void> _editCustomerDialog() async {
-    final nameController = TextEditingController(text: customer['name'] ?? '');
-    final addressController = TextEditingController(text: customer['address'] ?? '');
-    final contact1Controller = TextEditingController(text: customer['contact1'] ?? customer['contact'] ?? '');
-    final contact2Controller = TextEditingController(text: customer['contact2'] ?? '');
-    final formKey = GlobalKey<FormState>();
-    bool loading = false;
-    String? error;
-
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) => AlertDialog(
-            title: const Text('Edit Customer'),
-            content: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (error != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(error!, style: const TextStyle(color: Colors.red)),
-                    ),
-                  TextFormField(
-                    controller: nameController,
-                    decoration: const InputDecoration(labelText: 'Customer Name'),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Enter name' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: addressController,
-                    decoration: const InputDecoration(labelText: 'Address'),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Enter address' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: contact1Controller,
-                    decoration: const InputDecoration(labelText: 'Contact Number 1'),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(10),
-                    ],
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Enter contact';
-                      if (v.length != 10) return 'Enter exactly 10 digits';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: contact2Controller,
-                    decoration: const InputDecoration(labelText: 'Contact Number 2 (optional)'),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(10),
-                    ],
-                    validator: (v) {
-                      if (v != null && v.isNotEmpty && v.length != 10) return 'Enter exactly 10 digits';
-                      return null;
-                    },
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: loading ? null : () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: loading
-                    ? null
-                    : () async {
-                        if (!formKey.currentState!.validate()) return;
-                        setState(() => loading = true);
-                        try {
-                          // Update local state
-                          this.setState(() {
-                            customer['name'] = nameController.text.trim();
-                            customer['address'] = addressController.text.trim();
-                            customer['contact1'] = contact1Controller.text.trim();
-                            customer['contact2'] = contact2Controller.text.trim();
-                            customer['contact'] = contact1Controller.text.trim();
-                          });
-                          // Update Firestore
-                          final user = FirebaseAuth.instance.currentUser;
-                          if (user != null && user.email != null) {
-                            final docId = user.email!.toLowerCase();
-                            final now = DateTime.now();
-                            final months = [
-                              'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-                            ];
-                            final monthYear = "${months[now.month - 1]} ${now.year}";
-                            final docRef = FirebaseFirestore.instance
-                                .collection('customer_target')
-                                .doc(monthYear)
-                                .collection('users')
-                                .doc(docId);
-                            final doc = await docRef.get();
-                            if (doc.exists && doc.data()?['customers'] != null) {
-                              List customers = List.from(doc.data()!['customers']);
-                              int idx = customers.indexWhere((c) =>
-                                  (c['name'] == widget.customer['name'] &&
-                                   (c['contact1'] ?? c['contact']) == (widget.customer['contact1'] ?? widget.customer['contact'])));
-                              if (idx != -1) {
-                                customers[idx]['name'] = nameController.text.trim();
-                                customers[idx]['address'] = addressController.text.trim();
-                                customers[idx]['contact1'] = contact1Controller.text.trim();
-                                customers[idx]['contact2'] = contact2Controller.text.trim();
-                                customers[idx]['contact'] = contact1Controller.text.trim();
-                                await docRef.update({'customers': customers});
-                              }
-                            }
-                          }
-                          Navigator.pop(context);
-                        } catch (e) {
-                          setState(() => error = 'Failed to update: $e');
-                        } finally {
-                          setState(() => loading = false);
-                        }
-                      },
-                child: loading
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Text('Save'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _fetchLastRemarks() async {
-    if (!mounted) return;
-    setState(() {
-      _loadingLastRemarks = true;
-    });
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null || user.email == null) {
-        if (mounted) {
-          setState(() => _loadingLastRemarks = false);
-        }
-        return;
-      }
-      final contact1 = customer['contact1'] ?? customer['contact'];
-      final contact2 = customer['contact2'];
-      if ((contact1 == null || contact1.isEmpty) && (contact2 == null || contact2.isEmpty)) {
-        if (mounted) {
-          setState(() => _loadingLastRemarks = false);
-        }
-        return;
-      }
-
-      final now = DateTime.now();
-      const months = [
-        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-      ];
-      final List<Map<String, String>> results = [];
-
-      // Parallelize: fetch all 3 months at once instead of sequentially
-      final futures = <Future<DocumentSnapshot>>[];
-      final monthYears = <String>[];
-      for (int i = 1; i <= 3; i++) {
-        final prev = DateTime(now.year, now.month - i, 1);
-        final monthYear = "${months[prev.month - 1]} ${prev.year}";
-        monthYears.add(monthYear);
-        futures.add(FirebaseFirestore.instance
-            .collection('customer_target')
-            .doc(monthYear)
-            .collection('users')
-            .doc(user.email!.toLowerCase())
-            .get());
-      }
-      final docs = await Future.wait(futures);
-
-      for (int i = 0; i < docs.length; i++) {
-        final doc = docs[i];
-        final monthYear = monthYears[i];
-        if (doc.exists && doc.data() != null && (doc.data() as Map<String, dynamic>)['customers'] != null) {
-          final List customerList = (doc.data() as Map<String, dynamic>)['customers'];
-          dynamic prevCustomer;
-          if (contact1 != null && contact1.isNotEmpty) {
-            prevCustomer = customerList.firstWhere(
-              (c) => c['contact'] == contact1 || c['contact1'] == contact1,
-              orElse: () => null,
-            );
-          }
-          if ((prevCustomer == null || prevCustomer['remarks'] == null || prevCustomer['remarks'].toString().trim().isEmpty) &&
-              contact2 != null && contact2.isNotEmpty) {
-            prevCustomer = customerList.firstWhere(
-              (c) => c['contact'] == contact2 || c['contact2'] == contact2,
-              orElse: () => null,
-            );
-          }
-          if (prevCustomer != null && prevCustomer['remarks'] != null && prevCustomer['remarks'].toString().trim().isNotEmpty) {
-            results.add({'monthYear': monthYear, 'remarks': prevCustomer['remarks'].toString()});
-          }
-        }
-      }
-
-      if (mounted) {
-        setState(() {
-          _pastRemarks = results;
-          _loadingLastRemarks = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _pastRemarks = [];
-          _loadingLastRemarks = false;
-        });
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
     final Color blue = const Color(0xFF005BAC);
     final Color green = const Color.fromARGB(255, 108, 185, 13);
     final primaryColor = called ? green : blue;
@@ -742,24 +195,19 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     String? address = customer['address'];
     List<MapEntry<String, dynamic>> fields = [];
 
-    // Add contact numbers as the first fields in details
     if (contact1 != null && contact1.isNotEmpty) {
       fields.add(MapEntry('contact_no_1', contact1));
     }
     if (contact2 != null && contact2.isNotEmpty) {
       fields.add(MapEntry('contact_no_2', contact2));
     }
-
-    // Add address as a field just after contact numbers
     if (address != null && address.isNotEmpty) {
       fields.add(MapEntry('address', address));
     }
 
     customer.forEach((key, value) {
       if (key == 'slno' || key == 'remarks' || key == 'callMade' || key == 'callDate' || key == 'contact' || key == 'contact1' || key == 'contact2' || key == 'address' || key == 'lastCalledNumber' || key == 'lastRemarks') return;
-      if (key == 'name') {
-        // handled separately
-      } else {
+      if (key != 'name') {
         fields.add(MapEntry(key, value));
       }
     });
@@ -785,14 +233,23 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
             IconButton(
               icon: const Icon(Icons.refresh),
               tooltip: 'Reload Call Status',
-              onPressed: () async {
-                await _reloadCallStatus();
-              },
+              onPressed: _reloadCallStatus,
             ),
             IconButton(
               icon: const Icon(Icons.edit),
               tooltip: 'Edit Customer',
-              onPressed: _editCustomerDialog,
+              onPressed: () {
+                editCustomerDialog(
+                  context: context,
+                  customer: customer,
+                  widgetCustomer: widget.customer,
+                  onUpdated: (updatedFields) {
+                    setState(() {
+                      customer.addAll(updatedFields);
+                    });
+                  },
+                );
+              },
             ),
           ],
         ),
@@ -800,513 +257,76 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Header Card with Contact Info
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [primaryColor, primaryColor.withValues(alpha: 0.8)],
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          called ? Icons.check_circle : Icons.person,
-                          size: 50,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      if (customerName != null) ...[
-                        Text(
-                          customerName,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 16),
-                        if (contact1 != null && contact1.isNotEmpty)
-                          called
-                              // Call Completed: white background with separate Call Again button
-                              ? Column(
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(25),
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                        ),
-                                        child: Material(
-                                          color: Colors.transparent,
-                                          child: InkWell(
-                                            onTap: null,
-                                            child: Padding(
-                                              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(Icons.phone, color: primaryColor),
-                                                  const SizedBox(width: 8),
-                                                  Text(
-                                                    'Call Completed',
-                                                    style: TextStyle(
-                                                      color: primaryColor,
-                                                      fontWeight: FontWeight.bold,
-                                                      fontSize: 16,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(25),
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            colors: [
-                                              primaryColor,
-                                              primaryColor.withValues(alpha: 0.8),
-                                            ],
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                          ),
-                                        ),
-                                        child: Material(
-                                          color: Colors.transparent,
-                                          child: InkWell(
-                                            onTap: () => _makeCall(context, contact1, contact2),
-                                            child: Padding(
-                                              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  const Icon(Icons.phone, color: Colors.white),
-                                                  const SizedBox(width: 8),
-                                                  const Text(
-                                                    'Call Again',
-                                                    style: TextStyle(
-                                                      color: Colors.white,
-                                                      fontWeight: FontWeight.bold,
-                                                      fontSize: 16,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              // Make Call: gradient button
-                              : ClipRRect(
-                                  borderRadius: BorderRadius.circular(25),
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: [
-                                          primaryColor,
-                                          primaryColor.withValues(alpha: 0.8),
-                                        ],
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                      ),
-                                    ),
-                                    child: Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        onTap: () => _makeCall(context, contact1, contact2),
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const Icon(Icons.phone, color: Colors.white),
-                                              const SizedBox(width: 8),
-                                              const Text(
-                                                'Make Call',
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 16,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                      ],
-                    ],
-                  ),
-                ),
+              CustomerHeaderCard(
+                customerName: customerName,
+                contact1: contact1,
+                contact2: contact2,
+                called: called,
+                primaryColor: primaryColor,
+                onCallPressed: () {
+                  makeCall(
+                    context,
+                    customer,
+                    contact1 ?? '',
+                    contact2,
+                    (numberToCall, startTime) {
+                      setState(() {
+                        _pendingCallNumber = numberToCall;
+                        _callStartTime = startTime;
+                        customer['lastCalledNumber'] = numberToCall;
+                      });
+                    },
+                  );
+                },
               ),
-
-              // Status Indicator
-              Container(
-                margin: const EdgeInsets.all(16),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: called
-                      ? swappedColor.withValues(alpha: 0.1)
-                      : Colors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: called ? swappedColor : Colors.orange,
-                    width: 2,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      called ? Icons.check_circle : Icons.pending,
-                      color: called ? swappedColor : Colors.orange,
-                      size: 28,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            called ? 'Call Completed' : 'Call Pending',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: called ? swappedColor : Colors.orange[700],
-                            ),
-                          ),
-                          Text(
-                            called ? 'Please add remarks below' : 'Tap the button above to call',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: called ? swappedColor : Colors.orange[600],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+              CustomerStatusIndicator(
+                called: called,
+                swappedColor: swappedColor,
               ),
-
-              // Customer Details Section
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  'Customer Details',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                ),
+              CustomerDetailsSection(
+                fields: fields,
               ),
-              const SizedBox(height: 8),
-
-              // Details Cards (now includes contact numbers at the top)
-              ...fields.map((entry) => Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.grey[850] : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _formatFieldName(entry.key),
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.grey[400] : Colors.grey[600],
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      entry.value?.toString() ?? '-',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                  ],
-                ),
-              )).toList(),
-
-              // --- Last Remarks Section ---
-              if (_loadingLastRemarks)
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: LinearProgressIndicator(),
-                ),
-              if (!_loadingLastRemarks && _pastRemarks.isNotEmpty)
-                ..._pastRemarks.map((entry) => Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${entry['monthYear']} Remarks',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          entry['remarks']!,
-                          style: const TextStyle(fontSize: 15, color: Colors.black87),
-                        ),
-                      ),
-                    ],
-                  ),
-                )).toList(),
-
-              // --- Remarks Section ---
-              const SizedBox(height: 16),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  'Remarks',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                ),
+              CustomerLastRemarksSection(
+                loadingLastRemarks: _loadingLastRemarks,
+                pastRemarks: _pastRemarks,
               ),
-              const SizedBox(height: 8),
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.grey[850] : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: TextFormField(
-                  controller: remarksController,
-                  enabled: called,
-                  maxLines: 4,
-                  decoration: InputDecoration(
-                    hintText: called ? 'Enter call remarks here...' : 'Complete the call first to add remarks',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey[300]!),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey[300]!),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: primaryColor, width: 2),
-                    ),
-                    disabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey[200]!),
-                    ),
-                    contentPadding: const EdgeInsets.all(12),
-                  ),
-                  style: TextStyle(
-                    color: isDark ? Colors.white : Colors.black87,
-                    fontSize: 16,
-                  ),
-                ),
+              CustomerRemarksSection(
+                remarksController: remarksController,
+                called: called,
+                remarksEntered: remarksEntered,
+                primaryColor: primaryColor,
+                onSavePressed: (called && remarksEntered)
+                    ? () async {
+                        final remarks = remarksController.text.trim();
+                        if (customer.isNotEmpty) {
+                          customer['remarks'] = remarks;
+                          await updateRemarksInFirestore(
+                            customer: customer,
+                            remarks: remarks,
+                            context: context,
+                            mounted: mounted,
+                          );
+                          if (widget.onStatusChanged != null) {
+                            await widget.onStatusChanged!(remarks);
+                          }
+                          if (mounted) {
+                            setState(() {
+                              _remarksSaved = true;
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Remarks saved.'), backgroundColor: Colors.green),
+                            );
+                          }
+                        }
+                      }
+                    : null,
               ),
-              // Save Button
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: remarksEntered
-                          ? LinearGradient(
-                              colors: [
-                                primaryColor,
-                                primaryColor.withValues(alpha: 0.8),
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            )
-                          : null,
-                      color: remarksEntered ? null : Colors.grey[400],
-                    ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: called && remarksEntered
-                            ? () async {
-                                final remarks = remarksController.text.trim();
-                                if (customer.isNotEmpty) {
-                                  customer['remarks'] = remarks;
-                                  
-                                  // Save to Firestore
-                                  await _updateRemarksInFirestore(remarks);
-                                  
-                                  if (widget.onStatusChanged != null) {
-                                    await widget.onStatusChanged!(remarks);
-                                  }
-                                  if (mounted) {
-                                    setState(() {
-                                      _remarksSaved = true; // Set flag after save
-                                    });
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Remarks saved.'), backgroundColor: Colors.green),
-                                    );
-                                  }
-                                }
-                              }
-                            : null,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.save, color: remarksEntered ? Colors.white : Colors.white70),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Save',
-                                style: TextStyle(
-                                  color: remarksEntered ? Colors.white : Colors.white70,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // Add To Leads Button
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: (_remarksSaved && remarksEntered)
-                          ? LinearGradient(
-                              colors: [
-                                primaryColor,
-                                primaryColor.withValues(alpha: 0.8),
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            )
-                          : null,
-                      color: (_remarksSaved && remarksEntered) ? null : Colors.grey[400],
-                    ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: (called && remarksEntered && _remarksSaved)
-                            ? () async {
-                                // Always use lastCalledNumber for leads
-                                String? phone = customer['lastCalledNumber'] ?? customer['contact1'] ?? customer['contact'] ?? customer['phone'];
-                                String? name = customer['name'];
-                                String? address = customer['address'];
-                                Map<String, dynamic>? customerData;
-
-                                if (phone != null && phone.isNotEmpty) {
-                                  final snap = await FirebaseFirestore.instance
-                                      .collection('customer')
-                                      .where('phone', isEqualTo: phone)
-                                      .limit(1)
-                                      .get();
-                                  if (snap.docs.isNotEmpty) {
-                                    customerData = snap.docs.first.data();
-                                  }
-                                }
-
-                                final prefillName = customerData?['name'] ?? name ?? '';
-                                final prefillPhone = customerData?['phone'] ?? phone ?? '';
-                                final prefillAddress = customerData?['address'] ?? address ?? '';
-
-                                if (mounted) {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (context) => FollowUpForm(
-                                        key: UniqueKey(),
-                                        initialName: prefillName,
-                                        initialPhone: prefillPhone,
-                                        initialAddress: prefillAddress,
-                                        source: 'CC',
-                                      ),
-                                    ),
-                                  );
-                                }
-                              }
-                            : null,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.add, color: (_remarksSaved && remarksEntered) ? Colors.white : Colors.white70),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Add To Leads',
-                                style: TextStyle(
-                                  color: (_remarksSaved && remarksEntered) ? Colors.white : Colors.white70,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+              AddToLeadsButton(
+                customer: customer,
+                called: called,
+                remarksEntered: remarksEntered,
+                remarksSaved: _remarksSaved,
+                primaryColor: primaryColor,
               ),
               const SizedBox(height: 24),
             ],
