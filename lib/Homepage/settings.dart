@@ -1,59 +1,16 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../Misc/theme_notifier.dart';
-import 'package:awesome_notifications/awesome_notifications.dart';
-import 'package:android_intent_plus/android_intent.dart';
-import 'dart:io';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SettingsPage extends StatelessWidget {
-  Future<void> _triggerDeleteOldLeads(BuildContext context) async {
-    try {
-      final functions = FirebaseFunctions.instanceFor(region: 'asia-south1');
-      final callable = functions.httpsCallable('deleteOldLeadsCallable');
-      final result = await callable();
-      final deleted = result.data['deleted'] ?? 0;
-      final before = result.data['before'] ?? '';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content:
-                Text('Deleted $deleted old leads (created before $before)')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete old leads: $e')),
-      );
-    }
-  }
-
   final String userRole;
   final ThemeProvider themeProvider;
 
   const SettingsPage(
       {super.key, required this.userRole, required this.themeProvider});
-
-  void _openNotificationToneSettings(BuildContext context) async {
-    if (Platform.isAndroid) {
-      const channelId = 'todo_reminder_channel';
-      final intent = AndroidIntent(
-        action: 'android.settings.CHANNEL_NOTIFICATION_SETTINGS',
-        arguments: <String, dynamic>{
-          'android.provider.extra.APP_PACKAGE': 'com.mtc.mtcsync',
-          'android.provider.extra.CHANNEL_ID': channelId,
-        },
-      );
-      await intent.launch();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content:
-                Text('Please change notification sound from iOS Settings.')),
-      );
-    }
-  }
 
   Future<void> _generateRegistrationCode(BuildContext context) async {
     final code = (Random().nextInt(9000) + 1000).toString();
@@ -228,19 +185,6 @@ class SettingsPage extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 32),
-                      const Text(
-                        'Notifications',
-                        style: TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                      ListTile(
-                        leading: const Icon(Icons.music_note),
-                        title: const Text('Notification Tone'),
-                        subtitle: const Text('Change your notification sound'),
-                        onTap: () => _openNotificationToneSettings(context),
-                        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                      ),
-                      const SizedBox(height: 32),
                       FutureBuilder<String?>(
                         future: getUserRole(),
                         builder: (context, snapshot) {
@@ -254,19 +198,18 @@ class SettingsPage extends StatelessWidget {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                ElevatedButton(
+                                ElevatedButton.icon(
                                   onPressed: () =>
                                       _generateRegistrationCode(context),
-                                  child:
+                                  icon: const Icon(Icons.key_rounded),
+                                  label:
                                       const Text('Generate Registration Code'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF005BAC),
+                                    foregroundColor: Colors.white,
+                                  ),
                                 ),
                                 if (isAdmin) ...[
-                                  const SizedBox(height: 16),
-                                  ElevatedButton(
-                                    onPressed: () =>
-                                        _triggerDeleteOldLeads(context),
-                                    child: const Text('Delete Old Leads Now'),
-                                  ),
                                   const SizedBox(height: 16),
                                   ElevatedButton.icon(
                                     onPressed: () =>
