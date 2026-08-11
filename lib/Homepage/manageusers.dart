@@ -266,7 +266,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                   ..sort((a, b) => a.key.compareTo(b.key));
 
                 // Get latest version from app_constants.dart
-                const String latestVersion = '2.0.174';
+                const String latestVersion = '2.0.175';
 
                 return AlertDialog(
                   title: Row(
@@ -446,7 +446,9 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
       case 'sme':
         return 'SME';
       default:
-        return role.isNotEmpty ? role[0].toUpperCase() + role.substring(1) : role;
+        return role.isNotEmpty
+            ? role[0].toUpperCase() + role.substring(1)
+            : role;
     }
   }
 
@@ -599,7 +601,8 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               DropdownButton<String>(
-                                value: _roles.contains(role) ? role : _roles.first,
+                                value:
+                                    _roles.contains(role) ? role : _roles.first,
                                 isDense: true,
                                 underline: Container(),
                                 borderRadius: BorderRadius.circular(12),
@@ -622,7 +625,9 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                           Text(
                                             _formatRoleName(r),
                                             style: TextStyle(
-                                              color: isDark ? Colors.white : Colors.black87,
+                                              color: isDark
+                                                  ? Colors.white
+                                                  : Colors.black87,
                                               fontWeight: FontWeight.w500,
                                               fontSize: 11,
                                             ),
@@ -646,7 +651,8 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                               const SizedBox(width: 6),
                                               Text(
                                                 _formatRoleName(r),
-                                                style: const TextStyle(fontSize: 12),
+                                                style: const TextStyle(
+                                                    fontSize: 12),
                                               ),
                                             ],
                                           ),
