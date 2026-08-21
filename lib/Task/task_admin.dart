@@ -45,7 +45,7 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _loadUsers();
   }
 
@@ -380,10 +380,11 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           labelStyle:
-              const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
           tabs: const [
             Tab(icon: Icon(Icons.add_task_rounded), text: 'Assign Task'),
-            Tab(icon: Icon(Icons.assignment_rounded), text: 'Assigned Tasks'),
+            Tab(icon: Icon(Icons.pending_actions_rounded), text: 'Pending'),
+            Tab(icon: Icon(Icons.task_alt_rounded), text: 'Completed'),
           ],
         ),
       ),
@@ -391,7 +392,8 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
         controller: _tabController,
         children: [
           _buildAssignTaskTab(isDark),
-          _buildAssignedTasksTab(isDark),
+          _buildTaskListTab(isDark, filterStatus: 'pending'),
+          _buildTaskListTab(isDark, filterStatus: 'completed'),
         ],
       ),
     );
@@ -925,11 +927,13 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
     });
   }
 
-  Widget _buildAssignedTasksTab(bool isDark) {
+  Widget _buildTaskListTab(bool isDark, {required String filterStatus}) {
     final currentUserId = _auth.currentUser?.uid;
     if (currentUserId == null) {
       return const Center(child: Text('User not logged in'));
     }
+
+    final isPendingTab = filterStatus == 'pending';
 
     return StreamBuilder<QuerySnapshot>(
       stream: _firestore
@@ -951,13 +955,15 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  Icons.playlist_add_check_rounded,
+                  isPendingTab
+                      ? Icons.pending_actions_rounded
+                      : Icons.task_alt_rounded,
                   size: 64,
                   color: isDark ? Colors.white24 : Colors.black26,
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'No tasks assigned yet',
+                  isPendingTab ? 'No pending tasks' : 'No completed tasks',
                   style: TextStyle(
                     fontSize: 16,
                     color: isDark ? Colors.white60 : Colors.black54,
@@ -982,34 +988,71 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
             }
             massGroups[massId]!.add(doc);
           } else {
-            displayItems.add(doc);
+            final st = (data['status'] as String? ?? 'pending').toLowerCase();
+            if (st == filterStatus) {
+              displayItems.add(doc);
+            }
           }
         }
 
         massGroups.forEach((massId, docsList) {
           if (docsList.isNotEmpty) {
-            final firstDoc = docsList.first;
-            final data = firstDoc.data() as Map<String, dynamic>;
-            
-            Timestamp? latestTs = data['timestamp'] as Timestamp?;
-            for (final d in docsList) {
-              final ts = (d.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
-              if (ts != null && (latestTs == null || ts.compareTo(latestTs) > 0)) {
-                latestTs = ts;
-              }
-            }
+            final totalUsers = docsList.length;
+            final completedCount = docsList.where((d) => (d.data() as Map<String, dynamic>)['status'] == 'completed').length;
+            final pendingCount = totalUsers - completedCount;
 
-            displayItems.add(MassTaskGroup(
-              massTaskId: massId,
-              title: data['title'] ?? '',
-              description: data['description'] ?? '',
-              assignedByName: data['assigned_by_name'] ?? 'Core Team',
-              assignedByEmail: data['assigned_by_email'] ?? '',
-              timestamp: latestTs,
-              userTasks: docsList,
-            ));
+            // In pending tab, show mass task if it has pending subtasks. In completed tab, show if it has completed subtasks.
+            final bool shouldInclude = isPendingTab ? pendingCount > 0 : completedCount > 0;
+
+            if (shouldInclude) {
+              final firstDoc = docsList.first;
+              final data = firstDoc.data() as Map<String, dynamic>;
+              
+              Timestamp? latestTs = data['timestamp'] as Timestamp?;
+              for (final d in docsList) {
+                final ts = (d.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+                if (ts != null && (latestTs == null || ts.compareTo(latestTs) > 0)) {
+                  latestTs = ts;
+                }
+              }
+
+              displayItems.add(MassTaskGroup(
+                massTaskId: massId,
+                title: data['title'] ?? '',
+                description: data['description'] ?? '',
+                assignedByName: data['assigned_by_name'] ?? 'Core Team',
+                assignedByEmail: data['assigned_by_email'] ?? '',
+                timestamp: latestTs,
+                userTasks: docsList,
+              ));
+            }
           }
         });
+
+        if (displayItems.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  isPendingTab
+                      ? Icons.pending_actions_rounded
+                      : Icons.task_alt_rounded,
+                  size: 64,
+                  color: isDark ? Colors.white24 : Colors.black26,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  isPendingTab ? 'No pending tasks' : 'No completed tasks',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: isDark ? Colors.white60 : Colors.black54,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
 
         // Sort by timestamp newest first
         displayItems.sort((a, b) {
@@ -1052,7 +1095,10 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => MassTaskUsersPage(group: group),
+                        builder: (context) => MassTaskUsersPage(
+                          group: group,
+                          initialStatusFilter: filterStatus,
+                        ),
                       ),
                     );
                   },
@@ -1657,7 +1703,8 @@ class MassTaskGroup {
 
 class MassTaskUsersPage extends StatefulWidget {
   final MassTaskGroup group;
-  const MassTaskUsersPage({super.key, required this.group});
+  final String? initialStatusFilter; // 'pending', 'completed', or null
+  const MassTaskUsersPage({super.key, required this.group, this.initialStatusFilter});
 
   @override
   State<MassTaskUsersPage> createState() => _MassTaskUsersPageState();
@@ -1683,10 +1730,14 @@ class _MassTaskUsersPageState extends State<MassTaskUsersPage> {
 
     // Filtered tasks list
     final filteredTasks = widget.group.userTasks.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      if (widget.initialStatusFilter != null) {
+        final st = (data['status'] as String? ?? 'pending').toLowerCase();
+        if (st != widget.initialStatusFilter) return false;
+      }
       if (_selectedBranch == null || _selectedBranch!.isEmpty) {
         return true;
       }
-      final data = doc.data() as Map<String, dynamic>;
       final branch = (data['assigned_to_branch'] as String? ?? data['branch'] ?? 'Unknown').toString().trim().toUpperCase();
       return branch == _selectedBranch;
     }).toList();
