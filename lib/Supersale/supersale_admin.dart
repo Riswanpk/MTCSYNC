@@ -36,8 +36,10 @@ class _SupersalePageState extends State<SupersalePage> {
   Future<void> _deleteSupersale(String docId) async {
     try {
       final openNotifId = (docId + '_open').hashCode & 0x7FFFFFFF;
+      final preCloseNotifId = (docId + '_preclose').hashCode & 0x7FFFFFFF;
       final closedNotifId = (docId + '_closed').hashCode & 0x7FFFFFFF;
       await AwesomeNotifications().cancel(openNotifId);
+      await AwesomeNotifications().cancel(preCloseNotifId);
       await AwesomeNotifications().cancel(closedNotifId);
 
       await _firestore.collection('supersales').doc(docId).delete();

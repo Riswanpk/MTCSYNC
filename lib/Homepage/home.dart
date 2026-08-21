@@ -26,7 +26,7 @@ import '../Navigation/user_cache_service.dart';
 import '../SME/sme_notification_service.dart';
 import '../Leads/leads_notification.dart';
 import '../DME/services/dme_complaint_service.dart';
-import '../DME/services/dme_supabase_service.dart';
+import '../DME_MTC/core/services/dme_supabase_service.dart';
 import '../Task/task_sales.dart' show syncTaskReminders;
 
 // Top-level function for compute to decode contacts JSON
@@ -79,7 +79,7 @@ class _HomePageState extends State<HomePage>
     // Initialize Supabase early so notification dot shows on app startup
     unawaited(() async {
       try {
-        await DmeSupabaseService.instance.ensureInitialized();
+        await DmeMtcSupabaseService.instance.ensureInitialized();
       } catch (_) {}
     }());
     _userCache.ensureLoaded().then((_) {

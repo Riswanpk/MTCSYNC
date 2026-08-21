@@ -6,7 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:mtcsync/Misc/notification_permission_service.dart';
 import 'package:mtcsync/Navigation/user_cache_service.dart';
 import '../DME/services/dme_complaint_service.dart';
-import '../DME/services/dme_supabase_service.dart';
+import '../DME_MTC/core/services/dme_supabase_service.dart';
 import '../DME/screens/dme_complaints_management.dart';
 import 'presentfollowup.dart';
 import '../SME/sme_assigned_leads_page.dart';
@@ -57,7 +57,7 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
   Future<void> _initSupabaseAndFetchAll() async {
     try {
       // Initialize Supabase before fetching complaints
-      await DmeSupabaseService.instance.ensureInitialized();
+      await DmeMtcSupabaseService.instance.ensureInitialized();
       await _fetchAll();
     } catch (e) {
       debugPrint('Error initializing Supabase for notifications: $e');

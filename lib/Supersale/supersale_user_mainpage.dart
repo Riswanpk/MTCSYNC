@@ -231,8 +231,10 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
     final deletedDocIds = _scheduledDocIds.difference(activeDocIds);
     for (final deletedId in deletedDocIds) {
       final openNotifId = (deletedId + '_open').hashCode & 0x7FFFFFFF;
+      final preCloseNotifId = (deletedId + '_preclose').hashCode & 0x7FFFFFFF;
       final closedNotifId = (deletedId + '_closed').hashCode & 0x7FFFFFFF;
       await AwesomeNotifications().cancel(openNotifId);
+      await AwesomeNotifications().cancel(preCloseNotifId);
       await AwesomeNotifications().cancel(closedNotifId);
     }
     _scheduledDocIds = activeDocIds;
@@ -243,8 +245,10 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
       final isEligible = branches.contains(_userBranch) || branches.contains('all');
       if (!isEligible) {
         final openNotifId = (doc.id + '_open').hashCode & 0x7FFFFFFF;
+        final preCloseNotifId = (doc.id + '_preclose').hashCode & 0x7FFFFFFF;
         final closedNotifId = (doc.id + '_closed').hashCode & 0x7FFFFFFF;
         await AwesomeNotifications().cancel(openNotifId);
+        await AwesomeNotifications().cancel(preCloseNotifId);
         await AwesomeNotifications().cancel(closedNotifId);
         continue;
       }
@@ -256,8 +260,10 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
 
       final startDt = startTs.toDate();
       final endDt = endTs.toDate();
+      final preCloseDt = endDt.subtract(const Duration(minutes: 30));
 
       final openNotifId = (doc.id + '_open').hashCode & 0x7FFFFFFF;
+      final preCloseNotifId = (doc.id + '_preclose').hashCode & 0x7FFFFFFF;
       final closedNotifId = (doc.id + '_closed').hashCode & 0x7FFFFFFF;
 
       // Schedule Open notification if bookingStart is in the future
@@ -283,6 +289,36 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
             hour: startDt.hour,
             minute: startDt.minute,
             second: startDt.second,
+            timeZone: tz,
+            preciseAlarm: true,
+            allowWhileIdle: true,
+          ),
+        );
+      }
+
+      // Schedule 30-min Reminder before closing notification if preCloseDt is in the future
+      if (preCloseDt.isAfter(now)) {
+        final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
+        await NotificationPermissionService.instance.safeCreateNotification(
+          content: NotificationContent(
+            id: preCloseNotifId,
+            channelKey: 'supersale_open_channel',
+            title: 'Supersale Closing Soon!',
+            body: 'Supersale booking for "$itemName" will close in 30 minutes!',
+            notificationLayout: NotificationLayout.Default,
+            payload: {
+              'type': 'supersale',
+              'subType': 'booking_preclose',
+              'docId': doc.id,
+            },
+          ),
+          schedule: NotificationCalendar(
+            year: preCloseDt.year,
+            month: preCloseDt.month,
+            day: preCloseDt.day,
+            hour: preCloseDt.hour,
+            minute: preCloseDt.minute,
+            second: preCloseDt.second,
             timeZone: tz,
             preciseAlarm: true,
             allowWhileIdle: true,

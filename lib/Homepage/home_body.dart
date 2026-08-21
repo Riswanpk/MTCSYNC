@@ -25,16 +25,17 @@ import '../SME/sme_leads_page.dart';
 import '../SME/sme_dashboard.dart';
 import '../SME/sme_ads_page.dart';
 import '../SME/sme_deletion_approval.dart';
-import '../DME/services/dme_supabase_service.dart';
-import '../DME/screens/dme_sales_upload.dart';
-import '../DME/screens/dme_customer_list.dart';
-import '../DME/screens/dme_reminders_and_calls.dart';
-import '../DME/screens/dme_customer_db_upload.dart';
-import '../DME/screens/dme_user_management.dart';
-import '../DME/screens/dme_dashboard.dart';
-import '../DME/screens/dme_user_dashboard.dart';
-import '../DME/screens/dme_leads_page.dart';
+import '../DME_MTC/users/services/dme_user_service.dart';
+import '../DME_MTC/sales/screens/dme_sales_upload_screen.dart';
+import '../DME_MTC/customers/screens/dme_customer_list_screen.dart';
+import '../DME_MTC/reminders/screens/dme_reminders_screen.dart';
+import '../DME_MTC/customers/screens/dme_customer_db_upload_screen.dart';
+import '../DME_MTC/users/screens/dme_user_management_screen.dart';
+import '../DME_MTC/dashboard/screens/dme_dashboard_screen.dart';
+import '../DME_MTC/dashboard/screens/dme_user_dashboard_screen.dart';
+import '../DME_MTC/leads/screens/dme_leads_screen.dart';
 import '../DME/screens/dme_complaints_management.dart';
+import '../DME_MTC/dme_home.dart' as mtc;
 import '../Supersale/supersale_admin.dart';
 import '../Supersale/supersale_admin_dashboard.dart';
 import '../Supersale/supersale_user_mainpage.dart';
@@ -796,11 +797,11 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           icon: Icons.groups_rounded,
         ),
         NeumorphicButton(
-          onTap: () => _navigateToDmeComplaints(context),
-          text: 'Complaints',
-          color: const Color(0xFFFFE0B2),
-          textColor: const Color(0xFFE65100),
-          icon: Icons.warning_rounded,
+          onTap: () => _navigateToDmeMtc(context),
+          text: 'DME MTC (New)',
+          color: const Color(0xFF673AB7),
+          textColor: Colors.white,
+          icon: Icons.rocket_launch_rounded,
         ),
       ];
       return _buildButtonGrid(buttons);
@@ -842,6 +843,13 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
         color: const Color(0xFF00897B),
         textColor: Colors.white,
         icon: Icons.people_alt_rounded,
+      ),
+      NeumorphicButton(
+        onTap: () => _navigateToDmeMtc(context),
+        text: 'DME MTC (New)',
+        color: const Color(0xFF673AB7),
+        textColor: Colors.white,
+        icon: Icons.rocket_launch_rounded,
       ),
     ];
     return _buildButtonGrid(buttons);
@@ -1178,12 +1186,12 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     }
 
     try {
-      var dmeUser = await DmeSupabaseService.instance.getCurrentUser(uid);
+      var dmeUser = await DmeUserService.instance.getCurrentUser(uid);
 
       // For dme_admin users not yet synced, sync them first
       if (dmeUser == null) {
-        await DmeSupabaseService.instance.syncDmeAdminUsers();
-        dmeUser = await DmeSupabaseService.instance.getCurrentUser(uid);
+        await DmeUserService.instance.syncDmeAdminUsers();
+        dmeUser = await DmeUserService.instance.getCurrentUser(uid);
       }
 
       if (dmeUser == null || !context.mounted) {
@@ -1211,11 +1219,11 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   Future<void> _navigateToDmeRemindersAndCalls(BuildContext context) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
-    final dmeUser = await DmeSupabaseService.instance.getCurrentUser(uid);
+    final dmeUser = await DmeUserService.instance.getCurrentUser(uid);
     if (dmeUser == null || !context.mounted) return;
     Navigator.of(context).push(
       MaterialPageRoute(
-          builder: (_) => DmeRemindersAndCallsPage(dmeUser: dmeUser)),
+          builder: (_) => DmeRemindersScreen(dmeUser: dmeUser)),
     );
   }
 
@@ -1240,7 +1248,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   Future<void> _navigateToDmeUserDashboard(BuildContext context) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
-    final dmeUser = await DmeSupabaseService.instance.getCurrentUser(uid);
+    final dmeUser = await DmeUserService.instance.getCurrentUser(uid);
     if (dmeUser == null || !context.mounted) return;
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => DmeUserDashboardPage(dmeUser: dmeUser)),
@@ -1250,7 +1258,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   Future<void> _navigateToDmeLeads(BuildContext context) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
-    final dmeUser = await DmeSupabaseService.instance.getCurrentUser(uid);
+    final dmeUser = await DmeUserService.instance.getCurrentUser(uid);
     if (dmeUser == null || !context.mounted) return;
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => DmeLeadsPage(isAdmin: dmeUser.isAdmin)),
@@ -1269,6 +1277,14 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
         builder: (_) => const LoadingOverlayPage(
           child: SmeAssignedLeadsPage(),
         ),
+      ),
+    );
+  }
+
+  Future<void> _navigateToDmeMtc(BuildContext context) async {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const mtc.DmeHomePage(),
       ),
     );
   }

@@ -14,7 +14,7 @@ import 'manageusers.dart';
 import '../Instructions/instructions.dart';
 import '../Misc/theme_notifier.dart';
 
-import '../DME/screens/dme_user_management.dart';
+import '../DME_MTC/users/screens/dme_user_management_screen.dart';
 import '../SME/sme_lead_form.dart';
 
 /// Builds the drawer widget for the home page.

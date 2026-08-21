@@ -73,7 +73,13 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
         final data = widget.bookingDoc!.data() as Map<String, dynamic>;
         _isSpotSale = data['isSpotSale'] == true || data['saleType'] == 'spot_sale';
         _customerController.text = data['customerName'] ?? '';
-        _phoneController.text = data['phone'] ?? '';
+        final String rawPhone = (data['phone'] ?? '').toString().replaceAll(RegExp(r'\D'), '');
+        final String digitsOnly = rawPhone.startsWith('91') && rawPhone.length > 10
+            ? rawPhone.substring(2)
+            : rawPhone;
+        _phoneController.text = digitsOnly.length > 5
+            ? '+91 ${digitsOnly.substring(0, 5)} ${digitsOnly.substring(5)}'
+            : '+91 $digitsOnly';
         _quantityController.text = (data['quantity'] ?? '').toString();
         _rateController.text = (data['rate'] ?? '').toString();
         _descriptionController.text = data['description'] ?? '';
@@ -98,6 +104,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
           _deliveryReminderDateTime = (data['deliveryReminder'] as Timestamp).toDate();
         }
       } else {
+        _phoneController.text = '+91 ';
         if (_isSpotSale) {
           _advanceController.text = '0';
         }
@@ -633,11 +640,6 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
                     TextFormField(
                       controller: _phoneController,
                       keyboardType: TextInputType.phone,
-                      maxLength: 10,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(10),
-                      ],
                       style: TextStyle(color: isDark ? Colors.white : Colors.black87),
                       decoration: _buildInputDecoration(
                         isDark,
@@ -646,13 +648,35 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
                         counterText: '',
                       ),
                       validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return _isSpotSale ? 'Please enter billed phone number' : 'Please enter phone number';
+                        if (value == null || value.isEmpty || !value.startsWith('+91 ')) {
+                          return 'Phone must start with +91';
                         }
-                        if (value.trim().length != 10) {
-                          return 'Phone number must be exactly 10 digits';
+                        final digits = value.replaceAll(RegExp(r'\D'), '');
+                        if (digits.length != 12) {
+                          return 'Enter valid 10-digit number after +91';
                         }
                         return null;
+                      },
+                      onChanged: (val) {
+                        if (!val.startsWith('+91 ')) {
+                          _phoneController.text = '+91 ';
+                          _phoneController.selection = TextSelection.fromPosition(
+                            TextPosition(offset: _phoneController.text.length),
+                          );
+                          return;
+                        }
+
+                        String raw = val.replaceAll('+91 ', '').replaceAll(' ', '');
+                        if (raw.length > 10) raw = raw.substring(0, 10);
+                        final formatted = raw.length > 5
+                            ? '+91 ${raw.substring(0, 5)} ${raw.substring(5)}'
+                            : '+91 $raw';
+                        if (_phoneController.text != formatted) {
+                          _phoneController.text = formatted;
+                          _phoneController.selection = TextSelection.fromPosition(
+                            TextPosition(offset: formatted.length),
+                          );
+                        }
                       },
                     ),
                     const SizedBox(height: 20),

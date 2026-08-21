@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../DME/services/dme_supabase_service.dart';
+import '../DME_MTC/users/services/dme_user_service.dart';
+import '../DME_MTC/core/services/dme_supabase_service.dart';
 import 'user_cache_service.dart';
 
 class UserDetailPage extends StatefulWidget {
@@ -153,7 +154,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
 
   Future<void> _handleDmeRoleAssignment() async {
     try {
-      final dmeService = DmeSupabaseService.instance;
+      final dmeService = DmeUserService.instance;
       final firebaseUid = widget.userId;
       final email = _userData?['email'] ?? '';
       final username = _usernameController.text.trim().isNotEmpty
@@ -194,7 +195,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
           // For dme_user, prompt for branch selection
           if (!mounted) return;
           
-          final branches = await dmeService.getBranches();
+          final branches = await DmeMtcSupabaseService.instance.getBranches();
           final previousBranchIds = existingUser != null 
               ? await dmeService.getUserBranchIds(existingUser.id)
               : <int>[];

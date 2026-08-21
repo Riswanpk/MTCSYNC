@@ -66,6 +66,7 @@ Future<void> generateFullReport({
       'Sl.No',
       'Customer Name',
       'Phone No.',
+      'Billed No.',
       'Description',
       'Quantity',
       'Rate',
@@ -114,25 +115,30 @@ Future<void> generateFullReport({
             ? dateFormat.format(createdAtTs.toDate())
             : '';
 
-        final Timestamp? deliveryEndTs = data['deliveryEnd'] as Timestamp?;
-        final String deliverDate = deliveryEndTs != null
-            ? dateFormat.format(deliveryEndTs.toDate())
+        final Timestamp? deliveryReminderTs = data['deliveryReminder'] as Timestamp?;
+        final String deliverDate = deliveryReminderTs != null
+            ? dateFormat.format(deliveryReminderTs.toDate())
             : '';
 
         final String rawStatus = data['status']?.toString() ?? 'pending';
         final bool isDelivered = rawStatus.toLowerCase() == 'delivered';
         final String deliveryStatus = isDelivered ? 'Delivered' : 'Pending';
 
+        final String billedPhone = isDelivered
+            ? (data['billedPhone']?.toString() ?? '')
+            : '';
+
         sheet.getRangeByIndex(currentRow, 1).setNumber(slNo.toDouble());
         sheet.getRangeByIndex(currentRow, 2).setText(customerName);
         sheet.getRangeByIndex(currentRow, 3).setText(phone);
-        sheet.getRangeByIndex(currentRow, 4).setText(description);
-        sheet.getRangeByIndex(currentRow, 5).setNumber(quantity);
-        sheet.getRangeByIndex(currentRow, 6).setNumber(rate);
-        sheet.getRangeByIndex(currentRow, 7).setText(sourceStr);
-        sheet.getRangeByIndex(currentRow, 8).setText(bookedDate);
-        sheet.getRangeByIndex(currentRow, 9).setText(deliverDate);
-        sheet.getRangeByIndex(currentRow, 10).setText(deliveryStatus);
+        sheet.getRangeByIndex(currentRow, 4).setText(billedPhone);
+        sheet.getRangeByIndex(currentRow, 5).setText(description);
+        sheet.getRangeByIndex(currentRow, 6).setNumber(quantity);
+        sheet.getRangeByIndex(currentRow, 7).setNumber(rate);
+        sheet.getRangeByIndex(currentRow, 8).setText(sourceStr);
+        sheet.getRangeByIndex(currentRow, 9).setText(bookedDate);
+        sheet.getRangeByIndex(currentRow, 10).setText(deliverDate);
+        sheet.getRangeByIndex(currentRow, 11).setText(deliveryStatus);
 
         // Highlight non-delivered rows in yellow
         if (!isDelivered) {
