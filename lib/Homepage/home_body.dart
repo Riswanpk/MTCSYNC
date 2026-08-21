@@ -21,6 +21,7 @@ import '../Sync Head/sync_head_leads_page.dart';
 import '../Sync Head/sync_head_todos_page.dart';
 import '../Sync Head/sync_head_report_todo.dart';
 import '../Sync Head/sync_head_customer_list_deletion_approval.dart';
+import '../Sync Head/sync_head_yupulse_data.dart';
 import '../SME/sme_leads_page.dart';
 import '../SME/sme_dashboard.dart';
 import '../SME/sme_ads_page.dart';
@@ -764,6 +765,22 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
             badgeCount: pendingCount > 0 ? pendingCount : null,
           );
         },
+      ),
+      NeumorphicButton(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const LoadingOverlayPage(
+                child: YupulseSyncPage(),
+              ),
+            ),
+          );
+        },
+        text: 'Yupulse Sync',
+        color: primaryGreen,
+        textColor: Colors.white,
+        icon: Icons.sync_rounded,
       ),
     ];
     return _buildButtonGrid(buttons);
