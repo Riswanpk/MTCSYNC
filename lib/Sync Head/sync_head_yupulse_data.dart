@@ -194,7 +194,7 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
       for (final userDoc in usersSnap.docs) {
         final uData = userDoc.data();
         final username = uData['username'] ?? uData['email'] ?? 'Unknown User';
-        final rawYupassId = (uData['yupass_id'] ?? uData['yupassId'] ?? '').toString().trim();
+        final rawYupassId = (uData['YuPulseID'] ?? uData['yupass_id'] ?? uData['yupassId'] ?? '').toString().trim();
         final email = (uData['email'] ?? '').toString().toLowerCase().trim();
 
         // 2. Fetch existing marks from Firestore if available

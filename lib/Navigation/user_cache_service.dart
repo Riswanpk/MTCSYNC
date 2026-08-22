@@ -30,7 +30,7 @@ class UserCacheService {
   String? _branch;
   String? _email;
   String? _username;
-  String? _yupassId;
+  String? _yuPulseId;
   bool _loaded = false;
 
   // --- All-users cache ---
@@ -45,7 +45,8 @@ class UserCacheService {
   String? get branch => _branch;
   String? get email => _email;
   String? get username => _username;
-  String? get yupassId => _yupassId;
+  String? get yuPulseId => _yuPulseId;
+  String? get yupassId => _yuPulseId;
   bool get isLoaded => _loaded;
 
   /// Loads the user document from Firestore if not already cached.
@@ -73,12 +74,12 @@ class UserCacheService {
     _branch = doc.data()?['branch'];
     _email = doc.data()?['email'] ?? user.email;
     _username = doc.data()?['username'] ?? doc.data()?['email'] ?? 'User';
-    _yupassId = doc.data()?['yupass_id'];
+    _yuPulseId = doc.data()?['YuPulseID'] ?? doc.data()?['yupass_id'];
     _loaded = true;
   }
 
   /// Returns cached list of all user documents (as Maps).
-  /// Each map contains: 'uid', 'email', 'username', 'branch', 'role', 'yupass_id'.
+  /// Each map contains: 'uid', 'email', 'username', 'branch', 'role', 'YuPulseID', 'yupass_id'.
   /// Cached for [_allUsersTtl]. Call [refreshAllUsers] to force reload.
   Future<List<Map<String, dynamic>>> getAllUsers({bool forceRefresh = false}) async {
     if (!forceRefresh &&
@@ -109,13 +110,15 @@ class UserCacheService {
         await FirebaseFirestore.instance.collection('users').get();
     _allUsers = snapshot.docs.map((doc) {
       final data = doc.data();
+      final pulseId = (data['YuPulseID'] ?? data['yupass_id'] ?? '').toString();
       return {
         'uid': doc.id,
         'email': data['email'] ?? '',
         'username': data['username'] ?? '',
         'branch': data['branch'] ?? '',
         'role': data['role'] ?? '',
-        'yupass_id': data['yupass_id'] ?? '',
+        'YuPulseID': pulseId,
+        'yupass_id': pulseId,
       };
     }).toList();
     _branches = _allUsers!
@@ -134,7 +137,7 @@ class UserCacheService {
     _branch = null;
     _email = null;
     _username = null;
-    _yupassId = null;
+    _yuPulseId = null;
     _loaded = false;
     _allUsers = null;
     _branches = null;

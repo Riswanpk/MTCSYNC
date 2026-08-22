@@ -38,20 +38,20 @@ class _UserDetailPageState extends State<UserDetailPage> {
   String? _selectedRole;
   String? _selectedBranch;
   late TextEditingController _usernameController;
-  late TextEditingController _yupassIdController;
+  late TextEditingController _yuPulseIdController;
 
   @override
   void initState() {
     super.initState();
     _usernameController = TextEditingController();
-    _yupassIdController = TextEditingController();
+    _yuPulseIdController = TextEditingController();
     _loadUserData();
   }
 
   @override
   void dispose() {
     _usernameController.dispose();
-    _yupassIdController.dispose();
+    _yuPulseIdController.dispose();
     super.dispose();
   }
 
@@ -72,7 +72,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
         setState(() {
           _userData = userDoc.data();
           _usernameController.text = _userData?['username'] ?? '';
-          _yupassIdController.text = _userData?['yupass_id'] ?? '';
+          _yuPulseIdController.text = _userData?['YuPulseID'] ?? _userData?['yupass_id'] ?? '';
           _selectedRole = _userData?['role'] ?? 'sales';
           _selectedBranch = _userData?['branch'];
           _appVersion = versionDoc.data()?['appVersion'];
@@ -98,10 +98,10 @@ class _UserDetailPageState extends State<UserDetailPage> {
     setState(() => _isSaving = true);
     try {
       final newUsername = _usernameController.text.trim();
-      final newYupassId = _yupassIdController.text.trim();
+      final newYuPulseId = _yuPulseIdController.text.trim();
       final updates = <String, dynamic>{
         'role': _selectedRole,
-        'yupass_id': newYupassId,
+        'YuPulseID': newYuPulseId,
       };
       if (newUsername.isNotEmpty) {
         updates['username'] = newUsername;
@@ -153,12 +153,12 @@ class _UserDetailPageState extends State<UserDetailPage> {
     if (_userData == null) return false;
     final currentName = (_userData!['username'] ?? '').toString().trim();
     final newName = _usernameController.text.trim();
-    final currentYupass = (_userData!['yupass_id'] ?? '').toString().trim();
-    final newYupass = _yupassIdController.text.trim();
+    final currentYuPulseId = (_userData!['YuPulseID'] ?? _userData!['yupass_id'] ?? '').toString().trim();
+    final newYuPulseId = _yuPulseIdController.text.trim();
     return _selectedRole != (_userData!['role'] ?? 'sales') ||
         _selectedBranch != _userData!['branch'] ||
         newName != currentName ||
-        newYupass != currentYupass;
+        newYuPulseId != currentYuPulseId;
   }
 
   Future<void> _handleDmeRoleAssignment() async {
@@ -451,12 +451,12 @@ class _UserDetailPageState extends State<UserDetailPage> {
             const Divider(height: 20),
             _infoRow(
               Icons.badge,
-              'Yupass ID',
-              (_userData?['yupass_id'] != null && (_userData!['yupass_id'] as String).isNotEmpty)
-                  ? _userData!['yupass_id']
+              'YuPulseID',
+              ((_userData?['YuPulseID'] ?? _userData?['yupass_id']) != null && ((_userData!['YuPulseID'] ?? _userData!['yupass_id']) as String).isNotEmpty)
+                  ? (_userData!['YuPulseID'] ?? _userData!['yupass_id'])
                   : 'N/A',
               isDark,
-              valueColor: (_userData?['yupass_id'] != null && (_userData!['yupass_id'] as String).isNotEmpty)
+              valueColor: ((_userData?['YuPulseID'] ?? _userData?['yupass_id']) != null && ((_userData!['YuPulseID'] ?? _userData!['yupass_id']) as String).isNotEmpty)
                   ? const Color(0xFF005BAC)
                   : null,
             ),
@@ -551,9 +551,9 @@ class _UserDetailPageState extends State<UserDetailPage> {
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 16),
-            // Yupass ID field
+            // YuPulseID field
             Text(
-              'Yupass ID',
+              'YuPulseID',
               style: TextStyle(
                 fontWeight: FontWeight.w500,
                 color: isDark ? Colors.white60 : Colors.grey[700],
@@ -562,9 +562,9 @@ class _UserDetailPageState extends State<UserDetailPage> {
             ),
             const SizedBox(height: 6),
             TextField(
-              controller: _yupassIdController,
+              controller: _yuPulseIdController,
               decoration: InputDecoration(
-                hintText: 'Enter Yupass ID',
+                hintText: 'Enter YuPulseID',
                 filled: true,
                 fillColor: isDark ? const Color(0xFF181A20) : Colors.grey[100],
                 border: OutlineInputBorder(
