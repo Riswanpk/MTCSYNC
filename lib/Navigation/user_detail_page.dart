@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../DME_MTC/users/services/dme_user_service.dart';
-import '../DME_MTC/core/services/dme_supabase_service.dart';
 import 'user_cache_service.dart';
 
 class UserDetailPage extends StatefulWidget {
@@ -115,11 +113,6 @@ class _UserDetailPageState extends State<UserDetailPage> {
           .doc(widget.userId)
           .update(updates);
 
-      // Handle DME role assignments
-      if (_selectedRole == 'dme_admin' || _selectedRole == 'dme_user') {
-        await _handleDmeRoleAssignment();
-      }
-
       await UserCacheService.instance.refreshAllUsers();
       if (widget.userId == FirebaseAuth.instance.currentUser?.uid) {
         await UserCacheService.instance.refresh();
@@ -159,147 +152,6 @@ class _UserDetailPageState extends State<UserDetailPage> {
         _selectedBranch != _userData!['branch'] ||
         newName != currentName ||
         newYuPulseId != currentYuPulseId;
-  }
-
-  Future<void> _handleDmeRoleAssignment() async {
-    try {
-      final dmeService = DmeUserService.instance;
-      final firebaseUid = widget.userId;
-      final email = _userData?['email'] ?? '';
-      final username = _usernameController.text.trim().isNotEmpty
-          ? _usernameController.text.trim()
-          : (_userData?['username'] ?? '');
-      final previousRole = _userData?['role'] ?? 'sales';
-
-      // Check if user already exists in Supabase
-      final existingUser = await dmeService.getCurrentUser(firebaseUid);
-
-      // If changing FROM a DME role to a non-DME role, delete from Supabase
-      if ((previousRole == 'dme_admin' || previousRole == 'dme_user') &&
-          _selectedRole != 'dme_admin' &&
-          _selectedRole != 'dme_user' &&
-          existingUser != null) {
-        await dmeService.deleteDmeUser(existingUser.id);
-        dmeService.clearCache();
-        return;
-      }
-
-      // If changing TO a DME role
-      if (_selectedRole == 'dme_admin' || _selectedRole == 'dme_user') {
-        if (_selectedRole == 'dme_admin') {
-          if (existingUser == null) {
-            // Create new DME admin (no branches needed for admin)
-            await dmeService.createDmeUser(
-              firebaseUid: firebaseUid,
-              email: email,
-              username: username,
-              role: 'dme_admin',
-              branchIds: [],
-            );
-          } else {
-            // Update role to dme_admin
-            await dmeService.updateDmeUserRole(existingUser.id, 'dme_admin');
-          }
-        } else if (_selectedRole == 'dme_user') {
-          // For dme_user, prompt for branch selection
-          if (!mounted) return;
-          
-          final branches = await DmeMtcSupabaseService.instance.getBranches();
-          final previousBranchIds = existingUser != null 
-              ? await dmeService.getUserBranchIds(existingUser.id)
-              : <int>[];
-          final selectedBranchIds = await _showBranchSelectorDialog(branches, previousBranchIds);
-          
-          if (selectedBranchIds == null || selectedBranchIds.isEmpty) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('At least one branch must be assigned for DME User'),
-                  backgroundColor: Colors.orange,
-                ),
-              );
-            }
-            return;
-          }
-
-          if (existingUser == null) {
-            // Create new DME user with branches
-            await dmeService.createDmeUser(
-              firebaseUid: firebaseUid,
-              email: email,
-              username: username,
-              role: 'dme_user',
-              branchIds: selectedBranchIds,
-            );
-          } else {
-            // Update role to dme_user and set branches
-            await dmeService.updateDmeUserRole(existingUser.id, 'dme_user');
-            await dmeService.setUserBranches(existingUser.id, selectedBranchIds);
-          }
-        }
-      }
-      dmeService.clearCache();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error setting DME role: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<List<int>?> _showBranchSelectorDialog(
-    List<Map<String, dynamic>> branches,
-    List<int> currentSelections,
-  ) async {
-    final selected = Set<int>.from(currentSelections);
-
-    return showDialog<List<int>?>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setStateDialog) => AlertDialog(
-          title: const Text('Select Branches'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: branches.map((branch) {
-                  final id = branch['id'] as int;
-                  final name = branch['name'] as String;
-                  return CheckboxListTile(
-                    title: Text(name),
-                    value: selected.contains(id),
-                    onChanged: (value) {
-                      setStateDialog(() {
-                        if (value == true) {
-                          selected.add(id);
-                        } else {
-                          selected.remove(id);
-                        }
-                      });
-                    },
-                  );
-                }).toList(),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, selected.toList()),
-              child: const Text('Select'),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   String _formatTimestamp(Timestamp? ts) {

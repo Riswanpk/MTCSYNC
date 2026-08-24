@@ -1,20 +1,13 @@
-
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:mtcsync/DME/screens/dme_user_complaints.dart';
-import 'package:mtcsync/DME/screens/dme_customer_variants_page.dart';
 import 'package:provider/provider.dart';
-
 import '../Login/login.dart';
 import 'settings.dart';
 import '../Navigation/user_cache_service.dart';
 import 'manageusers.dart';
-
 import '../Instructions/instructions.dart';
 import '../Misc/theme_notifier.dart';
-
-import '../DME_MTC/users/screens/dme_user_management_screen.dart';
 import '../SME/sme_lead_form.dart';
 
 /// Builds the drawer widget for the home page.
@@ -38,71 +31,13 @@ class HomeDrawer extends StatelessWidget {
         children: [
           _buildDrawerHeader(context),
           _buildSettingsTile(context),
-          // DME users: 'My Complaints' showing only their own raised complaints
-          if (role == 'dme_user') _buildDmeUserComplaintsTile(context),
-          if (role == 'dme_user') _buildDmeUserAddLeadTile(context),
-          if (role == 'dme_user') _buildDmeUserVariantsTile(context),
           if (role == 'admin' || role == 'sync_head' || role == 'Sync Head')
             _buildManageUsersTile(context),
-          if (role == 'dme_admin') _buildDmeUsersTile(context),
 
           _buildInstructionsTile(context),
           _buildLogoutTile(context),
         ],
       ),
-    );
-  }
-
-  Widget _buildDmeUserComplaintsTile(BuildContext context) {
-    return ListTile(
-      dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: const Icon(Icons.assignment_rounded, color: Colors.redAccent),
-      title: const Text('My Complaints'),
-      onTap: () {
-        Navigator.pop(context);
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (context) => const DmeUserComplaintsPage()),
-        );
-      },
-    );
-  }
-
-  Widget _buildDmeUserAddLeadTile(BuildContext context) {
-    return ListTile(
-      dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: const Icon(Icons.person_add_rounded, color: Colors.teal),
-      title: const Text('Add Lead'),
-      onTap: () {
-        Navigator.pop(context);
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (context) => const SmeLeadForm(source: 'DME')),
-        );
-      },
-    );
-  }
-
-  Widget _buildDmeUserVariantsTile(BuildContext context) {
-    return ListTile(
-      dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: const Icon(Icons.category_rounded, color: Colors.purpleAccent),
-      title: const Text('Multi-Category Customers'),
-      subtitle:
-          const Text('2+ categories or types', style: TextStyle(fontSize: 10)),
-      onTap: () {
-        Navigator.pop(context);
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (context) => const DmeCustomerVariantsPage()),
-        );
-      },
     );
   }
 
@@ -236,23 +171,6 @@ class HomeDrawer extends StatelessWidget {
           context,
           MaterialPageRoute(
               builder: (context) => ManageUsersPage(userRole: role ?? 'admin')),
-        );
-      },
-    );
-  }
-
-  Widget _buildDmeUsersTile(BuildContext context) {
-    return ListTile(
-      dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: const Icon(Icons.manage_accounts, color: Colors.indigo),
-      title: const Text('DME Users'),
-      onTap: () {
-        Navigator.pop(context);
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (context) => const DmeUserManagementPage()),
         );
       },
     );

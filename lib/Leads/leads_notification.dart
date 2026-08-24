@@ -5,9 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:mtcsync/Misc/notification_permission_service.dart';
 import 'package:mtcsync/Navigation/user_cache_service.dart';
-import '../DME/services/dme_complaint_service.dart';
-import '../DME_MTC/core/services/dme_supabase_service.dart';
-import '../DME/screens/dme_complaints_management.dart';
 import 'presentfollowup.dart';
 import '../SME/sme_assigned_leads_page.dart';
 import '../Task/task_sales.dart';
@@ -15,7 +12,7 @@ import '../Task/task_admin.dart';
 
 // ─── Notification Types ────────────────────────────────────────────────────
 
-enum _NotifType { transfer, leadAssignment, complaint, coreTask }
+enum _NotifType { transfer, leadAssignment, coreTask }
 
 class _NotifItem {
   final _NotifType type;
@@ -51,20 +48,7 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
   @override
   void initState() {
     super.initState();
-    _initSupabaseAndFetchAll();
-  }
-
-  Future<void> _initSupabaseAndFetchAll() async {
-    try {
-      // Initialize Supabase before fetching complaints
-      await DmeMtcSupabaseService.instance.ensureInitialized();
-      await _fetchAll();
-    } catch (e) {
-      debugPrint('Error initializing Supabase for notifications: $e');
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
+    _fetchAll();
   }
 
   // ─── Data Fetching ────────────────────────────────────────────────────────
@@ -82,12 +66,10 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
     final uid = currentUser.uid;
     final items = <_NotifItem>[];
 
-    // Run all three fetches in parallel for better performance
     try {
       await Future.wait<void>([
         _fetchTransferredLeads(uid, items),
         _fetchAssignedLeads(uid, items),
-        _fetchAssignedComplaints(uid, items),
         _fetchCoreTasks(uid, items),
       ]);
     } catch (e) {
@@ -244,69 +226,6 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
     }
   }
 
-  Future<void> _fetchAssignedComplaints(
-      String uid, List<_NotifItem> items) async {
-    try {
-      // Fetch complaints assigned to current user (limit to 30 for performance)
-      final assignedComplaints = await DmeComplaintService.instance
-          .getAssignedComplaints(userId: uid, status: 'raised');
-      
-      // Limit to first 30 items to prevent slow loading
-      final limitedAssigned = assignedComplaints.take(30);
-      
-      for (final c in limitedAssigned) {
-        final text = c.complaintText;
-        final subtitle =
-            text.length > 70 ? '${text.substring(0, 70)}...' : text;
-        items.add(_NotifItem(
-          type: _NotifType.complaint,
-          id: c.id ?? '',
-          title: c.customerName,
-          subtitle: subtitle,
-          time: c.createdAt,
-        ));
-      }
-
-      // If user is a manager, also fetch all branch complaints (limit to 20 to avoid slow load)
-      final userCache = UserCacheService.instance;
-      await userCache.ensureLoaded();
-      final userRole = userCache.role;
-      final userBranch = userCache.branch;
-
-      if ((userRole == 'manager' || userRole == 'asst_manager') && userBranch != null) {
-        // Get branch ID from branch name
-        final branchId = await DmeComplaintService.instance
-            .getBranchIdByName(userBranch);
-        
-        if (branchId != null) {
-          // Fetch all complaints for this branch (limit to 20 for performance)
-          final branchComplaints = await DmeComplaintService.instance
-              .getComplaintsForBranch(branchId: branchId, status: 'raised');
-          
-          final limitedBranch = branchComplaints.take(20);
-          
-          for (final c in limitedBranch) {
-            // Only add if not already in list (avoid duplicates)
-            if (!items.any((item) => item.id == c.id)) {
-              final text = c.complaintText;
-              final subtitle =
-                  text.length > 70 ? '${text.substring(0, 70)}...' : text;
-              items.add(_NotifItem(
-                type: _NotifType.complaint,
-                id: c.id ?? '',
-                title: c.customerName,
-                subtitle: subtitle,
-                time: c.createdAt,
-              ));
-            }
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Error fetching complaints: $e');
-    }
-  }
-
   Future<void> _fetchCoreTasks(String uid, List<_NotifItem> items) async {
     try {
       final userCache = UserCacheService.instance;
@@ -449,32 +368,6 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
       if (mounted) {
         await _fetchAll();
       }
-    } else if (item.type == _NotifType.complaint) {
-      // Mark complaint as seen by this user before navigating
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid != null) {
-        await DmeComplaintService.instance
-            .markComplaintNotificationAsSeen(complaintId: item.id, userId: uid);
-      }
-      
-      // Remove from list immediately for responsive UI
-      if (mounted) {
-        setState(() {
-          _items.removeWhere((i) => i.id == item.id);
-        });
-      }
-      
-      if (!mounted) return;
-      // Navigate to complaints page, then refresh notifications when returning
-      await Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const DmeComplaintsManagementPage()),
-      );
-      
-      // Refresh the notification list when returning
-      if (mounted) {
-        await _fetchAll();
-      }
     } else if (item.type == _NotifType.coreTask) {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       final userCache = UserCacheService.instance;
@@ -602,10 +495,6 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
         accentColor = const Color(0xFF2E7D32);
         iconData = Icons.person_add_alt_1_rounded;
         typeLabel = 'Lead Assigned';
-      case _NotifType.complaint:
-        accentColor = const Color(0xFFC62828);
-        iconData = Icons.assignment_rounded;
-        typeLabel = 'Complaint Assigned';
       case _NotifType.coreTask:
         accentColor = const Color(0xFFE65100);
         iconData = Icons.assignment_late_rounded;

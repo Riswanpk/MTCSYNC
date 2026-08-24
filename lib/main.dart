@@ -21,10 +21,6 @@ import 'Todo/todo.dart'; // <-- Already present
 import 'SME/sme_assigned_leads_page.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'Version/user_version_helper.dart'; // <-- Add this import
-import 'DME/screens/dme_customer_tile_viewer.dart';
-import 'DME/screens/dme_assigned_complaints.dart';
-import 'DME/models/dme_reminder.dart';
-import 'DME/services/dme_supabase_service.dart';
 import 'Task/task_sales.dart';
 import 'Task/task_admin.dart';
 import 'Supersale/supersale_user_mainpage.dart';
@@ -579,18 +575,6 @@ class NotificationController {
       return;
     }
 
-    // Handle DME complaint notifications navigation
-    if (notifType == 'dme_complaint' || notifType == 'complaint_assigned' || notifType == 'complaint_raised' || channelKey == 'dme_complaints_channel') {
-      _doPush((_) => const DmeAssignedComplaintsPage());
-      return;
-    }
-
-    // Handle DME reminder notification
-    if (notifType == 'dme_reminder') {
-      _handleDmeReminder(receivedAction);
-      return;
-    }
-
     // Handle supersale notifications navigation
     final isSupersaleOpen = channelKey == 'supersale_open_channel' ||
         (notifType == 'supersale' && payload?['subType'] == 'booking_open');
@@ -647,38 +631,6 @@ class NotificationController {
       navigator.push(MaterialPageRoute(builder: builder));
     } else {
       Future.microtask(() => _doPush(builder));
-    }
-  }
-
-  static Future<void> _handleDmeReminder(ReceivedAction receivedAction) async {
-    final reminderId = receivedAction.payload?['reminderId'];
-    final customerId = int.tryParse(receivedAction.payload?['customerId'] ?? '');
-    
-    if (customerId != null && reminderId != null && reminderId.isNotEmpty) {
-      try {
-        WidgetsFlutterBinding.ensureInitialized();
-        await Firebase.initializeApp();
-        
-        final svc = DmeSupabaseService.instance;
-        final reminder = await svc.getReminderDetail(int.parse(reminderId as String));
-        
-        if (reminder != null) {
-          final userCache = UserCacheService.instance;
-          final firebaseUid = userCache.uid;
-          
-          if (firebaseUid != null) {
-            final user = await svc.getCurrentUser(firebaseUid);
-            if (user != null) {
-              _doPush((_) => DmeCustomerTileViewer(
-                reminder: reminder,
-                dmeUser: user,
-              ));
-            }
-          }
-        }
-      } catch (e) {
-        debugPrint('Error handling DME reminder notification: $e');
-      }
     }
   }
 

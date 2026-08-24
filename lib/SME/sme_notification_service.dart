@@ -26,7 +26,6 @@ class SmeNotificationService {
       final type = data['type'] ?? data['notifType'];
       const handled = {
         'sme_lead_assignment',
-        'dme_lead_assignment',
         'lead_transfer',
         'core_task_assignment',
         'core_task_completion',
@@ -45,7 +44,6 @@ class SmeNotificationService {
       final isSupersale = type == 'supersale_notification';
       final subType = data['subType'] ?? '';
 
-      final isDmeComplaint = type == 'dme_complaint' || type == 'complaint_assigned' || type == 'complaint_raised';
       final isSmeLead = type == 'sme_lead_assignment' || type == 'sme_lead';
 
       String targetChannel = 'basic_channel_v2';
@@ -65,8 +63,6 @@ class SmeNotificationService {
         targetChannel = 'task_completion_channel';
       } else if (isSmeLead) {
         targetChannel = 'sme_lead_channel';
-      } else if (isDmeComplaint) {
-        targetChannel = 'dme_complaints_channel';
       }
 
       // Show local notification so AwesomeNotifications action buttons work

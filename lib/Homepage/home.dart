@@ -25,8 +25,6 @@ import '../Misc/battery_optimization_helper.dart';
 import '../Navigation/user_cache_service.dart';
 import '../SME/sme_notification_service.dart';
 import '../Leads/leads_notification.dart';
-import '../DME/services/dme_complaint_service.dart';
-import '../DME_MTC/core/services/dme_supabase_service.dart';
 import '../Task/task_sales.dart' show syncTaskReminders;
 
 // Top-level function for compute to decode contacts JSON
@@ -76,12 +74,6 @@ class _HomePageState extends State<HomePage>
     super.initState();
     isAppReady = true;
     _initSwingAnimation();
-    // Initialize Supabase early so notification dot shows on app startup
-    unawaited(() async {
-      try {
-        await DmeMtcSupabaseService.instance.ensureInitialized();
-      } catch (_) {}
-    }());
     _userCache.ensureLoaded().then((_) {
       if (mounted) {
         setState(() {
@@ -257,23 +249,8 @@ class _HomePageState extends State<HomePage>
         if (mounted) _scheduleDebouncedCountUpdate();
       });
     }
-
-    // Listen for complaints using Supabase
-    _listenForComplaintsRealtime(uid);
   }
 
-  void _listenForComplaintsRealtime(String uid) {
-    _complaintsListener?.cancel();
-    // Poll every 60 s — reduced from 3 s to prevent ANR on low-spec devices.
-    // Each tick triggers the debounced updater so rapid bursts are still coalesced.
-    _complaintsListener = Stream.periodic(const Duration(seconds: 60)).listen((_) {
-      if (mounted) _scheduleDebouncedCountUpdate();
-    });
-  }
-
-  /// Debounces calls to [_updateOtherCountFromListeners] so that multiple
-  /// rapid-fire listener events (assigned leads + core tasks + periodic poll
-  /// all firing at once) are coalesced into a single execution after 500 ms.
   void _scheduleDebouncedCountUpdate() {
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 500), () {
@@ -283,8 +260,6 @@ class _HomePageState extends State<HomePage>
 
   Future<void> _updateOtherCountFromListeners() async {
     if (!mounted) return;
-    // Guard: skip if a previous call is still running to avoid piling up
-    // overlapping Firestore round-trips that stall the event loop (ANR).
     if (_isUpdatingCount) return;
     _isUpdatingCount = true;
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -320,65 +295,6 @@ class _HomePageState extends State<HomePage>
             } catch (_) {}
           }
           count += docIds.where((id) => !seenIds.contains(id)).length;
-        }
-      } catch (_) {}
-
-      // Count complaints assigned to this user that are still raised (excluding seen ones)
-      int unresolvedComplaintsCount = 0;
-      List<String> countedComplaintIds = [];
-      try {
-        final complaints = await DmeComplaintService.instance
-            .getAssignedComplaints(userId: uid, status: 'raised');
-
-        if (complaints.isNotEmpty) {
-          final results = await Future.wait(complaints.map((complaint) async {
-            final isSeen = await DmeComplaintService.instance
-                .isComplaintSeen(complaintId: complaint.id ?? '', userId: uid);
-            return MapEntry(complaint, isSeen);
-          }));
-
-          for (final entry in results) {
-            if (!entry.value) {
-              count++;
-              unresolvedComplaintsCount++;
-              countedComplaintIds.add(entry.key.id ?? '');
-            }
-          }
-        }
-      } catch (_) {}
-
-      // Also count branch complaints for managers (avoid duplicates)
-      try {
-        if (_role == 'manager' || _role == 'asst_manager') {
-          final branchName = _userCache.branch ?? '';
-          if (branchName.isNotEmpty) {
-            final branchId = await DmeComplaintService.instance
-                .getBranchIdByName(branchName);
-
-            if (branchId != null) {
-              final branchComplaints = await DmeComplaintService.instance
-                  .getComplaintsForBranch(branchId: branchId, status: 'raised');
-
-              final uncounted = branchComplaints
-                  .where((c) => !countedComplaintIds.contains(c.id))
-                  .toList();
-
-              if (uncounted.isNotEmpty) {
-                final results = await Future.wait(uncounted.map((complaint) async {
-                  final isSeen = await DmeComplaintService.instance
-                      .isComplaintSeen(complaintId: complaint.id ?? '', userId: uid);
-                  return isSeen;
-                }));
-
-                for (final isSeen in results) {
-                  if (!isSeen) {
-                    count++;
-                    unresolvedComplaintsCount++;
-                  }
-                }
-              }
-            }
-          }
         }
       } catch (_) {}
 
@@ -427,7 +343,7 @@ class _HomePageState extends State<HomePage>
         setState(() {
           _otherCount = count;
           _taskCount = taskCount;
-          _complaintCount = unresolvedComplaintsCount;
+         
         });
       }
     } finally {

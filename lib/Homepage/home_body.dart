@@ -15,7 +15,6 @@ import '../Marketing/viewer_marketing.dart';
 import '../Customer Calling/customer_list_target.dart';
 import '../Customer Calling/customer_admin_viewer.dart';
 import '../Navigation/loading_page.dart';
-
 import 'home_widgets.dart';
 import '../Sync Head/sync_head_leads_page.dart';
 import '../Sync Head/sync_head_todos_page.dart';
@@ -26,17 +25,6 @@ import '../SME/sme_leads_page.dart';
 import '../SME/sme_dashboard.dart';
 import '../SME/sme_ads_page.dart';
 import '../SME/sme_deletion_approval.dart';
-import '../DME_MTC/users/services/dme_user_service.dart';
-import '../DME_MTC/sales/screens/dme_sales_upload_screen.dart';
-import '../DME_MTC/customers/screens/dme_customer_list_screen.dart';
-import '../DME_MTC/reminders/screens/dme_reminders_screen.dart';
-import '../DME_MTC/customers/screens/dme_customer_db_upload_screen.dart';
-import '../DME_MTC/users/screens/dme_user_management_screen.dart';
-import '../DME_MTC/dashboard/screens/dme_dashboard_screen.dart';
-import '../DME_MTC/dashboard/screens/dme_user_dashboard_screen.dart';
-import '../DME_MTC/leads/screens/dme_leads_screen.dart';
-import '../DME/screens/dme_complaints_management.dart';
-import '../DME_MTC/dme_home.dart' as mtc;
 import '../Supersale/supersale_admin.dart';
 import '../Supersale/supersale_admin_dashboard.dart';
 import '../Supersale/supersale_user_mainpage.dart';
@@ -554,15 +542,6 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           textColor: Colors.white,
           icon: Icons.inventory_2_rounded,
         ),
-      if (role == 'admin' || role == 'manager' || role == 'asst_manager' || role == 'sales')
-        NeumorphicButton(
-          onTap: () => _navigateToDmeComplaints(context),
-          text: 'Complaints',
-          color: const Color(0xFFE53935),
-          textColor: Colors.white,
-          icon: Icons.warning_rounded,
-          badgeCount: widget.complaintCount,
-        ),
       if (role == 'manager' || role == 'asst_manager')
         NeumorphicButton(
           onTap: () => _navigateToDashboard(context),
@@ -584,9 +563,6 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     }
     if (role == 'sme') {
       return _buildSmeTiles(context);
-    }
-    if (role == 'dme_admin' || role == 'dme_user') {
-      return _buildDmeTiles(context);
     }
 
     // Build button list based on role — always show 6 buttons
@@ -743,26 +719,16 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
                 context,
                 MaterialPageRoute(
                   builder: (_) => const LoadingOverlayPage(
-                    child: CustomerAdminViewerPage(),
-                  ),
-                ),
-              );
-            },
-            onLongPress: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const LoadingOverlayPage(
                     child: SyncHeadCustomerListDeletionApprovalPage(),
                   ),
                 ),
               );
             },
-            text: 'Customer Calling',
-            color: isDark ? const Color(0xFF23272A) : Colors.white,
-            textColor: isDark ? Colors.white70 : const Color(0xFF607D8B),
-            icon: Icons.phone_rounded,
-            badgeCount: pendingCount > 0 ? pendingCount : null,
+            text: 'Approvals',
+            color: primaryBlue,
+            textColor: Colors.white,
+            icon: Icons.how_to_reg_rounded,
+            badgeCount: pendingCount,
           );
         },
       ),
@@ -786,91 +752,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     return _buildButtonGrid(buttons);
   }
 
-  /// Builds the DME-specific home tiles.
-  Widget _buildDmeTiles(BuildContext context) {
-    final role = widget.role;
-    // dme_admin sees Dashboard, Customer DB Upload, and Complaints
-    if (role == 'dme_admin') {
-      final List<Widget> buttons = [
-        NeumorphicButton(
-          onTap: () => _navigateToDmeDashboard(context),
-          text: 'Dashboard',
-          color: const Color(0xFFB2EBF2),
-          textColor: const Color(0xFF00695C),
-          icon: Icons.analytics_rounded,
-        ),
-        NeumorphicButton(
-          onTap: () => _navigateToDmeCustomerDbUpload(context),
-          text: 'Customer DB Upload',
-          color: const Color(0xFFC8E6C9),
-          textColor: const Color(0xFF1B5E20),
-          icon: Icons.storage_rounded,
-        ),
-        NeumorphicButton(
-          onTap: () => _navigateToDmeCustomerList(context),
-          text: 'Customer List',
-          color: const Color(0xFFFFD580),
-          textColor: const Color(0xFFE65100),
-          icon: Icons.groups_rounded,
-        ),
-        NeumorphicButton(
-          onTap: () => _navigateToDmeMtc(context),
-          text: 'DME MTC (New)',
-          color: const Color(0xFF673AB7),
-          textColor: Colors.white,
-          icon: Icons.rocket_launch_rounded,
-        ),
-      ];
-      return _buildButtonGrid(buttons);
-    }
 
-    // dme_user sees Upload Sales, Customers, Reminders, Call Customers
-    final List<Widget> buttons = [
-      NeumorphicButton(
-        onTap: () => _navigateToDmeSalesUpload(context),
-        text: 'Upload Sales',
-        color: const Color(0xFF1E88E5),
-        textColor: Colors.white,
-        icon: Icons.upload_file,
-      ),
-      NeumorphicButton(
-        onTap: () => _navigateToDmeCustomerList(context),
-        text: 'Customers',
-        color: const Color(0xFF8CC63F),
-        textColor: Colors.white,
-        icon: Icons.groups_rounded,
-      ),
-      NeumorphicButton(
-        onTap: () => _navigateToDmeRemindersAndCalls(context),
-        text: 'Reminders & Calls',
-        color: const Color(0xFFE65100),
-        textColor: Colors.white,
-        icon: Icons.phone_in_talk_rounded,
-      ),
-      NeumorphicButton(
-        onTap: () => _navigateToDmeUserDashboard(context),
-        text: 'My Dashboard',
-        color: const Color(0xFFFFA000),
-        textColor: Colors.white,
-        icon: Icons.bar_chart_rounded,
-      ),
-      NeumorphicButton(
-        onTap: () => _navigateToDmeLeads(context),
-        text: 'Leads',
-        color: const Color(0xFF00897B),
-        textColor: Colors.white,
-        icon: Icons.people_alt_rounded,
-      ),
-      NeumorphicButton(
-        onTap: () => _navigateToDmeMtc(context),
-        text: 'DME MTC (New)',
-        color: const Color(0xFF673AB7),
-        textColor: Colors.white,
-        icon: Icons.rocket_launch_rounded,
-      ),
-    ];
-    return _buildButtonGrid(buttons);
-  }
 
   /// Builds the SME-specific home tiles.
   Widget _buildSmeTiles(BuildContext context) {
@@ -1186,122 +1068,12 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     );
   }
 
-  // ── DME Navigation Methods ──────────────────────────────────
-  Future<void> _navigateToDmeSalesUpload(BuildContext context) async {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const DmeSalesUploadPage()),
-    );
-  }
-
-  Future<void> _navigateToDmeCustomerList(BuildContext context) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User not authenticated')),
-      );
-      return;
-    }
-
-    try {
-      var dmeUser = await DmeUserService.instance.getCurrentUser(uid);
-
-      // For dme_admin users not yet synced, sync them first
-      if (dmeUser == null) {
-        await DmeUserService.instance.syncDmeAdminUsers();
-        dmeUser = await DmeUserService.instance.getCurrentUser(uid);
-      }
-
-      if (dmeUser == null || !context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('User profile not found. Please contact admin.')),
-        );
-        return;
-      }
-
-      Navigator.of(context).push(
-        MaterialPageRoute(
-            builder: (_) => DmeCustomerListPage(dmeUser: dmeUser!)),
-      );
-    } catch (e) {
-      debugPrint('Error navigating to customer list: $e');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _navigateToDmeRemindersAndCalls(BuildContext context) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    final dmeUser = await DmeUserService.instance.getCurrentUser(uid);
-    if (dmeUser == null || !context.mounted) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-          builder: (_) => DmeRemindersScreen(dmeUser: dmeUser)),
-    );
-  }
-
-  Future<void> _navigateToDmeCustomerDbUpload(BuildContext context) async {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const DmeCustomerDbUploadPage()),
-    );
-  }
-
-  Future<void> _navigateToDmeUsers(BuildContext context) async {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const DmeUserManagementPage()),
-    );
-  }
-
-  Future<void> _navigateToDmeDashboard(BuildContext context) async {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const DmeDashboardPage()),
-    );
-  }
-
-  Future<void> _navigateToDmeUserDashboard(BuildContext context) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    final dmeUser = await DmeUserService.instance.getCurrentUser(uid);
-    if (dmeUser == null || !context.mounted) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => DmeUserDashboardPage(dmeUser: dmeUser)),
-    );
-  }
-
-  Future<void> _navigateToDmeLeads(BuildContext context) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    final dmeUser = await DmeUserService.instance.getCurrentUser(uid);
-    if (dmeUser == null || !context.mounted) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => DmeLeadsPage(isAdmin: dmeUser.isAdmin)),
-    );
-  }
-
-  Future<void> _navigateToDmeComplaints(BuildContext context) async {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const DmeComplaintsManagementPage()),
-    );
-  }
-
   Future<void> _navigateToSmeAssignedLeads(BuildContext context) async {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => const LoadingOverlayPage(
           child: SmeAssignedLeadsPage(),
         ),
-      ),
-    );
-  }
-
-  Future<void> _navigateToDmeMtc(BuildContext context) async {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const mtc.DmeHomePage(),
       ),
     );
   }
