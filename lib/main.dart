@@ -5,7 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
-import 'package:mtcsync/Navigation/user_cache_service.dart';
 import 'package:mtcsync/Misc/sound_service.dart';
 import 'package:provider/provider.dart';
 import 'package:in_app_update/in_app_update.dart';
@@ -25,6 +24,8 @@ import 'Task/task_sales.dart';
 import 'Task/task_admin.dart';
 import 'Supersale/supersale_user_mainpage.dart';
 import 'Misc/network_guard.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'DME/dme_config.dart';
 
 /// Top-level background message handler for FCM Push Notifications
 @pragma('vm:entry-point')
@@ -126,6 +127,18 @@ void main() async {
     await SoundService.instance.initialize();
   } catch (e) {
     debugPrint('SoundService init error: $e');
+  }
+
+  // Initialize Supabase if configured
+  if (DmeConfig.isConfigured) {
+    try {
+      await Supabase.initialize(
+        url: DmeConfig.supabaseUrl,
+        anonKey: DmeConfig.supabaseAnonKey,
+      );
+    } catch (e) {
+      debugPrint('Supabase init error: $e');
+    }
   }
 
   // Run the app
