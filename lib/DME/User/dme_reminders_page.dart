@@ -27,14 +27,6 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
   List<int> _userAssignedBranches = [];
   int? _selectedBranchId; // null means 'All Assigned Branches'
 
-  SupabaseClient? get _supabaseClient {
-    try {
-      return Supabase.instance.client;
-    } catch (_) {
-      return null;
-    }
-  }
-
   @override
   void initState() {
     super.initState();
@@ -75,8 +67,8 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
   }
 
   Future<void> _fetchRemindersForBranch(int branchId) async {
-    final client = _supabaseClient;
-    if (client == null || !DmeConfig.isConfigured) return;
+    final client = await DmeConfig.getClient();
+    if (client == null) return;
 
     setState(() => _isLoading = true);
 

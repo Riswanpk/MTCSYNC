@@ -25,14 +25,6 @@ class _DmeAdminCustomerDetailPageState extends State<DmeAdminCustomerDetailPage>
   List<Map<String, dynamic>> _sales = [];
   Map<String, dynamic>? _reminder;
 
-  SupabaseClient? get _supabaseClient {
-    try {
-      return Supabase.instance.client;
-    } catch (_) {
-      return null;
-    }
-  }
-
   @override
   void initState() {
     super.initState();
@@ -62,9 +54,9 @@ class _DmeAdminCustomerDetailPageState extends State<DmeAdminCustomerDetailPage>
   }
 
   Future<void> _loadFullCustomerProfile() async {
-    final client = _supabaseClient;
+    final client = await DmeConfig.getClient();
     final customerId = _customer['id'];
-    if (client == null || !DmeConfig.isConfigured || customerId == null) {
+    if (client == null || customerId == null) {
       setState(() => _isLoading = false);
       return;
     }

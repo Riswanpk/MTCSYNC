@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../DME/dme_config.dart';
 import 'dart:convert';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
@@ -71,7 +71,9 @@ Future<List<Map<String, dynamic>>> fetchCustomersByName(String query) async {
   try {
     if (query.isEmpty) return [];
     
-    final client = Supabase.instance.client;
+    final client = await DmeConfig.getClient();
+    if (client == null) return [];
+
     final response = await client
         .from('dme_customers')
         .select('id, name, phone, address')

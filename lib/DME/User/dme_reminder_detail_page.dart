@@ -32,14 +32,6 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
   List<Map<String, dynamic>> _salesHistory = [];
   bool _isLoadingHistory = false;
 
-  SupabaseClient? get _supabaseClient {
-    try {
-      return Supabase.instance.client;
-    } catch (_) {
-      return null;
-    }
-  }
-
   @override
   void initState() {
     super.initState();
@@ -81,9 +73,9 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
   }
 
   Future<void> _fetchCustomerSalesHistory() async {
-    final client = _supabaseClient;
+    final client = await DmeConfig.getClient();
     final customerId = _reminder['customer_id'];
-    if (client == null || !DmeConfig.isConfigured || customerId == null) return;
+    if (client == null || customerId == null) return;
 
     setState(() => _isLoadingHistory = true);
     try {
@@ -251,8 +243,8 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
   }
 
   Future<void> _saveAndMarkCompleted() async {
-    final client = _supabaseClient;
-    if (client == null || !DmeConfig.isConfigured) return;
+    final client = await DmeConfig.getClient();
+    if (client == null) return;
 
     final remarks = _remarksController.text.trim();
     if (remarks.isEmpty) {

@@ -903,7 +903,7 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
                 'reminder_date': DateFormat('yyyy-MM-dd').format(reminderDate),
                 'last_purchase_date': DateFormat('yyyy-MM-dd').format(sale.date),
                 'last_purchase_branch': sale.branchId,
-                'status': 'pending',
+                'status': 'pending', // Fresh/reset reminder date for new purchase
                 'updated_at': DateTime.now().toIso8601String(),
               };
             } else {
@@ -933,6 +933,54 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
               'customer_type_id': sale.typeId,
             };
           }
+        }
+      }
+
+      // Check existing reminders in database to ensure we advance due dates for existing customers
+      final List<int> customerIdsWithNewReminders = remindersByCustomer.keys.toList();
+      if (customerIdsWithNewReminders.isNotEmpty) {
+        try {
+          // Fetch existing database reminders in chunks of 500
+          for (int i = 0; i < customerIdsWithNewReminders.length; i += 500) {
+            final chunk = customerIdsWithNewReminders.sublist(
+              i,
+              (i + 500 > customerIdsWithNewReminders.length) ? customerIdsWithNewReminders.length : i + 500,
+            );
+            final existingDbReminders = await client
+                .from('dme_reminders')
+                .select('id, customer_id, last_purchase_date, reminder_date, status')
+                .inFilter('customer_id', chunk);
+
+            for (var dbRow in (existingDbReminders as List)) {
+              final cId = dbRow['customer_id'] as int?;
+              if (cId != null && remindersByCustomer.containsKey(cId)) {
+                final dbLastPurchaseStr = dbRow['last_purchase_date']?.toString();
+                final dbLastPurchase = dbLastPurchaseStr != null ? DateTime.tryParse(dbLastPurchaseStr) : null;
+
+                final currentObj = remindersByCustomer[cId]!;
+                final newLastPurchaseStr = currentObj['last_purchase_date']?.toString();
+                final newLastPurchase = newLastPurchaseStr != null ? DateTime.tryParse(newLastPurchaseStr) : null;
+
+                // If existing DB last purchase is newer than Excel, preserve the DB one
+                if (dbLastPurchase != null && newLastPurchase != null && dbLastPurchase.isAfter(newLastPurchase)) {
+                  remindersByCustomer[cId] = {
+                    'customer_id': cId,
+                    'reminder_date': dbRow['reminder_date'],
+                    'last_purchase_date': dbRow['last_purchase_date'],
+                    'last_purchase_branch': currentObj['last_purchase_branch'],
+                    'status': dbRow['status'],
+                    'updated_at': DateTime.now().toIso8601String(),
+                  };
+                } else {
+                  // The newly uploaded invoice is newer: Reset status to 'pending' and advance reminder_date forward!
+                  currentObj['status'] = 'pending';
+                  currentObj['updated_at'] = DateTime.now().toIso8601String();
+                }
+              }
+            }
+          }
+        } catch (checkErr) {
+          debugPrint('Notice checking existing reminders: $checkErr');
         }
       }
 

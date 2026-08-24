@@ -35,14 +35,6 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
   int? _selectedTypeId; // null = All
   String _sortBy = 'recent'; // 'recent', 'name_asc', 'name_desc'
 
-  SupabaseClient? get _supabaseClient {
-    try {
-      return Supabase.instance.client;
-    } catch (_) {
-      return null;
-    }
-  }
-
   @override
   void initState() {
     super.initState();
@@ -94,8 +86,8 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
   }
 
   Future<void> _fetchCustomersDirectory() async {
-    final client = _supabaseClient;
-    if (client == null || !DmeConfig.isConfigured) {
+    final client = await DmeConfig.getClient();
+    if (client == null) {
       setState(() => _isLoading = false);
       return;
     }

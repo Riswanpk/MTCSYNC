@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
@@ -26,14 +27,6 @@ class _DmeWhatsAppProofPageState extends State<DmeWhatsAppProofPage> {
 
   Uint8List? _compressedBytes;
   bool _isUploading = false;
-
-  SupabaseClient? get _supabaseClient {
-    try {
-      return Supabase.instance.client;
-    } catch (_) {
-      return null;
-    }
-  }
 
   @override
   void dispose() {
@@ -74,8 +67,8 @@ class _DmeWhatsAppProofPageState extends State<DmeWhatsAppProofPage> {
   }
 
   Future<void> _uploadProofAndSubmit() async {
-    final client = _supabaseClient;
-    if (client == null || !DmeConfig.isConfigured) {
+    final client = await DmeConfig.getClient();
+    if (client == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Supabase is not configured.')),
       );
@@ -105,7 +98,7 @@ class _DmeWhatsAppProofPageState extends State<DmeWhatsAppProofPage> {
       final user = FirebaseAuth.instance.currentUser;
       final uploaderEmail = user?.email ?? 'unknown';
 
-      // 1. Upload compressed bytes to Supabase Storage bucket 'whatsapp_proofs' (fallback: 'dme_proofs')
+      // 1. Upload compressed bytes to Supabase Storage or fallback to base64 Data URI
       final fileName = 'proof_${reminderId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       String publicUrl = '';
 
@@ -117,7 +110,7 @@ class _DmeWhatsAppProofPageState extends State<DmeWhatsAppProofPage> {
             );
         publicUrl = client.storage.from('whatsapp_proofs').getPublicUrl(fileName);
       } catch (storageErr) {
-        debugPrint('Storage bucket whatsapp_proofs upload error: $storageErr');
+        debugPrint('Storage bucket whatsapp_proofs upload notice: $storageErr');
         try {
           await client.storage.from('dme_proofs').uploadBinary(
                 fileName,
@@ -126,7 +119,10 @@ class _DmeWhatsAppProofPageState extends State<DmeWhatsAppProofPage> {
               );
           publicUrl = client.storage.from('dme_proofs').getPublicUrl(fileName);
         } catch (_) {
-          publicUrl = fileName;
+          // Robust Fallback: Store as compressed base64 data URI directly in DB so upload never fails
+          // Even if user hasn't created the bucket or RLS policies yet in Supabase
+          final base64String = base64Encode(_compressedBytes!);
+          publicUrl = 'data:image/jpeg;base64,$base64String';
         }
       }
 
