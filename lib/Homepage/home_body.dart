@@ -31,6 +31,8 @@ import '../Supersale/supersale_user_mainpage.dart';
 import '../SME/sme_assigned_leads_page.dart';
 import '../Task/task_admin.dart';
 import '../Task/task_sales.dart';
+import '../DME/User/dme_user_homepage.dart';
+import '../DME/Admin/dme_admin_homepage.dart';
 
 /// App brand colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -564,6 +566,12 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     if (role == 'sme') {
       return _buildSmeTiles(context);
     }
+    if (role == 'dme_user') {
+      return _buildDmeUserTiles(context);
+    }
+    if (role == 'dme_admin') {
+      return _buildDmeAdminTiles(context);
+    }
 
     // Build button list based on role — always show 6 buttons
     // Left buttons (even indices: 0, 2, 4) will be primaryBlue
@@ -827,6 +835,16 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       ),
     ];
     return _buildButtonGrid(buttons);
+  }
+
+  /// Builds the DME User-specific home tiles (Upload, Customers, Complaints, Leads).
+  Widget _buildDmeUserTiles(BuildContext context) {
+    return buildDmeUserTiles(context);
+  }
+
+  /// Builds the DME Admin-specific home tiles.
+  Widget _buildDmeAdminTiles(BuildContext context) {
+    return buildDmeAdminTiles(context);
   }
 
   Future<void> _navigateToSyncHeadLeads(BuildContext context) async {
