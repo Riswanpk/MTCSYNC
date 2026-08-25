@@ -722,7 +722,8 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
         builder: (context, snapshot) {
           final pendingCount = snapshot.data?.docs.length ?? 0;
           return NeumorphicButton(
-            onTap: () {
+            onTap: () => _navigateToCustomerList(context),
+            onLongPress: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -732,11 +733,11 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
                 ),
               );
             },
-            text: 'Approvals',
-            color: primaryBlue,
-            textColor: Colors.white,
-            icon: Icons.how_to_reg_rounded,
-            badgeCount: pendingCount,
+            text: 'Customer Calling',
+            color: isDark ? const Color(0xFF23272A) : Colors.white,
+            textColor: isDark ? Colors.white70 : const Color(0xFF607D8B),
+            icon: Icons.phone_rounded,
+            badgeCount: pendingCount > 0 ? pendingCount : null,
           );
         },
       ),

@@ -26,7 +26,8 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
-  List<Map<String, dynamic>> _allCustomers = [];
+  final ScrollController _scrollController = ScrollController();
+  List<Map<String, dynamic>> _customers = [];
   List<int> _assignedBranches = [];
 
   // Filter selections
@@ -35,10 +36,25 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
   int? _selectedTypeId; // null = All
   String _sortBy = 'recent'; // 'recent', 'name_asc', 'name_desc'
 
+  // Pagination state
+  int _currentOffset = 0;
+  static const int _pageSize = 30;
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
+
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _initBranchAccess();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      if (!_isLoading && !_isLoadingMore && _hasMore) {
+        _fetchMoreCustomers();
+      }
+    }
   }
 
   Future<void> _initBranchAccess() async {
@@ -62,11 +78,12 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
         debugPrint('Error loading user assigned branches: $e');
       }
     }
-    await _fetchCustomersDirectory();
+    await _fetchCustomersDirectory(reset: true);
   }
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -85,57 +102,98 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
     return str;
   }
 
-  Future<void> _fetchCustomersDirectory() async {
+  Future<void> _fetchCustomersDirectory({bool reset = false}) async {
     final client = await DmeConfig.getClient();
     if (client == null) {
       setState(() => _isLoading = false);
       return;
     }
 
-    setState(() => _isLoading = true);
+    if (reset) {
+      setState(() {
+        _isLoading = true;
+        _currentOffset = 0;
+        _hasMore = true;
+        _customers.clear();
+      });
+    }
 
     try {
-      // Query customers with their branches, categories, types junctions
-      final response = await client
-          .from('dme_customers')
-          .select('id, name, phone, address, salesman, last_purchase_date, created_at, dme_customer_branches(branch_id, category_id, customer_type_id)')
-          .order('last_purchase_date', ascending: false);
+      // 1. If branch, category, or type filters are active, query customer IDs matching junction criteria
+      List<int>? filteredCustomerIds;
+      final needsJunctionFilter = _selectedBranchId != null ||
+          _selectedCategoryId != null ||
+          _selectedTypeId != null ||
+          _assignedBranches.isNotEmpty;
 
-      final List data = response as List;
-      List<Map<String, dynamic>> customers = [];
+      if (needsJunctionFilter) {
+        var junctionQuery = client.from('dme_customer_branches').select('customer_id');
 
-      for (var item in data) {
-        final cust = Map<String, dynamic>.from(item);
-        final branchList = cust['dme_customer_branches'] as List?;
-
-        List<int> branchIds = [];
-        List<int> categoryIds = [];
-        List<int> typeIds = [];
-
-        if (branchList != null) {
-          for (var b in branchList) {
-            final bId = b['branch_id'] as int?;
-            final catId = b['category_id'] as int?;
-            final tId = b['customer_type_id'] as int?;
-            if (bId != null && !branchIds.contains(bId)) branchIds.add(bId);
-            if (catId != null && !categoryIds.contains(catId)) categoryIds.add(catId);
-            if (tId != null && !typeIds.contains(tId)) typeIds.add(tId);
-          }
+        if (_selectedBranchId != null) {
+          junctionQuery = junctionQuery.eq('branch_id', _selectedBranchId!);
+        } else if (_assignedBranches.isNotEmpty) {
+          junctionQuery = junctionQuery.inFilter('branch_id', _assignedBranches);
         }
 
-        // If user is restricted to specific assigned branches, ensure customer has activity in at least one assigned branch
-        if (_assignedBranches.isNotEmpty && !branchIds.any((bId) => _assignedBranches.contains(bId))) {
-          continue;
+        if (_selectedCategoryId != null) {
+          junctionQuery = junctionQuery.eq('category_id', _selectedCategoryId!);
         }
 
-        cust['branch_ids'] = branchIds;
-        cust['category_ids'] = categoryIds;
-        cust['type_ids'] = typeIds;
-        customers.add(cust);
+        if (_selectedTypeId != null) {
+          junctionQuery = junctionQuery.eq('customer_type_id', _selectedTypeId!);
+        }
+
+        final junctionRes = await junctionQuery;
+        final Set<int> matchedCustIds = {};
+        for (var row in (junctionRes as List)) {
+          final cId = row['customer_id'] as int?;
+          if (cId != null) matchedCustIds.add(cId);
+        }
+        filteredCustomerIds = matchedCustIds.toList();
+
+        if (filteredCustomerIds.isEmpty) {
+          setState(() {
+            _customers = [];
+            _hasMore = false;
+            _isLoading = false;
+          });
+          return;
+        }
       }
 
+      // 2. Query dme_customers
+      dynamic query = client
+          .from('dme_customers')
+          .select('id, name, phone, address, salesman, last_purchase_date, created_at, dme_customer_branches(branch_id, category_id, customer_type_id)');
+
+      if (filteredCustomerIds != null) {
+        query = query.inFilter('id', filteredCustomerIds);
+      }
+
+      // Search Query
+      if (_searchQuery.trim().isNotEmpty) {
+        final q = _searchQuery.trim();
+        query = query.or('name.ilike.%$q%,phone.ilike.%$q%,salesman.ilike.%$q%,address.ilike.%$q%');
+      }
+
+      // Order
+      if (_sortBy == 'name_asc') {
+        query = query.order('name', ascending: true);
+      } else if (_sortBy == 'name_desc') {
+        query = query.order('name', ascending: false);
+      } else {
+        query = query.order('last_purchase_date', ascending: false, nullsFirst: false);
+      }
+
+      final response = await query.range(0, _pageSize - 1);
+      final List data = response as List;
+
+      List<Map<String, dynamic>> parsedList = _parseCustomerRows(data);
+
       setState(() {
-        _allCustomers = customers;
+        _customers = parsedList;
+        _currentOffset = data.length;
+        _hasMore = data.length >= _pageSize;
         _isLoading = false;
       });
     } catch (e) {
@@ -149,52 +207,128 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
     }
   }
 
-  List<Map<String, dynamic>> _getFilteredCustomers() {
-    return _allCustomers.where((c) {
-      // 1. Search Query
-      if (_searchQuery.isNotEmpty) {
-        final q = _searchQuery.toLowerCase();
-        final name = (c['name'] ?? '').toString().toLowerCase();
-        final phone = (c['phone'] ?? '').toString().toLowerCase();
-        final address = (c['address'] ?? '').toString().toLowerCase();
-        final salesman = (c['salesman'] ?? '').toString().toLowerCase();
-        if (!name.contains(q) && !phone.contains(q) && !address.contains(q) && !salesman.contains(q)) {
-          return false;
+  Future<void> _fetchMoreCustomers() async {
+    final client = await DmeConfig.getClient();
+    if (client == null || _isLoadingMore || !_hasMore) return;
+
+    setState(() => _isLoadingMore = true);
+
+    try {
+      List<int>? filteredCustomerIds;
+      final needsJunctionFilter = _selectedBranchId != null ||
+          _selectedCategoryId != null ||
+          _selectedTypeId != null ||
+          _assignedBranches.isNotEmpty;
+
+      if (needsJunctionFilter) {
+        var junctionQuery = client.from('dme_customer_branches').select('customer_id');
+
+        if (_selectedBranchId != null) {
+          junctionQuery = junctionQuery.eq('branch_id', _selectedBranchId!);
+        } else if (_assignedBranches.isNotEmpty) {
+          junctionQuery = junctionQuery.inFilter('branch_id', _assignedBranches);
+        }
+
+        if (_selectedCategoryId != null) {
+          junctionQuery = junctionQuery.eq('category_id', _selectedCategoryId!);
+        }
+
+        if (_selectedTypeId != null) {
+          junctionQuery = junctionQuery.eq('customer_type_id', _selectedTypeId!);
+        }
+
+        final junctionRes = await junctionQuery;
+        final Set<int> matchedCustIds = {};
+        for (var row in (junctionRes as List)) {
+          final cId = row['customer_id'] as int?;
+          if (cId != null) matchedCustIds.add(cId);
+        }
+        filteredCustomerIds = matchedCustIds.toList();
+
+        if (filteredCustomerIds.isEmpty) {
+          setState(() {
+            _hasMore = false;
+            _isLoadingMore = false;
+          });
+          return;
         }
       }
 
-      // 2. Branch Filter
-      if (_selectedBranchId != null) {
-        final List<int> bIds = (c['branch_ids'] as List<int>?) ?? [];
-        if (!bIds.contains(_selectedBranchId)) return false;
+      dynamic query = client
+          .from('dme_customers')
+          .select('id, name, phone, address, salesman, last_purchase_date, created_at, dme_customer_branches(branch_id, category_id, customer_type_id)');
+
+      if (filteredCustomerIds != null) {
+        query = query.inFilter('id', filteredCustomerIds);
       }
 
-      // 3. Category Filter
-      if (_selectedCategoryId != null) {
-        final List<int> catIds = (c['category_ids'] as List<int>?) ?? [];
-        if (!catIds.contains(_selectedCategoryId)) return false;
+      if (_searchQuery.trim().isNotEmpty) {
+        final q = _searchQuery.trim();
+        query = query.or('name.ilike.%$q%,phone.ilike.%$q%,salesman.ilike.%$q%,address.ilike.%$q%');
       }
 
-      // 4. Customer Type Filter
-      if (_selectedTypeId != null) {
-        final List<int> tIds = (c['type_ids'] as List<int>?) ?? [];
-        if (!tIds.contains(_selectedTypeId)) return false;
+      if (_sortBy == 'name_asc') {
+        query = query.order('name', ascending: true);
+      } else if (_sortBy == 'name_desc') {
+        query = query.order('name', ascending: false);
+      } else {
+        query = query.order('last_purchase_date', ascending: false, nullsFirst: false);
       }
 
-      return true;
-    }).toList()
-      ..sort((a, b) {
-        if (_sortBy == 'name_asc') {
-          return (a['name'] ?? '').toString().toLowerCase().compareTo((b['name'] ?? '').toString().toLowerCase());
-        } else if (_sortBy == 'name_desc') {
-          return (b['name'] ?? '').toString().toLowerCase().compareTo((a['name'] ?? '').toString().toLowerCase());
-        } else {
-          // recent purchase date
-          final dateA = a['last_purchase_date']?.toString() ?? '';
-          final dateB = b['last_purchase_date']?.toString() ?? '';
-          return dateB.compareTo(dateA);
-        }
+      final response = await query.range(_currentOffset, _currentOffset + _pageSize - 1);
+      final List data = response as List;
+
+      List<Map<String, dynamic>> parsedList = _parseCustomerRows(data);
+
+      setState(() {
+        _customers.addAll(parsedList);
+        _currentOffset += data.length;
+        _hasMore = data.length >= _pageSize;
+        _isLoadingMore = false;
       });
+    } catch (e) {
+      debugPrint('Error fetching more customers: $e');
+      setState(() => _isLoadingMore = false);
+    }
+  }
+
+  List<Map<String, dynamic>> _parseCustomerRows(List data) {
+    List<Map<String, dynamic>> result = [];
+    for (var item in data) {
+      final cust = Map<String, dynamic>.from(item);
+      final branchList = cust['dme_customer_branches'] as List?;
+
+      List<int> branchIds = [];
+      List<int> categoryIds = [];
+      List<int> typeIds = [];
+
+      if (branchList != null) {
+        for (var b in branchList) {
+          final bId = b['branch_id'] as int?;
+          final catId = b['category_id'] as int?;
+          final tId = b['customer_type_id'] as int?;
+          if (bId != null && !branchIds.contains(bId)) branchIds.add(bId);
+          if (catId != null && !categoryIds.contains(catId)) categoryIds.add(catId);
+          if (tId != null && !typeIds.contains(tId)) typeIds.add(tId);
+        }
+      }
+
+      // If user restricted to assigned branches
+      if (_assignedBranches.isNotEmpty && !branchIds.any((bId) => _assignedBranches.contains(bId))) {
+        continue;
+      }
+
+      // Check category & type filters if selected
+      if (_selectedBranchId != null && !branchIds.contains(_selectedBranchId)) continue;
+      if (_selectedCategoryId != null && !categoryIds.contains(_selectedCategoryId)) continue;
+      if (_selectedTypeId != null && !typeIds.contains(_selectedTypeId)) continue;
+
+      cust['branch_ids'] = branchIds;
+      cust['category_ids'] = categoryIds;
+      cust['type_ids'] = typeIds;
+      result.add(cust);
+    }
+    return result;
   }
 
   void _openFilterBottomSheet() {
@@ -238,13 +372,13 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
                               _selectedTypeId = null;
                               _sortBy = 'recent';
                             });
-                            setState(() {});
+                            _fetchCustomersDirectory(reset: true);
                           },
                           child: const Text('Reset All'),
                         ),
                       ],
                     ),
-                    const Divider(),
+                    const SizedBox(height: 16),
 
                     // Branch Filter (respects assigned branches)
                     const Text('Branch', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
@@ -357,8 +491,8 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                         onPressed: () {
-                          setState(() {});
                           Navigator.pop(ctx);
+                          _fetchCustomersDirectory(reset: true);
                         },
                         child: const Text('Apply Filters', style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
@@ -377,7 +511,6 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final filtered = _getFilteredCustomers();
 
     final hasActiveFilter = _selectedBranchId != null || _selectedCategoryId != null || _selectedTypeId != null || _sortBy != 'recent';
 
@@ -398,7 +531,7 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
             tooltip: 'Reload',
-            onPressed: _fetchCustomersDirectory,
+            onPressed: () => _fetchCustomersDirectory(reset: true),
           ),
         ],
       ),
@@ -423,7 +556,8 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
                             icon: const Icon(Icons.clear, size: 18),
                             onPressed: () {
                               _searchController.clear();
-                              setState(() => _searchQuery = '');
+                              _searchQuery = '';
+                              _fetchCustomersDirectory(reset: true);
                             },
                           )
                         : null,
@@ -435,7 +569,10 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
                     ),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   ),
-                  onChanged: (val) => setState(() => _searchQuery = val.trim()),
+                  onChanged: (val) {
+                    _searchQuery = val.trim();
+                    _fetchCustomersDirectory(reset: true);
+                  },
                 ),
                 if (hasActiveFilter) ...[
                   const SizedBox(height: 8),
@@ -449,7 +586,10 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
                             child: Chip(
                               label: Text('Branch: ${DmeConstants.getBranchName(_selectedBranchId)}', style: const TextStyle(fontSize: 11)),
                               deleteIcon: const Icon(Icons.close, size: 14),
-                              onDeleted: () => setState(() => _selectedBranchId = null),
+                              onDeleted: () {
+                                _selectedBranchId = null;
+                                _fetchCustomersDirectory(reset: true);
+                              },
                             ),
                           ),
                         if (_selectedCategoryId != null)
@@ -458,7 +598,10 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
                             child: Chip(
                               label: Text('Category: ${DmeConstants.getCategoryName(_selectedCategoryId)}', style: const TextStyle(fontSize: 11)),
                               deleteIcon: const Icon(Icons.close, size: 14),
-                              onDeleted: () => setState(() => _selectedCategoryId = null),
+                              onDeleted: () {
+                                _selectedCategoryId = null;
+                                _fetchCustomersDirectory(reset: true);
+                              },
                             ),
                           ),
                         if (_selectedTypeId != null)
@@ -467,17 +610,19 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
                             child: Chip(
                               label: Text('Type: ${DmeConstants.getCustomerTypeName(_selectedTypeId)}', style: const TextStyle(fontSize: 11)),
                               deleteIcon: const Icon(Icons.close, size: 14),
-                              onDeleted: () => setState(() => _selectedTypeId = null),
+                              onDeleted: () {
+                                _selectedTypeId = null;
+                                _fetchCustomersDirectory(reset: true);
+                              },
                             ),
                           ),
                         TextButton(
                           onPressed: () {
-                            setState(() {
-                              _selectedBranchId = null;
-                              _selectedCategoryId = null;
-                              _selectedTypeId = null;
-                              _sortBy = 'recent';
-                            });
+                            _selectedBranchId = null;
+                            _selectedCategoryId = null;
+                            _selectedTypeId = null;
+                            _sortBy = 'recent';
+                            _fetchCustomersDirectory(reset: true);
                           },
                           child: const Text('Clear Filters', style: TextStyle(fontSize: 11)),
                         ),
@@ -496,13 +641,14 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  '${filtered.length} Customer(s) Found',
+                  '${_customers.length} Customer(s) Loaded',
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey),
                 ),
-                Text(
-                  'Total Directory: ${_allCustomers.length}',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
+                if (_hasMore)
+                  const Text(
+                    'Scroll down for more...',
+                    style: TextStyle(fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic),
+                  ),
               ],
             ),
           ),
@@ -511,7 +657,7 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : filtered.isEmpty
+                : _customers.isEmpty
                     ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -526,13 +672,22 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
                         ),
                       )
                     : RefreshIndicator(
-                        onRefresh: _fetchCustomersDirectory,
+                        onRefresh: () => _fetchCustomersDirectory(reset: true),
                         child: ListView.separated(
+                          controller: _scrollController,
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          itemCount: filtered.length,
+                          itemCount: _customers.length + (_isLoadingMore ? 1 : 0),
                           separatorBuilder: (_, __) => const SizedBox(height: 10),
                           itemBuilder: (context, index) {
-                            final c = filtered[index];
+                            if (index == _customers.length) {
+                              return const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(12.0),
+                                  child: CircularProgressIndicator(),
+                                ),
+                              );
+                            }
+                            final c = _customers[index];
                             final name = c['name'] ?? 'Unnamed Customer';
                             final phone = c['phone'] ?? 'N/A';
                             final address = c['address'] ?? '';

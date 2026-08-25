@@ -8,16 +8,22 @@ import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 Future<void> generateFullReport({
   required String selectedItem,
   required List<String> activeBranches,
+  String? adminPostingId,
 }) async {
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
   // Fire all branch queries in parallel
   final results = await Future.wait(
-    activeBranches.map((branch) => firestore
-        .collection('supersale_user_entries')
-        .doc(branch)
-        .collection(selectedItem)
-        .get()),
+    activeBranches.map((branch) {
+      var query = firestore
+          .collection('supersale_user_entries')
+          .doc(branch)
+          .collection(selectedItem);
+      if (adminPostingId != null && adminPostingId.isNotEmpty) {
+        return query.where('adminPostingId', isEqualTo: adminPostingId).get();
+      }
+      return query.get();
+    }),
   );
 
   final xlsio.Workbook workbook = xlsio.Workbook();

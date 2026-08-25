@@ -594,9 +594,14 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               title: const Row(
                 children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 26),
                   SizedBox(width: 8),
-                  Text('Phone Number Duplication'),
+                  Expanded(
+                    child: Text(
+                      'Phone Duplication',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ],
               ),
               content: SizedBox(

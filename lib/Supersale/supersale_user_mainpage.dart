@@ -795,78 +795,303 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
             } else {
               // Mark as Delivered (Left-to-right swipe)
               final phoneController = TextEditingController();
+              final quantityController = TextEditingController(text: '$quantity');
               final formKey = GlobalKey<FormState>();
+              DateTime? nextReminderDate = (data['deliveryReminder'] is Timestamp)
+                  ? (data['deliveryReminder'] as Timestamp).toDate()
+                  : null;
 
               final confirmed = await showDialog<bool>(
                 context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Mark as Delivered'),
-                  content: Form(
-                    key: formKey,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Confirm/Enter billed phone number:'),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: phoneController,
-                          keyboardType: TextInputType.phone,
-                          decoration: const InputDecoration(
-                            labelText: 'Billed Phone',
-                            hintText: 'Enter phone number',
-                            border: OutlineInputBorder(),
+                builder: (ctx) => StatefulBuilder(
+                  builder: (context, setDialogState) {
+                    final int currentDeliveredQty = int.tryParse(quantityController.text.trim()) ?? quantity;
+                    final bool isPartial = quantity > 1 && currentDeliveredQty < quantity;
+
+                    return AlertDialog(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      title: const Text('Confirm Delivery', style: TextStyle(fontWeight: FontWeight.bold)),
+                      content: Form(
+                        key: formKey,
+                        child: SingleChildScrollView(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Customer: $customerName',
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                              ),
+                              Text(
+                                'Item: $item (Total Booked: $quantity)',
+                                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                              ),
+                              const SizedBox(height: 16),
+                              if (quantity > 1) ...[
+                                TextFormField(
+                                  controller: quantityController,
+                                  keyboardType: TextInputType.number,
+                                  decoration: InputDecoration(
+                                    labelText: 'Delivering Quantity (Max $quantity)',
+                                    hintText: 'Enter quantity delivered now',
+                                    prefixIcon: const Icon(Icons.inventory_2_rounded, size: 20),
+                                    border: const OutlineInputBorder(),
+                                    helperText: isPartial
+                                        ? 'Partial Delivery: ${quantity - currentDeliveredQty} will remain pending'
+                                        : 'Full Delivery: all $quantity units delivered',
+                                    helperStyle: TextStyle(
+                                      color: isPartial ? Colors.orange[800] : Colors.green[800],
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  onChanged: (val) => setDialogState(() {}),
+                                  validator: (value) {
+                                    if (value == null || value.trim().isEmpty) {
+                                      return 'Please enter quantity';
+                                    }
+                                    final val = int.tryParse(value.trim());
+                                    if (val == null || val <= 0) {
+                                      return 'Quantity must be greater than 0';
+                                    }
+                                    if (val > quantity) {
+                                      return 'Cannot deliver more than $quantity';
+                                    }
+                                    return null;
+                                  },
+                                ),
+                                const SizedBox(height: 14),
+                              ],
+                              TextFormField(
+                                controller: phoneController,
+                                keyboardType: TextInputType.phone,
+                                decoration: const InputDecoration(
+                                  labelText: 'Billed Phone',
+                                  hintText: 'Enter phone number',
+                                  prefixIcon: Icon(Icons.phone_rounded, size: 20),
+                                  border: OutlineInputBorder(),
+                                ),
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'Please enter phone number';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              if (isPartial) ...[
+                                const SizedBox(height: 16),
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Row(
+                                        children: [
+                                          Icon(Icons.calendar_today_rounded, size: 16, color: Colors.orange),
+                                          SizedBox(width: 6),
+                                          Text(
+                                            'Next Delivery / Reminder Date',
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.orange),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      InkWell(
+                                        onTap: () async {
+                                          final pickedDate = await showDatePicker(
+                                            context: context,
+                                            initialDate: nextReminderDate ?? DateTime.now().add(const Duration(days: 2)),
+                                            firstDate: DateTime.now(),
+                                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                                          );
+                                          if (pickedDate != null && context.mounted) {
+                                            final pickedTime = await showTimePicker(
+                                              context: context,
+                                              initialTime: nextReminderDate != null
+                                                  ? TimeOfDay.fromDateTime(nextReminderDate!)
+                                                  : const TimeOfDay(hour: 10, minute: 0),
+                                            );
+                                            setDialogState(() {
+                                              nextReminderDate = DateTime(
+                                                pickedDate.year,
+                                                pickedDate.month,
+                                                pickedDate.day,
+                                                pickedTime?.hour ?? 10,
+                                                pickedTime?.minute ?? 0,
+                                              );
+                                            });
+                                          }
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                          decoration: BoxDecoration(
+                                            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: Colors.grey[300]!),
+                                          ),
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                nextReminderDate != null
+                                                    ? DateFormat('dd MMM yyyy, hh:mm a').format(nextReminderDate!)
+                                                    : 'Select Next Delivery Date',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: nextReminderDate != null
+                                                      ? (isDark ? Colors.white : Colors.black87)
+                                                      : Colors.grey,
+                                                ),
+                                              ),
+                                              const Icon(Icons.edit_calendar_rounded, size: 16, color: primaryBlue),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Please enter phone number';
+                        ),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancel'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () {
+                            if (formKey.currentState!.validate()) {
+                              Navigator.pop(ctx, true);
                             }
-                            return null;
                           },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryGreen,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: Text(
+                            isPartial ? 'Deliver ($currentDeliveredQty)' : 'Deliver All',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ],
-                    ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('Cancel'),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        if (formKey.currentState!.validate()) {
-                          Navigator.pop(context, true);
-                        }
-                      },
-                      child: const Text('Deliver', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                    ),
-                  ],
+                    );
+                  },
                 ),
               );
 
               if (confirmed == true) {
                 try {
-                  await doc.reference.update({
-                    'status': 'delivered',
-                    'billedPhone': phoneController.text.trim(),
-                  });
-                  if (mounted) {
-                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                      const SnackBar(
-                        content: Text('Booking marked as Delivered successfully'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
+                  final int deliveredQty = int.tryParse(quantityController.text.trim()) ?? quantity;
+                  final String billedPhoneText = phoneController.text.trim();
+
+                  if (deliveredQty >= quantity) {
+                    // Full delivery
+                    await doc.reference.update({
+                      'status': 'delivered',
+                      'billedPhone': billedPhoneText,
+                      'deliveredAt': FieldValue.serverTimestamp(),
+                    });
+                    if (mounted) {
+                      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                        const SnackBar(
+                          content: Text('Booking marked as Delivered successfully'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  } else {
+                    // Partial delivery: Split booking
+                    final int remainingQty = quantity - deliveredQty;
+                    final double originalAdvance = (data['advance'] ?? 0.0).toDouble();
+                    final double unitAdvance = quantity > 0 ? (originalAdvance / quantity) : 0.0;
+                    final double deliveredAdvance = unitAdvance * deliveredQty;
+                    final double remainingAdvance = originalAdvance - deliveredAdvance;
+
+                    // 1. Create child record for delivered portion
+                    final deliveredData = Map<String, dynamic>.from(data);
+                    deliveredData['quantity'] = deliveredQty;
+                    deliveredData['advance'] = deliveredAdvance;
+                    deliveredData['status'] = 'delivered';
+                    deliveredData['billedPhone'] = billedPhoneText;
+                    deliveredData['deliveredAt'] = FieldValue.serverTimestamp();
+                    deliveredData['parentBookingId'] = doc.id;
+                    deliveredData['isPartialSplit'] = true;
+
+                    await doc.reference.parent.add(deliveredData);
+
+                    // 2. Update parent booking with remaining quantity
+                    final Map<String, dynamic> updateRemainingData = {
+                      'quantity': remainingQty,
+                      'advance': remainingAdvance,
+                      'status': 'pending',
+                      'hasPartialDelivery': true,
+                    };
+                    if (nextReminderDate != null) {
+                      updateRemainingData['deliveryReminder'] = Timestamp.fromDate(nextReminderDate!);
+                    }
+
+                    await doc.reference.update(updateRemainingData);
+
+                    // 3. Reschedule reminder notification if next date was selected
+                    if (nextReminderDate != null && nextReminderDate!.isAfter(DateTime.now())) {
+                      final notifId = doc.id.hashCode & 0x7FFFFFFF;
+                      final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
+                      await NotificationPermissionService.instance.safeCreateNotification(
+                        content: NotificationContent(
+                          id: notifId,
+                          channelKey: 'delivery_reminder_channel',
+                          title: 'Remaining Delivery Reminder',
+                          body: 'Reminder: $remainingQty remaining units for customer $customerName ($item)',
+                          notificationLayout: NotificationLayout.Default,
+                          customSound: 'resource://raw/delivery_reminder',
+                          payload: {
+                            'type': 'supersale_delivery_reminder',
+                            'docId': doc.id,
+                            'branch': _userBranch ?? '',
+                            'item': item,
+                          },
+                        ),
+                        schedule: NotificationCalendar(
+                          year: nextReminderDate!.year,
+                          month: nextReminderDate!.month,
+                          day: nextReminderDate!.day,
+                          hour: nextReminderDate!.hour,
+                          minute: nextReminderDate!.minute,
+                          second: 0,
+                          millisecond: 0,
+                          timeZone: tz,
+                          repeats: false,
+                        ),
+                      );
+                    }
+
+                    if (mounted) {
+                      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                        SnackBar(
+                          content: Text('Delivered $deliveredQty units. $remainingQty units remain pending.'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
                   }
                 } catch (e) {
                   if (mounted) {
                     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                      SnackBar(content: Text('Failed to update status: $e'), backgroundColor: Colors.red),
+                      SnackBar(content: Text('Failed to process delivery: $e'), backgroundColor: Colors.red),
                     );
                   }
                 }
               }
-              return false; // Slides back, will shift to Delivered tab dynamically
+              return false; // Slides back, will shift to Delivered / update pending dynamically
             }
           },
           child: Container(
@@ -946,22 +1171,62 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
                                 ),
                               ),
                               const SizedBox(height: 4),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: status == 'delivered'
-                                      ? Colors.green.withOpacity(0.15)
-                                      : Colors.orange.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  status == 'delivered' ? 'Delivered' : 'Pending',
-                                  style: TextStyle(
-                                    color: status == 'delivered' ? Colors.green : Colors.orange,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 10,
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (data['isPartialSplit'] == true) ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                      margin: const EdgeInsets.only(right: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Text(
+                                        'Part Split',
+                                        style: TextStyle(
+                                          color: Colors.blue,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 9,
+                                        ),
+                                      ),
+                                    ),
+                                  ] else if (data['hasPartialDelivery'] == true && status != 'delivered') ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                      margin: const EdgeInsets.only(right: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.purple.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Text(
+                                        'Part Remaining',
+                                        style: TextStyle(
+                                          color: Colors.purple,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 9,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: status == 'delivered'
+                                          ? Colors.green.withOpacity(0.15)
+                                          : Colors.orange.withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      status == 'delivered' ? 'Delivered' : 'Pending',
+                                      style: TextStyle(
+                                        color: status == 'delivered' ? Colors.green : Colors.orange,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 10,
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                ],
                               ),
                             ],
                           ),

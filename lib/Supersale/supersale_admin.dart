@@ -33,7 +33,7 @@ class _SupersalePageState extends State<SupersalePage> {
     return DateFormat('dd MMM yyyy, hh:mm a').format(dt.toLocal());
   }
 
-  Future<void> _deleteSupersale(String docId) async {
+  Future<void> _deleteSupersale(String docId, String itemName, List<dynamic> branches) async {
     try {
       final openNotifId = (docId + '_open').hashCode & 0x7FFFFFFF;
       final preCloseNotifId = (docId + '_preclose').hashCode & 0x7FFFFFFF;
@@ -41,6 +41,29 @@ class _SupersalePageState extends State<SupersalePage> {
       await AwesomeNotifications().cancel(openNotifId);
       await AwesomeNotifications().cancel(preCloseNotifId);
       await AwesomeNotifications().cancel(closedNotifId);
+
+      // Clean up user entries associated with this specific posting
+      final List<String> fallbackBranches = [
+        'BGR', 'CBE', 'CHN', 'CLT', 'EKM', 'JBL', 'KKM', 'KSD',
+        'KTM', 'PKD', 'PKT', 'PMN', 'TRR', 'TSR', 'TLY', 'TVM',
+        'UDP', 'VDK', 'WND', 'PKTR', 'PLA', 'PMNA'
+      ];
+      final targetBranches = branches.contains('all') || branches.isEmpty
+          ? fallbackBranches
+          : branches.map((e) => e.toString()).toList();
+
+      for (final branch in targetBranches) {
+        final entries = await _firestore
+            .collection('supersale_user_entries')
+            .doc(branch)
+            .collection(itemName)
+            .where('adminPostingId', isEqualTo: docId)
+            .get();
+
+        for (final entry in entries.docs) {
+          await entry.reference.delete();
+        }
+      }
 
       await _firestore.collection('supersales').doc(docId).delete();
       if (mounted) {
@@ -181,7 +204,7 @@ class _SupersalePageState extends State<SupersalePage> {
                   child: const Icon(Icons.delete_rounded,
                       color: Colors.white, size: 28),
                 ),
-                onDismissed: (direction) => _deleteSupersale(docId),
+                onDismissed: (direction) => _deleteSupersale(docId, item, branches),
                 confirmDismiss: (direction) async {
                   return await showDialog<bool>(
                     context: context,
@@ -204,20 +227,27 @@ class _SupersalePageState extends State<SupersalePage> {
                 },
                 child: InkWell(
                   onTap: () {
+                    final bStart = _parseDate(bookingStart);
+                    final bEnd = _parseDate(bookingEnd);
+                    final dStart = _parseDate(deliveryStart);
+                    final dEnd = _parseDate(deliveryEnd);
+
+                    final validBookingRange = bStart.isAfter(bEnd)
+                        ? DateTimeRange(start: bEnd, end: bStart)
+                        : DateTimeRange(start: bStart, end: bEnd);
+
+                    final validDeliveryRange = dStart.isAfter(dEnd)
+                        ? DateTimeRange(start: dEnd, end: dStart)
+                        : DateTimeRange(start: dStart, end: dEnd);
+
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (context) => SupersaleFormPage(
                           docId: docId,
                           item: item,
-                          bookingRange: DateTimeRange(
-                            start: _parseDate(bookingStart),
-                            end: _parseDate(bookingEnd),
-                          ),
-                          deliveryRange: DateTimeRange(
-                            start: _parseDate(deliveryStart),
-                            end: _parseDate(deliveryEnd),
-                          ),
+                          bookingRange: validBookingRange,
+                          deliveryRange: validDeliveryRange,
                           branches: branches.map((e) => e.toString()).toList(),
                         ),
                       ),

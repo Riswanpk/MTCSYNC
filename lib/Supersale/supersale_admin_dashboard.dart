@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
 import 'supersale_admin_report.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
@@ -20,7 +21,7 @@ class _SupersaleAdminDashboardState extends State<SupersaleAdminDashboard> {
   bool _isFetchingChartData = false;
   
   List<Map<String, dynamic>> _activeSupersalesList = [];
-  String? _selectedSupersaleItem;
+  String? _selectedSupersaleDocId;
   
   List<String> _chartBranches = [];
   List<double> _chartValues = [];
@@ -29,6 +30,19 @@ class _SupersaleAdminDashboardState extends State<SupersaleAdminDashboard> {
   void initState() {
     super.initState();
     _fetchActiveSupersales();
+  }
+
+  String _formatSimpleDate(dynamic dateField) {
+    if (dateField == null) return '';
+    DateTime dt;
+    if (dateField is Timestamp) {
+      dt = dateField.toDate();
+    } else if (dateField is String) {
+      dt = DateTime.tryParse(dateField) ?? DateTime.now();
+    } else {
+      return '';
+    }
+    return DateFormat('dd/MM/yy').format(dt.toLocal());
   }
 
   Future<void> _fetchActiveSupersales() async {
@@ -57,15 +71,23 @@ class _SupersaleAdminDashboardState extends State<SupersaleAdminDashboard> {
         }
         
         if (isActive) {
-          activeList.add(data);
+          final copy = Map<String, dynamic>.from(data);
+          copy['id'] = doc.id;
+          activeList.add(copy);
         }
       }
       
       if (mounted) {
         setState(() {
           _activeSupersalesList = activeList;
+          if (activeList.isNotEmpty) {
+            _selectedSupersaleDocId = activeList.first['id'];
+          }
           _isLoading = false;
         });
+        if (_selectedSupersaleDocId != null) {
+          _fetchChartDataForSelected();
+        }
       }
     } catch (e) {
       debugPrint('Error fetching active supersales: $e');
@@ -78,7 +100,7 @@ class _SupersaleAdminDashboardState extends State<SupersaleAdminDashboard> {
   }
   
   Future<void> _fetchChartDataForSelected() async {
-    if (_selectedSupersaleItem == null) return;
+    if (_selectedSupersaleDocId == null) return;
     
     setState(() {
       _isFetchingChartData = true;
@@ -86,8 +108,12 @@ class _SupersaleAdminDashboardState extends State<SupersaleAdminDashboard> {
     
     try {
       // Find the selected supersale doc to get its branches
-      final selectedData = _activeSupersalesList.firstWhere((element) => element['item'] == _selectedSupersaleItem, orElse: () => {});
+      final selectedData = _activeSupersalesList.firstWhere(
+        (element) => element['id'] == _selectedSupersaleDocId,
+        orElse: () => {},
+      );
       final branches = List<String>.from(selectedData['branches'] ?? []);
+      final itemName = selectedData['item'] as String? ?? '';
       
       List<MapEntry<String, double>> paired = [];
       
@@ -95,7 +121,8 @@ class _SupersaleAdminDashboardState extends State<SupersaleAdminDashboard> {
         final entriesSnapshot = await _firestore
             .collection('supersale_user_entries')
             .doc(branch)
-            .collection(_selectedSupersaleItem!)
+            .collection(itemName)
+            .where('adminPostingId', isEqualTo: _selectedSupersaleDocId)
             .get();
             
         paired.add(MapEntry(branch, entriesSnapshot.docs.length.toDouble()));
@@ -160,7 +187,7 @@ class _SupersaleAdminDashboardState extends State<SupersaleAdminDashboard> {
                   _buildDropdown(isDark),
                   const SizedBox(height: 32),
                   
-                  if (_selectedSupersaleItem != null) ...[
+                  if (_selectedSupersaleDocId != null) ...[
                     Text(
                       'Entries per Branch',
                       style: TextStyle(
@@ -173,18 +200,18 @@ class _SupersaleAdminDashboardState extends State<SupersaleAdminDashboard> {
                     _buildBarChart(isDark),
                     const SizedBox(height: 32),
                   ] else if (_activeSupersalesList.isNotEmpty) ...[
-                    Container(
-                      height: 150,
-                      alignment: Alignment.center,
-                      child: Text(
-                        'Select a supersale from the dropdown above to view data.',
-                        style: TextStyle(
-                          color: isDark ? Colors.white54 : Colors.black45,
-                          fontSize: 14,
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 40.0),
+                        child: Text(
+                          'Select a supersale from the dropdown above to view data.',
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: isDark ? Colors.white60 : Colors.black54,
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 32),
                   ],
                   
                   _buildGenerateReportsButton(context, isDark),
@@ -225,7 +252,7 @@ class _SupersaleAdminDashboardState extends State<SupersaleAdminDashboard> {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: _selectedSupersaleItem,
+          value: _selectedSupersaleDocId,
           hint: Text(
             'Select a Supersale',
             style: TextStyle(
@@ -238,11 +265,16 @@ class _SupersaleAdminDashboardState extends State<SupersaleAdminDashboard> {
           dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
           icon: Icon(Icons.arrow_drop_down_rounded, color: primaryBlue, size: 28),
           items: _activeSupersalesList.map((sale) {
+            final docId = sale['id'] as String? ?? '';
             final itemName = sale['item'] as String? ?? 'Unnamed';
+            final startStr = _formatSimpleDate(sale['bookingStart']);
+            final endStr = _formatSimpleDate(sale['bookingEnd']);
+            final dateLabel = (startStr.isNotEmpty && endStr.isNotEmpty) ? ' ($startStr - $endStr)' : '';
+
             return DropdownMenuItem<String>(
-              value: itemName,
+              value: docId,
               child: Text(
-                itemName,
+                '$itemName$dateLabel',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -252,9 +284,9 @@ class _SupersaleAdminDashboardState extends State<SupersaleAdminDashboard> {
             );
           }).toList(),
           onChanged: (val) {
-            if (val != null && val != _selectedSupersaleItem) {
+            if (val != null && val != _selectedSupersaleDocId) {
               setState(() {
-                _selectedSupersaleItem = val;
+                _selectedSupersaleDocId = val;
               });
               _fetchChartDataForSelected();
             }
