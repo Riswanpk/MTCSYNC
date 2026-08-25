@@ -24,8 +24,6 @@ import 'Task/task_sales.dart';
 import 'Task/task_admin.dart';
 import 'Supersale/supersale_user_mainpage.dart';
 import 'Misc/network_guard.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'DME/dme_config.dart';
 
 /// Top-level background message handler for FCM Push Notifications
 @pragma('vm:entry-point')
@@ -129,17 +127,6 @@ void main() async {
     debugPrint('SoundService init error: $e');
   }
 
-  // Initialize Supabase if configured
-  if (DmeConfig.isConfigured) {
-    try {
-      await Supabase.initialize(
-        url: DmeConfig.supabaseUrl,
-        anonKey: DmeConfig.supabaseAnonKey,
-      );
-    } catch (e) {
-      debugPrint('Supabase init error: $e');
-    }
-  }
 
   // Run the app
   runApp(
