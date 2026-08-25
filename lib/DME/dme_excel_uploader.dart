@@ -25,7 +25,7 @@ class ParsedExcelRow {
   final String voucherNo;
   final String party;
   final String address;
-  final String phone;
+  String phone;
   final String typeName;
   final int? typeId;
   final String categoryName;
@@ -89,7 +89,7 @@ class GroupedSale {
 
 /// Item to represent each customer/sale in the preview list
 class ParsedCustomerItem {
-  final String phone;
+  String phone;
   final String partyName;
   final String address;
   final String branchName;
@@ -150,6 +150,33 @@ class CustomerConflict {
         phoneController = TextEditingController(text: customPhone ?? '');
 }
 
+/// Information about a customer record without a phone number
+class MissingPhoneCustomer {
+  final String partyName;
+  final String branchName;
+  final String voucherNo;
+  final String address;
+  final String salesman;
+  final String categoryName;
+  final String typeName;
+  final DateTime date;
+  String assignedPhone;
+  final TextEditingController phoneController;
+
+  MissingPhoneCustomer({
+    required this.partyName,
+    required this.branchName,
+    required this.voucherNo,
+    required this.address,
+    required this.salesman,
+    required this.categoryName,
+    required this.typeName,
+    required this.date,
+    String? phone,
+  })  : assignedPhone = phone ?? '',
+        phoneController = TextEditingController(text: phone ?? '');
+}
+
 class DmeExcelUploaderPage extends StatefulWidget {
   const DmeExcelUploaderPage({super.key});
 
@@ -169,6 +196,7 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
   List<GroupedSale> _groupedSales = [];
   List<ParsedCustomerItem> _customerList = [];
   List<CustomerConflict> _conflicts = [];
+  List<MissingPhoneCustomer> _missingPhones = [];
   final List<String> _logs = [];
 
   String _customerFilter = 'all'; // 'all', 'new', 'existing', 'conflict'
@@ -348,35 +376,79 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
         // Row 1: Header row
         // Row 2+: Data Rows
 
+        String lastBranchName = '';
+        int? lastBranchId;
+        DateTime? lastDate;
+        String lastVoucher = '';
+        String lastParty = '';
+        String lastAddress = '';
+        String lastPhone = '';
+        String lastTypeName = '';
+        int? lastTypeId;
+        String lastCatName = '';
+        int? lastCatId;
+        String lastSalesman = '';
+
         for (int r = 2; r < rows.length; r++) {
           final row = rows[r];
           if (row.isEmpty) continue;
 
-          String branchName = _getCellValue(row.isNotEmpty ? row[0] : null).toString().trim().toUpperCase();
+          String rawBranch = _getCellValue(row.isNotEmpty ? row[0] : null).toString().trim().toUpperCase();
           dynamic rawDate = row.length > 1 ? _getCellValue(row[1]) : null;
-          String voucherNo = _getCellValue(row.length > 2 ? row[2] : null).toString().trim();
-          String party = _getCellValue(row.length > 3 ? row[3] : null).toString().trim();
+          String rawVoucher = _getCellValue(row.length > 2 ? row[2] : null).toString().trim();
+          String rawParty = _getCellValue(row.length > 3 ? row[3] : null).toString().trim();
           dynamic address1 = row.length > 4 ? _getCellValue(row[4]) : null;
           dynamic address2 = row.length > 5 ? _getCellValue(row[5]) : null;
           dynamic address3 = row.length > 6 ? _getCellValue(row[6]) : null;
           dynamic rawMobile = row.length > 7 ? _getCellValue(row[7]) : null;
-          String typeName = _getCellValue(row.length > 8 ? row[8] : null).toString().trim().toUpperCase();
-          String categoryName = _getCellValue(row.length > 9 ? row[9] : null).toString().trim().toUpperCase();
-          String salesman = _getCellValue(row.length > 10 ? row[10] : null).toString().trim();
+          String rawType = _getCellValue(row.length > 8 ? row[8] : null).toString().trim().toUpperCase();
+          String rawCat = _getCellValue(row.length > 9 ? row[9] : null).toString().trim().toUpperCase();
+          String rawSalesman = _getCellValue(row.length > 10 ? row[10] : null).toString().trim();
           String itemName = _getCellValue(row.length > 11 ? row[11] : null).toString().trim();
           String qty = _getCellValue(row.length > 12 ? row[12] : null).toString().trim();
 
-          if (branchName.isEmpty && party.isEmpty && voucherNo.isEmpty && itemName.isEmpty) {
+          if (rawBranch.isEmpty && rawParty.isEmpty && rawVoucher.isEmpty && itemName.isEmpty) {
             continue;
           }
 
-          final date = _parseExcelDate(rawDate);
-          final phone = _cleanPhoneNumber(rawMobile);
-          final mergedAddress = _mergeAddress(address1, address2, address3);
+          // If a new party or branch or voucher is present, update last seen header data
+          if (rawBranch.isNotEmpty) {
+            lastBranchName = rawBranch;
+            lastBranchId = DmeConstants.getBranchIdByName(rawBranch);
+          }
+          if (rawDate != null && rawDate.toString().trim().isNotEmpty) {
+            lastDate = _parseExcelDate(rawDate);
+          }
+          if (rawVoucher.isNotEmpty) lastVoucher = rawVoucher;
+          if (rawParty.isNotEmpty) lastParty = rawParty;
+          if (rawMobile != null && rawMobile.toString().trim().isNotEmpty) {
+            lastPhone = _cleanPhoneNumber(rawMobile);
+          }
+          final mergedAddr = _mergeAddress(address1, address2, address3);
+          if (mergedAddr.isNotEmpty) lastAddress = mergedAddr;
 
-          final branchId = DmeConstants.getBranchIdByName(branchName);
-          final typeId = DmeConstants.getCustomerTypeIdByName(typeName);
-          final categoryId = DmeConstants.getCategoryIdByName(categoryName);
+          if (rawType.isNotEmpty) {
+            lastTypeName = rawType;
+            lastTypeId = DmeConstants.getCustomerTypeIdByName(rawType);
+          }
+          if (rawCat.isNotEmpty) {
+            lastCatName = rawCat;
+            lastCatId = DmeConstants.getCategoryIdByName(rawCat);
+          }
+          if (rawSalesman.isNotEmpty) lastSalesman = rawSalesman;
+
+          final branchName = rawBranch.isNotEmpty ? rawBranch : lastBranchName;
+          final branchId = DmeConstants.getBranchIdByName(branchName) ?? lastBranchId;
+          final date = (rawDate != null && rawDate.toString().trim().isNotEmpty) ? _parseExcelDate(rawDate) : (lastDate ?? DateTime.now());
+          final phone = (rawMobile != null && rawMobile.toString().trim().isNotEmpty) ? _cleanPhoneNumber(rawMobile) : lastPhone;
+          final party = rawParty.isNotEmpty ? rawParty : lastParty;
+          final voucherNo = rawVoucher.isNotEmpty ? rawVoucher : lastVoucher;
+          final address = mergedAddr.isNotEmpty ? mergedAddr : lastAddress;
+          final typeName = rawType.isNotEmpty ? rawType : lastTypeName;
+          final typeId = DmeConstants.getCustomerTypeIdByName(typeName) ?? lastTypeId;
+          final categoryName = rawCat.isNotEmpty ? rawCat : lastCatName;
+          final categoryId = DmeConstants.getCategoryIdByName(categoryName) ?? lastCatId;
+          final salesman = rawSalesman.isNotEmpty ? rawSalesman : lastSalesman;
 
           parsed.add(ParsedExcelRow(
             branchName: branchName,
@@ -384,7 +456,7 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
             date: date,
             voucherNo: voucherNo,
             party: party,
-            address: mergedAddress,
+            address: address,
             phone: phone,
             typeName: typeName,
             typeId: typeId,
@@ -471,6 +543,7 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
     try {
       final List<ParsedCustomerItem> customerItems = [];
       final List<CustomerConflict> detectedConflicts = [];
+      final List<MissingPhoneCustomer> detectedMissingPhones = [];
       final Map<String, dynamic> dbCache = {};
       final Map<String, String> excelPhonePartyMap = {}; // phone -> first party seen in this excel
 
@@ -479,7 +552,20 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
         String? existingDbName;
         int? existingDbId;
 
-        if (sale.phone.isNotEmpty) {
+        if (sale.phone.isEmpty) {
+          if (!detectedMissingPhones.any((m) => m.partyName.toLowerCase() == sale.party.toLowerCase() && m.branchName == sale.branchName)) {
+            detectedMissingPhones.add(MissingPhoneCustomer(
+              partyName: sale.party,
+              branchName: sale.branchName,
+              voucherNo: sale.voucherNo,
+              address: sale.address,
+              salesman: sale.salesman,
+              categoryName: sale.categoryName,
+              typeName: sale.typeName,
+              date: sale.date,
+            ));
+          }
+        } else {
           // 1. Check if same phone is repeated within the same Excel with different party names
           if (excelPhonePartyMap.containsKey(sale.phone)) {
             final firstPartyInExcel = excelPhonePartyMap[sale.phone]!;
@@ -544,7 +630,7 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
         }
 
         customerItems.add(ParsedCustomerItem(
-          phone: sale.phone.isNotEmpty ? sale.phone : 'N/A',
+          phone: sale.phone.isNotEmpty ? sale.phone : 'Missing Phone',
           partyName: sale.party.isNotEmpty ? sale.party : 'Unnamed Party',
           address: sale.address,
           branchName: sale.branchName,
@@ -565,14 +651,21 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
       setState(() {
         _customerList = customerItems;
         _conflicts = detectedConflicts;
+        _missingPhones = detectedMissingPhones;
         _isParsing = false;
-        _statusMessage = _conflicts.isNotEmpty
-            ? 'Found ${_conflicts.length} duplicate/conflict phone number(s). Review choices below.'
-            : 'Found ${_groupedSales.length} sale(s): ${_customerList.where((c) => !c.isExisting).length} New, ${_customerList.where((c) => c.isExisting).length} Existing.';
+        if (_missingPhones.isNotEmpty) {
+          _statusMessage = 'Found ${_missingPhones.length} customer(s) with missing phone number. Please enter phone numbers before uploading.';
+        } else if (_conflicts.isNotEmpty) {
+          _statusMessage = 'Found ${_conflicts.length} duplicate/conflict phone number(s). Review choices below.';
+        } else {
+          _statusMessage = 'Found ${_groupedSales.length} sale(s): ${_customerList.where((c) => !c.isExisting).length} New, ${_customerList.where((c) => c.isExisting).length} Existing.';
+        }
       });
 
-      if (_conflicts.isNotEmpty && mounted) {
-        _showConflictDialog();
+      if (_missingPhones.isNotEmpty && mounted) {
+        await _showMissingPhoneDialog();
+      } else if (_conflicts.isNotEmpty && mounted) {
+        await _showConflictDialog();
       }
     } catch (e) {
       setState(() {
@@ -580,6 +673,162 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
         _statusMessage = 'Could not verify database status: $e';
       });
     }
+  }
+
+  /// Dialog requiring the user to enter a phone number for customers without one
+  Future<void> _showMissingPhoneDialog() async {
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final allFilled = _missingPhones.every((m) => m.phoneController.text.trim().length >= 5);
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.phone_missed_rounded, color: Colors.redAccent, size: 26),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Missing Phone Numbers',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'The following customer(s) have no mobile number in the Excel sheet. DME requires a valid phone number for every customer. Please enter their phone numbers below:',
+                      style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                    ),
+                    const SizedBox(height: 12),
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: _missingPhones.length,
+                        separatorBuilder: (_, __) => const Divider(height: 20),
+                        itemBuilder: (context, idx) {
+                          final m = _missingPhones[idx];
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      m.partyName.isNotEmpty ? m.partyName : 'Unnamed Party',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF005BAC).withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      m.branchName,
+                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF005BAC)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (m.address.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(m.address, style: TextStyle(fontSize: 11, color: Colors.grey[600]), maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ],
+                              const SizedBox(height: 8),
+                              TextField(
+                                controller: m.phoneController,
+                                keyboardType: TextInputType.phone,
+                                decoration: InputDecoration(
+                                  labelText: 'Enter Mobile Number *',
+                                  hintText: 'e.g. 9876543210',
+                                  isDense: true,
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                  prefixIcon: const Icon(Icons.phone_android_rounded, size: 18),
+                                  errorText: m.phoneController.text.trim().isEmpty ? 'Required' : null,
+                                ),
+                                onChanged: (val) {
+                                  m.assignedPhone = _cleanPhoneNumber(val.trim());
+                                  setDialogState(() {});
+                                },
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: allFilled ? const Color(0xFF005BAC) : Colors.grey,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () {
+                    final unfilled = _missingPhones.where((m) => _cleanPhoneNumber(m.phoneController.text.trim()).isEmpty).toList();
+                    if (unfilled.isNotEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Please fill in phone numbers for all ${unfilled.length} customer(s).'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+
+                    // Propagate newly filled phone numbers to parsed rows and grouped sales
+                    for (var m in _missingPhones) {
+                      final cleanPh = _cleanPhoneNumber(m.phoneController.text.trim());
+                      m.assignedPhone = cleanPh;
+
+                      for (var s in _groupedSales) {
+                        if (s.party.toLowerCase() == m.partyName.toLowerCase() && s.branchName == m.branchName && s.phone.isEmpty) {
+                          s.phone = cleanPh;
+                        }
+                      }
+                      for (var r in _parsedRows) {
+                        if (r.party.toLowerCase() == m.partyName.toLowerCase() && r.branchName == m.branchName && r.phone.isEmpty) {
+                          r.phone = cleanPh;
+                        }
+                      }
+                      for (var c in _customerList) {
+                        if (c.partyName.toLowerCase() == m.partyName.toLowerCase() && c.branchName == m.branchName && (c.phone == 'Missing Phone' || c.phone == 'N/A' || c.phone.isEmpty)) {
+                          c.phone = cleanPh;
+                        }
+                      }
+                    }
+
+                    setState(() {
+                      _missingPhones.clear();
+                    });
+
+                    Navigator.of(ctx).pop();
+
+                    // Now check duplicate phone conflict dialog if any exists
+                    if (_conflicts.isNotEmpty && mounted) {
+                      _showConflictDialog();
+                    }
+                  },
+                  child: const Text('Save Phone Numbers & Continue'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   /// Dialog allowing the user to choose which customer to keep or change phone number
@@ -764,6 +1013,30 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
       return;
     }
 
+    // STRICT CHECK: Ensure no customer has a missing phone number before uploading
+    final missingPhoneSales = _groupedSales.where((s) => s.phone.trim().isEmpty).toList();
+    if (missingPhoneSales.isNotEmpty || _missingPhones.isNotEmpty) {
+      if (_missingPhones.isEmpty) {
+        for (var s in missingPhoneSales) {
+          if (!_missingPhones.any((m) => m.partyName.toLowerCase() == s.party.toLowerCase() && m.branchName == s.branchName)) {
+            _missingPhones.add(MissingPhoneCustomer(
+              partyName: s.party,
+              branchName: s.branchName,
+              voucherNo: s.voucherNo,
+              address: s.address,
+              salesman: s.salesman,
+              categoryName: s.categoryName,
+              typeName: s.typeName,
+              date: s.date,
+            ));
+          }
+        }
+      }
+      _showSnackBar('Please fill in missing phone numbers before uploading.', isError: true);
+      await _showMissingPhoneDialog();
+      return;
+    }
+
     setState(() {
       _isUploading = true;
       _uploadProgress = 0.1;
@@ -834,30 +1107,74 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
         _statusMessage = 'Inserting sales...';
       });
 
-      // 2. Batch Insert Sales
+      // 2. Batch Upsert Sales (Handles re-uploads and multiple sales per customer cleanly)
       final List<Map<String, dynamic>> salesToInsert = [];
-      for (var sale in _groupedSales) {
+      final Map<String, int> saleGroupToIdx = {};
+
+      for (int i = 0; i < _groupedSales.length; i++) {
+        final sale = _groupedSales[i];
         final activePhone = activePhoneBySale['${sale.party}_${sale.phone}_${sale.date.millisecondsSinceEpoch}'] ?? sale.phone;
         final custId = phoneToCustomerId[activePhone];
+        final dateStr = DateFormat('yyyy-MM-dd').format(sale.date);
+        final saleKey = '${custId}_${dateStr}_${sale.branchId}';
 
-        salesToInsert.add({
-          'date': DateFormat('yyyy-MM-dd').format(sale.date),
-          'customer_id': custId,
-          'purchased_branch': sale.branchId,
-          'salesman': sale.salesman.isNotEmpty ? sale.salesman : null,
-          'category_id': sale.categoryId,
-          'customer_type_id': sale.typeId,
-          'uploaded_by': uploadedBy,
-        });
+        if (!saleGroupToIdx.containsKey(saleKey)) {
+          saleGroupToIdx[saleKey] = salesToInsert.length;
+          salesToInsert.add({
+            'date': dateStr,
+            'customer_id': custId,
+            'purchased_branch': sale.branchId,
+            'salesman': sale.salesman.isNotEmpty ? sale.salesman : null,
+            'category_id': sale.categoryId,
+            'customer_type_id': sale.typeId,
+            'uploaded_by': uploadedBy,
+          });
+        }
       }
 
-      final insertedSalesRes = await client
-          .from('dme_sales')
-          .insert(salesToInsert)
-          .select('id');
+      dynamic insertedSalesRes;
+      try {
+        // Try upserting with date,customer_id,purchased_branch or onConflict date,customer_id
+        insertedSalesRes = await client
+            .from('dme_sales')
+            .upsert(
+              salesToInsert,
+              onConflict: 'date,customer_id,purchased_branch',
+            )
+            .select('id, date, customer_id, purchased_branch');
+      } catch (upsertErr) {
+        debugPrint('Upsert onConflict date,customer_id,purchased_branch note: $upsertErr');
+        try {
+          insertedSalesRes = await client
+              .from('dme_sales')
+              .upsert(
+                salesToInsert,
+                onConflict: 'date,customer_id',
+              )
+              .select('id, date, customer_id, purchased_branch');
+        } catch (_) {
+          // If constraint is custom named, fallback to plain upsert without explicit onConflict
+          insertedSalesRes = await client
+              .from('dme_sales')
+              .upsert(salesToInsert)
+              .select('id, date, customer_id, purchased_branch');
+        }
+      }
 
       final List insertedSalesList = insertedSalesRes as List;
-      _addLog('✓ Bulk inserted ${insertedSalesList.length} sales records');
+      final Map<String, int> saleKeyToSaleId = {};
+      for (var row in insertedSalesList) {
+        final id = row['id'] as int?;
+        final dt = row['date']?.toString();
+        final cId = row['customer_id']?.toString();
+        final bId = row['purchased_branch']?.toString();
+        if (id != null && dt != null && cId != null) {
+          saleKeyToSaleId['${cId}_${dt}_$bId'] = id;
+          saleKeyToSaleId['${cId}_$dt'] = id;
+        }
+      }
+
+      _addLog('✓ Synchronized ${insertedSalesList.length} sales records in database');
 
       setState(() {
         _uploadProgress = 0.7;
@@ -871,9 +1188,12 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
 
       for (int i = 0; i < _groupedSales.length; i++) {
         final sale = _groupedSales[i];
-        final saleId = i < insertedSalesList.length ? insertedSalesList[i]['id'] as int? : null;
         final activePhone = activePhoneBySale['${sale.party}_${sale.phone}_${sale.date.millisecondsSinceEpoch}'] ?? sale.phone;
         final custId = phoneToCustomerId[activePhone];
+        final dateStr = DateFormat('yyyy-MM-dd').format(sale.date);
+        final saleKeyWithBranch = '${custId}_${dateStr}_${sale.branchId}';
+        final saleKeyWithoutBranch = '${custId}_$dateStr';
+        final saleId = saleKeyToSaleId[saleKeyWithBranch] ?? saleKeyToSaleId[saleKeyWithoutBranch];
 
         if (saleId != null && sale.products.isNotEmpty) {
           detailsToInsert.add({

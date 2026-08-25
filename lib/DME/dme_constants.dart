@@ -149,12 +149,56 @@ class DmeConstants {
     return null;
   }
 
+  static final Map<String, int> _branchAliases = {
+    // Exact Codes
+    'bgr': 1, 'cbe': 2, 'chn': 3, 'clt': 4, 'ekm': 5,
+    'jbl': 6, 'kkm': 7, 'ksd': 8, 'ktm': 9, 'pkd': 10,
+    'pkt': 11, 'pmn': 12, 'trr': 13, 'tsr': 14, 'tly': 15,
+    'tvm': 16, 'udp': 17, 'vdk': 18, 'wnd': 19,
+
+    // City / Town / Regional Names
+    'bangalore': 1, 'bengaluru': 1,
+    'coimbatore': 2,
+    'chennai': 3, 'madras': 3,
+    'calicut': 4, 'kozhikode': 4,
+    'ernakulam': 5, 'cochin': 5, 'kochi': 5,
+    'jabalpur': 6,
+    'kanyakumari': 7, 'nagercoil': 7,
+    'kasaragod': 8, 'kasargod': 8,
+    'kottayam': 9,
+    'palakkad': 10, 'palghat': 10,
+    'pattambi': 11,
+    'perinthalmanna': 12, 'perinthamanna': 12,
+    'tirur': 13,
+    'thrissur': 14, 'trichur': 14,
+    'thalassery': 15, 'tellicherry': 15,
+    'trivandrum': 16, 'thiruvananthapuram': 16,
+    'udupi': 17,
+    'vadakara': 18, 'badagara': 18,
+    'wayanad': 19, 'sulthan bathery': 19, 'kalpetta': 19, 'mananthavady': 19,
+  };
+
   static int? getBranchIdByName(String name) {
-    final clean = name.trim().toLowerCase();
+    final clean = name.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
     if (clean.isEmpty) return null;
+
+    // 1. Direct alias or code match
+    if (_branchAliases.containsKey(clean)) {
+      return _branchAliases[clean];
+    }
+
+    // 2. Direct branch list code match
     for (var b in branches) {
       if (b.name.toLowerCase() == clean) return b.id;
     }
+
+    // 3. Partial contains match
+    for (var entry in _branchAliases.entries) {
+      if (clean.contains(entry.key) || entry.key.contains(clean)) {
+        return entry.value;
+      }
+    }
+
     return null;
   }
 
