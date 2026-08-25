@@ -100,7 +100,7 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
 
   late String _selectedMonth;
   List<String> _branches = [];
-  String _selectedBranch = 'All Branches';
+  String? _selectedBranch;
   bool _loadingBranches = true;
   bool _loadingUsers = false;
   bool _saving = false;
@@ -141,15 +141,10 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
       final list = set.toList()..sort();
       if (mounted) {
         setState(() {
-          _branches = ['All Branches', ...list];
-          if (_branches.length > 1) {
-            _selectedBranch = _branches[1]; // default first actual branch
-          }
+          _branches = list;
+          _selectedBranch = null;
           _loadingBranches = false;
         });
-        if (_selectedBranch != 'All Branches') {
-          _loadUserData();
-        }
       }
     } catch (e) {
       if (mounted) {
@@ -161,7 +156,7 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
   }
 
   Future<void> _loadUserData() async {
-    if (_selectedBranch == 'All Branches') {
+    if (_selectedBranch == null) {
       setState(() {
         _userMarkItems = [];
       });
@@ -345,7 +340,7 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
   }
 
   Future<void> _sendMarksToFirestore() async {
-    if (_userMarkItems.isEmpty) return;
+    if (_userMarkItems.isEmpty || _selectedBranch == null) return;
 
     // Check if any user is missing a yupass_id
     final missingUsers = _userMarkItems
@@ -391,6 +386,7 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
     });
 
     try {
+      final currentBranch = _selectedBranch!;
       for (final item in _userMarkItems) {
         final yupassId = item['yupass_id'] as String;
         final useAutoTodo = item['useAutoTodo'] as bool;
@@ -408,7 +404,7 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
 
         await MarksFirestoreService.setMarkData(
           month: _selectedMonth,
-          branch: _selectedBranch,
+          branch: currentBranch,
           yupassId: yupassId,
           todoData: todoVal,
           customerCallingData: callingVal,
@@ -561,6 +557,14 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
                             ),
                             DropdownButtonFormField<String>(
                               initialValue: _selectedBranch,
+                              hint: Text(
+                                'Select Branch',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: isDark ? Colors.white54 : Colors.grey.shade600,
+                                ),
+                              ),
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
@@ -608,7 +612,7 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
                 ),
                 // User List Content
                 Expanded(
-                  child: _selectedBranch == 'All Branches'
+                  child: _selectedBranch == null
                       ? Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,

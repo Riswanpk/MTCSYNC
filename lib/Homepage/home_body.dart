@@ -710,7 +710,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       NeumorphicButton(
         onTap: () => _navigateToDashboard(context),
         text: 'Dashboard',
-        color: primaryGreen,
+        color: primaryBlue,
         textColor: Colors.white,
         icon: Icons.dashboard_rounded,
       ),
@@ -734,8 +734,8 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
               );
             },
             text: 'Customer Calling',
-            color: isDark ? const Color(0xFF23272A) : Colors.white,
-            textColor: isDark ? Colors.white70 : const Color(0xFF607D8B),
+            color: primaryGreen,
+            textColor: Colors.white,
             icon: Icons.phone_rounded,
             badgeCount: pendingCount > 0 ? pendingCount : null,
           );
@@ -753,8 +753,8 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           );
         },
         text: 'Yupulse Sync',
-        color: primaryGreen,
-        textColor: Colors.white,
+        color: isDark ? const Color(0xFF23272A) : Colors.white,
+        textColor: isDark ? Colors.white70 : const Color(0xFF607D8B),
         icon: Icons.sync_rounded,
       ),
     ];
