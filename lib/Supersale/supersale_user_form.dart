@@ -233,11 +233,18 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
           : (double.tryParse(_advanceController.text.trim()) ?? 0.0);
 
       if (_isEditMode) {
+        final data = widget.bookingDoc!.data() as Map<String, dynamic>;
+        final String? parentBookingId = data['parentBookingId'] as String?;
+        final int oldQuantity = (data['quantity'] ?? 0) is int
+            ? data['quantity']
+            : int.tryParse(data['quantity'].toString()) ?? 0;
+        final int newQuantity = int.parse(_quantityController.text.trim());
+
         // Edit Mode: update existing document fields
         final updateData = <String, dynamic>{
           'customerName': _customerController.text.trim(),
           'phone': _phoneController.text.trim(),
-          'quantity': int.parse(_quantityController.text.trim()),
+          'quantity': newQuantity,
           'rate': double.parse(_rateController.text.trim()),
           'advance': advanceValue,
           'description': _descriptionController.text.trim(),
@@ -248,6 +255,42 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
         }
 
         await widget.bookingDoc!.reference.update(updateData);
+
+        // If this delivered record was split from a parent booking
+        if (parentBookingId != null && parentBookingId.isNotEmpty) {
+          final parentDocRef = widget.bookingDoc!.reference.parent.doc(parentBookingId);
+          final parentSnap = await parentDocRef.get();
+
+          if (parentSnap.exists) {
+            final parentData = parentSnap.data() as Map<String, dynamic>;
+            final int parentPendingQty = (parentData['quantity'] ?? 0) is int
+                ? parentData['quantity']
+                : int.tryParse(parentData['quantity'].toString()) ?? 0;
+
+            final int qtyDifference = newQuantity - oldQuantity;
+
+            if (qtyDifference > 0) {
+              if (qtyDifference >= parentPendingQty) {
+                // Full delivery reached -> Delete the remaining pending entry
+                await parentDocRef.delete();
+                // Cancel scheduled notifications for the pending parent
+                final notifId = parentBookingId.hashCode & 0x7FFFFFFF;
+                await AwesomeNotifications().cancel(notifId);
+              } else {
+                // Reduce the pending quantity by the difference
+                final int newPendingQty = parentPendingQty - qtyDifference;
+                final double parentAdvance = (parentData['advance'] ?? 0.0).toDouble();
+                final double unitAdvance = parentPendingQty > 0 ? (parentAdvance / parentPendingQty) : 0.0;
+                final double newParentAdvance = unitAdvance * newPendingQty;
+
+                await parentDocRef.update({
+                  'quantity': newPendingQty,
+                  'advance': newParentAdvance,
+                });
+              }
+            }
+          }
+        }
 
         if (!_isSpotSale &&
             _deliveryReminderDateTime != null &&
