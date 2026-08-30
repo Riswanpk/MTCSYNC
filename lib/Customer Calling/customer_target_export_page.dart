@@ -25,6 +25,7 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
   String? _error;
   bool _detailedReport = false;
   bool _datewiseReport = false;
+  bool _threeMonthReport = false;
   List<String> _branches = [];
   String? _selectedBranch = 'All Branches';
 
@@ -60,8 +61,11 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
 
   Future<void> _fetchBranches() async {
     final allBranches = await UserCacheService.instance.getBranches();
+    final nonAdminBranches = allBranches
+        .where((b) => b.trim().toLowerCase() != 'admin')
+        .toList();
     setState(() {
-      _branches = ['All Branches', ...allBranches];
+      _branches = ['All Branches', ...nonAdminBranches];
       _selectedBranch = 'All Branches';
     });
   }
@@ -96,6 +100,8 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
       for (final doc in usersSnapshot.docs) {
         final data = doc.data();
         final branch = data['branch'] ?? 'Unknown';
+        if (branch.toString().trim().toLowerCase() == 'admin') continue;
+
         final userEmail =
             (data['user'] ?? doc.id).toString().toLowerCase().trim();
 
@@ -121,7 +127,72 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
 
       // For each branch, create a sheet
       int sheetIndex = 0;
-      if (_detailedReport) {
+      if (_detailedReport || _threeMonthReport) {
+        // If 3-month report is selected, prepare previous 2 months' data
+        String? prev1MonthYear;
+        String? prev2MonthYear;
+        // email -> contact/normalized -> remark
+        final Map<String, Map<String, String>> prev1RemarksByUser = {};
+        final Map<String, Map<String, String>> prev2RemarksByUser = {};
+
+        if (_threeMonthReport && _selectedMonthYear != null) {
+          final parts = _selectedMonthYear!.split(' ');
+          final monthStr = parts[0];
+          final year = int.parse(parts[1]);
+          const months = [
+            'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+          ];
+          final monthIdx = months.indexOf(monthStr); // 0 to 11
+          final selectedDate = DateTime(year, monthIdx + 1, 1);
+
+          final prev1Date = DateTime(selectedDate.year, selectedDate.month - 1, 1);
+          final prev2Date = DateTime(selectedDate.year, selectedDate.month - 2, 1);
+
+          prev1MonthYear = "${months[prev1Date.month - 1]} ${prev1Date.year}";
+          prev2MonthYear = "${months[prev2Date.month - 1]} ${prev2Date.year}";
+
+          // Fetch previous 2 months concurrently
+          final futures = await Future.wait([
+            FirebaseFirestore.instance
+                .collection('customer_target')
+                .doc(prev1MonthYear)
+                .collection('users')
+                .get(),
+            FirebaseFirestore.instance
+                .collection('customer_target')
+                .doc(prev2MonthYear)
+                .collection('users')
+                .get(),
+          ]);
+
+          void extractRemarks(
+              QuerySnapshot snapshot, Map<String, Map<String, String>> targetMap) {
+            for (final doc in snapshot.docs) {
+              final data = doc.data() as Map<String, dynamic>? ?? {};
+              final userEmail =
+                  (data['user'] ?? doc.id).toString().toLowerCase().trim();
+              final customers = (data['customers'] as List<dynamic>? ?? [])
+                  .map((e) => Map<String, dynamic>.from(e))
+                  .toList();
+              final userRemarks = targetMap.putIfAbsent(userEmail, () => {});
+              for (final c in customers) {
+                final remarks = (c['remarks'] ?? '').toString().trim();
+                if (remarks.isEmpty) continue;
+                final c1 = (c['contact1'] ?? c['contact'] ?? '').toString().trim();
+                final c2 = (c['contact2'] ?? '').toString().trim();
+                final cName = (c['name'] ?? '').toString().trim().toLowerCase();
+                if (c1.isNotEmpty) userRemarks[c1] = remarks;
+                if (c2.isNotEmpty) userRemarks[c2] = remarks;
+                if (cName.isNotEmpty) userRemarks['name:$cName'] = remarks;
+              }
+            }
+          }
+
+          extractRemarks(futures[0], prev1RemarksByUser);
+          extractRemarks(futures[1], prev2RemarksByUser);
+        }
+
         for (final branch in filteredBranchUserMap.keys) {
           final sheet = sheetIndex == 0
               ? workbook.worksheets[0]
@@ -141,8 +212,10 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
                 customers.where((c) => c['callMade'] == true).length;
             final totalCount = customers.length;
 
+            final maxColLetter = _threeMonthReport ? 'E' : 'C';
+
             // --- Username header row ---
-            final userRange = sheet.getRangeByName('A$row:C$row');
+            final userRange = sheet.getRangeByName('A$row:$maxColLetter$row');
             userRange.merge();
             userRange.setText(username);
             userRange.cellStyle.bold = true;
@@ -155,7 +228,7 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
             row++;
 
             // --- Called progress row ---
-            final progressRange = sheet.getRangeByName('A$row:C$row');
+            final progressRange = sheet.getRangeByName('A$row:$maxColLetter$row');
             progressRange.merge();
             progressRange
                 .setText('Customers Called: $calledCount / $totalCount');
@@ -180,12 +253,28 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
             final hB = sheet.getRangeByName('B$row');
             final hC = sheet.getRangeByName('C$row');
             hA.setText('Customer Name');
-            hB.setText('Remarks');
-            hC.setText('Call Status');
+            hB.setText('Call Status');
+            hC.setText('Remarks');
             applyHeaderStyle(hA);
             applyHeaderStyle(hB);
             applyHeaderStyle(hC);
+
+            if (_threeMonthReport) {
+              final hD = sheet.getRangeByName('D$row');
+              final hE = sheet.getRangeByName('E$row');
+              hD.setText(prev1MonthYear != null
+                  ? '$prev1MonthYear Remarks'
+                  : 'Previous Month Remarks');
+              hE.setText(prev2MonthYear != null
+                  ? '$prev2MonthYear Remarks'
+                  : 'Prev to Prev Month Remarks');
+              applyHeaderStyle(hD);
+              applyHeaderStyle(hE);
+            }
             row++;
+
+            final userPrev1 = prev1RemarksByUser[userEmail] ?? {};
+            final userPrev2 = prev2RemarksByUser[userEmail] ?? {};
 
             // --- Customer data rows ---
             for (final customer in customers) {
@@ -195,25 +284,61 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
               final cellC = sheet.getRangeByName('C$row');
 
               cellA.setText(customer['name'] ?? '');
-              cellB.setText(customer['remarks'] ?? '');
-              cellC.setText(isCalled ? 'Called' : 'Not Called');
+              cellB.setText(isCalled ? 'Called' : 'Not Called');
+              cellC.setText(customer['remarks'] ?? '');
+
+              final cellsToBorder = [cellA, cellB, cellC];
+
+              if (_threeMonthReport) {
+                final cellD = sheet.getRangeByName('D$row');
+                final cellE = sheet.getRangeByName('E$row');
+
+                final c1 = (customer['contact1'] ?? customer['contact'] ?? '')
+                    .toString()
+                    .trim();
+                final c2 = (customer['contact2'] ?? '').toString().trim();
+                final cName = (customer['name'] ?? '').toString().trim().toLowerCase();
+
+                String prev1Remark = '';
+                if (c1.isNotEmpty && userPrev1.containsKey(c1)) {
+                  prev1Remark = userPrev1[c1]!;
+                } else if (c2.isNotEmpty && userPrev1.containsKey(c2)) {
+                  prev1Remark = userPrev1[c2]!;
+                } else if (cName.isNotEmpty && userPrev1.containsKey('name:$cName')) {
+                  prev1Remark = userPrev1['name:$cName']!;
+                }
+
+                String prev2Remark = '';
+                if (c1.isNotEmpty && userPrev2.containsKey(c1)) {
+                  prev2Remark = userPrev2[c1]!;
+                } else if (c2.isNotEmpty && userPrev2.containsKey(c2)) {
+                  prev2Remark = userPrev2[c2]!;
+                } else if (cName.isNotEmpty && userPrev2.containsKey('name:$cName')) {
+                  prev2Remark = userPrev2['name:$cName']!;
+                }
+
+                cellD.setText(prev1Remark);
+                cellE.setText(prev2Remark);
+
+                cellsToBorder.addAll([cellD, cellE]);
+              }
 
               // Cell borders
-              for (final cell in [cellA, cellB, cellC]) {
+              for (final cell in cellsToBorder) {
                 cell.cellStyle.borders.all.lineStyle =
                     syncfusion.LineStyle.thin;
                 cell.cellStyle.borders.all.color = '#CCCCCC';
               }
 
-              // Call Status colouring
+              // Call Status colouring (Column B)
               if (isCalled) {
-                cellC.cellStyle.backColor = '#4CAF50';
-                cellC.cellStyle.fontColor = '#FFFFFF';
-                cellC.cellStyle.bold = true;
+                cellB.cellStyle.backColor = '#4CAF50';
+                cellB.cellStyle.fontColor = '#FFFFFF';
+                cellB.cellStyle.bold = true;
               } else {
-                cellC.cellStyle.backColor = '#F44336';
-                cellC.cellStyle.fontColor = '#FFFFFF';
-                cellC.cellStyle.bold = true;
+                cellB.cellStyle.backColor = '#F44336';
+                cellB.cellStyle.fontColor = '#FFFFFF';
+                cellB.cellStyle.bold = true;
               }
               row++;
             }
@@ -223,6 +348,10 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
           sheet.autoFitColumn(1);
           sheet.autoFitColumn(2);
           sheet.autoFitColumn(3);
+          if (_threeMonthReport) {
+            sheet.autoFitColumn(4);
+            sheet.autoFitColumn(5);
+          }
           sheetIndex++;
         }
       } else if (_datewiseReport) {
@@ -444,11 +573,32 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
       workbook.dispose();
 
       final dir = await getTemporaryDirectory();
-      final file = File(
-          '${dir.path}/CustomerTarget_${_selectedMonthYear!.replaceAll(' ', '_')}.xlsx');
+      String fileName;
+      String shareText;
+
+      final branchPrefix = (_selectedBranch != null && _selectedBranch != 'All Branches')
+          ? _selectedBranch!
+          : 'All Branches';
+      final monthName = _selectedMonthYear?.split(' ').first.toLowerCase() ?? '';
+
+      if (_threeMonthReport) {
+        fileName = '$branchPrefix 3-month $monthName report.xlsx';
+        shareText = '$branchPrefix 3-month $monthName report';
+      } else if (_detailedReport) {
+        fileName = '${branchPrefix}_Detailed_${_selectedMonthYear!.replaceAll(' ', '_')}.xlsx';
+        shareText = '$branchPrefix Customer Target Detailed $_selectedMonthYear';
+      } else if (_datewiseReport) {
+        fileName = '${branchPrefix}_Datewise_${_selectedMonthYear!.replaceAll(' ', '_')}.xlsx';
+        shareText = '$branchPrefix Customer Target Datewise $_selectedMonthYear';
+      } else {
+        fileName = 'CustomerTarget_${_selectedMonthYear!.replaceAll(' ', '_')}.xlsx';
+        shareText = 'Customer Target $_selectedMonthYear';
+      }
+
+      final file = File('${dir.path}/$fileName');
       await file.writeAsBytes(bytes, flush: true);
       await Share.shareXFiles([XFile(file.path)],
-          text: 'Customer Target $_selectedMonthYear');
+          text: shareText);
     } catch (e) {
       setState(() {
         _error = 'Export failed: $e';
@@ -575,34 +725,71 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
               onChanged: (val) => setState(() => _selectedBranch = val),
             ),
 
-            const SizedBox(height: 16),
-            // Detailed Report checkbox styled
-            Row(
+            // Report checkboxes styled
+            Wrap(
+              spacing: 16,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Checkbox(
-                  value: _detailedReport,
-                  activeColor: _primaryBlue,
-                  onChanged: (val) => setState(() {
-                    _detailedReport = val ?? false;
-                    if (_detailedReport) _datewiseReport = false;
-                  }),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Checkbox(
+                      value: _detailedReport,
+                      activeColor: _primaryBlue,
+                      onChanged: (val) => setState(() {
+                        _detailedReport = val ?? false;
+                        if (_detailedReport) {
+                          _datewiseReport = false;
+                          _threeMonthReport = false;
+                        }
+                      }),
+                    ),
+                    const Text(
+                      'Detailed Report',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                  ],
                 ),
-                const Text(
-                  'Detailed Report',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Checkbox(
+                      value: _datewiseReport,
+                      activeColor: _primaryBlue,
+                      onChanged: (val) => setState(() {
+                        _datewiseReport = val ?? false;
+                        if (_datewiseReport) {
+                          _detailedReport = false;
+                          _threeMonthReport = false;
+                        }
+                      }),
+                    ),
+                    const Text(
+                      'Datewise Report',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 20),
-                Checkbox(
-                  value: _datewiseReport,
-                  activeColor: _primaryBlue,
-                  onChanged: (val) => setState(() {
-                    _datewiseReport = val ?? false;
-                    if (_datewiseReport) _detailedReport = false;
-                  }),
-                ),
-                const Text(
-                  'Datewise Report',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Checkbox(
+                      value: _threeMonthReport,
+                      activeColor: _primaryBlue,
+                      onChanged: (val) => setState(() {
+                        _threeMonthReport = val ?? false;
+                        if (_threeMonthReport) {
+                          _detailedReport = false;
+                          _datewiseReport = false;
+                        }
+                      }),
+                    ),
+                    const Text(
+                      '3-month report',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                  ],
                 ),
               ],
             ),
