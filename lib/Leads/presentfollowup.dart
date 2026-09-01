@@ -279,13 +279,16 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
         // Clear the 'opened' flag so it can be rescheduled if dismissed
         await clearNotificationOpened(widget.docId);
 
+        final hashStr = widget.docId.hashCode.abs().toString();
+        final notifId = int.tryParse(hashStr.length >= 7 ? hashStr.substring(0, 7) : hashStr) ?? 0;
+
         // Cancel previous notification for this follow-up (if any)
-        await AwesomeNotifications().cancelSchedule(int.tryParse(widget.docId.hashCode.toString().substring(0, 7)) ?? 0);
+        await AwesomeNotifications().cancelSchedule(notifId);
 
         // Schedule new notification with action button
         await NotificationPermissionService.instance.safeCreateNotification(
           content: NotificationContent(
-            id: int.tryParse(widget.docId.hashCode.toString().substring(0, 7)) ?? 0,
+            id: notifId,
             channelKey: 'basic_channel',
             title: 'Follow-up Reminder',
             body: 'Reminder for ${_nameController.text}',

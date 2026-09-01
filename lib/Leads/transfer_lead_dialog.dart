@@ -157,8 +157,9 @@ class _TransferLeadDialogState extends State<TransferLeadDialog> {
 
       // Cancel the local reminder notification on this device so it doesn't
       // fire for the original owner after the lead has been transferred away.
+      final hashStr = widget.leadDocId.hashCode.abs().toString();
       final notifId = int.tryParse(
-              widget.leadDocId.hashCode.abs().toString().substring(0, 7)) ??
+              hashStr.length >= 7 ? hashStr.substring(0, 7) : hashStr) ??
           0;
       await AwesomeNotifications().cancelSchedule(notifId);
 

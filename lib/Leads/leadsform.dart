@@ -177,7 +177,8 @@ class _FollowUpFormState extends State<FollowUpForm> {
         );
 
         // Schedule notification with Edit button and docId payload
-        final notifId = int.tryParse(followUpRef.id.hashCode.abs().toString().substring(0, 7)) ?? 0;
+        final hashStr = followUpRef.id.hashCode.abs().toString();
+        final notifId = int.tryParse(hashStr.length >= 7 ? hashStr.substring(0, 7) : hashStr) ?? 0;
         await NotificationPermissionService.instance.safeCreateNotification(
           content: NotificationContent(
             id: notifId,
