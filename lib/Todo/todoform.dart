@@ -33,27 +33,55 @@ List<DateTime> getCurrentISTWindow() {
 
 /// Creates a daily_report document only if one doesn't already exist
 /// for this user+type in the current 12 PM–12 PM IST window.
+/// Uses a deterministic docId: '${userId}_${type}_${windowKey}' to guarantee
+/// exactly-once creation and prevent race conditions or missing records.
 Future<void> _createDailyReportIfNeeded({
   required String userId,
   required String documentId,
   required String type,
 }) async {
-  final window = getCurrentISTWindow();
-  final existing = await FirebaseFirestore.instance
-      .collection('daily_report')
-      .where('userId', isEqualTo: userId)
-      .where('type', isEqualTo: type)
-      .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(window[0]))
-      .where('timestamp', isLessThan: Timestamp.fromDate(window[1]))
-      .limit(1)
-      .get();
-  if (existing.docs.isEmpty) {
-    await FirebaseFirestore.instance.collection('daily_report').add({
-      'timestamp': FieldValue.serverTimestamp(),
-      'userId': userId,
-      'documentId': documentId,
-      'type': type,
-    });
+  try {
+    final window = getCurrentISTWindow();
+    final start = window[0];
+    final windowKey = "${start.year}${start.month.toString().padLeft(2, '0')}${start.day.toString().padLeft(2, '0')}";
+    final docId = "${userId}_${type}_$windowKey";
+
+    final docRef = FirebaseFirestore.instance.collection('daily_report').doc(docId);
+    final docSnap = await docRef.get();
+
+    if (!docSnap.exists) {
+      await docRef.set({
+        'timestamp': FieldValue.serverTimestamp(),
+        'userId': userId,
+        'documentId': documentId,
+        'type': type,
+      }, SetOptions(merge: true));
+    }
+  } catch (e) {
+    debugPrint('Error creating daily_report document: $e');
+    // Fallback: Attempt standard collection.add if doc set fails
+    try {
+      final window = getCurrentISTWindow();
+      final existing = await FirebaseFirestore.instance
+          .collection('daily_report')
+          .where('userId', isEqualTo: userId)
+          .where('type', isEqualTo: type)
+          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(window[0]))
+          .where('timestamp', isLessThan: Timestamp.fromDate(window[1]))
+          .limit(1)
+          .get();
+
+      if (existing.docs.isEmpty) {
+        await FirebaseFirestore.instance.collection('daily_report').add({
+          'timestamp': FieldValue.serverTimestamp(),
+          'userId': userId,
+          'documentId': documentId,
+          'type': type,
+        });
+      }
+    } catch (fallbackError) {
+      debugPrint('Fallback daily_report creation failed: $fallbackError');
+    }
   }
 }
 
@@ -169,31 +197,81 @@ class _TodoFormPageState extends State<TodoFormPage> {
       _selectedReminderTime!.minute,
     );
 
-    if (widget.docId != null) {
-      // Update existing todo
-      await FirebaseFirestore.instance.collection('todo').doc(widget.docId!).update({
+    try {
+      if (widget.docId != null) {
+        // Update existing todo
+        await FirebaseFirestore.instance.collection('todo').doc(widget.docId!).update({
+          'title': title,
+          'userId': user.uid,
+          'description': desc,
+          'reminder': scheduledDate.toIso8601String(),
+          'reminder_sent': false,
+          'email': email,
+          'created_by': createdBy,
+        });
+
+        await _clearDraft();
+
+        // Daily report entry for edits (deduplicated per 12PM–12PM IST window)
+        await _createDailyReportIfNeeded(
+          userId: createdBy,
+          documentId: widget.docId!,
+          type: 'todo',
+        );
+
+        // Cancel old notification and reschedule with updated time
+        try {
+          final notifId = widget.docId!.hashCode & 0x7FFFFFFF;
+          await AwesomeNotifications().cancel(notifId);
+          final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
+          await NotificationPermissionService.instance.safeCreateNotification(
+            content: NotificationContent(
+              id: notifId,
+              channelKey: 'todo_reminder_channel',
+              title: 'To-Do Reminder',
+              body: 'Reminder: $title',
+              notificationLayout: NotificationLayout.Default,
+              payload: {
+                'type': 'todo',
+                'docId': widget.docId!,
+              },
+            ),
+            schedule: NotificationCalendar(
+              year: scheduledDate.year,
+              month: scheduledDate.month,
+              day: scheduledDate.day,
+              hour: scheduledDate.hour,
+              minute: scheduledDate.minute,
+              second: 0,
+              millisecond: 0,
+              timeZone: tz,
+              repeats: false,
+              preciseAlarm: true,
+              allowWhileIdle: true,
+            ),
+          );
+        } catch (e) {
+          debugPrint('Warning: Failed to reschedule todo notification: $e');
+        }
+
+        if (mounted) Navigator.pop(context);
+        return;
+      }
+
+      final todoRef = await FirebaseFirestore.instance.collection('todo').add({
         'title': title,
-        'userId': user.uid,
         'description': desc,
-        'reminder': scheduledDate.toIso8601String(),
-        'reminder_sent': false,
+        'status': 'pending',
+        'timestamp': FieldValue.serverTimestamp(),
         'email': email,
         'created_by': createdBy,
+        'reminder': scheduledDate.toIso8601String(),
+        'reminder_sent': false,
       });
 
-      await _clearDraft();
-
-      // Daily report entry for edits (deduplicated per 12PM–12PM IST window)
-      await _createDailyReportIfNeeded(
-        userId: createdBy,
-        documentId: widget.docId!,
-        type: 'todo',
-      );
-
-      // Cancel old notification and reschedule with updated time
+      // Schedule local notification for the exact reminder time
       try {
-        final notifId = widget.docId!.hashCode & 0x7FFFFFFF;
-        await AwesomeNotifications().cancel(notifId);
+        final notifId = todoRef.id.hashCode & 0x7FFFFFFF;
         final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
         await NotificationPermissionService.instance.safeCreateNotification(
           content: NotificationContent(
@@ -204,7 +282,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
             notificationLayout: NotificationLayout.Default,
             payload: {
               'type': 'todo',
-              'docId': widget.docId!,
+              'docId': todoRef.id,
             },
           ),
           schedule: NotificationCalendar(
@@ -222,73 +300,33 @@ class _TodoFormPageState extends State<TodoFormPage> {
           ),
         );
       } catch (e) {
-        debugPrint('Warning: Failed to reschedule todo notification: $e');
+        debugPrint('Warning: Failed to schedule todo notification: $e');
       }
 
-      if (mounted) Navigator.pop(context);
-      return;
-    }
+      await _clearDraft();
 
-    final todoRef = await FirebaseFirestore.instance.collection('todo').add({
-      'title': title,
-      'description': desc,
-      'status': 'pending',
-      'timestamp': FieldValue.serverTimestamp(),
-      'email': email,
-      'created_by': createdBy,
-      'reminder': scheduledDate.toIso8601String(),
-      'reminder_sent': false,
-    });
-
-    // Schedule local notification for the exact reminder time
-    try {
-      final notifId = todoRef.id.hashCode & 0x7FFFFFFF;
-      final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
-      await NotificationPermissionService.instance.safeCreateNotification(
-        content: NotificationContent(
-          id: notifId,
-          channelKey: 'todo_reminder_channel',
-          title: 'To-Do Reminder',
-          body: 'Reminder: $title',
-          notificationLayout: NotificationLayout.Default,
-          payload: {
-            'type': 'todo',
-            'docId': todoRef.id,
-          },
-        ),
-        schedule: NotificationCalendar(
-          year: scheduledDate.year,
-          month: scheduledDate.month,
-          day: scheduledDate.day,
-          hour: scheduledDate.hour,
-          minute: scheduledDate.minute,
-          second: 0,
-          millisecond: 0,
-          timeZone: tz,
-          repeats: false,
-          preciseAlarm: true,
-          allowWhileIdle: true,
-        ),
+      // Daily report entry for new todo (deduplicated per 12PM–12PM IST window)
+      await _createDailyReportIfNeeded(
+        userId: createdBy,
+        documentId: todoRef.id,
+        type: 'todo',
       );
+
+      if (mounted) {
+        Navigator.pop(context);
+      }
     } catch (e) {
-      debugPrint('Warning: Failed to schedule todo notification: $e');
+      debugPrint('Error saving todo: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save To-Do: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
-
-    await _clearDraft();
-
-    // Daily report entry for new todo (deduplicated per 12PM–12PM IST window)
-    await _createDailyReportIfNeeded(
-      userId: createdBy,
-      documentId: todoRef.id,
-      type: 'todo',
-    );
-
-
-
-    if (mounted) {
-      Navigator.pop(context);
-    }
-    // Don't call setState after pop, as the widget is disposed
   }
 
   Future<void> _saveDraft() async {
