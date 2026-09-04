@@ -605,7 +605,6 @@ class _HomePageState extends State<HomePage>
             // Page scroll indicator dots shown only for roles with multiple pages
             if (_role != 'supersale_admin' &&
                 _role != 'core_team' &&
-                _role != 'sync_head' &&
                 _role != 'sme' &&
                 _role != 'dme_admin' &&
                 _role != 'dme_user')

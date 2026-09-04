@@ -21,6 +21,7 @@ import '../Sync Head/sync_head_todos_page.dart';
 import '../Sync Head/sync_head_report_todo.dart';
 import '../Sync Head/sync_head_customer_list_deletion_approval.dart';
 import '../Sync Head/sync_head_yupulse_data.dart';
+import '../Sync Head/transfer_call_list_page.dart';
 import '../SME/sme_leads_page.dart';
 import '../SME/sme_dashboard.dart';
 import '../SME/sme_ads_page.dart';
@@ -397,7 +398,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     if (role == 'core_team') {
       return _buildCoreTeamTiles(context);
     }
-    if (role == 'sync_head' || role == 'sme' || role == 'dme_admin' || role == 'dme_user') {
+    if (role == 'sme' || role == 'dme_admin' || role == 'dme_user') {
       return _buildOriginalHomePage(context);
     }
 
@@ -543,6 +544,14 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           color: primaryGreen,
           textColor: Colors.white,
           icon: Icons.inventory_2_rounded,
+        ),
+      if (role == 'sync_head')
+        NeumorphicButton(
+          onTap: () => _navigateToTransferCallList(context),
+          text: 'Transfer Call List',
+          color: primaryBlue,
+          textColor: Colors.white,
+          icon: Icons.phone_forwarded_rounded,
         ),
       if (role == 'manager' || role == 'asst_manager')
         NeumorphicButton(
@@ -863,6 +872,16 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       MaterialPageRoute(
         builder: (_) => const LoadingOverlayPage(
           child: SyncHeadTodosPage(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _navigateToTransferCallList(BuildContext context) async {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const LoadingOverlayPage(
+          child: TransferCallListPage(),
         ),
       ),
     );
