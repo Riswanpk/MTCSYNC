@@ -681,6 +681,10 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
             bookingEnd != null &&
             now.isAfter(bookingStart.toDate()) &&
             now.isBefore(bookingEnd.toDate());
+        final bool isCancelAllowed = bookingStart != null &&
+            deliveryEnd != null &&
+            now.isAfter(bookingStart.toDate()) &&
+            now.isBefore(deliveryEnd.toDate());
         final bool isDelivered = status == 'delivered';
 
         return Dismissible(
@@ -728,11 +732,11 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
           onDismissed: (direction) {},
           confirmDismiss: (direction) async {
             if (direction == DismissDirection.endToStart) {
-              // Swipe to Cancel booking (only allowed during booking interval)
-              if (!isActionAllowed) {
+              // Swipe to Cancel booking (allowed during booking and delivery period)
+              if (!isCancelAllowed) {
                 ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                   const SnackBar(
-                    content: Text('Booking period has ended. You cannot cancel this entry.'),
+                    content: Text('Delivery period has ended. You cannot cancel this entry.'),
                     backgroundColor: Colors.red,
                   ),
                 );
