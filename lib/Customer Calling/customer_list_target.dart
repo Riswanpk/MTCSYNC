@@ -284,12 +284,15 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
           _isTileViewerOpen = true;
         },
         onStatusChanged: (c, remarks) async {
-          setState(() {
-            c['remarks'] = remarks;
-          });
+          c['remarks'] = remarks;
+          if (mounted) {
+            setState(() {});
+          }
           await _updateFirestore();
           _isTileViewerOpen = false;
-          await _fetchCustomerData();
+          if (mounted) {
+            await _fetchCustomerData();
+          }
         },
       ),
     );
@@ -327,6 +330,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
     }
 
     var status = await Permission.phone.request();
+    if (!mounted) return;
     if (!status.isGranted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Phone permission denied')),
@@ -369,16 +373,19 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
               _isTileViewerOpen = true;
             },
             onStatusChanged: (c, remarks) async {
-              setState(() {
-                c['callMade'] = true;
-                if (c['callDate'] == null) {
-                  c['callDate'] = Timestamp.now();
-                }
-                c['remarks'] = remarks;
-              });
+              c['callMade'] = true;
+              if (c['callDate'] == null) {
+                c['callDate'] = Timestamp.now();
+              }
+              c['remarks'] = remarks;
+              if (mounted) {
+                setState(() {});
+              }
               await _updateFirestore();
               _isTileViewerOpen = false;
-              await _fetchCustomerData();
+              if (mounted) {
+                await _fetchCustomerData();
+              }
             },
           ),
         );

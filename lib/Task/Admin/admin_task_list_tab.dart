@@ -26,6 +26,7 @@ class _AdminTaskListTabState extends State<AdminTaskListTab> {
   final _auth = FirebaseAuth.instance;
 
   String? _selectedFilterBranch;
+  String? _selectedFilterUser;
 
   Future<void> _deleteTask(String docId) async {
     final confirm = await showDialog<bool>(
@@ -132,9 +133,9 @@ class _AdminTaskListTabState extends State<AdminTaskListTab> {
     }
   }
 
-  Widget _buildBranchFilterHeader(bool isDark) {
+  Widget _buildFilterHeader(bool isDark, List<String> availableUsers) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF101C2E) : Colors.white,
         border: Border(
@@ -143,86 +144,191 @@ class _AdminTaskListTabState extends State<AdminTaskListTab> {
           ),
         ),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Icon(
-            Icons.filter_alt_outlined,
-            size: 20,
-            color: isDark ? Colors.white70 : const Color(0xFF005BAC),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            'Branch:',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-              color: isDark ? Colors.white : Colors.black87,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Container(
-              height: 40,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF16253B) : const Color(0xFFF3F4F6),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: isDark ? Colors.white24 : Colors.black12,
+          Row(
+            children: [
+              // Branch Filter
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.business_rounded,
+                      size: 18,
+                      color: isDark ? Colors.white70 : const Color(0xFF005BAC),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Branch:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Container(
+                        height: 38,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF16253B) : const Color(0xFFF3F4F6),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isDark ? Colors.white24 : Colors.black12,
+                          ),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedFilterBranch,
+                            isDense: true,
+                            isExpanded: true,
+                            hint: Text(
+                              'All Branches',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark ? Colors.white60 : Colors.black54,
+                              ),
+                            ),
+                            dropdownColor:
+                                isDark ? const Color(0xFF16253B) : Colors.white,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                            items: [
+                              const DropdownMenuItem<String>(
+                                value: null,
+                                child: Text('All Branches'),
+                              ),
+                              ...widget.branches.map((b) => DropdownMenuItem<String>(
+                                    value: b,
+                                    child: Text(b),
+                                  )),
+                            ],
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedFilterBranch = val;
+                                // Reset user filter if selected user is not available in the new branch
+                                _selectedFilterUser = null;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedFilterBranch,
-                  isDense: true,
-                  isExpanded: true,
-                  hint: Text(
-                    'All Branches',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: isDark ? Colors.white60 : Colors.black54,
-                    ),
-                  ),
-                  dropdownColor:
-                      isDark ? const Color(0xFF16253B) : Colors.white,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                  items: [
-                    const DropdownMenuItem<String>(
-                      value: null,
-                      child: Text('All Branches'),
-                    ),
-                    ...widget.branches.map((b) => DropdownMenuItem<String>(
-                          value: b,
-                          child: Text(b),
-                        )),
-                  ],
-                  onChanged: (val) {
+              if (_selectedFilterBranch != null) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: const Icon(Icons.clear_rounded, size: 16),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Clear branch filter',
+                  color: isDark ? Colors.white70 : Colors.black54,
+                  onPressed: () {
                     setState(() {
-                      _selectedFilterBranch = val;
+                      _selectedFilterBranch = null;
                     });
                   },
                 ),
-              ),
-            ),
+              ],
+            ],
           ),
-          if (_selectedFilterBranch != null) ...[
-            const SizedBox(width: 8),
-            IconButton(
-              icon: const Icon(Icons.clear_rounded, size: 18),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-              tooltip: 'Clear filter',
-              color: isDark ? Colors.white70 : Colors.black54,
-              onPressed: () {
-                setState(() {
-                  _selectedFilterBranch = null;
-                });
-              },
-            ),
-          ],
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              // User Filter
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.person_outline_rounded,
+                      size: 18,
+                      color: isDark ? Colors.white70 : const Color(0xFF005BAC),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'User:     ',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Container(
+                        height: 38,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF16253B) : const Color(0xFFF3F4F6),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isDark ? Colors.white24 : Colors.black12,
+                          ),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: availableUsers.contains(_selectedFilterUser)
+                                ? _selectedFilterUser
+                                : null,
+                            isDense: true,
+                            isExpanded: true,
+                            hint: Text(
+                              'All Users',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark ? Colors.white60 : Colors.black54,
+                              ),
+                            ),
+                            dropdownColor:
+                                isDark ? const Color(0xFF16253B) : Colors.white,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                            items: [
+                              const DropdownMenuItem<String>(
+                                value: null,
+                                child: Text('All Users'),
+                              ),
+                              ...availableUsers.map((u) => DropdownMenuItem<String>(
+                                    value: u,
+                                    child: Text(u),
+                                  )),
+                            ],
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedFilterUser = val;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_selectedFilterUser != null) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: const Icon(Icons.clear_rounded, size: 16),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Clear user filter',
+                  color: isDark ? Colors.white70 : Colors.black54,
+                  onPressed: () {
+                    setState(() {
+                      _selectedFilterUser = null;
+                    });
+                  },
+                ),
+              ],
+            ],
+          ),
         ],
       ),
     );
@@ -238,26 +344,49 @@ class _AdminTaskListTabState extends State<AdminTaskListTab> {
 
     final isPendingTab = widget.filterStatus == 'pending';
 
-    return Column(
-      children: [
-        _buildBranchFilterHeader(isDark),
-        Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: _firestore
-                .collection('core_tasks')
-                .where('assigned_by', isEqualTo: currentUserId)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
-              }
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore
+          .collection('core_tasks')
+          .where('assigned_by', isEqualTo: currentUserId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
 
-              final docs = snapshot.data?.docs ?? [];
-              if (docs.isEmpty) {
-                return Center(
+        final docs = snapshot.data?.docs ?? [];
+
+        // Extract available usernames across the docs for this tab status (optionally scoped to selected branch)
+        final Set<String> availableUsersSet = {};
+        for (final doc in docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          final docBranch = (data['assigned_to_branch'] as String? ??
+                  data['branch'] ??
+                  '')
+              .toString()
+              .trim()
+              .toUpperCase();
+          if (_selectedFilterBranch != null &&
+              _selectedFilterBranch!.isNotEmpty &&
+              docBranch != _selectedFilterBranch) {
+            continue;
+          }
+          final name = (data['assigned_to_name'] as String? ?? '').trim();
+          if (name.isNotEmpty) {
+            availableUsersSet.add(name);
+          }
+        }
+        final availableUsers = availableUsersSet.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+        if (docs.isEmpty) {
+          return Column(
+            children: [
+              _buildFilterHeader(isDark, availableUsers),
+              Expanded(
+                child: Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -278,145 +407,161 @@ class _AdminTaskListTabState extends State<AdminTaskListTab> {
                       ),
                     ],
                   ),
-                );
+                ),
+              ),
+            ],
+          );
+        }
+
+        // Group by mass_task_id for mass tasks
+        final Map<String, List<DocumentSnapshot>> massGroups = {};
+        final List<dynamic> displayItems = [];
+
+        for (final doc in docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          final bool isMass = data['is_mass_task'] == true &&
+              data['mass_task_id'] != null;
+
+          if (isMass) {
+            final String massId = data['mass_task_id'];
+            if (!massGroups.containsKey(massId)) {
+              massGroups[massId] = [];
+            }
+            massGroups[massId]!.add(doc);
+          } else {
+            final st = (data['status'] as String? ?? 'pending').toLowerCase();
+            if (st == widget.filterStatus) {
+              // Apply branch filter
+              if (_selectedFilterBranch != null &&
+                  _selectedFilterBranch!.isNotEmpty) {
+                final docBranch = (data['assigned_to_branch'] as String? ??
+                        data['branch'] ??
+                        '')
+                    .toString()
+                    .trim()
+                    .toUpperCase();
+                if (docBranch != _selectedFilterBranch) {
+                  continue;
+                }
               }
+              // Apply user filter
+              if (_selectedFilterUser != null &&
+                  _selectedFilterUser!.isNotEmpty) {
+                final docUser = (data['assigned_to_name'] as String? ?? '').trim();
+                if (docUser != _selectedFilterUser) {
+                  continue;
+                }
+              }
+              displayItems.add(doc);
+            }
+          }
+        }
 
-              // Group by mass_task_id for mass tasks
-              final Map<String, List<DocumentSnapshot>> massGroups = {};
-              final List<dynamic> displayItems = [];
+        massGroups.forEach((massId, docsList) {
+          if (docsList.isNotEmpty) {
+            // If branch or user filter is set, only consider userTasks matching them
+            final relevantDocs = docsList.where((d) {
+              final data = d.data() as Map<String, dynamic>;
+              if (_selectedFilterBranch != null &&
+                  _selectedFilterBranch!.isNotEmpty) {
+                final b = (data['assigned_to_branch'] as String? ??
+                        data['branch'] ??
+                        '')
+                    .toString()
+                    .trim()
+                    .toUpperCase();
+                if (b != _selectedFilterBranch) return false;
+              }
+              if (_selectedFilterUser != null &&
+                  _selectedFilterUser!.isNotEmpty) {
+                final u = (data['assigned_to_name'] as String? ?? '').trim();
+                if (u != _selectedFilterUser) return false;
+              }
+              return true;
+            }).toList();
 
-              for (final doc in docs) {
-                final data = doc.data() as Map<String, dynamic>;
-                final bool isMass = data['is_mass_task'] == true &&
-                    data['mass_task_id'] != null;
+            if (relevantDocs.isEmpty) return;
 
-                if (isMass) {
-                  final String massId = data['mass_task_id'];
-                  if (!massGroups.containsKey(massId)) {
-                    massGroups[massId] = [];
-                  }
-                  massGroups[massId]!.add(doc);
-                } else {
-                  final st = (data['status'] as String? ?? 'pending').toLowerCase();
-                  if (st == widget.filterStatus) {
-                    // Apply branch filter
-                    if (_selectedFilterBranch != null &&
-                        _selectedFilterBranch!.isNotEmpty) {
-                      final docBranch = (data['assigned_to_branch'] as String? ??
-                              data['branch'] ??
-                              '')
-                          .toString()
-                          .trim()
-                          .toUpperCase();
-                      if (docBranch != _selectedFilterBranch) {
-                        continue;
-                      }
-                    }
-                    displayItems.add(doc);
-                  }
+            final totalUsers = relevantDocs.length;
+            final completedCount = relevantDocs
+                .where((d) =>
+                    (d.data() as Map<String, dynamic>)['status'] ==
+                    'completed')
+                .length;
+            final pendingCount = totalUsers - completedCount;
+
+            // In pending tab, show mass task if it has pending subtasks. In completed tab, show if it has completed subtasks.
+            final bool shouldInclude =
+                isPendingTab ? pendingCount > 0 : completedCount > 0;
+
+            if (shouldInclude) {
+              final firstDoc = relevantDocs.first;
+              final data = firstDoc.data() as Map<String, dynamic>;
+
+              Timestamp? latestTs = data['timestamp'] as Timestamp?;
+              for (final d in relevantDocs) {
+                final ts = (d.data() as Map<String, dynamic>)['timestamp']
+                    as Timestamp?;
+                if (ts != null &&
+                    (latestTs == null || ts.compareTo(latestTs) > 0)) {
+                  latestTs = ts;
                 }
               }
 
-              massGroups.forEach((massId, docsList) {
-                if (docsList.isNotEmpty) {
-                  // If branch filter is set, only consider userTasks matching that branch
-                  final relevantDocs = _selectedFilterBranch == null
-                      ? docsList
-                      : docsList.where((d) {
-                          final data = d.data() as Map<String, dynamic>;
-                          final b = (data['assigned_to_branch'] as String? ??
-                                  data['branch'] ??
-                                  '')
-                              .toString()
-                              .trim()
-                              .toUpperCase();
-                          return b == _selectedFilterBranch;
-                        }).toList();
+              displayItems.add(MassTaskGroup(
+                massTaskId: massId,
+                title: data['title'] ?? '',
+                description: data['description'] ?? '',
+                assignedByName: data['assigned_by_name'] ?? 'Core Team',
+                assignedByEmail: data['assigned_by_email'] ?? '',
+                timestamp: latestTs,
+                userTasks: relevantDocs,
+              ));
+            }
+          }
+        });
 
-                  if (relevantDocs.isEmpty) return;
+        String emptyMessage = isPendingTab ? 'No pending tasks' : 'No completed tasks';
+        if (_selectedFilterBranch != null && _selectedFilterUser != null) {
+          emptyMessage = 'No tasks found for user $_selectedFilterUser in branch $_selectedFilterBranch';
+        } else if (_selectedFilterBranch != null) {
+          emptyMessage = 'No tasks found for branch $_selectedFilterBranch';
+        } else if (_selectedFilterUser != null) {
+          emptyMessage = 'No tasks found for user $_selectedFilterUser';
+        }
 
-                  final totalUsers = relevantDocs.length;
-                  final completedCount = relevantDocs
-                      .where((d) =>
-                          (d.data() as Map<String, dynamic>)['status'] ==
-                          'completed')
-                      .length;
-                  final pendingCount = totalUsers - completedCount;
-
-                  // In pending tab, show mass task if it has pending subtasks. In completed tab, show if it has completed subtasks.
-                  final bool shouldInclude =
-                      isPendingTab ? pendingCount > 0 : completedCount > 0;
-
-                  if (shouldInclude) {
-                    final firstDoc = relevantDocs.first;
-                    final data = firstDoc.data() as Map<String, dynamic>;
-
-                    Timestamp? latestTs = data['timestamp'] as Timestamp?;
-                    for (final d in relevantDocs) {
-                      final ts = (d.data() as Map<String, dynamic>)['timestamp']
-                          as Timestamp?;
-                      if (ts != null &&
-                          (latestTs == null || ts.compareTo(latestTs) > 0)) {
-                        latestTs = ts;
-                      }
-                    }
-
-                    displayItems.add(MassTaskGroup(
-                      massTaskId: massId,
-                      title: data['title'] ?? '',
-                      description: data['description'] ?? '',
-                      assignedByName: data['assigned_by_name'] ?? 'Core Team',
-                      assignedByEmail: data['assigned_by_email'] ?? '',
-                      timestamp: latestTs,
-                      userTasks: relevantDocs,
-                    ));
-                  }
-                }
-              });
-
-              if (displayItems.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        isPendingTab
-                            ? Icons.pending_actions_rounded
-                            : Icons.task_alt_rounded,
-                        size: 64,
-                        color: isDark ? Colors.white24 : Colors.black26,
+        return Column(
+          children: [
+            _buildFilterHeader(isDark, availableUsers),
+            Expanded(
+              child: displayItems.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            isPendingTab
+                                ? Icons.pending_actions_rounded
+                                : Icons.task_alt_rounded,
+                            size: 64,
+                            color: isDark ? Colors.white24 : Colors.black26,
+                          ),
+                          const SizedBox(height: 16),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Text(
+                              emptyMessage,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: isDark ? Colors.white60 : Colors.black54,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
-                      Text(
-                        _selectedFilterBranch != null
-                            ? 'No tasks found for branch $_selectedFilterBranch'
-                            : (isPendingTab
-                                ? 'No pending tasks'
-                                : 'No completed tasks'),
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: isDark ? Colors.white60 : Colors.black54,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              // Sort by timestamp newest first
-              displayItems.sort((a, b) {
-                final tsA = a is DocumentSnapshot
-                    ? (a.data() as Map<String, dynamic>)['timestamp'] as Timestamp?
-                    : (a as MassTaskGroup).timestamp;
-                final tsB = b is DocumentSnapshot
-                    ? (b.data() as Map<String, dynamic>)['timestamp'] as Timestamp?
-                    : (b as MassTaskGroup).timestamp;
-                if (tsA == null) return 1;
-                if (tsB == null) return -1;
-                return tsB.compareTo(tsA);
-              });
-
-              return ListView.builder(
+                    )
+                  : ListView.builder(
                 padding: const EdgeInsets.all(16),
                 itemCount: displayItems.length,
                 itemBuilder: (context, index) {
@@ -948,11 +1093,11 @@ class _AdminTaskListTabState extends State<AdminTaskListTab> {
                     ),
                   );
                 },
-              );
-            },
-          ),
-        ),
-      ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

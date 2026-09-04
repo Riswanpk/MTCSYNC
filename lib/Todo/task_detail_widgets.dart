@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'todoform.dart';
 import '../Navigation/user_cache_service.dart';
-import 'todo_widgets.dart';
 
 /// Full-screen task detail page.
 class TaskDetailPage extends StatelessWidget {
@@ -12,10 +11,10 @@ class TaskDetailPage extends StatelessWidget {
   final String dateStr;
 
   const TaskDetailPage({
-    Key? key,
+    super.key,
     required this.data,
     required this.dateStr,
-  }) : super(key: key);
+  });
 
   bool get isAssignedByManager => data['assigned_by_name'] != null;
 
@@ -106,7 +105,7 @@ class TaskDetailPage extends StatelessWidget {
                               'timestamp': Timestamp.now(),
                             });
                             // Optionally pop back to the list page
-                            if (Navigator.canPop(context)) {
+                            if (context.mounted && Navigator.canPop(context)) {
                               Navigator.pop(context);
                             }
                           }
@@ -204,7 +203,7 @@ class TaskDetailPage extends StatelessWidget {
 /// Loads a task detail page by document ID.
 class TaskDetailPageFromId extends StatelessWidget {
   final String docId;
-  const TaskDetailPageFromId({Key? key, required this.docId}) : super(key: key);
+  const TaskDetailPageFromId({super.key, required this.docId});
 
   @override
   Widget build(BuildContext context) {

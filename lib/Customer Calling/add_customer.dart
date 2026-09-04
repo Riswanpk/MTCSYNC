@@ -8,6 +8,8 @@ import 'dart:convert';
 import '../Navigation/user_cache_service.dart';
 
 class AddCustomerPage extends StatefulWidget {
+  const AddCustomerPage({super.key});
+
   @override
   State<AddCustomerPage> createState() => _AddCustomerPageState();
 }
@@ -49,10 +51,12 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
       bool nameExists = customers.any(
           (c) => (c['name'] ?? '').toString().trim().toLowerCase() == newName);
       if (nameExists) {
-        setState(() {
-          _error = 'A customer with this name already exists.';
-          _loading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _error = 'A customer with this name already exists.';
+            _loading = false;
+          });
+        }
         return;
       }
       customers.add({
@@ -70,15 +74,16 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
         'customers': customers,
         'updated': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
-      Navigator.pop(context, true);
+      if (mounted) {
+        Navigator.pop(context, true);
+      }
     } catch (e) {
-      setState(() {
-        _error = "Failed to add: $e";
-      });
-    } finally {
-      setState(() {
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = "Failed to add: $e";
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -111,6 +116,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
       final List<dynamic> decoded = jsonDecode(cached);
       cachedContacts = decoded.map((c) => Contact.fromJson(c)).toList();
     }
+    if (!mounted) return;
     // Show modal immediately with cached (or empty) contacts
     showModalBottomSheet(
       context: context,
@@ -150,6 +156,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
 
   Future<void> _pasteFromClipboard(TextEditingController controller) async {
     final clipboardData = await Clipboard.getData('text/plain');
+    if (!mounted) return;
     if (clipboardData != null && clipboardData.text != null) {
       final digits = RegExp(r'\d')
           .allMatches(clipboardData.text!)
@@ -247,8 +254,9 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                   LengthLimitingTextInputFormatter(10),
                 ],
                 validator: (v) {
-                  if (v != null && v.isNotEmpty && v.length != 10)
+                  if (v != null && v.isNotEmpty && v.length != 10) {
                     return 'Enter exactly 10 digits';
+                  }
                   return null;
                 },
               ),
@@ -257,6 +265,10 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _loading ? null : _addCustomer,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8CC63F),
+                    foregroundColor: Colors.white,
+                  ),
                   child: _loading
                       ? const SizedBox(
                           width: 20,
@@ -264,10 +276,6 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                           child: CircularProgressIndicator(
                               strokeWidth: 2, color: Colors.white))
                       : const Text('Add Customer'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF8CC63F),
-                    foregroundColor: Colors.white,
-                  ),
                 ),
               ),
               const SizedBox(height: 16),

@@ -127,11 +127,16 @@ Future<void> editCustomerDialog({
                             }
                           }
                         }
-                        Navigator.pop(context);
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                        }
                       } catch (e) {
-                        setState(() => error = 'Failed to update: $e');
-                      } finally {
-                        setState(() => loading = false);
+                        if (context.mounted) {
+                          setState(() {
+                            error = 'Failed to update: $e';
+                            loading = false;
+                          });
+                        }
                       }
                     },
               child: loading
