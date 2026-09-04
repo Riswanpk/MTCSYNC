@@ -21,7 +21,7 @@ import '../Sync Head/sync_head_todos_page.dart';
 import '../Sync Head/sync_head_report_todo.dart';
 import '../Sync Head/sync_head_customer_list_deletion_approval.dart';
 import '../Sync Head/sync_head_yupulse_data.dart';
-import '../Sync Head/transfer_call_list_page.dart';
+import '../Sync Head/Transfer Call List/transfer_call_list_page.dart';
 import '../SME/sme_leads_page.dart';
 import '../SME/sme_dashboard.dart';
 import '../SME/sme_ads_page.dart';
