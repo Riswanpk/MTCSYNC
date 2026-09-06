@@ -32,6 +32,27 @@ class SmeLeadDetailPageFromId extends StatelessWidget {
           );
         }
         final data = doc.data() as Map<String, dynamic>;
+        final assignedToUid = (data['assigned_to'] as String? ?? '').trim();
+        final role = UserCacheService.instance.role;
+        if (role != 'admin' && assignedToUid.isNotEmpty && assignedToUid != currentUid) {
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text('Access Restricted'),
+              backgroundColor: const Color(0xFF005BAC),
+              foregroundColor: Colors.white,
+            ),
+            body: const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24.0),
+                child: Text(
+                  'Access restricted: You are not assigned to this SME lead.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 16),
+                ),
+              ),
+            ),
+          );
+        }
         final assignedByUid = data['assigned_by'] as String? ?? '';
 
         return FutureBuilder<DocumentSnapshot>(
@@ -490,6 +511,36 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final assignedTo = (_data['assigned_to'] as String? ?? '').trim();
+    final role = UserCacheService.instance.role;
+    if (role != 'admin' && assignedTo.isNotEmpty && assignedTo != widget.currentUid) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Access Restricted'),
+          flexibleSpace: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [_brandPrimary, _brandAccent],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          ),
+          foregroundColor: Colors.white,
+        ),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Text(
+              'Access restricted: You are not assigned to this SME lead.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16),
+            ),
+          ),
+        ),
+      );
+    }
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final name = _data['name'] ?? 'No Name';
     final phone = _data['phone'] ?? '';

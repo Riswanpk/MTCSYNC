@@ -76,12 +76,15 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
 
     var status = await Permission.phone.request();
     if (!status.isGranted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Phone permission denied')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Phone permission denied')),
+        );
+      }
       return;
     }
 
+    if (!mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -168,12 +171,13 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
         .collection('follow_ups')
         .where('source', whereIn: ['sme', 'SME']);
 
-    if (_currentRole == 'sales') {
-      query = query.where('assigned_to', isEqualTo: _currentUid);
-    } else if (_currentRole == 'manager' || _currentRole == 'asst_manager') {
-      if (_currentBranch != null && _currentBranch!.isNotEmpty) {
+    if (_currentRole == 'admin') {
+      if (_currentBranch != null && _currentBranch!.isNotEmpty && _currentBranch != 'All') {
         query = query.where('branch', isEqualTo: _currentBranch);
       }
+    } else {
+      // Manager, asst_manager, sales, and other users can only see SME leads assigned to them
+      query = query.where('assigned_to', isEqualTo: _currentUid);
     }
 
     if (_selectedFilter != 'All' && _selectedFilter != 'Pending') {
