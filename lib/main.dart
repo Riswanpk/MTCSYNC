@@ -164,7 +164,9 @@ Future<void> _setupFirebaseMessaging() async {
         return; // Handled by SmeNotificationService to prevent duplicate notifications
       }
       String channelKey = 'basic_channel_v2';
-      if (type == 'dme_complaint' || type == 'complaint_assigned' || type == 'complaint_raised') {
+      if (type == 'customer_editing_request' || type == 'customer_deletion_request' || type == 'customer_approval') {
+        channelKey = 'customer_approval_channel';
+      } else if (type == 'dme_complaint' || type == 'complaint_assigned' || type == 'complaint_raised') {
         channelKey = 'dme_complaints_channel';
       } else if (type == 'todo' || type == 'todo_reminder') {
         channelKey = 'todo_reminder_channel';
@@ -338,6 +340,17 @@ Future<void> _initializeNotifications() async {
       importance: NotificationImportance.High,
       channelShowBadge: true,
       criticalAlerts: true,
+      playSound: true,
+    ),
+    NotificationChannel(
+      channelKey: 'customer_approval_channel',
+      channelName: 'Customer Approvals',
+      channelDescription: 'Channel for customer editing and deletion approval notifications',
+      defaultColor: const Color(0xFF005BAC),
+      ledColor: Colors.blue,
+      importance: NotificationImportance.High,
+      channelShowBadge: true,
+      criticalAlerts: false,
       playSound: true,
     ),
   ];
