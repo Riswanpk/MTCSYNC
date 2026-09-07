@@ -182,11 +182,28 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
       fields.add(MapEntry('address', address));
     }
 
+    const ignoredKeys = {
+      'slno',
+      'remarks',
+      'callMade',
+      'callDate',
+      'contact',
+      'contact1',
+      'contact2',
+      'address',
+      'lastCalledNumber',
+      'lastRemarks',
+      'pendingDeletion',
+      'pendingEditing',
+      'isEdited',
+      'editApproved',
+      'pendingEditData',
+      'name',
+    };
+
     customer.forEach((key, value) {
-      if (key == 'slno' || key == 'remarks' || key == 'callMade' || key == 'callDate' || key == 'contact' || key == 'contact1' || key == 'contact2' || key == 'address' || key == 'lastCalledNumber' || key == 'lastRemarks' || key == 'pendingDeletion') return;
-      if (key != 'name') {
-        fields.add(MapEntry(key, value));
-      }
+      if (ignoredKeys.contains(key) || ignoredKeys.contains(key.toLowerCase())) return;
+      fields.add(MapEntry(key, value));
     });
 
     bool remarksEntered = remarksController.text.trim().isNotEmpty;
@@ -213,9 +230,25 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
               onPressed: _reloadCallStatus,
             ),
             IconButton(
-              icon: const Icon(Icons.edit),
-              tooltip: 'Edit Customer',
+              icon: Icon(
+                Icons.edit,
+                color: (customer['pendingEditing'] == true || customer['pendingDeletion'] == true)
+                    ? Colors.white38
+                    : Colors.white,
+              ),
+              tooltip: (customer['pendingEditing'] == true || customer['pendingDeletion'] == true)
+                  ? 'Approval pending'
+                  : 'Edit Customer',
               onPressed: () {
+                if (customer['pendingEditing'] == true || customer['pendingDeletion'] == true) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('This customer is already pending approval and cannot be edited.'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                  return;
+                }
                 editCustomerDialog(
                   context: context,
                   customer: customer,
@@ -240,7 +273,17 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                 contact2: contact2,
                 called: called,
                 primaryColor: primaryColor,
+                isCallDisabled: customer['pendingEditing'] == true || customer['pendingDeletion'] == true,
                 onCallPressed: () {
+                  if (customer['pendingEditing'] == true || customer['pendingDeletion'] == true) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Calling is disabled while customer is pending approval.'),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
+                    return;
+                  }
                   makeCall(
                     context,
                     customer,

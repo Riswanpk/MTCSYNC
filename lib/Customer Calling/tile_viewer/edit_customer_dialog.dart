@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../Sync Head/sync_head_editing_approval.dart';
 
 Future<void> editCustomerDialog({
   required BuildContext context,
@@ -9,30 +9,33 @@ Future<void> editCustomerDialog({
   required Map<String, dynamic> widgetCustomer,
   required Function(Map<String, dynamic> updatedFields) onUpdated,
 }) async {
+  if (customer['pendingEditing'] == true || customer['pendingDeletion'] == true) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('This customer is already pending approval and cannot be edited.'),
+        backgroundColor: Colors.orange,
+      ),
+    );
+    return;
+  }
+
   final nameController = TextEditingController(text: customer['name'] ?? '');
   final addressController = TextEditingController(text: customer['address'] ?? '');
   final contact1Controller = TextEditingController(text: customer['contact1'] ?? customer['contact'] ?? '');
   final contact2Controller = TextEditingController(text: customer['contact2'] ?? '');
   final formKey = GlobalKey<FormState>();
-  bool loading = false;
-  String? error;
 
   await showDialog(
     context: context,
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Edit Customer'),
-          content: Form(
-            key: formKey,
+    builder: (dialogCtx) {
+      return AlertDialog(
+        title: const Text('Edit Customer'),
+        content: Form(
+          key: formKey,
+          child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(error!, style: const TextStyle(color: Colors.red)),
-                  ),
                 TextFormField(
                   controller: nameController,
                   decoration: const InputDecoration(labelText: 'Customer Name'),
@@ -76,75 +79,69 @@ Future<void> editCustomerDialog({
               ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: loading ? null : () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: loading
-                  ? null
-                  : () async {
-                      if (!formKey.currentState!.validate()) return;
-                      setState(() => loading = true);
-                      try {
-                        final updated = {
-                          'name': nameController.text.trim(),
-                          'address': addressController.text.trim(),
-                          'contact1': contact1Controller.text.trim(),
-                          'contact2': contact2Controller.text.trim(),
-                          'contact': contact1Controller.text.trim(),
-                        };
-                        onUpdated(updated);
-
-                        final user = FirebaseAuth.instance.currentUser;
-                        if (user != null && user.email != null) {
-                          final docId = user.email!.toLowerCase();
-                          final now = DateTime.now();
-                          final months = [
-                            'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-                          ];
-                          final monthYear = "${months[now.month - 1]} ${now.year}";
-                          final docRef = FirebaseFirestore.instance
-                              .collection('customer_target')
-                              .doc(monthYear)
-                              .collection('users')
-                              .doc(docId);
-                          final doc = await docRef.get();
-                          if (doc.exists && doc.data()?['customers'] != null) {
-                            List customers = List.from(doc.data()!['customers']);
-                            int idx = customers.indexWhere((c) =>
-                                (c['name'] == widgetCustomer['name'] &&
-                                 (c['contact1'] ?? c['contact']) == (widgetCustomer['contact1'] ?? widgetCustomer['contact'])));
-                            if (idx != -1) {
-                              customers[idx]['name'] = nameController.text.trim();
-                              customers[idx]['address'] = addressController.text.trim();
-                              customers[idx]['contact1'] = contact1Controller.text.trim();
-                              customers[idx]['contact2'] = contact2Controller.text.trim();
-                              customers[idx]['contact'] = contact1Controller.text.trim();
-                              await docRef.update({'customers': customers});
-                            }
-                          }
-                        }
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                        }
-                      } catch (e) {
-                        if (context.mounted) {
-                          setState(() {
-                            error = 'Failed to update: $e';
-                            loading = false;
-                          });
-                        }
-                      }
-                    },
-              child: loading
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Save'),
-            ),
-          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+
+              final newName = nameController.text.trim();
+              final newAddress = addressController.text.trim();
+              final newContact1 = contact1Controller.text.trim();
+              final newContact2 = contact2Controller.text.trim();
+
+              final oldName = (customer['name'] ?? '').toString().trim();
+              final oldAddress = (customer['address'] ?? '').toString().trim();
+              final oldContact1 =
+                  (customer['contact1'] ?? customer['contact'] ?? '').toString().trim();
+              final oldContact2 = (customer['contact2'] ?? '').toString().trim();
+
+              final bool hasChanges = newName != oldName ||
+                  newAddress != oldAddress ||
+                  newContact1 != oldContact1 ||
+                  newContact2 != oldContact2;
+
+              if (!hasChanges) {
+                Navigator.pop(dialogCtx);
+                return;
+              }
+
+              Navigator.pop(dialogCtx);
+
+              final updatedFields = {
+                'name': newName,
+                'address': newAddress,
+                'contact1': newContact1,
+                'contact2': newContact2,
+                'contact': newContact1,
+              };
+
+              final user = FirebaseAuth.instance.currentUser;
+              final docId = user?.email?.toLowerCase();
+
+              final success = await SyncHeadEditingApprovalService.requestCustomerEdit(
+                context: context,
+                customer: customer,
+                updatedFields: updatedFields,
+                widgetCustomer: widgetCustomer,
+                docId: docId,
+              );
+
+              if (success) {
+                onUpdated({'pendingEditing': true});
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF005BAC),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Save'),
+          ),
+        ],
       );
     },
   );

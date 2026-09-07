@@ -1,7 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
-import 'customer_target_customer_tile_viewer.dart';
 import 'customer_list_target_service.dart';
 
 class CustomerListTileItem extends StatelessWidget {
@@ -33,18 +31,20 @@ class CustomerListTileItem extends StatelessWidget {
     final bool callMade = customer['callMade'] == true;
     final bool isEven = customerIndex % 2 == 0;
     final bool isPendingDeletion = customer['pendingDeletion'] == true;
+    final bool isPendingEditing = customer['pendingEditing'] == true;
+    final bool isPending = isPendingDeletion || isPendingEditing;
 
     return Opacity(
-      opacity: isPendingDeletion ? 0.45 : 1.0,
+      opacity: isPending ? 0.45 : 1.0,
       child: Material(
-        color: isPendingDeletion
+        color: isPending
             ? (isDark ? Colors.grey.shade900 : Colors.grey.shade300)
             : (isEven
                 ? (isDark ? const Color(0xFF1E2128) : Colors.white)
                 : (isDark ? const Color(0xFF23272E) : const Color(0xFFF5F9FF))),
         child: InkWell(
           onTap: openViewer,
-          onLongPress: isPendingDeletion
+          onLongPress: isPending
               ? null
               : () async {
                   final action = await showModalBottomSheet<String>(
@@ -54,11 +54,6 @@ class CustomerListTileItem extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           ListTile(
-                            leading: const Icon(Icons.edit, color: Colors.blue),
-                            title: const Text('Edit'),
-                            onTap: () => Navigator.pop(context, 'edit'),
-                          ),
-                          ListTile(
                             leading: const Icon(Icons.delete, color: Colors.red),
                             title: const Text('Delete'),
                             onTap: () => Navigator.pop(context, 'delete'),
@@ -67,26 +62,7 @@ class CustomerListTileItem extends StatelessWidget {
                       ),
                     ),
                   );
-                  if (action == 'edit') {
-                    if (!context.mounted) return;
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => SalesCustomerTileViewer(
-                          customer: customer,
-                          onStatusChanged: (remarks) async {
-                            customer['callMade'] = true;
-                            if (customer['callDate'] == null) {
-                              customer['callDate'] = Timestamp.now();
-                            }
-                            customer['remarks'] = remarks;
-                            await onUpdateFirestore();
-                          },
-                        ),
-                      ),
-                    );
-                    onCustomerUpdated();
-                  } else if (action == 'delete') {
+                  if (action == 'delete') {
                     if (!context.mounted) return;
                     await CustomerListTargetService.requestCustomerDeletion(
                       context: context,
@@ -117,7 +93,7 @@ class CustomerListTileItem extends StatelessWidget {
                     children: [
                       CircleAvatar(
                         radius: 14,
-                        backgroundColor: isPendingDeletion
+                        backgroundColor: isPending
                             ? Colors.grey.shade400
                             : const Color(0xFFE3F2FD),
                         child: Text(
@@ -138,10 +114,10 @@ class CustomerListTileItem extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
-                            color: isPendingDeletion
+                            color: isPending
                                 ? Colors.grey
                                 : const Color.fromARGB(255, 108, 186, 5),
-                            decoration: isPendingDeletion ? TextDecoration.lineThrough : null,
+                            decoration: isPending ? TextDecoration.lineThrough : null,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -156,7 +132,7 @@ class CustomerListTileItem extends StatelessWidget {
                     (customer['address'] ?? '-').toString().toUpperCase(),
                     style: TextStyle(
                       fontSize: 13,
-                      color: isPendingDeletion
+                      color: isPending
                           ? Colors.grey
                           : const Color(0xFF005BAC).withValues(alpha: 0.9),
                     ),
@@ -171,15 +147,15 @@ class CustomerListTileItem extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
-                        color: isPendingDeletion
-                            ? Colors.red.withValues(alpha: 0.15)
+                        color: isPending
+                            ? (isPendingDeletion ? Colors.red.withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15))
                             : (callMade
                                 ? Colors.green.withValues(alpha: 0.15)
                                 : Colors.orange.withValues(alpha: 0.15)),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: isPendingDeletion
-                              ? Colors.red.withValues(alpha: 0.4)
+                          color: isPending
+                              ? (isPendingDeletion ? Colors.red.withValues(alpha: 0.4) : Colors.orange.withValues(alpha: 0.4))
                               : (callMade
                                   ? Colors.green.withValues(alpha: 0.4)
                                   : Colors.orange.withValues(alpha: 0.4)),
@@ -190,12 +166,12 @@ class CustomerListTileItem extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            isPendingDeletion
+                            isPending
                                 ? Icons.hourglass_top_rounded
                                 : (callMade ? Icons.check_circle : Icons.pending),
                             size: 14,
-                            color: isPendingDeletion
-                                ? Colors.red
+                            color: isPending
+                                ? (isPendingDeletion ? Colors.red : Colors.orange)
                                 : (callMade ? Colors.green : Colors.orange),
                           ),
                         ],

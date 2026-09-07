@@ -377,8 +377,9 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
         int pendingRemarksCount = _customers!.where((c) {
           final bool callMade = c['callMade'] == true;
           final bool isPendingDeletion = c['pendingDeletion'] == true;
+          final bool isPendingEditing = c['pendingEditing'] == true;
           final String remarks = (c['remarks'] ?? '').toString().trim();
-          return callMade && !isPendingDeletion && remarks.isEmpty;
+          return callMade && !isPendingDeletion && !isPendingEditing && remarks.isEmpty;
         }).length;
 
         List<Map<String, dynamic>> sortedCustomers = List<Map<String, dynamic>>.from(filteredCustomers);
@@ -607,12 +608,22 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                           final customerIndex = index - 1;
                           final customer = sortedCustomers[customerIndex];
                           final bool isPendingDeletion = customer['pendingDeletion'] == true;
+                          final bool isPendingEditing = customer['pendingEditing'] == true;
 
                           void openViewer() {
                             if (isPendingDeletion) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('This customer is pending deletion approval.'),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
+                              return;
+                            }
+                            if (isPendingEditing) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('This customer is pending editing approval.'),
                                   backgroundColor: Colors.orange,
                                 ),
                               );

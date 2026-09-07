@@ -728,25 +728,35 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
             .collection('customer_deletion_requests')
             .where('status', isEqualTo: 'pending')
             .snapshots(),
-        builder: (context, snapshot) {
-          final pendingCount = snapshot.data?.docs.length ?? 0;
-          return NeumorphicButton(
-            onTap: () => _navigateToCustomerList(context),
-            onLongPress: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const LoadingOverlayPage(
-                    child: SyncHeadCustomerListDeletionApprovalPage(),
-                  ),
-                ),
+        builder: (context, delSnapshot) {
+          return StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('customer_editing_requests')
+                .where('status', isEqualTo: 'pending')
+                .snapshots(),
+            builder: (context, editSnapshot) {
+              final delCount = delSnapshot.data?.docs.length ?? 0;
+              final editCount = editSnapshot.data?.docs.length ?? 0;
+              final pendingCount = delCount + editCount;
+              return NeumorphicButton(
+                onTap: () => _navigateToCustomerList(context),
+                onLongPress: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const LoadingOverlayPage(
+                        child: SyncHeadCustomerListDeletionApprovalPage(),
+                      ),
+                    ),
+                  );
+                },
+                text: 'Customer Calling',
+                color: primaryGreen,
+                textColor: Colors.white,
+                icon: Icons.phone_rounded,
+                badgeCount: pendingCount > 0 ? pendingCount : null,
               );
             },
-            text: 'Customer Calling',
-            color: primaryGreen,
-            textColor: Colors.white,
-            icon: Icons.phone_rounded,
-            badgeCount: pendingCount > 0 ? pendingCount : null,
           );
         },
       ),
