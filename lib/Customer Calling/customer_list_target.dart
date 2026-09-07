@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
@@ -12,8 +11,6 @@ import 'customer_target_customer_tile_viewer.dart';
 import 'customer_calling_remarks_pending.dart';
 import 'customer_list_target_service.dart';
 import 'customer_list_tile_item.dart';
-import 'call_scanner_service.dart';
-import 'call_detected_remarks_dialog.dart';
 import 'add_customer.dart';
 
 class CustomerListTarget extends StatefulWidget {
@@ -41,7 +38,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _fetchCustomerData().then((_) => _autoScanCallLog());
+    _fetchCustomerData();
   }
 
   Future<void> _fetchCustomerData() async {
@@ -252,50 +249,8 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       if (_isTileViewerOpen) return;
-      _fetchCustomerData().then((_) => _autoScanCallLog());
+      _fetchCustomerData();
     }
-  }
-
-  /// Silently scans today's call log and auto-marks customers as called
-  Future<void> _autoScanCallLog() async {
-    if (_customers == null || _customers!.isEmpty) return;
-
-    final newlyCalled = await CallScannerService.scanTodayCallLog(_customers!);
-    if (newlyCalled.isNotEmpty) {
-      for (var c in newlyCalled) {
-        c['callMade'] = true;
-        c['callDate'] = Timestamp.now();
-      }
-      if (mounted) {
-        setState(() {});
-        await _updateFirestore();
-        _showRemarksPromptDialog(newlyCalled);
-      }
-    }
-  }
-
-  void _showRemarksPromptDialog(List<Map<String, dynamic>> customers) {
-    showDialog(
-      context: context,
-      builder: (ctx) => CallDetectedRemarksDialog(
-        customers: customers,
-        titleText: 'Call Detected! Add Remarks',
-        onCustomerSelected: () {
-          _isTileViewerOpen = true;
-        },
-        onStatusChanged: (c, remarks) async {
-          c['remarks'] = remarks;
-          if (mounted) {
-            setState(() {});
-          }
-          await _updateFirestore();
-          _isTileViewerOpen = false;
-          if (mounted) {
-            await _fetchCustomerData();
-          }
-        },
-      ),
-    );
   }
 
   Future<void> _updateFirestore() async {
@@ -319,86 +274,6 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
       debugPrint('Failed to update Firestore: $e');
     }
     await _saveToLocalCache();
-  }
-
-  Future<void> _scanCallLogAndShowMatches() async {
-    if (_customers == null || _customers!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No customers to check.'), backgroundColor: Colors.orange),
-      );
-      return;
-    }
-
-    var status = await Permission.phone.request();
-    if (!mounted) return;
-    if (!status.isGranted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Phone permission denied')),
-      );
-      return;
-    }
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
-    try {
-      List<Map<String, dynamic>> matchedCustomers =
-          await CallScannerService.scanTodayCallLog(_customers!);
-
-      if (!mounted) return;
-      Navigator.of(context).pop();
-
-      if (matchedCustomers.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No new calls detected for today.'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-        return;
-      }
-
-      if (mounted) {
-        await showDialog(
-          context: context,
-          builder: (ctx) => CallDetectedRemarksDialog(
-            customers: matchedCustomers,
-            titleText: 'Calls Detected',
-            onCustomerSelected: () {
-              _isTileViewerOpen = true;
-            },
-            onStatusChanged: (c, remarks) async {
-              c['callMade'] = true;
-              if (c['callDate'] == null) {
-                c['callDate'] = Timestamp.now();
-              }
-              c['remarks'] = remarks;
-              if (mounted) {
-                setState(() {});
-              }
-              await _updateFirestore();
-              _isTileViewerOpen = false;
-              if (mounted) {
-                await _fetchCustomerData();
-              }
-            },
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) Navigator.of(context).pop();
-      debugPrint('Error scanning call log: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error scanning call log: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
   }
 
   @override
@@ -444,11 +319,6 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
               backgroundColor: isDark ? primaryBlue : primaryGreen,
               iconTheme: const IconThemeData(color: Colors.white),
               actions: [
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  tooltip: 'Scan Call Log',
-                  onPressed: _scanCallLogAndShowMatches,
-                ),
                 IconButton(
                   icon: const Icon(Icons.add),
                   tooltip: 'Add Customer',
@@ -504,18 +374,15 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
 
         int totalCount = filteredCustomers.length;
         int calledCount = filteredCustomers.where((c) => c['callMade'] == true).length;
+        int pendingRemarksCount = _customers!.where((c) {
+          final bool callMade = c['callMade'] == true;
+          final bool isPendingDeletion = c['pendingDeletion'] == true;
+          final String remarks = (c['remarks'] ?? '').toString().trim();
+          return callMade && !isPendingDeletion && remarks.isEmpty;
+        }).length;
 
         List<Map<String, dynamic>> sortedCustomers = List<Map<String, dynamic>>.from(filteredCustomers);
         sortedCustomers.sort((a, b) {
-          final bool aNeedsRemarks =
-              a['callMade'] == true && (a['remarks'] ?? '').toString().trim().isEmpty;
-          final bool bNeedsRemarks =
-              b['callMade'] == true && (b['remarks'] ?? '').toString().trim().isEmpty;
-
-          if (aNeedsRemarks != bNeedsRemarks) {
-            return aNeedsRemarks ? -1 : 1;
-          }
-
           if (_sortCalledFirst) {
             return (b['callMade'] == true ? 1 : 0) - (a['callMade'] == true ? 1 : 0);
           } else {
@@ -531,8 +398,15 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
             iconTheme: const IconThemeData(color: Colors.white),
             actions: [
               IconButton(
-                icon: const Icon(Icons.edit_note),
-                tooltip: 'Remarks Pending List',
+                icon: Badge.count(
+                  count: pendingRemarksCount,
+                  isLabelVisible: pendingRemarksCount > 0,
+                  backgroundColor: Colors.orange.shade700,
+                  child: const Icon(Icons.rate_review_outlined),
+                ),
+                tooltip: pendingRemarksCount > 0
+                    ? 'Remarks Pending ($pendingRemarksCount)'
+                    : 'Remarks Pending List',
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -541,11 +415,6 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                     ),
                   ).then((_) => _fetchCustomerData());
                 },
-              ),
-              IconButton(
-                icon: const Icon(Icons.refresh),
-                tooltip: 'Scan Call Log',
-                onPressed: _scanCallLogAndShowMatches,
               ),
               IconButton(
                 icon: const Icon(Icons.add),
@@ -781,7 +650,6 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                             isDark: isDark,
                             primaryBlue: primaryBlue,
                             primaryGreen: primaryGreen,
-                            needsRemarks: false,
                             openViewer: openViewer,
                             onCustomerUpdated: _fetchCustomerData,
                             onUpdateFirestore: _updateFirestore,

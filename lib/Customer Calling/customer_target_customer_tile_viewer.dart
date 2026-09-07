@@ -45,7 +45,6 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
       });
     });
     _restorePendingCallState();
-    _checkForAnyRecentCall();
     _fetchLastRemarksData();
   }
 
@@ -111,26 +110,6 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     }
   }
 
-  Future<void> _checkForAnyRecentCall() async {
-    if (called) return;
-    await checkForAnyRecentCall(
-      customer: customer,
-      context: context,
-      mounted: mounted,
-      onCallDetected: () {
-        if (mounted) {
-          setState(() {
-            called = true;
-          });
-        } else {
-          called = true;
-        }
-        _pendingCallNumber = null;
-        _callStartTime = null;
-      },
-    );
-  }
-
   Future<void> _reloadCallStatus() async {
     await reloadCallStatus(
       customer: customer,
@@ -176,8 +155,6 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
             });
           }
         });
-      } else if (!called) {
-        _checkForAnyRecentCall();
       }
     }
   }

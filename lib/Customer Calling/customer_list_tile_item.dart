@@ -10,7 +10,6 @@ class CustomerListTileItem extends StatelessWidget {
   final bool isDark;
   final Color primaryBlue;
   final Color primaryGreen;
-  final bool needsRemarks;
   final Function() openViewer;
   final Function() onCustomerUpdated;
   final Future<void> Function() onUpdateFirestore;
@@ -23,7 +22,6 @@ class CustomerListTileItem extends StatelessWidget {
     required this.isDark,
     required this.primaryBlue,
     required this.primaryGreen,
-    required this.needsRemarks,
     required this.openViewer,
     required this.onCustomerUpdated,
     required this.onUpdateFirestore,
@@ -41,11 +39,9 @@ class CustomerListTileItem extends StatelessWidget {
       child: Material(
         color: isPendingDeletion
             ? (isDark ? Colors.grey.shade900 : Colors.grey.shade300)
-            : (needsRemarks
-                ? Colors.orange.withValues(alpha: 0.12)
-                : (isEven
-                    ? (isDark ? const Color(0xFF1E2128) : Colors.white)
-                    : (isDark ? const Color(0xFF23272E) : const Color(0xFFF5F9FF)))),
+            : (isEven
+                ? (isDark ? const Color(0xFF1E2128) : Colors.white)
+                : (isDark ? const Color(0xFF23272E) : const Color(0xFFF5F9FF))),
         child: InkWell(
           onTap: openViewer,
           onLongPress: isPendingDeletion
@@ -111,9 +107,6 @@ class CustomerListTileItem extends StatelessWidget {
                   color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
                   width: 0.5,
                 ),
-                left: needsRemarks
-                    ? const BorderSide(color: Colors.orange, width: 4)
-                    : BorderSide.none,
               ),
             ),
             child: Row(
