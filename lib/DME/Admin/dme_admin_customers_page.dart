@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
 import '../dme_constants.dart';
@@ -65,6 +64,7 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
           final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+          if (!mounted) return;
           final data = doc.data();
           final role = data?['role']?.toString();
           if (role == 'dme_user' && data?['assigned_branches'] is List) {
@@ -78,6 +78,7 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
         debugPrint('Error loading user assigned branches: $e');
       }
     }
+    if (!mounted) return;
     await _fetchCustomersDirectory(reset: true);
   }
 
@@ -104,6 +105,7 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
 
   Future<void> _fetchCustomersDirectory({bool reset = false}) async {
     final client = await DmeConfig.getClient();
+    if (!mounted) return;
     if (client == null) {
       setState(() => _isLoading = false);
       return;
@@ -144,6 +146,8 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
         }
 
         final junctionRes = await junctionQuery;
+        if (!mounted) return;
+
         final Set<int> matchedCustIds = {};
         for (var row in (junctionRes as List)) {
           final cId = row['customer_id'] as int?;
@@ -186,6 +190,8 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
       }
 
       final response = await query.range(0, _pageSize - 1);
+      if (!mounted) return;
+
       final List data = response as List;
 
       List<Map<String, dynamic>> parsedList = _parseCustomerRows(data);
@@ -198,18 +204,17 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
       });
     } catch (e) {
       debugPrint('Error loading customers directory: $e');
+      if (!mounted) return;
       setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading customers: $e'), backgroundColor: Colors.red),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading customers: $e'), backgroundColor: Colors.red),
+      );
     }
   }
 
   Future<void> _fetchMoreCustomers() async {
     final client = await DmeConfig.getClient();
-    if (client == null || _isLoadingMore || !_hasMore) return;
+    if (!mounted || client == null || _isLoadingMore || !_hasMore) return;
 
     setState(() => _isLoadingMore = true);
 
@@ -238,6 +243,8 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
         }
 
         final junctionRes = await junctionQuery;
+        if (!mounted) return;
+
         final Set<int> matchedCustIds = {};
         for (var row in (junctionRes as List)) {
           final cId = row['customer_id'] as int?;
@@ -276,6 +283,8 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
       }
 
       final response = await query.range(_currentOffset, _currentOffset + _pageSize - 1);
+      if (!mounted) return;
+
       final List data = response as List;
 
       List<Map<String, dynamic>> parsedList = _parseCustomerRows(data);
@@ -288,6 +297,7 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
       });
     } catch (e) {
       debugPrint('Error fetching more customers: $e');
+      if (!mounted) return;
       setState(() => _isLoadingMore = false);
     }
   }

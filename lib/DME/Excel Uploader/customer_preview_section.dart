@@ -40,6 +40,9 @@ class CustomerPreviewSection extends StatelessWidget {
       return true;
     }).toList();
 
+    final newCount = customerList.where((c) => !c.isExisting).length;
+    final existingCount = customerList.where((c) => c.isExisting).length;
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -59,15 +62,19 @@ class CustomerPreviewSection extends StatelessWidget {
                   TextButton.icon(
                     onPressed: onResolveConflictsPressed,
                     icon: const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 18),
-                    label: Text('Resolve (${conflicts.length})', style: const TextStyle(color: Colors.orange, fontSize: 12)),
+                    label: Text(
+                      'Resolve Conflicts (${conflicts.length})',
+                      style: const TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
                   ),
               ],
             ),
             const SizedBox(height: 8),
 
-            // Filter chips & Search
+            // Filter chips & Search with Color Theme
             Wrap(
               spacing: 8,
+              runSpacing: 6,
               children: [
                 ChoiceChip(
                   label: Text('All (${customerList.length})', style: const TextStyle(fontSize: 12)),
@@ -75,27 +82,60 @@ class CustomerPreviewSection extends StatelessWidget {
                   onSelected: (_) => onFilterChanged('all'),
                 ),
                 ChoiceChip(
-                  label: Text('New (${customerList.where((c) => !c.isExisting).length})', style: const TextStyle(fontSize: 12)),
+                  avatar: const Icon(Icons.table_chart_rounded, size: 14, color: Colors.green),
+                  label: Text(
+                    'New Excel ($newCount)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: customerFilter == 'new' ? FontWeight.bold : FontWeight.normal,
+                      color: customerFilter == 'new' ? Colors.green[800] : null,
+                    ),
+                  ),
                   selected: customerFilter == 'new',
                   selectedColor: Colors.green.withValues(alpha: 0.2),
+                  side: BorderSide(
+                    color: customerFilter == 'new' ? Colors.green : Colors.grey.withValues(alpha: 0.3),
+                  ),
                   onSelected: (_) => onFilterChanged('new'),
                 ),
                 ChoiceChip(
-                  label: Text('Existing (${customerList.where((c) => c.isExisting).length})', style: const TextStyle(fontSize: 12)),
+                  avatar: const Icon(Icons.storage_rounded, size: 14, color: Colors.red),
+                  label: Text(
+                    'Database Existing ($existingCount)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: customerFilter == 'existing' ? FontWeight.bold : FontWeight.normal,
+                      color: customerFilter == 'existing' ? Colors.red[800] : null,
+                    ),
+                  ),
                   selected: customerFilter == 'existing',
-                  selectedColor: Colors.blue.withValues(alpha: 0.2),
+                  selectedColor: Colors.red.withValues(alpha: 0.2),
+                  side: BorderSide(
+                    color: customerFilter == 'existing' ? Colors.red : Colors.grey.withValues(alpha: 0.3),
+                  ),
                   onSelected: (_) => onFilterChanged('existing'),
                 ),
                 if (conflicts.isNotEmpty)
                   ChoiceChip(
-                    label: Text('Conflicts (${conflicts.length})', style: const TextStyle(fontSize: 12)),
+                    avatar: const Icon(Icons.warning_amber_rounded, size: 14, color: Colors.orange),
+                    label: Text(
+                      'Conflicts (${conflicts.length})',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: customerFilter == 'conflict' ? FontWeight.bold : FontWeight.normal,
+                        color: customerFilter == 'conflict' ? Colors.orange[800] : null,
+                      ),
+                    ),
                     selected: customerFilter == 'conflict',
                     selectedColor: Colors.orange.withValues(alpha: 0.2),
+                    side: BorderSide(
+                      color: customerFilter == 'conflict' ? Colors.orange : Colors.grey.withValues(alpha: 0.3),
+                    ),
                     onSelected: (_) => onFilterChanged('conflict'),
                   ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
 
             TextField(
               decoration: InputDecoration(
@@ -127,6 +167,9 @@ class CustomerPreviewSection extends StatelessWidget {
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (context, idx) {
                         final cust = filteredCustomers[idx];
+                        final isDb = cust.isExisting;
+                        final hasConflict = cust.hasNameConflict;
+
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 8.0),
                           child: Row(
@@ -134,14 +177,14 @@ class CustomerPreviewSection extends StatelessWidget {
                             children: [
                               CircleAvatar(
                                 radius: 18,
-                                backgroundColor: cust.isExisting
-                                    ? (cust.hasNameConflict ? Colors.orange : Colors.blue)
-                                    : Colors.green,
+                                backgroundColor: isDb
+                                    ? (hasConflict ? Colors.orange[700] : Colors.red[700])
+                                    : Colors.green[700],
                                 foregroundColor: Colors.white,
                                 child: Icon(
-                                  cust.isExisting
-                                      ? (cust.hasNameConflict ? Icons.warning_amber : Icons.how_to_reg)
-                                      : Icons.person_add,
+                                  isDb
+                                      ? (hasConflict ? Icons.warning_amber : Icons.storage_rounded)
+                                      : Icons.table_chart_rounded,
                                   size: 18,
                                 ),
                               ),
@@ -161,30 +204,43 @@ class CustomerPreviewSection extends StatelessWidget {
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                           decoration: BoxDecoration(
-                                            color: cust.isExisting
-                                                ? (cust.hasNameConflict
+                                            color: isDb
+                                                ? (hasConflict
                                                     ? Colors.orange.withValues(alpha: 0.15)
-                                                    : Colors.blue.withValues(alpha: 0.15))
+                                                    : Colors.red.withValues(alpha: 0.12))
                                                 : Colors.green.withValues(alpha: 0.15),
                                             borderRadius: BorderRadius.circular(6),
                                             border: Border.all(
-                                              color: cust.isExisting
-                                                  ? (cust.hasNameConflict ? Colors.orange : Colors.blue)
-                                                  : Colors.green,
+                                              color: isDb
+                                                  ? (hasConflict ? Colors.orange : Colors.red.withValues(alpha: 0.5))
+                                                  : Colors.green.withValues(alpha: 0.5),
                                               width: 0.8,
                                             ),
                                           ),
-                                          child: Text(
-                                            cust.isExisting
-                                                ? (cust.hasNameConflict ? 'Duplicate' : 'Existing')
-                                                : 'New Customer',
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                              color: cust.isExisting
-                                                  ? (cust.hasNameConflict ? Colors.orange[800] : Colors.blue[800])
-                                                  : Colors.green[800],
-                                            ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                isDb ? Icons.storage_rounded : Icons.table_chart_rounded,
+                                                size: 11,
+                                                color: isDb
+                                                    ? (hasConflict ? Colors.orange[800] : Colors.red[800])
+                                                    : Colors.green[800],
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                isDb
+                                                    ? (hasConflict ? 'DB Conflict' : 'Database Record')
+                                                    : 'Excel (New)',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: isDb
+                                                      ? (hasConflict ? Colors.orange[800] : Colors.red[800])
+                                                      : Colors.green[800],
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                       ],
@@ -201,17 +257,96 @@ class CustomerPreviewSection extends StatelessWidget {
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                    if (cust.hasNameConflict) ...[
-                                      const SizedBox(height: 4),
+                                    if (hasConflict) ...[
+                                      const SizedBox(height: 6),
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        padding: const EdgeInsets.all(8),
                                         decoration: BoxDecoration(
-                                          color: Colors.orange.withValues(alpha: 0.1),
-                                          borderRadius: BorderRadius.circular(4),
+                                          color: Colors.orange.withValues(alpha: isDark ? 0.2 : 0.08),
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
                                         ),
-                                        child: Text(
-                                          'Known Name: "${cust.existingDbName}" vs Excel Name: "${cust.partyName}"',
-                                          style: const TextStyle(fontSize: 11, color: Colors.deepOrange),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.red.withValues(alpha: 0.2),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Icon(Icons.storage_rounded, size: 10, color: Colors.red[800]),
+                                                      const SizedBox(width: 3),
+                                                      Text(
+                                                        'Database:',
+                                                        style: TextStyle(
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.bold,
+                                                          color: Colors.red[800],
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Expanded(
+                                                  child: Text(
+                                                    '"${cust.existingDbName}"',
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: isDark ? Colors.red[200] : Colors.red[900],
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Row(
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.green.withValues(alpha: 0.2),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Icon(Icons.table_chart_rounded, size: 10, color: Colors.green[800]),
+                                                      const SizedBox(width: 3),
+                                                      Text(
+                                                        'Excel File:',
+                                                        style: TextStyle(
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.bold,
+                                                          color: Colors.green[800],
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Expanded(
+                                                  child: Text(
+                                                    '"${cust.partyName}"',
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: isDark ? Colors.green[200] : Colors.green[900],
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ],
@@ -230,3 +365,4 @@ class CustomerPreviewSection extends StatelessWidget {
     );
   }
 }
+

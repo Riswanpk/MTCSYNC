@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import '../dme_constants.dart';
 import '../dme_config.dart';
@@ -55,6 +54,7 @@ class _DmeAdminCustomerDetailPageState extends State<DmeAdminCustomerDetailPage>
 
   Future<void> _loadFullCustomerProfile() async {
     final client = await DmeConfig.getClient();
+    if (!mounted) return;
     final customerId = _customer['id'];
     if (client == null || customerId == null) {
       setState(() => _isLoading = false);
@@ -86,6 +86,8 @@ class _DmeAdminCustomerDetailPageState extends State<DmeAdminCustomerDetailPage>
             .maybeSingle(),
       ]);
 
+      if (!mounted) return;
+
       setState(() {
         _branches = List<Map<String, dynamic>>.from(results[0] as List);
         _sales = List<Map<String, dynamic>>.from(results[1] as List);
@@ -94,6 +96,7 @@ class _DmeAdminCustomerDetailPageState extends State<DmeAdminCustomerDetailPage>
       });
     } catch (e) {
       debugPrint('Error loading customer profile: $e');
+      if (!mounted) return;
       setState(() => _isLoading = false);
     }
   }

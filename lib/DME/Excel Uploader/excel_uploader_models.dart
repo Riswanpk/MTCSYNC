@@ -120,6 +120,7 @@ class CustomerConflict {
   final String originalPhone;
   final String existingName;
   final int? existingCustomerId;
+  final bool isFromDatabase;
   final String newName;
   final String newAddress;
   final String newSalesman;
@@ -131,6 +132,7 @@ class CustomerConflict {
     required this.originalPhone,
     required this.existingName,
     this.existingCustomerId,
+    this.isFromDatabase = true,
     required this.newName,
     required this.newAddress,
     required this.newSalesman,

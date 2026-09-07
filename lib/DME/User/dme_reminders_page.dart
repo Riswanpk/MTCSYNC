@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -26,6 +25,7 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
 
   List<int> _userAssignedBranches = [];
   int? _selectedBranchId; // null means 'All Assigned Branches'
+  String? _selectedOverdueDay; // yyyy-MM-dd, null means 'All Overdue Days'
 
   @override
   void initState() {
@@ -105,7 +105,21 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
         final parsedDate = DateTime.tryParse(reminderDateStr);
 
         if (status == 'completed' || status == 'called') {
-          completed.add(reminder);
+          // Only show calls completed on the current day
+          final updatedAtStr = reminder['updated_at']?.toString();
+          if (updatedAtStr != null && updatedAtStr.isNotEmpty) {
+            final updatedDate = DateTime.tryParse(updatedAtStr);
+            if (updatedDate != null) {
+              final updatedDay = DateTime(
+                updatedDate.toLocal().year,
+                updatedDate.toLocal().month,
+                updatedDate.toLocal().day,
+              );
+              if (updatedDay.isAtSameMomentAs(currentDay)) {
+                completed.add(reminder);
+              }
+            }
+          }
         } else if (parsedDate != null) {
           final reminderDay = DateTime(parsedDate.year, parsedDate.month, parsedDate.day);
 
@@ -122,6 +136,15 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
         _todayReminders = today;
         _overdueReminders = overdue;
         _completedReminders = completed;
+        if (_selectedOverdueDay != null) {
+          final exists = overdue.any((r) {
+            final d = r['reminder_date']?.toString();
+            if (d == null) return false;
+            final p = DateTime.tryParse(d);
+            return p != null && DateFormat('yyyy-MM-dd').format(p) == _selectedOverdueDay;
+          });
+          if (!exists) _selectedOverdueDay = null;
+        }
         _isLoading = false;
       });
     } catch (e) {
@@ -228,6 +251,7 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
                         if (val != null) {
                           setState(() {
                             _selectedBranchId = val;
+                            _selectedOverdueDay = null;
                           });
                           _fetchRemindersForBranch(val);
                         }
@@ -281,13 +305,142 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
                         controller: _tabController,
                         children: [
                           _buildReminderList(_todayReminders, isToday: true),
-                          _buildReminderList(_overdueReminders, isOverdue: true),
+                          _buildOverdueView(isDark),
                           _buildReminderList(_completedReminders, isCompleted: true),
                         ],
                       )),
           ),
         ],
       ),
+    );
+  }
+
+  List<String> get _availableOverdueDates {
+    final Set<String> dates = {};
+    for (var r in _overdueReminders) {
+      final dStr = r['reminder_date']?.toString();
+      if (dStr != null && dStr.isNotEmpty) {
+        final parsed = DateTime.tryParse(dStr);
+        if (parsed != null) {
+          dates.add(DateFormat('yyyy-MM-dd').format(parsed));
+        }
+      }
+    }
+    final sorted = dates.toList()..sort((a, b) => b.compareTo(a));
+    return sorted;
+  }
+
+  Widget _buildOverdueView(bool isDark) {
+    final availableDates = _availableOverdueDates;
+
+    final list = _selectedOverdueDay == null
+        ? _overdueReminders
+        : _overdueReminders.where((r) {
+            final dStr = r['reminder_date']?.toString();
+            if (dStr == null) return false;
+            final parsed = DateTime.tryParse(dStr);
+            if (parsed == null) return false;
+            return DateFormat('yyyy-MM-dd').format(parsed) == _selectedOverdueDay;
+          }).toList();
+
+    return Column(
+      children: [
+        if (availableDates.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.fromLTRB(12, 6, 12, 4),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.grey[850] : Colors.orange.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: _selectedOverdueDay != null
+                    ? Colors.orange
+                    : Colors.grey.withValues(alpha: 0.25),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.calendar_month_outlined,
+                  size: 18,
+                  color: _selectedOverdueDay != null ? Colors.orange[800] : Colors.grey[700],
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Overdue Date:',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white70 : Colors.grey[800],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String?>(
+                      value: _selectedOverdueDay,
+                      isExpanded: true,
+                      icon: const Icon(Icons.arrow_drop_down, size: 20),
+                      items: [
+                        DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text(
+                            'All Overdue Dates (${_overdueReminders.length})',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: _selectedOverdueDay == null ? FontWeight.bold : FontWeight.normal,
+                              color: _selectedOverdueDay == null ? const Color(0xFF005BAC) : null,
+                            ),
+                          ),
+                        ),
+                        ...availableDates.map((dateStr) {
+                          final parsed = DateTime.parse(dateStr);
+                          final displayDate = DateFormat('dd MMM yyyy (EEE)').format(parsed);
+                          final count = _overdueReminders.where((r) {
+                            final d = r['reminder_date']?.toString();
+                            if (d == null) return false;
+                            final p = DateTime.tryParse(d);
+                            return p != null && DateFormat('yyyy-MM-dd').format(p) == dateStr;
+                          }).length;
+
+                          return DropdownMenuItem<String?>(
+                            value: dateStr,
+                            child: Text(
+                              '$displayDate — $count call${count > 1 ? 's' : ''}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: _selectedOverdueDay == dateStr ? FontWeight.bold : FontWeight.normal,
+                                color: _selectedOverdueDay == dateStr ? Colors.orange[900] : null,
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                      onChanged: (val) {
+                        setState(() {
+                          _selectedOverdueDay = val;
+                        });
+                      },
+                    ),
+                  ),
+                ),
+                if (_selectedOverdueDay != null)
+                  InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => setState(() => _selectedOverdueDay = null),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4.0),
+                      child: Icon(Icons.clear_rounded, size: 16, color: Colors.grey[600]),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        Expanded(
+          child: _buildReminderList(list, isOverdue: true),
+        ),
+      ],
     );
   }
 
@@ -317,9 +470,11 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
             const SizedBox(height: 12),
             Text(
               isCompleted
-                  ? 'No completed calls yet.'
+                  ? 'No calls completed today.'
                   : isOverdue
-                      ? 'Great job! No overdue reminders.'
+                      ? (_selectedOverdueDay != null
+                          ? 'No overdue reminders for this selected date.'
+                          : 'Great job! No overdue reminders.')
                       : 'No calls scheduled for today.',
               style: TextStyle(color: Colors.grey[600], fontSize: 14),
             ),

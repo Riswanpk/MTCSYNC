@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dme_user_management_page.dart';
 import 'dme_admin_customers_page.dart';
 import 'dme_admin_dashboard_page.dart';
+import 'Reports/dme_reports_page.dart';
 import '../../Homepage/home_widgets.dart';
 import '../../Navigation/loading_page.dart';
 
@@ -20,6 +21,7 @@ class DmeAdminHomePage extends StatelessWidget {
 /// Builds the DME Admin tiles:
 /// Row 1: Customers (Primary Green), Dashboard (Primary Blue)
 /// Row 2: Complaints (Primary Green), Manage Users (Primary Blue)
+/// Row 3: Reports (Primary Green)
 Widget buildDmeAdminTiles(BuildContext context) {
   final List<Widget> buttons = [
     // 1. Customers
@@ -91,6 +93,24 @@ Widget buildDmeAdminTiles(BuildContext context) {
       textColor: Colors.white,
       icon: Icons.manage_accounts_rounded,
     ),
+
+    // 5. Reports (New Customers Visited)
+    NeumorphicButton(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const LoadingOverlayPage(
+              child: DmeReportsPage(),
+            ),
+          ),
+        );
+      },
+      text: 'Reports',
+      color: primaryGreen,
+      textColor: Colors.white,
+      icon: Icons.assessment_rounded,
+    ),
   ];
 
   return Column(
@@ -108,6 +128,14 @@ Widget buildDmeAdminTiles(BuildContext context) {
           Expanded(child: buttons[2]),
           const SizedBox(width: 16),
           Expanded(child: buttons[3]),
+        ],
+      ),
+      const SizedBox(height: 16),
+      Row(
+        children: [
+          Expanded(child: buttons[4]),
+          const SizedBox(width: 16),
+          const Expanded(child: SizedBox()),
         ],
       ),
     ],

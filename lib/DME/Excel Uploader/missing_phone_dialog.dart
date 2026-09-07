@@ -73,6 +73,26 @@ class _MissingPhoneDialogState extends State<MissingPhoneDialog> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
+                              color: Colors.green.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: Colors.green.withValues(alpha: 0.4), width: 0.8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.table_chart_rounded, size: 10, color: Colors.green[800]),
+                                const SizedBox(width: 3),
+                                Text(
+                                  'Excel Row',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green[800]),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
                               color: const Color(0xFF005BAC).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(4),
                             ),

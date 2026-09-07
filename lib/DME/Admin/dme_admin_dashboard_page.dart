@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
 import '../dme_constants.dart';
@@ -55,7 +54,10 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
       try {
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
-          final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+          final doc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get();
           final data = doc.data();
           final role = data?['role']?.toString();
           if (role == 'dme_user' && data?['assigned_branches'] is List) {
@@ -112,6 +114,7 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
 
   Future<void> _loadDashboardData() async {
     final client = await DmeConfig.getClient();
+    if (!mounted) return;
     if (client == null) {
       setState(() => _isLoading = false);
       return;
@@ -132,7 +135,8 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
       while (hasMoreSales) {
         var query = client
             .from('dme_sales')
-            .select('id, date, customer_id, purchased_branch, category_id, customer_type_id')
+            .select(
+                'id, date, customer_id, purchased_branch, category_id, customer_type_id')
             .gte('date', startStr)
             .lte('date', endStr);
 
@@ -142,7 +146,8 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
           query = query.inFilter('purchased_branch', _assignedBranches);
         }
 
-        final batch = await query.range(salesOffset, salesOffset + pageSize - 1);
+        final batch =
+            await query.range(salesOffset, salesOffset + pageSize - 1);
         final list = batch as List;
         allSales.addAll(list);
         if (list.length < pageSize) {
@@ -153,8 +158,12 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
       }
 
       // 2. Fetch ALL Customers created in date range (Paginated)
-      final startIso = DateTime(_startDate.year, _startDate.month, _startDate.day, 0, 0, 0).toIso8601String();
-      final endIso = DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59, 59, 999).toIso8601String();
+      final startIso =
+          DateTime(_startDate.year, _startDate.month, _startDate.day, 0, 0, 0)
+              .toIso8601String();
+      final endIso =
+          DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59, 59, 999)
+              .toIso8601String();
 
       List<dynamic> allCreatedCusts = [];
       int custOffset = 0;
@@ -167,7 +176,8 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
             .gte('created_at', startIso)
             .lte('created_at', endIso);
 
-        final batch = await custQuery.range(custOffset, custOffset + pageSize - 1);
+        final batch =
+            await custQuery.range(custOffset, custOffset + pageSize - 1);
         final list = batch as List;
         allCreatedCusts.addAll(list);
         if (list.length < pageSize) {
@@ -181,7 +191,8 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
       if (_selectedBranchId != null) {
         for (var c in allCreatedCusts) {
           final bList = c['dme_customer_branches'] as List?;
-          if (bList != null && bList.any((b) => b['branch_id'] == _selectedBranchId)) {
+          if (bList != null &&
+              bList.any((b) => b['branch_id'] == _selectedBranchId)) {
             newCustomersCount++;
           }
         }
@@ -203,12 +214,15 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
             .lte('updated_at', '${endStr}T23:59:59');
 
         if (_selectedBranchId != null) {
-          remindersQuery = remindersQuery.eq('last_purchase_branch', _selectedBranchId!);
+          remindersQuery =
+              remindersQuery.eq('last_purchase_branch', _selectedBranchId!);
         } else if (_assignedBranches.isNotEmpty) {
-          remindersQuery = remindersQuery.inFilter('last_purchase_branch', _assignedBranches);
+          remindersQuery = remindersQuery.inFilter(
+              'last_purchase_branch', _assignedBranches);
         }
 
-        final batch = await remindersQuery.range(remOffset, remOffset + pageSize - 1);
+        final batch =
+            await remindersQuery.range(remOffset, remOffset + pageSize - 1);
         final list = batch as List;
         allReminders.addAll(list);
         if (list.length < pageSize) {
@@ -246,14 +260,16 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
           final custIdList = uniqueCustIds.toList();
           // Chunk requests by 500
           for (int i = 0; i < custIdList.length; i += 500) {
-            final chunk = custIdList.sublist(i, (i + 500 > custIdList.length) ? custIdList.length : i + 500);
+            final chunk = custIdList.sublist(
+                i, (i + 500 > custIdList.length) ? custIdList.length : i + 500);
             final custBranchRes = await client
                 .from('dme_customer_branches')
                 .select('category_id, customer_type_id, branch_id')
                 .inFilter('customer_id', chunk);
 
             for (var cb in (custBranchRes as List)) {
-              if (_selectedBranchId != null && cb['branch_id'] != _selectedBranchId) continue;
+              if (_selectedBranchId != null &&
+                  cb['branch_id'] != _selectedBranchId) continue;
               final catId = cb['category_id'] as int?;
               final tId = cb['customer_type_id'] as int?;
               if (catId != null) catSales[catId] = (catSales[catId] ?? 0) + 1;
@@ -262,6 +278,8 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
           }
         }
       }
+
+      if (!mounted) return;
 
       setState(() {
         _uniqueCustomersVisited = uniqueCustIds.length;
@@ -276,12 +294,13 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
       });
     } catch (e) {
       debugPrint('Error loading dashboard analytics: $e');
+      if (!mounted) return;
       setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading dashboard data: $e'), backgroundColor: Colors.red),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Error loading dashboard data: $e'),
+            backgroundColor: Colors.red),
+      );
     }
   }
 
@@ -292,7 +311,8 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('DME Analytics Dashboard', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('DME Analytics Dashboard',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
         actions: [
@@ -311,7 +331,8 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
             // 1. Date & Branch Filter Card
             Card(
               elevation: 3,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
@@ -326,29 +347,40 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
                         const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.tune_rounded, color: Color(0xFF005BAC), size: 20),
+                            Icon(Icons.tune_rounded,
+                                color: Color(0xFF005BAC), size: 20),
                             SizedBox(width: 6),
-                            Text('Dashboard Filters', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                            Text('Dashboard Filters',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 15)),
                           ],
                         ),
                         InkWell(
                           onTap: _pickDateRange,
                           borderRadius: BorderRadius.circular(8),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF005BAC).withValues(alpha: 0.08),
+                              color: const Color(0xFF005BAC)
+                                  .withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFF005BAC).withValues(alpha: 0.2)),
+                              border: Border.all(
+                                  color: const Color(0xFF005BAC)
+                                      .withValues(alpha: 0.2)),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.calendar_month_rounded, size: 16, color: Color(0xFF005BAC)),
+                                const Icon(Icons.calendar_month_rounded,
+                                    size: 16, color: Color(0xFF005BAC)),
                                 const SizedBox(width: 6),
                                 Text(
                                   '${_formatDate(_startDate)} - ${_formatDate(_endDate)}',
-                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF005BAC)),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                      color: Color(0xFF005BAC)),
                                 ),
                               ],
                             ),
@@ -361,15 +393,19 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
                     // Branch Selector (Displays only Branch Name)
                     Row(
                       children: [
-                        const Icon(Icons.storefront_rounded, size: 20, color: Colors.grey),
+                        const Icon(Icons.storefront_rounded,
+                            size: 20, color: Colors.grey),
                         const SizedBox(width: 8),
-                        const Text('Branch:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                        const Text('Branch:',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 13)),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             decoration: BoxDecoration(
-                              color: isDark ? Colors.grey[850] : Colors.grey[100],
+                              color:
+                                  isDark ? Colors.grey[850] : Colors.grey[100],
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: DropdownButtonHideUnderline(
@@ -379,13 +415,17 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
                                 items: [
                                   DropdownMenuItem<int?>(
                                     value: null,
-                                    child: Text(_assignedBranches.isNotEmpty ? 'All Assigned Branches' : 'All Branches (National)'),
+                                    child: Text(_assignedBranches.isNotEmpty
+                                        ? 'All Assigned Branches'
+                                        : 'All Branches'),
                                   ),
                                   ...(_assignedBranches.isNotEmpty
-                                          ? DmeConstants.branches.where((b) => _assignedBranches.contains(b.id))
+                                          ? DmeConstants.branches.where((b) =>
+                                              _assignedBranches.contains(b.id))
                                           : DmeConstants.branches)
                                       .map((b) {
-                                    return DropdownMenuItem<int?>(value: b.id, child: Text(b.name));
+                                    return DropdownMenuItem<int?>(
+                                        value: b.id, child: Text(b.name));
                                   }),
                                 ],
                                 onChanged: (val) {
@@ -448,38 +488,52 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
               ),
               const SizedBox(height: 20),
 
-              // 3. Branch Distribution Breakdown (When National/All Branches is selected)
+              // 3. Branch Distribution Breakdown (When All Branches is selected)
               if (_selectedBranchId == null && _salesByBranch.isNotEmpty) ...[
                 Card(
                   elevation: 3,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
                   child: Padding(
                     padding: const EdgeInsets.all(18.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Branch Distribution', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                        Text('Branch Distribution',
+                            style: theme.textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 16),
                         ListView.separated(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
                           itemCount: _salesByBranch.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 8),
                           itemBuilder: (context, idx) {
                             final entry = _salesByBranch.entries.toList()[idx];
-                            final branchName = DmeConstants.getBranchName(entry.key);
+                            final branchName =
+                                DmeConstants.getBranchName(entry.key);
                             final count = entry.value;
-                            final total = _salesByBranch.values.fold<int>(0, (acc, v) => acc + v);
+                            final total = _salesByBranch.values
+                                .fold<int>(0, (acc, v) => acc + v);
                             final percent = total > 0 ? (count / total) : 0.0;
 
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text(branchName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                    Text('$count (${(percent * 100).toStringAsFixed(0)}%)', style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+                                    Text(branchName,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13)),
+                                    Text(
+                                        '$count (${(percent * 100).toStringAsFixed(0)}%)',
+                                        style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey[700])),
                                   ],
                                 ),
                                 const SizedBox(height: 4),
@@ -489,7 +543,9 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
                                     value: percent,
                                     minHeight: 8,
                                     backgroundColor: Colors.grey[200],
-                                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF005BAC)),
+                                    valueColor:
+                                        const AlwaysStoppedAnimation<Color>(
+                                            Color(0xFF005BAC)),
                                   ),
                                 ),
                               ],
@@ -506,37 +562,54 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
               // 4. Category Breakdown Distribution
               Card(
                 elevation: 3,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
                 child: Padding(
                   padding: const EdgeInsets.all(18.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Category Distribution', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                      Text('Category Distribution',
+                          style: theme.textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold)),
                       const SizedBox(height: 16),
                       if (_salesByCategory.isEmpty)
-                        const Center(child: Text('No category data in this period', style: TextStyle(color: Colors.grey)))
+                        const Center(
+                            child: Text('No category data in this period',
+                                style: TextStyle(color: Colors.grey)))
                       else
                         ListView.separated(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
                           itemCount: _salesByCategory.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 8),
                           itemBuilder: (context, idx) {
-                            final entry = _salesByCategory.entries.toList()[idx];
-                            final catName = DmeConstants.getCategoryName(entry.key);
+                            final entry =
+                                _salesByCategory.entries.toList()[idx];
+                            final catName =
+                                DmeConstants.getCategoryName(entry.key);
                             final count = entry.value;
-                            final total = _salesByCategory.values.fold<int>(0, (acc, v) => acc + v);
+                            final total = _salesByCategory.values
+                                .fold<int>(0, (acc, v) => acc + v);
                             final percent = total > 0 ? (count / total) : 0.0;
 
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text(catName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                    Text('$count (${(percent * 100).toStringAsFixed(0)}%)', style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+                                    Text(catName,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13)),
+                                    Text(
+                                        '$count (${(percent * 100).toStringAsFixed(0)}%)',
+                                        style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey[700])),
                                   ],
                                 ),
                                 const SizedBox(height: 4),
@@ -547,7 +620,9 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
                                     minHeight: 8,
                                     backgroundColor: Colors.grey[200],
                                     valueColor: AlwaysStoppedAnimation<Color>(
-                                      idx % 2 == 0 ? const Color(0xFF005BAC) : const Color(0xFF8CC63F),
+                                      idx % 2 == 0
+                                          ? const Color(0xFF005BAC)
+                                          : const Color(0xFF8CC63F),
                                     ),
                                   ),
                                 ),
@@ -564,29 +639,39 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
               // 5. Customer Types Breakdown
               Card(
                 elevation: 3,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
                 child: Padding(
                   padding: const EdgeInsets.all(18.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Customer Type Distribution', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                      Text('Customer Type Distribution',
+                          style: theme.textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold)),
                       const SizedBox(height: 16),
                       if (_salesByType.isEmpty)
-                        const Center(child: Text('No customer type data in this period', style: TextStyle(color: Colors.grey)))
+                        const Center(
+                            child: Text('No customer type data in this period',
+                                style: TextStyle(color: Colors.grey)))
                       else
                         Wrap(
                           spacing: 12,
                           runSpacing: 12,
                           children: _salesByType.entries.map((entry) {
-                            final typeName = DmeConstants.getCustomerTypeName(entry.key);
+                            final typeName =
+                                DmeConstants.getCustomerTypeName(entry.key);
                             final count = entry.value;
                             return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 10),
                               decoration: BoxDecoration(
-                                color: isDark ? Colors.grey[850] : Colors.grey[100],
+                                color: isDark
+                                    ? Colors.grey[850]
+                                    : Colors.grey[100],
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                                border: Border.all(
+                                    color: Colors.grey.withValues(alpha: 0.2)),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -598,11 +683,14 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
                                   const SizedBox(width: 8),
                                   Text(
                                     '$typeName: ',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13),
                                   ),
                                   Text(
                                     '$count',
-                                    style: TextStyle(color: Colors.grey[700], fontSize: 13),
+                                    style: TextStyle(
+                                        color: Colors.grey[700], fontSize: 13),
                                   ),
                                 ],
                               ),
@@ -642,7 +730,10 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
                 Flexible(
                   child: Text(
                     title,
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey),
+                    style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -658,7 +749,8 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
             const SizedBox(height: 6),
             Text(
               value,
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color),
+              style: TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.bold, color: color),
             ),
             const SizedBox(height: 2),
             Text(
