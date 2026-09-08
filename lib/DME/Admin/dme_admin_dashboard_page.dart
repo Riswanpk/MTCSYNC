@@ -196,6 +196,15 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
             newCustomersCount++;
           }
         }
+      } else if (_assignedBranches.isNotEmpty) {
+        // Filter by assigned branches — match the report page logic
+        for (var c in allCreatedCusts) {
+          final bList = c['dme_customer_branches'] as List?;
+          if (bList != null &&
+              bList.any((b) => _assignedBranches.contains(b['branch_id']))) {
+            newCustomersCount++;
+          }
+        }
       } else {
         newCustomersCount = allCreatedCusts.length;
       }

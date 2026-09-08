@@ -131,19 +131,22 @@ class ExcelParsingService {
         final row = rows[r];
         if (row.isEmpty) continue;
 
-        String rawBranch = getCellValue(row.isNotEmpty ? row[0] : null).toString().trim().toUpperCase();
-        dynamic rawDate = row.length > 1 ? getCellValue(row[1]) : null;
-        String rawVoucher = getCellValue(row.length > 2 ? row[2] : null).toString().trim();
-        String rawParty = getCellValue(row.length > 3 ? row[3] : null).toString().trim();
-        dynamic address1 = row.length > 4 ? getCellValue(row[4]) : null;
-        dynamic address2 = row.length > 5 ? getCellValue(row[5]) : null;
-        dynamic address3 = row.length > 6 ? getCellValue(row[6]) : null;
-        dynamic rawMobile = row.length > 7 ? getCellValue(row[7]) : null;
-        String rawType = getCellValue(row.length > 8 ? row[8] : null).toString().trim().toUpperCase();
-        String rawCat = getCellValue(row.length > 9 ? row[9] : null).toString().trim().toUpperCase();
-        String rawSalesman = getCellValue(row.length > 10 ? row[10] : null).toString().trim();
-        String itemName = getCellValue(row.length > 11 ? row[11] : null).toString().trim();
-        String qty = getCellValue(row.length > 12 ? row[12] : null).toString().trim();
+        // Safe cell accessor to prevent RangeError on short/malformed rows
+        Data? safeCell(int colIdx) => colIdx < row.length ? row[colIdx] : null;
+
+        String rawBranch = getCellValue(safeCell(0)).toString().trim().toUpperCase();
+        dynamic rawDate = getCellValue(safeCell(1));
+        String rawVoucher = getCellValue(safeCell(2)).toString().trim();
+        String rawParty = getCellValue(safeCell(3)).toString().trim();
+        dynamic address1 = getCellValue(safeCell(4));
+        dynamic address2 = getCellValue(safeCell(5));
+        dynamic address3 = getCellValue(safeCell(6));
+        dynamic rawMobile = getCellValue(safeCell(7));
+        String rawType = getCellValue(safeCell(8)).toString().trim().toUpperCase();
+        String rawCat = getCellValue(safeCell(9)).toString().trim().toUpperCase();
+        String rawSalesman = getCellValue(safeCell(10)).toString().trim();
+        String itemName = getCellValue(safeCell(11)).toString().trim();
+        String qty = getCellValue(safeCell(12)).toString().trim();
 
         if (rawBranch.isEmpty && rawParty.isEmpty && rawVoucher.isEmpty && itemName.isEmpty) {
           continue;

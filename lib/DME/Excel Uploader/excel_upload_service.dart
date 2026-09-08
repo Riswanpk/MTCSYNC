@@ -127,11 +127,6 @@ class ExcelUploadService {
           'uploaded_by': uploadedBy,
         };
 
-        // If this customer already has a sale record on this date in DB, provide existing ID for primary key upsert
-        if (existingSaleIdsByKey.containsKey(saleKey)) {
-          salePayload['id'] = existingSaleIdsByKey[saleKey]!;
-        }
-
         salesToInsert.add(salePayload);
       } else {
         // If multiple invoices exist on the same date for this customer, update branch if previously null
@@ -148,29 +143,28 @@ class ExcelUploadService {
     if (salesToInsert.isNotEmpty) {
       dynamic insertedSalesRes;
       try {
-        // With 'id' included for existing rows, plain upsert will perform primary key update without constraint collisions
         insertedSalesRes = await client
             .from('dme_sales')
-            .upsert(salesToInsert)
+            .upsert(
+              salesToInsert,
+              onConflict: 'customer_id,date',
+            )
             .select('id, date, customer_id, purchased_branch');
       } catch (upsertErr) {
-        debugPrint('Standard upsert failed: $upsertErr, attempting onConflict customer_id,date');
+        debugPrint('Upsert onConflict customer_id,date failed: $upsertErr, attempting onConflict date,customer_id');
         try {
-          insertedSalesRes = await client
-              .from('dme_sales')
-              .upsert(
-                salesToInsert,
-                onConflict: 'customer_id,date',
-              )
-              .select('id, date, customer_id, purchased_branch');
-        } catch (cErr2) {
-          debugPrint('Upsert onConflict customer_id,date note: $cErr2');
           insertedSalesRes = await client
               .from('dme_sales')
               .upsert(
                 salesToInsert,
                 onConflict: 'date,customer_id',
               )
+              .select('id, date, customer_id, purchased_branch');
+        } catch (cErr2) {
+          debugPrint('Upsert onConflict date,customer_id failed: $cErr2, attempting standard insert');
+          insertedSalesRes = await client
+              .from('dme_sales')
+              .insert(salesToInsert)
               .select('id, date, customer_id, purchased_branch');
         }
       }
@@ -186,6 +180,35 @@ class ExcelUploadService {
             saleKeyToSaleId['${cId}_$dt'] = id;
             insertedSalesList.add(row);
           }
+        }
+      }
+
+      // Query database to ensure 100% of sales have their generated/updated IDs in saleKeyToSaleId
+      if (customerIds.isNotEmpty) {
+        try {
+          for (int i = 0; i < customerIds.length; i += 500) {
+            final chunk = customerIds.sublist(
+              i,
+              (i + 500 > customerIds.length) ? customerIds.length : i + 500,
+            );
+            final fetched = await client
+                .from('dme_sales')
+                .select('id, date, customer_id, purchased_branch')
+                .inFilter('customer_id', chunk);
+
+            for (var row in (fetched as List)) {
+              final id = row['id'] as int?;
+              final dt = row['date']?.toString();
+              final cId = row['customer_id']?.toString();
+              final bId = row['purchased_branch']?.toString();
+              if (id != null && dt != null && cId != null) {
+                saleKeyToSaleId['${cId}_${dt}_$bId'] = id;
+                saleKeyToSaleId['${cId}_$dt'] = id;
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('Notice post-fetching sale IDs: $e');
         }
       }
     }
@@ -335,10 +358,25 @@ class ExcelUploadService {
     // Execute batch operations concurrently for maximum speed
     final List<Future<dynamic>> parallelTasks = [];
     if (detailsToInsert.isNotEmpty) {
-      parallelTasks.add(client.from('dme_sales_detail').insert(detailsToInsert));
+      parallelTasks.add(() async {
+        try {
+          await client.from('dme_sales_detail').insert(detailsToInsert);
+        } catch (insertErr) {
+          // Re-upload scenario: details may already exist; log and continue
+          debugPrint('Sale details insert failed (possible re-upload): $insertErr');
+          onLog('⚠ Sale details: some may already exist (re-upload detected)');
+        }
+      }());
     }
     if (remindersToUpsert.isNotEmpty) {
-      parallelTasks.add(client.from('dme_reminders').upsert(remindersToUpsert, onConflict: 'customer_id'));
+      parallelTasks.add(() async {
+        try {
+          await client.from('dme_reminders').upsert(remindersToUpsert, onConflict: 'customer_id');
+        } catch (reminderErr) {
+          debugPrint('Reminders upsert failed: $reminderErr');
+          onLog('⚠ Reminders upsert error: $reminderErr');
+        }
+      }());
     }
     if (customerBranchesToInsert.isNotEmpty) {
       parallelTasks.add(() async {
@@ -349,7 +387,10 @@ class ExcelUploadService {
         } catch (_) {
           try {
             await client.from('dme_customer_branches').insert(customerBranchesToInsert);
-          } catch (_) {}
+          } catch (branchErr) {
+            debugPrint('Customer branches insert failed: $branchErr');
+            onLog('⚠ Customer branches save error: $branchErr');
+          }
         }
       }());
     }

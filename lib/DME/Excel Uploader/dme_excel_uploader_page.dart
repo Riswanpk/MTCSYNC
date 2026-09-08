@@ -224,7 +224,9 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
                   }
                 }
               }
-            } catch (_) {}
+            } catch (dbErr) {
+              debugPrint('DB lookup failed for phone ${sale.phone}: $dbErr');
+            }
           }
         }
 
@@ -358,16 +360,19 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
         groupedSales: _groupedSales,
         conflicts: _conflicts,
         onProgress: (progress, status) {
-          setState(() {
-            _uploadProgress = progress;
-            _statusMessage = status;
-          });
+          if (mounted) {
+            setState(() {
+              _uploadProgress = progress;
+              _statusMessage = status;
+            });
+          }
         },
         onLog: (log) {
-          _addLog(log);
+          if (mounted) _addLog(log);
         },
       );
 
+      if (!mounted) return;
       setState(() {
         _uploadProgress = 1.0;
         _isUploading = false;
@@ -376,6 +381,7 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
 
       _showSummaryDialog(insertedCount, 0);
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isUploading = false;
         _statusMessage = 'Batch upload failed: $e';
@@ -386,6 +392,7 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
   }
 
   void _addLog(String msg) {
+    if (!mounted) return;
     setState(() {
       _logs.add('[${DateFormat('HH:mm:ss').format(DateTime.now())}] $msg');
     });

@@ -143,15 +143,30 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
       final startStr = DateFormat('yyyy-MM-dd').format(_startDate);
       final endStr = DateFormat('yyyy-MM-dd').format(_endDate);
 
-      // 1. Fetch Customers created in the date interval
-      var custQuery = client
-          .from('dme_customers')
-          .select('id, name, phone, address, salesman, created_at')
-          .gte('created_at', '${startStr}T00:00:00')
-          .lte('created_at', '${endStr}T23:59:59');
+      // 1. Fetch Customers created in the date interval (Paginated)
+      final List<dynamic> custList = [];
+      int custOffset = 0;
+      const int pageSize = 1000;
+      bool hasMoreCusts = true;
 
-      final custRes = await custQuery;
-      final List<dynamic> custList = custRes as List<dynamic>;
+      while (hasMoreCusts) {
+        final custQuery = client
+            .from('dme_customers')
+            .select('id, name, phone, address, salesman, created_at')
+            .gte('created_at', '${startStr}T00:00:00')
+            .lte('created_at', '${endStr}T23:59:59')
+            .range(custOffset, custOffset + pageSize - 1);
+
+        final custBatch = await custQuery;
+        final list = custBatch as List<dynamic>;
+        custList.addAll(list);
+
+        if (list.length < pageSize) {
+          hasMoreCusts = false;
+        } else {
+          custOffset += pageSize;
+        }
+      }
 
       if (custList.isEmpty) {
         if (mounted) {
