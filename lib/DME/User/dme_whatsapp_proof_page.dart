@@ -68,6 +68,7 @@ class _DmeWhatsAppProofPageState extends State<DmeWhatsAppProofPage> {
 
   Future<void> _uploadProofAndSubmit() async {
     final client = await DmeConfig.getClient();
+    if (!mounted) return;
     if (client == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Supabase is not configured.')),

@@ -151,34 +151,61 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
         });
       }
 
-      // 2. Fetch completed reminders in date range
-      var remindersQuery = client
-          .from('dme_reminders')
-          .select('id, customer_id, reminder_date, last_purchase_branch, status, remarks, updated_at, dme_customers(id, name, phone, address, salesman)')
-          .inFilter('status', ['completed', 'called'])
-          .gte('updated_at', '${startStr}T00:00:00')
-          .lte('updated_at', '${endStr}T23:59:59');
+      // 2. Fetch completed reminders in date range (Paginated)
+      final List<dynamic> remList = [];
+      int remOffset = 0;
+      const int pageSize = 1000;
+      bool hasMoreRem = true;
 
-      if (_selectedBranchId != null) {
-        remindersQuery = remindersQuery.eq('last_purchase_branch', _selectedBranchId!);
-      } else if (_allowedBranches.isNotEmpty) {
-        remindersQuery = remindersQuery.inFilter('last_purchase_branch', _allowedBranches);
+      while (hasMoreRem) {
+        var remindersQuery = client
+            .from('dme_reminders')
+            .select('id, customer_id, reminder_date, last_purchase_branch, status, remarks, updated_at, dme_customers(id, name, phone, address, salesman)')
+            .inFilter('status', ['completed', 'called'])
+            .gte('updated_at', '${startStr}T00:00:00')
+            .lte('updated_at', '${endStr}T23:59:59');
+
+        if (_selectedBranchId != null) {
+          remindersQuery = remindersQuery.eq('last_purchase_branch', _selectedBranchId!);
+        } else if (_allowedBranches.isNotEmpty) {
+          remindersQuery = remindersQuery.inFilter('last_purchase_branch', _allowedBranches);
+        }
+
+        final batch = await remindersQuery.range(remOffset, remOffset + pageSize - 1);
+        final list = batch as List<dynamic>;
+        remList.addAll(list);
+
+        if (list.length < pageSize) {
+          hasMoreRem = false;
+        } else {
+          remOffset += pageSize;
+        }
       }
 
-      final remRes = await remindersQuery;
-      final List<dynamic> remList = remRes as List<dynamic>;
-
-      // 3. Fetch WhatsApp Proofs in date range
-      var proofsQuery = client
-          .from('dme_whatsapp_proofs')
-          .select('id, reminder_id, customer_id, image_url, remarks, created_at, uploaded_by')
-          .gte('created_at', '${startStr}T00:00:00')
-          .lte('created_at', '${endStr}T23:59:59');
-
+      // 3. Fetch WhatsApp Proofs in date range (Paginated)
       final List<dynamic> proofsList = [];
       try {
-        final pRes = await proofsQuery;
-        proofsList.addAll(pRes as List<dynamic>);
+        int proofOffset = 0;
+        bool hasMoreProofs = true;
+
+        while (hasMoreProofs) {
+          final proofsQuery = client
+              .from('dme_whatsapp_proofs')
+              .select('id, reminder_id, customer_id, image_url, remarks, created_at, uploaded_by')
+              .gte('created_at', '${startStr}T00:00:00')
+              .lte('created_at', '${endStr}T23:59:59')
+              .range(proofOffset, proofOffset + pageSize - 1);
+
+          final pBatch = await proofsQuery;
+          final pList = pBatch as List<dynamic>;
+          proofsList.addAll(pList);
+
+          if (pList.length < pageSize) {
+            hasMoreProofs = false;
+          } else {
+            proofOffset += pageSize;
+          }
+        }
       } catch (e) {
         debugPrint('dme_whatsapp_proofs query note: $e');
       }

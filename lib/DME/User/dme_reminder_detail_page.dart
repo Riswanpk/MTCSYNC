@@ -248,6 +248,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
 
     final remarks = _remarksController.text.trim();
     if (remarks.isEmpty) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter call remarks before saving.')),
       );

@@ -41,9 +41,9 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+    if (mounted) setState(() => _isLoading = true);
     await _loadUserBranches();
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _loadUserBranches() async {
@@ -70,17 +70,33 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
     final client = await DmeConfig.getClient();
     if (client == null) return;
 
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {
-      // Query reminders specifically for the selected branch
-      var query = client
-          .from('dme_reminders')
-          .select('id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, dme_customers(id, name, phone, address, salesman)')
-          .eq('last_purchase_branch', branchId);
+      // Query reminders specifically for the selected branch (Paginated)
+      final List<dynamic> data = [];
+      int remOffset = 0;
+      const int pageSize = 1000;
+      bool hasMore = true;
 
-      final response = await query;
-      final List data = response as List;
+      while (hasMore) {
+        final query = client
+            .from('dme_reminders')
+            .select('id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, dme_customers(id, name, phone, address, salesman)')
+            .eq('last_purchase_branch', branchId)
+            .range(remOffset, remOffset + pageSize - 1);
+
+        final batch = await query;
+        final list = batch as List;
+        data.addAll(list);
+
+        if (list.length < pageSize) {
+          hasMore = false;
+        } else {
+          remOffset += pageSize;
+        }
+      }
 
       final now = DateTime.now();
       final currentDay = DateTime(now.year, now.month, now.day);
@@ -132,24 +148,26 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
         }
       }
 
-      setState(() {
-        _todayReminders = today;
-        _overdueReminders = overdue;
-        _completedReminders = completed;
-        if (_selectedOverdueDay != null) {
-          final exists = overdue.any((r) {
-            final d = r['reminder_date']?.toString();
-            if (d == null) return false;
-            final p = DateTime.tryParse(d);
-            return p != null && DateFormat('yyyy-MM-dd').format(p) == _selectedOverdueDay;
-          });
-          if (!exists) _selectedOverdueDay = null;
-        }
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _todayReminders = today;
+          _overdueReminders = overdue;
+          _completedReminders = completed;
+          if (_selectedOverdueDay != null) {
+            final exists = overdue.any((r) {
+              final d = r['reminder_date']?.toString();
+              if (d == null) return false;
+              final p = DateTime.tryParse(d);
+              return p != null && DateFormat('yyyy-MM-dd').format(p) == _selectedOverdueDay;
+            });
+            if (!exists) _selectedOverdueDay = null;
+          }
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       debugPrint('Error fetching reminders: $e');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error loading reminders: $e'), backgroundColor: Colors.red),

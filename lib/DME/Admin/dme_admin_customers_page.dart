@@ -129,30 +129,44 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
           _assignedBranches.isNotEmpty;
 
       if (needsJunctionFilter) {
-        var junctionQuery = client.from('dme_customer_branches').select('customer_id');
-
-        if (_selectedBranchId != null) {
-          junctionQuery = junctionQuery.eq('branch_id', _selectedBranchId!);
-        } else if (_assignedBranches.isNotEmpty) {
-          junctionQuery = junctionQuery.inFilter('branch_id', _assignedBranches);
-        }
-
-        if (_selectedCategoryId != null) {
-          junctionQuery = junctionQuery.eq('category_id', _selectedCategoryId!);
-        }
-
-        if (_selectedTypeId != null) {
-          junctionQuery = junctionQuery.eq('customer_type_id', _selectedTypeId!);
-        }
-
-        final junctionRes = await junctionQuery;
-        if (!mounted) return;
-
         final Set<int> matchedCustIds = {};
-        for (var row in (junctionRes as List)) {
-          final cId = row['customer_id'] as int?;
-          if (cId != null) matchedCustIds.add(cId);
+        int juncOffset = 0;
+        const int juncPageSize = 1000;
+        bool hasMoreJunc = true;
+
+        while (hasMoreJunc) {
+          var junctionQuery = client.from('dme_customer_branches').select('customer_id');
+
+          if (_selectedBranchId != null) {
+            junctionQuery = junctionQuery.eq('branch_id', _selectedBranchId!);
+          } else if (_assignedBranches.isNotEmpty) {
+            junctionQuery = junctionQuery.inFilter('branch_id', _assignedBranches);
+          }
+
+          if (_selectedCategoryId != null) {
+            junctionQuery = junctionQuery.eq('category_id', _selectedCategoryId!);
+          }
+
+          if (_selectedTypeId != null) {
+            junctionQuery = junctionQuery.eq('customer_type_id', _selectedTypeId!);
+          }
+
+          final junctionRes = await junctionQuery.range(juncOffset, juncOffset + juncPageSize - 1);
+          if (!mounted) return;
+
+          final list = junctionRes as List;
+          for (var row in list) {
+            final cId = row['customer_id'] as int?;
+            if (cId != null) matchedCustIds.add(cId);
+          }
+
+          if (list.length < juncPageSize) {
+            hasMoreJunc = false;
+          } else {
+            juncOffset += juncPageSize;
+          }
         }
+
         filteredCustomerIds = matchedCustIds.toList();
 
         if (filteredCustomerIds.isEmpty) {
@@ -226,30 +240,44 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
           _assignedBranches.isNotEmpty;
 
       if (needsJunctionFilter) {
-        var junctionQuery = client.from('dme_customer_branches').select('customer_id');
-
-        if (_selectedBranchId != null) {
-          junctionQuery = junctionQuery.eq('branch_id', _selectedBranchId!);
-        } else if (_assignedBranches.isNotEmpty) {
-          junctionQuery = junctionQuery.inFilter('branch_id', _assignedBranches);
-        }
-
-        if (_selectedCategoryId != null) {
-          junctionQuery = junctionQuery.eq('category_id', _selectedCategoryId!);
-        }
-
-        if (_selectedTypeId != null) {
-          junctionQuery = junctionQuery.eq('customer_type_id', _selectedTypeId!);
-        }
-
-        final junctionRes = await junctionQuery;
-        if (!mounted) return;
-
         final Set<int> matchedCustIds = {};
-        for (var row in (junctionRes as List)) {
-          final cId = row['customer_id'] as int?;
-          if (cId != null) matchedCustIds.add(cId);
+        int juncOffset = 0;
+        const int juncPageSize = 1000;
+        bool hasMoreJunc = true;
+
+        while (hasMoreJunc) {
+          var junctionQuery = client.from('dme_customer_branches').select('customer_id');
+
+          if (_selectedBranchId != null) {
+            junctionQuery = junctionQuery.eq('branch_id', _selectedBranchId!);
+          } else if (_assignedBranches.isNotEmpty) {
+            junctionQuery = junctionQuery.inFilter('branch_id', _assignedBranches);
+          }
+
+          if (_selectedCategoryId != null) {
+            junctionQuery = junctionQuery.eq('category_id', _selectedCategoryId!);
+          }
+
+          if (_selectedTypeId != null) {
+            junctionQuery = junctionQuery.eq('customer_type_id', _selectedTypeId!);
+          }
+
+          final junctionRes = await junctionQuery.range(juncOffset, juncOffset + juncPageSize - 1);
+          if (!mounted) return;
+
+          final list = junctionRes as List;
+          for (var row in list) {
+            final cId = row['customer_id'] as int?;
+            if (cId != null) matchedCustIds.add(cId);
+          }
+
+          if (list.length < juncPageSize) {
+            hasMoreJunc = false;
+          } else {
+            juncOffset += juncPageSize;
+          }
         }
+
         filteredCustomerIds = matchedCustIds.toList();
 
         if (filteredCustomerIds.isEmpty) {
