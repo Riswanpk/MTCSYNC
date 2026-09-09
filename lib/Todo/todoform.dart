@@ -133,6 +133,15 @@ class _TodoFormPageState extends State<TodoFormPage> {
     if (!doc.exists) return;
     final data = doc.data();
     if (data == null) return;
+    if (data['status'] == 'done') {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Completed tasks cannot be edited.')),
+        );
+        Navigator.pop(context);
+      }
+      return;
+    }
     setState(() {
       _titleController.text = data['title'] ?? '';
       _descController.text = data['description'] ?? '';

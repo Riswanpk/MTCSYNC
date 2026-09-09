@@ -41,11 +41,13 @@ class TaskDetailPage extends StatelessWidget {
               final currentUserId = FirebaseAuth.instance.currentUser!.uid;
 
               // Conditions to show the edit button:
-              // 1. User is a manager AND they are the one who assigned the task.
-              // 2. The task was NOT assigned by a manager (i.e., it's a self-created task).
-              final bool canEdit = ((currentUserRole == 'manager' || currentUserRole == 'asst_manager') &&
-                      data['assigned_by'] == currentUserId) ||
-                  !isAssignedByManager;
+              // 1. Task must not be completed (completed tasks are read-only).
+              // 2. User is a manager AND they are the one who assigned the task, OR it's a self-created task.
+              final bool isDone = data['status'] == 'done';
+              final bool canEdit = !isDone &&
+                  (((currentUserRole == 'manager' || currentUserRole == 'asst_manager') &&
+                          data['assigned_by'] == currentUserId) ||
+                      !isAssignedByManager);
 
               return Row(
                 children: [

@@ -161,7 +161,7 @@ class TodoListItem extends StatelessWidget {
       ),
     );
 
-    if (!showSlidableActions) {
+    if (!showSlidableActions || data['status'] == 'done') {
       return child;
     }
 

@@ -358,54 +358,65 @@ class _TodoPageState extends State<TodoPage>
 
   Future<void> _toggleStatus(DocumentSnapshot doc) async {
     final currentStatus = doc['status'] ?? 'pending';
-    final newStatus = currentStatus == 'pending' ? 'done' : 'pending';
-
-    if (newStatus == 'done') {
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Mark as Done?'),
-          content:
-              const Text('Are you sure you want to mark this todo as done?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(foregroundColor: Colors.green),
-              child: const Text('Yes'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              style: TextButton.styleFrom(foregroundColor: Colors.blue),
-              child: const Text('Cancel'),
-            ),
-          ],
-        ),
-      );
-      if (confirm != true) return;
-
-      // Cancel the notification using the same ID calculation from todoform.dart
-      try {
-        final notificationId = doc.id.hashCode & 0x7FFFFFFF;
-        await AwesomeNotifications().cancel(notificationId);
-      } catch (e) {
-        debugPrint('Warning: Failed to cancel todo notification: $e');
+    if (currentStatus == 'done') {
+      // Completed tasks cannot be reverted back to pending
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Completed tasks cannot be changed.')),
+        );
       }
-
-      final today = _dateOnly(DateTime.now());
-      await _firestore.collection('todo').doc(doc.id).update({
-        'status': newStatus,
-        'timestamp': Timestamp.now(),
-      });
-
-    } else {
-      await _firestore.collection('todo').doc(doc.id).update({
-        'status': newStatus,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
+      return;
     }
+
+    final newStatus = 'done';
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Mark as Done?'),
+        content:
+            const Text('Are you sure you want to mark this todo as done? Completed tasks cannot be edited or reverted.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.green),
+            child: const Text('Yes'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            style: TextButton.styleFrom(foregroundColor: Colors.blue),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    // Cancel the notification using the same ID calculation from todoform.dart
+    try {
+      final notificationId = doc.id.hashCode & 0x7FFFFFFF;
+      await AwesomeNotifications().cancel(notificationId);
+    } catch (e) {
+      debugPrint('Warning: Failed to cancel todo notification: $e');
+    }
+
+    await _firestore.collection('todo').doc(doc.id).update({
+      'status': newStatus,
+      'timestamp': Timestamp.now(),
+    });
   }
 
   Future<void> _deleteTodo(String docId) async {
+    final doc = await _firestore.collection('todo').doc(docId).get();
+    if (doc.exists && doc.data()?['status'] == 'done') {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Completed tasks cannot be deleted.')),
+        );
+      }
+      return;
+    }
+
     // Cancel the notification using the same ID calculation from todoform.dart
     try {
       final notificationId = docId.hashCode & 0x7FFFFFFF;
@@ -415,7 +426,6 @@ class _TodoPageState extends State<TodoPage>
     }
     
     await _firestore.collection('todo').doc(docId).delete();
-
   }
 
   Future<void> _clearAllTodos() async {
@@ -423,9 +433,9 @@ class _TodoPageState extends State<TodoPage>
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear All Tasks?'),
+        title: const Text('Clear Pending Tasks?'),
         content: const Text(
-            'Are you sure you want to delete all your tasks? This cannot be undone.'),
+            'Are you sure you want to delete all your pending tasks? This cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
@@ -443,12 +453,12 @@ class _TodoPageState extends State<TodoPage>
       final snapshot = await _firestore
           .collection('todo')
           .where('email', isEqualTo: _userEmail)
+          .where('status', isEqualTo: 'pending')
           .get();
       for (var doc in snapshot.docs) {
         batch.delete(doc.reference);
       }
       await batch.commit();
-
     }
   }
 
