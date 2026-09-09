@@ -307,8 +307,8 @@ class _TodoPageState extends State<TodoPage>
       if (timestamp is Timestamp) {
         final todoTime = timestamp.toDate();
         final difference = now.difference(todoTime);
-        // Delete after 1 week (7 days) of completion
-        if (difference.inDays >= 7) {
+        // Delete after 60 days (about 2 months) of completion
+        if (difference.inDays >= 60) {
           batch.delete(doc.reference);
           // Do NOT update daily_report here!
         }
