@@ -5,6 +5,30 @@ import 'package:call_log/call_log.dart';
 import 'make_call.dart';
 import 'update_call_status_in_firestore.dart';
 
+bool _matchNumbers(String logNumber, String? contact) {
+  if (contact == null || contact.isEmpty) return false;
+  String cleanContact = contact.replaceAll(RegExp(r'\D'), '');
+  String cleanLog = logNumber.replaceAll(RegExp(r'\D'), '');
+  if (cleanContact.isEmpty || cleanLog.isEmpty) return false;
+
+  if (cleanLog == cleanContact) return true;
+  if (cleanLog.endsWith(cleanContact) || cleanContact.endsWith(cleanLog)) return true;
+  if (cleanContact.length >= 10 && cleanLog.length >= 10) {
+    String subContact = cleanContact.substring(cleanContact.length - 10);
+    String subLog = cleanLog.substring(cleanLog.length - 10);
+    return subContact == subLog;
+  }
+  return false;
+}
+
+Future<bool> _ensurePermissions() async {
+  var status = await Permission.phone.status;
+  if (!status.isGranted) {
+    status = await Permission.phone.request();
+  }
+  return status.isGranted;
+}
+
 Future<bool> checkIfCallWasMade({
   required Map<String, dynamic> customer,
   required String? pendingCallNumber,
@@ -14,8 +38,7 @@ Future<bool> checkIfCallWasMade({
   required Function() onCallDetected,
 }) async {
   if (pendingCallNumber == null || callStartTime == null) return false;
-  final permStatus = await Permission.phone.status;
-  if (!permStatus.isGranted) return false;
+  if (!await _ensurePermissions()) return false;
   try {
     final now = DateTime.now();
     final Iterable<CallLogEntry> entries = await CallLog.query(
@@ -25,11 +48,10 @@ Future<bool> checkIfCallWasMade({
     String? c1 = customer['contact1'] ?? customer['contact'];
     String? c2 = customer['contact2'];
     bool callMade = entries.any((entry) {
-      String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
+      String logNumber = entry.number ?? '';
       bool wasConnected = (entry.duration ?? 0) > 15;
-      bool matches1 = c1 != null && logNumber.endsWith(c1.replaceAll(RegExp(r'\D'), ''));
-      bool matches2 = c2 != null && c2.isNotEmpty && logNumber.endsWith(c2.replaceAll(RegExp(r'\D'), ''));
-      return (matches1 || matches2) && wasConnected;
+      bool matches = _matchNumbers(logNumber, c1) || _matchNumbers(logNumber, c2) || _matchNumbers(logNumber, pendingCallNumber);
+      return matches && wasConnected;
     });
     if (callMade) {
       customer['callMade'] = true;
@@ -65,8 +87,7 @@ Future<bool> checkForAnyRecentCall({
   required Function() onCallDetected,
 }) async {
   if (customer['callMade'] == true) return false;
-  final permStatus = await Permission.phone.status;
-  if (!permStatus.isGranted) return false;
+  if (!await _ensurePermissions()) return false;
   try {
     final now = DateTime.now();
     final startOfDay = DateTime(now.year, now.month, now.day);
@@ -77,18 +98,12 @@ Future<bool> checkForAnyRecentCall({
     String? c1 = customer['contact1'] ?? customer['contact'];
     String? c2 = customer['contact2'];
 
-    bool numberMatches(String logNumber, String? contact) {
-      if (contact == null || contact.isEmpty) return false;
-      String clean = contact.replaceAll(RegExp(r'\D'), '');
-      return logNumber.endsWith(clean) || clean.endsWith(logNumber);
-    }
-
     int latestOutgoingTime = -1;
     for (final entry in entries) {
       if (entry.callType != CallType.outgoing) continue;
-      String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
+      String logNumber = entry.number ?? '';
       if (logNumber.isEmpty) continue;
-      if (numberMatches(logNumber, c1) || numberMatches(logNumber, c2)) {
+      if (_matchNumbers(logNumber, c1) || _matchNumbers(logNumber, c2)) {
         if (entry.timestamp != null && entry.timestamp! > latestOutgoingTime) {
           latestOutgoingTime = entry.timestamp!;
         }
@@ -98,10 +113,10 @@ Future<bool> checkForAnyRecentCall({
 
     bool hasLongCall = entries.any((entry) {
       if (entry.timestamp == null || entry.timestamp! < latestOutgoingTime) return false;
-      String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
+      String logNumber = entry.number ?? '';
       if (logNumber.isEmpty) return false;
       bool longEnough = (entry.duration ?? 0) > 15;
-      return (numberMatches(logNumber, c1) || numberMatches(logNumber, c2)) && longEnough;
+      return (_matchNumbers(logNumber, c1) || _matchNumbers(logNumber, c2)) && longEnough;
     });
     if (hasLongCall) {
       customer['callMade'] = true;
@@ -143,8 +158,17 @@ Future<void> reloadCallStatus({
     );
     return;
   }
-  final permStatus = await Permission.phone.request();
-  if (!permStatus.isGranted) return;
+  if (!await _ensurePermissions()) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Call Log permission is required to detect calls.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+    return;
+  }
   try {
     final now = DateTime.now();
     final startOfDay = DateTime(now.year, now.month, now.day);
@@ -155,18 +179,12 @@ Future<void> reloadCallStatus({
     String? c1 = customer['contact1'] ?? customer['contact'];
     String? c2 = customer['contact2'];
 
-    bool numberMatches(String logNumber, String? contact) {
-      if (contact == null || contact.isEmpty) return false;
-      String clean = contact.replaceAll(RegExp(r'\D'), '');
-      return logNumber.endsWith(clean) || clean.endsWith(logNumber);
-    }
-
     bool hasOutgoingLongCall = entries.any((entry) {
       if (entry.callType != CallType.outgoing) return false;
-      String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
+      String logNumber = entry.number ?? '';
       if (logNumber.isEmpty) return false;
       bool longEnough = (entry.duration ?? 0) > 15;
-      return (numberMatches(logNumber, c1) || numberMatches(logNumber, c2)) && longEnough;
+      return (_matchNumbers(logNumber, c1) || _matchNumbers(logNumber, c2)) && longEnough;
     });
 
     if (hasOutgoingLongCall) {

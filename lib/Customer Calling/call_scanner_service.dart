@@ -6,8 +6,19 @@ import 'package:permission_handler/permission_handler.dart';
 class CallScannerService {
   static bool numberMatches(String logNumber, String? contact) {
     if (contact == null || contact.isEmpty) return false;
-    String clean = contact.replaceAll(RegExp(r'\D'), '');
-    return logNumber.endsWith(clean) || clean.endsWith(logNumber);
+    String cleanContact = contact.replaceAll(RegExp(r'\D'), '');
+    String cleanLog = logNumber.replaceAll(RegExp(r'\D'), '');
+    if (cleanContact.isEmpty || cleanLog.isEmpty) return false;
+    
+    // Match exact, suffix match (handling country code prefixes like +91), or last 10 digits match
+    if (cleanLog == cleanContact) return true;
+    if (cleanLog.endsWith(cleanContact) || cleanContact.endsWith(cleanLog)) return true;
+    if (cleanContact.length >= 10 && cleanLog.length >= 10) {
+      String subContact = cleanContact.substring(cleanContact.length - 10);
+      String subLog = cleanLog.substring(cleanLog.length - 10);
+      return subContact == subLog;
+    }
+    return false;
   }
 
   /// Scans today's call logs and returns a list of customers that match the call criteria
