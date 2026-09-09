@@ -34,10 +34,16 @@ class DmeCustomerCallItem {
     this.proofImageUrl,
   });
 
-  int get dayKey => completedAt.toLocal().day;
+  /// Convert completedAt to Indian Standard Time (UTC+05:30)
+  DateTime get completedAtIst {
+    final utc = completedAt.isUtc ? completedAt : completedAt.toUtc();
+    return utc.add(const Duration(hours: 5, minutes: 30));
+  }
 
-  String get formattedDate => DateFormat('dd-MM-yyyy').format(completedAt.toLocal());
-  String get formattedTime => DateFormat('hh:mm a').format(completedAt.toLocal());
+  int get dayKey => completedAtIst.day;
+
+  String get formattedDate => DateFormat('dd-MM-yyyy').format(completedAtIst);
+  String get formattedTime => '${DateFormat('hh:mm a').format(completedAtIst)} IST';
 }
 
 /// Statistics and action list for a specific DME User in the reporting period
