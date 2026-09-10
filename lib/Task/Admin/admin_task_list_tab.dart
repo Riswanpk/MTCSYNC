@@ -595,7 +595,6 @@ class _AdminTaskListTabState extends State<AdminTaskListTab> {
                             MaterialPageRoute(
                               builder: (context) => MassTaskUsersPage(
                                 group: group,
-                                initialStatusFilter: widget.filterStatus,
                               ),
                             ),
                           );

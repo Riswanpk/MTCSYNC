@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
-import '../Misc/notification_permission_service.dart';
-import '../Navigation/user_cache_service.dart';
+import '../../Misc/notification_permission_service.dart';
+import '../../Navigation/user_cache_service.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
