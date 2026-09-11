@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'camera_page.dart';
 import 'dart:io';
 import 'package:flutter/services.dart'; // Add this import
-import 'package:firebase_storage/firebase_storage.dart'; // Add this import
+// Add this import
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:path_provider/path_provider.dart';
@@ -129,7 +129,6 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
     TextEditingController? controller,
     bool error = false,
     String? errorText,
-    String? initialValue,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),

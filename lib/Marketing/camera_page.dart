@@ -190,13 +190,13 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
             child: const Text('Cancel', style: TextStyle(fontFamily: 'Electorize')),
           ),
           ElevatedButton(
-            child: const Text('Grant Permission', style: TextStyle(fontFamily: 'Electorize')),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.orange,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Grant Permission', style: TextStyle(fontFamily: 'Electorize')),
           ),
         ],
       ),

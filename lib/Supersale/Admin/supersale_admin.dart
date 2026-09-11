@@ -9,7 +9,7 @@ const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
 
 class SupersalePage extends StatefulWidget {
-  const SupersalePage({Key? key}) : super(key: key);
+  const SupersalePage({super.key});
 
   @override
   State<SupersalePage> createState() => _SupersalePageState();
@@ -35,9 +35,9 @@ class _SupersalePageState extends State<SupersalePage> {
 
   Future<void> _deleteSupersale(String docId, String itemName, List<dynamic> branches) async {
     try {
-      final openNotifId = (docId + '_open').hashCode & 0x7FFFFFFF;
-      final preCloseNotifId = (docId + '_preclose').hashCode & 0x7FFFFFFF;
-      final closedNotifId = (docId + '_closed').hashCode & 0x7FFFFFFF;
+      final openNotifId = ('${docId}_open').hashCode & 0x7FFFFFFF;
+      final preCloseNotifId = ('${docId}_preclose').hashCode & 0x7FFFFFFF;
+      final closedNotifId = ('${docId}_closed').hashCode & 0x7FFFFFFF;
       await AwesomeNotifications().cancel(openNotifId);
       await AwesomeNotifications().cancel(preCloseNotifId);
       await AwesomeNotifications().cancel(closedNotifId);
@@ -95,7 +95,7 @@ class _SupersalePageState extends State<SupersalePage> {
           Icon(
             isExpiredTab ? Icons.history_rounded : Icons.flash_off_rounded,
             size: 64,
-            color: primaryBlue.withOpacity(0.4),
+            color: primaryBlue.withValues(alpha: 0.4),
           ),
           const SizedBox(height: 16),
           Text(
@@ -235,7 +235,7 @@ class _SupersalePageState extends State<SupersalePage> {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
+                    color: Colors.black.withValues(alpha: 0.04),
                     blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),
@@ -279,8 +279,8 @@ class _SupersalePageState extends State<SupersalePage> {
                                         horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(
                                       color: isExpired
-                                          ? Colors.grey.withOpacity(0.15)
-                                          : primaryGreen.withOpacity(0.15),
+                                          ? Colors.grey.withValues(alpha: 0.15)
+                                          : primaryGreen.withValues(alpha: 0.15),
                                       borderRadius:
                                           BorderRadius.circular(6),
                                     ),

@@ -147,7 +147,7 @@ class _ReportTodoPageState extends State<ReportTodoPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             DropdownButtonFormField<String>(
-              value: _selectedBranch,
+              initialValue: _selectedBranch,
               hint: const Text('Select a Branch'),
               items: _branches.map((String branch) {
                 return DropdownMenuItem<String>(

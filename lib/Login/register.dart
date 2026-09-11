@@ -351,10 +351,12 @@ class _RegisterPageState extends State<RegisterPage>
                                     fontFamily: 'Montserrat',
                                   ),
                                   validator: (v) {
-                                    if (v == null || v.isEmpty)
+                                    if (v == null || v.isEmpty) {
                                       return 'Please enter email';
-                                    if (!RegExp(r'\S+@\S+\.\S+').hasMatch(v))
+                                    }
+                                    if (!RegExp(r'\S+@\S+\.\S+').hasMatch(v)) {
                                       return 'Enter a valid email';
+                                    }
                                     return null;
                                   },
                                 ),
@@ -380,7 +382,7 @@ class _RegisterPageState extends State<RegisterPage>
 
                                 // Branch dropdown
                                 DropdownButtonFormField<String>(
-                                  value: _selectedBranch,
+                                  initialValue: _selectedBranch,
                                   decoration: _inputDecoration(
                                       'Branch', Icons.business_outlined),
                                   dropdownColor: isDark
@@ -452,10 +454,12 @@ class _RegisterPageState extends State<RegisterPage>
                                   ),
                                   obscureText: _obscurePassword,
                                   validator: (v) {
-                                    if (v == null || v.isEmpty)
+                                    if (v == null || v.isEmpty) {
                                       return 'Please enter password';
-                                    if (v.length < 6)
+                                    }
+                                    if (v.length < 6) {
                                       return 'Password must be at least 6 characters';
+                                    }
                                     return null;
                                   },
                                 ),
@@ -474,10 +478,12 @@ class _RegisterPageState extends State<RegisterPage>
                                     fontFamily: 'Montserrat',
                                   ),
                                   validator: (v) {
-                                    if (v == null || v.isEmpty)
+                                    if (v == null || v.isEmpty) {
                                       return 'Enter registration code';
-                                    if (v.length != 4)
+                                    }
+                                    if (v.length != 4) {
                                       return 'Code must be 4 digits';
+                                    }
                                     return null;
                                   },
                                 ),

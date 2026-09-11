@@ -1037,7 +1037,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           ),
         ),
       );
-    } else if (branch != null && username != null && userid != null) {
+    } else if (branch != null && username != null) {
       // Save navigation state for activity recreation recovery
       await NavigationState.saveState('marketing', userData: {
         'username': username,

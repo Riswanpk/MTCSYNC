@@ -9,7 +9,7 @@ const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
 
 class SupersaleAdminReportPage extends StatefulWidget {
-  const SupersaleAdminReportPage({Key? key}) : super(key: key);
+  const SupersaleAdminReportPage({super.key});
 
   @override
   State<SupersaleAdminReportPage> createState() => _SupersaleAdminReportPageState();
@@ -183,7 +183,7 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
                     child: Icon(
                       Icons.analytics_rounded,
                       size: 80,
-                      color: primaryGreen.withOpacity(0.8),
+                      color: primaryGreen.withValues(alpha: 0.8),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -230,7 +230,7 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
+                          color: Colors.black.withValues(alpha: 0.04),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -265,7 +265,7 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
                                       Container(
                                         padding: const EdgeInsets.all(6),
                                         decoration: BoxDecoration(
-                                          color: primaryBlue.withOpacity(0.1),
+                                          color: primaryBlue.withValues(alpha: 0.1),
                                           borderRadius: BorderRadius.circular(8),
                                         ),
                                         child: const Icon(Icons.flash_on_rounded, size: 16, color: primaryBlue),
@@ -285,7 +285,7 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                           decoration: BoxDecoration(
-                                            color: primaryGreen.withOpacity(0.15),
+                                            color: primaryGreen.withValues(alpha: 0.15),
                                             borderRadius: BorderRadius.circular(6),
                                           ),
                                           child: Text(
@@ -430,7 +430,7 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
             padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
             decoration: BoxDecoration(
               color: isSelected
-                  ? primaryBlue.withOpacity(0.12)
+                  ? primaryBlue.withValues(alpha: 0.12)
                   : (isDark ? const Color(0xFF1E293B) : Colors.white),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
@@ -441,7 +441,7 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: isSelected ? primaryBlue.withOpacity(0.15) : Colors.black.withOpacity(0.02),
+                  color: isSelected ? primaryBlue.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.02),
                   blurRadius: 8,
                   offset: const Offset(0, 3),
                 ),
@@ -471,7 +471,7 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
                   style: TextStyle(
                     fontSize: 10,
                     color: isSelected
-                        ? primaryBlue.withOpacity(0.8)
+                        ? primaryBlue.withValues(alpha: 0.8)
                         : (isDark ? Colors.white38 : Colors.grey[500]),
                   ),
                   textAlign: TextAlign.center,

@@ -5,10 +5,10 @@ class CustomerLastRemarksSection extends StatelessWidget {
   final List<Map<String, String>> pastRemarks;
 
   const CustomerLastRemarksSection({
-    Key? key,
+    super.key,
     required this.loadingLastRemarks,
     required this.pastRemarks,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

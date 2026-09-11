@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import '../../Misc/notification_permission_service.dart';
@@ -15,10 +14,10 @@ class SupersaleUserFormPage extends StatefulWidget {
   final bool isSpotSale;
 
   const SupersaleUserFormPage({
-    Key? key,
+    super.key,
     this.bookingDoc,
     this.isSpotSale = false,
-  }) : super(key: key);
+  });
 
   @override
   State<SupersaleUserFormPage> createState() => _SupersaleUserFormPageState();
@@ -116,7 +115,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
             .get();
 
         _activeAdminPostings = snap.docs.where((doc) {
-          final data = doc.data() as Map<String, dynamic>;
+          final data = doc.data();
           final List<dynamic> branches = data['branches'] ?? [];
           final Timestamp? start = data['bookingStart'];
           final Timestamp? end = data['bookingEnd'];
@@ -415,7 +414,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
                 Icon(
                   Icons.lock_clock_rounded,
                   size: 64,
-                  color: Colors.red.withOpacity(0.6),
+                  color: Colors.red.withValues(alpha: 0.6),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -469,7 +468,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
                         margin: const EdgeInsets.only(bottom: 20),
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
-                          color: primaryGreen.withOpacity(0.15),
+                          color: primaryGreen.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: primaryGreen, width: 1.5),
                         ),

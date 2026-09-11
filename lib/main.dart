@@ -509,6 +509,8 @@ class _AuthGateState extends State<AuthGate> {
 }
 
 class UpdateGate extends StatefulWidget {
+  const UpdateGate({super.key});
+
   @override
   State<UpdateGate> createState() => _UpdateGateState();
 }
@@ -715,7 +717,7 @@ class NotificationController {
                       if (now.isAfter(nextCycleDateTime) || now.isAtSameMomentAs(nextCycleDateTime)) {
                         // Schedule for the next 7-day cycle
                         rescheduleDelay = nextCycleDateTime.difference(now);
-                        debugPrint('Lead at/past 7-day threshold. Rescheduling to ${nextCycleDateTime}. Delay: $rescheduleDelay');
+                        debugPrint('Lead at/past 7-day threshold. Rescheduling to $nextCycleDateTime. Delay: $rescheduleDelay');
                       } else {
                         // Still within the cycle: use 30-min same-day rescheduling
                         rescheduleDelay = const Duration(minutes: 30);

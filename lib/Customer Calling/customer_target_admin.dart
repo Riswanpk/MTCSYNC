@@ -97,7 +97,7 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
       }
 
       final sheet = excel.tables.values.first;
-      if (sheet == null || sheet.maxRows < 2) {
+      if (sheet.maxRows < 2) {
         throw Exception("Sheet is empty");
       }
 
@@ -315,7 +315,7 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
                 children: [
                   // Month Dropdown
                   DropdownButtonFormField<String>(
-                    value: _selectedMonthYear,
+                    initialValue: _selectedMonthYear,
                     hint: const Text('Select Target Month'),
                     items: _monthYears
                         .map((m) => DropdownMenuItem(value: m, child: Text(m)))
@@ -329,7 +329,7 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
                   const SizedBox(height: 16),
                   // Branch Dropdown
                   DropdownButtonFormField<String>(
-                    value: _branches.contains(_selectedBranch) ? _selectedBranch : null,
+                    initialValue: _branches.contains(_selectedBranch) ? _selectedBranch : null,
                     hint: const Text('Select Branch'),
                     items: _branches.isNotEmpty
                         ? _branches
@@ -353,7 +353,7 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
                   const SizedBox(height: 16),
                   // User Dropdown
                   DropdownButtonFormField<String>(
-                    value: _users.any((u) => u['email'] == _selectedUserEmail) ? _selectedUserEmail : null,
+                    initialValue: _users.any((u) => u['email'] == _selectedUserEmail) ? _selectedUserEmail : null,
                     hint: const Text('Select User'),
                     items: _users.isNotEmpty
                         ? _users

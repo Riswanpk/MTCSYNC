@@ -387,7 +387,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    value: _priority,
+                    initialValue: _priority,
                     decoration: const InputDecoration(
                       labelText: 'Priority',
                       prefixIcon: Icon(Icons.flag),

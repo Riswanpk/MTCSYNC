@@ -90,7 +90,7 @@ const Color primaryGreen = Color(0xFF8CC63F);
 
 class TodoFormPage extends StatefulWidget {
   final String? docId; // <-- Add this
-  const TodoFormPage({Key? key, this.docId}) : super(key: key);
+  const TodoFormPage({super.key, this.docId});
 
   static const String DRAFT_KEY = 'todo_form_draft';
 

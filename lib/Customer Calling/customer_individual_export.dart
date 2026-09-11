@@ -185,7 +185,7 @@ class _CustomerIndividualExportPageState extends State<CustomerIndividualExportP
 					crossAxisAlignment: CrossAxisAlignment.stretch,
 					children: [
 						DropdownButtonFormField<String>(
-							value: _branches.contains(_selectedBranch) ? _selectedBranch : null,
+							initialValue: _branches.contains(_selectedBranch) ? _selectedBranch : null,
 							decoration: InputDecoration(
 								labelText: 'Branch',
 								prefixIcon: const Icon(Icons.business_rounded),
@@ -210,7 +210,7 @@ class _CustomerIndividualExportPageState extends State<CustomerIndividualExportP
 						),
 						const SizedBox(height: 16),
 						DropdownButtonFormField<String>(
-							value: _users.any((u) => u['email'] == _selectedUserEmail)
+							initialValue: _users.any((u) => u['email'] == _selectedUserEmail)
 									? _selectedUserEmail
 									: null,
 							decoration: InputDecoration(
@@ -240,7 +240,7 @@ class _CustomerIndividualExportPageState extends State<CustomerIndividualExportP
 						),
 						const SizedBox(height: 16),
 						DropdownButtonFormField<String>(
-							value: _selectedMonthYear,
+							initialValue: _selectedMonthYear,
 							decoration: InputDecoration(
 								labelText: 'Month',
 								prefixIcon: const Icon(Icons.calendar_today_rounded),

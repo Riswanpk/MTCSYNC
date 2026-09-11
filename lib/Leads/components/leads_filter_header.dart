@@ -59,7 +59,7 @@ class LeadsFilterHeader extends StatelessWidget {
                       child: SizedBox(
                         height: 36,
                         child: DropdownButtonFormField<String>(
-                          value: selectedBranch,
+                          initialValue: selectedBranch,
                           items: availableBranches
                               .map((branch) => DropdownMenuItem(
                                     value: branch,
@@ -93,7 +93,7 @@ class LeadsFilterHeader extends StatelessWidget {
                       child: SizedBox(
                         height: 36,
                         child: DropdownButtonFormField<String>(
-                          value: selectedUser,
+                          initialValue: selectedUser,
                           items: [
                             const DropdownMenuItem(
                               value: null,
@@ -135,7 +135,7 @@ class LeadsFilterHeader extends StatelessWidget {
                       child: SizedBox(
                         height: 36,
                         child: DropdownButtonFormField<String>(
-                          value: selectedStatus,
+                          initialValue: selectedStatus,
                           items: statusOptions.map((status) {
                             return DropdownMenuItem<String>(
                               value: status,
@@ -169,7 +169,7 @@ class LeadsFilterHeader extends StatelessWidget {
                       child: SizedBox(
                         height: 36,
                         child: DropdownButtonFormField<String>(
-                          value: selectedPriority,
+                          initialValue: selectedPriority,
                           items: priorityOptions.map((priority) {
                             return DropdownMenuItem<String>(
                               value: priority,
@@ -203,7 +203,7 @@ class LeadsFilterHeader extends StatelessWidget {
                       child: SizedBox(
                         height: 36,
                         child: DropdownButtonFormField<bool>(
-                          value: sortAscending,
+                          initialValue: sortAscending,
                           items: const [
                             DropdownMenuItem(
                               value: false,
@@ -238,7 +238,7 @@ class LeadsFilterHeader extends StatelessWidget {
                       child: SizedBox(
                         height: 36,
                         child: DropdownButtonFormField<String>(
-                          value: selectedSource,
+                          initialValue: selectedSource,
                           items: sourceOptions.map((s) {
                             return DropdownMenuItem<String>(
                               value: s,
@@ -277,7 +277,7 @@ class LeadsFilterHeader extends StatelessWidget {
                           child: SizedBox(
                             height: 36,
                             child: DropdownButtonFormField<String>(
-                              value: selectedUser,
+                              initialValue: selectedUser,
                               items: [
                                 const DropdownMenuItem(
                                   value: null,
@@ -315,7 +315,7 @@ class LeadsFilterHeader extends StatelessWidget {
                           child: SizedBox(
                             height: 36,
                             child: DropdownButtonFormField<String>(
-                              value: selectedStatus,
+                              initialValue: selectedStatus,
                               items: statusOptions.map((status) {
                                 return DropdownMenuItem<String>(
                                   value: status,
@@ -353,7 +353,7 @@ class LeadsFilterHeader extends StatelessWidget {
                           child: SizedBox(
                             height: 36,
                             child: DropdownButtonFormField<String>(
-                              value: selectedPriority,
+                              initialValue: selectedPriority,
                               items: priorityOptions.map((priority) {
                                 return DropdownMenuItem<String>(
                                   value: priority,
@@ -387,7 +387,7 @@ class LeadsFilterHeader extends StatelessWidget {
                           child: SizedBox(
                             height: 36,
                             child: DropdownButtonFormField<bool>(
-                              value: sortAscending,
+                              initialValue: sortAscending,
                               items: const [
                                 DropdownMenuItem(
                                   value: false,
@@ -422,7 +422,7 @@ class LeadsFilterHeader extends StatelessWidget {
                           child: SizedBox(
                             height: 36,
                             child: DropdownButtonFormField<String>(
-                              value: selectedSource,
+                              initialValue: selectedSource,
                               items: sourceOptions.map((s) {
                                 return DropdownMenuItem<String>(
                                   value: s,
@@ -460,7 +460,7 @@ class LeadsFilterHeader extends StatelessWidget {
                           child: SizedBox(
                             height: 36,
                             child: DropdownButtonFormField<String>(
-                              value: selectedStatus,
+                              initialValue: selectedStatus,
                               items: statusOptions.map((status) {
                                 return DropdownMenuItem<String>(
                                   value: status,
@@ -494,7 +494,7 @@ class LeadsFilterHeader extends StatelessWidget {
                           child: SizedBox(
                             height: 36,
                             child: DropdownButtonFormField<String>(
-                              value: selectedPriority,
+                              initialValue: selectedPriority,
                               items: priorityOptions.map((priority) {
                                 return DropdownMenuItem<String>(
                                   value: priority,
@@ -528,7 +528,7 @@ class LeadsFilterHeader extends StatelessWidget {
                           child: SizedBox(
                             height: 36,
                             child: DropdownButtonFormField<bool>(
-                              value: sortAscending,
+                              initialValue: sortAscending,
                               items: const [
                                 DropdownMenuItem(
                                   value: false,
@@ -563,7 +563,7 @@ class LeadsFilterHeader extends StatelessWidget {
                           child: SizedBox(
                             height: 36,
                             child: DropdownButtonFormField<String>(
-                              value: selectedSource,
+                              initialValue: selectedSource,
                               items: sourceOptions.map((s) {
                                 return DropdownMenuItem<String>(
                                   value: s,

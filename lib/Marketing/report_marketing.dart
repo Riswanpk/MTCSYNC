@@ -6,10 +6,11 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:share_plus/share_plus.dart';
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
-import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 class ReportMarketingPage extends StatefulWidget {
+  const ReportMarketingPage({super.key});
+
   @override
   State<ReportMarketingPage> createState() => _ReportMarketingPageState();
 }

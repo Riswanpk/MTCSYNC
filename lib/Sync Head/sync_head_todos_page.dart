@@ -273,7 +273,7 @@ class _SyncHeadTodosPageState extends State<SyncHeadTodosPage> {
                 _branchesLoading
                     ? const LinearProgressIndicator()
                     : DropdownButtonFormField<String>(
-                        value: _selectedBranch,
+                        initialValue: _selectedBranch,
                         decoration: InputDecoration(
                           labelText: 'Branch',
                           labelStyle: const TextStyle(

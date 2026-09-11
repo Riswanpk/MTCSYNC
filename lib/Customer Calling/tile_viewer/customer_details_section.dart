@@ -4,9 +4,9 @@ class CustomerDetailsSection extends StatelessWidget {
   final List<MapEntry<String, dynamic>> fields;
 
   const CustomerDetailsSection({
-    Key? key,
+    super.key,
     required this.fields,
-  }) : super(key: key);
+  });
 
   String _formatFieldName(String key) {
     return key.split('_').map((word) => word[0].toUpperCase() + word.substring(1)).join(' ');

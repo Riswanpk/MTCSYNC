@@ -1,9 +1,7 @@
-import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import 'package:mtcsync/Misc/notification_permission_service.dart';
 import 'package:mtcsync/Navigation/user_cache_service.dart';
 import 'presentfollowup.dart';
 import '../SME/sme_assigned_leads_page.dart';
@@ -307,7 +305,7 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
         try {
           await FirebaseFirestore.instance
               .collection('user_seen_leads')
-              .doc('${item.id}__${uid}')
+              .doc('${item.id}__$uid')
               .set({
                 'lead_id': item.id,
                 'user_id': uid,
@@ -341,7 +339,7 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
         try {
           await FirebaseFirestore.instance
               .collection('user_seen_leads')
-              .doc('${item.id}__${uid}')
+              .doc('${item.id}__$uid')
               .set({
                 'lead_id': item.id,
                 'user_id': uid,
@@ -380,7 +378,7 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
           try {
             await FirebaseFirestore.instance
                 .collection('user_seen_leads')
-                .doc('${item.id}__${uid}')
+                .doc('${item.id}__$uid')
                 .set({
                   'lead_id': item.id,
                   'user_id': uid,

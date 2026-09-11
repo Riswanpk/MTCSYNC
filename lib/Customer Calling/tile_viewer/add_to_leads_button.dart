@@ -10,13 +10,13 @@ class AddToLeadsButton extends StatelessWidget {
   final Color primaryColor;
 
   const AddToLeadsButton({
-    Key? key,
+    super.key,
     required this.customer,
     required this.called,
     required this.remarksEntered,
     required this.remarksSaved,
     required this.primaryColor,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

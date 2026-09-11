@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../Navigation/user_cache_service.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 import 'package:share_plus/share_plus.dart';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 
 class TodoLeadsFullMonthPage extends StatefulWidget {
@@ -125,16 +123,16 @@ class _TodoLeadsFullMonthPageState extends State<TodoLeadsFullMonthPage> {
 
     // Generate Excel using Syncfusion
     final workbook = xlsio.Workbook();
-    int _branchIndex = 0;
+    int branchIndex = 0;
     for (final branch in branchUserStatus.keys) {
       xlsio.Worksheet sheet;
-      if (_branchIndex == 0) {
+      if (branchIndex == 0) {
         sheet = workbook.worksheets[0]; // default sheet
         sheet.name = branch;
       } else {
         sheet = workbook.worksheets.addWithName(branch);
       }
-      _branchIndex++;
+      branchIndex++;
 
       // Summary table
       sheet.getRangeByIndex(1, 1).setText('Username');

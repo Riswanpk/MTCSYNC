@@ -826,8 +826,9 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                 () {
                                   final isSelected = _priority == p;
                                   Color color;
-                                  if (p == 'High') color = const Color(0xFFEF4444);
-                                  else if (p == 'Medium') color = const Color(0xFFF59E0B);
+                                  if (p == 'High') {
+                                    color = const Color(0xFFEF4444);
+                                  } else if (p == 'Medium') color = const Color(0xFFF59E0B);
                                   else color = const Color(0xFF10B981);
 
                                   return Expanded(

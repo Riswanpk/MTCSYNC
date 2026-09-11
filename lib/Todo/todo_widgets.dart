@@ -21,14 +21,14 @@ class TodoListItem extends StatelessWidget {
   final bool showSlidableActions;
 
   const TodoListItem({
-    Key? key,
+    super.key,
     required this.doc,
     required this.data,
     required this.onToggleStatus,
     required this.onDelete,
     required this.getUsernameByEmail,
     this.showSlidableActions = true,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -284,11 +284,11 @@ class TodoListItemReadOnly extends StatelessWidget {
   final Future<String> Function(String email) getUsernameByEmail;
 
   const TodoListItemReadOnly({
-    Key? key,
+    super.key,
     required this.doc,
     required this.data,
     required this.getUsernameByEmail,
-  }) : super(key: key);
+  });
 
   static final Map<String, Future<String>> _usernameCache = {};
 

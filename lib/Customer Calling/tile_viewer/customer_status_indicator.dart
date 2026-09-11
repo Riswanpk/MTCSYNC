@@ -5,10 +5,10 @@ class CustomerStatusIndicator extends StatelessWidget {
   final Color swappedColor;
 
   const CustomerStatusIndicator({
-    Key? key,
+    super.key,
     required this.called,
     required this.swappedColor,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

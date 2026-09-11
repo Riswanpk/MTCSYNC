@@ -218,7 +218,7 @@ class _InsightsPageState extends State<InsightsPage> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
                     child: DropdownButtonFormField<String>(
-                      value: _selectedBranch,
+                      initialValue: _selectedBranch,
                       items: _branches
                           .map((b) => DropdownMenuItem(
                                 value: b,

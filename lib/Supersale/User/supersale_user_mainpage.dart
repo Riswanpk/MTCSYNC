@@ -12,7 +12,7 @@ const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
 
 class SupersaleUserMainPage extends StatefulWidget {
-  const SupersaleUserMainPage({Key? key}) : super(key: key);
+  const SupersaleUserMainPage({super.key});
 
   @override
   State<SupersaleUserMainPage> createState() => _SupersaleUserMainPageState();
@@ -230,9 +230,9 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
     // Cancel notifications for deleted supersales
     final deletedDocIds = _scheduledDocIds.difference(activeDocIds);
     for (final deletedId in deletedDocIds) {
-      final openNotifId = (deletedId + '_open').hashCode & 0x7FFFFFFF;
-      final preCloseNotifId = (deletedId + '_preclose').hashCode & 0x7FFFFFFF;
-      final closedNotifId = (deletedId + '_closed').hashCode & 0x7FFFFFFF;
+      final openNotifId = ('${deletedId}_open').hashCode & 0x7FFFFFFF;
+      final preCloseNotifId = ('${deletedId}_preclose').hashCode & 0x7FFFFFFF;
+      final closedNotifId = ('${deletedId}_closed').hashCode & 0x7FFFFFFF;
       await AwesomeNotifications().cancel(openNotifId);
       await AwesomeNotifications().cancel(preCloseNotifId);
       await AwesomeNotifications().cancel(closedNotifId);
@@ -244,9 +244,9 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
       final List<dynamic> branches = data['branches'] ?? [];
       final isEligible = branches.contains(_userBranch) || branches.contains('all');
       if (!isEligible) {
-        final openNotifId = (doc.id + '_open').hashCode & 0x7FFFFFFF;
-        final preCloseNotifId = (doc.id + '_preclose').hashCode & 0x7FFFFFFF;
-        final closedNotifId = (doc.id + '_closed').hashCode & 0x7FFFFFFF;
+        final openNotifId = ('${doc.id}_open').hashCode & 0x7FFFFFFF;
+        final preCloseNotifId = ('${doc.id}_preclose').hashCode & 0x7FFFFFFF;
+        final closedNotifId = ('${doc.id}_closed').hashCode & 0x7FFFFFFF;
         await AwesomeNotifications().cancel(openNotifId);
         await AwesomeNotifications().cancel(preCloseNotifId);
         await AwesomeNotifications().cancel(closedNotifId);
@@ -262,9 +262,9 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
       final endDt = endTs.toDate();
       final preCloseDt = endDt.subtract(const Duration(minutes: 30));
 
-      final openNotifId = (doc.id + '_open').hashCode & 0x7FFFFFFF;
-      final preCloseNotifId = (doc.id + '_preclose').hashCode & 0x7FFFFFFF;
-      final closedNotifId = (doc.id + '_closed').hashCode & 0x7FFFFFFF;
+      final openNotifId = ('${doc.id}_open').hashCode & 0x7FFFFFFF;
+      final preCloseNotifId = ('${doc.id}_preclose').hashCode & 0x7FFFFFFF;
+      final closedNotifId = ('${doc.id}_closed').hashCode & 0x7FFFFFFF;
 
       // Schedule Open notification if bookingStart is in the future
       if (startDt.isAfter(now)) {
@@ -454,8 +454,8 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: isBookingOpen
-                            ? primaryGreen.withOpacity(0.2)
-                            : Colors.red.withOpacity(0.2),
+                            ? primaryGreen.withValues(alpha: 0.2)
+                            : Colors.red.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
@@ -625,7 +625,7 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
             Icon(
               Icons.bookmark_outline_rounded,
               size: 64,
-              color: primaryBlue.withOpacity(0.3),
+              color: primaryBlue.withValues(alpha: 0.3),
             ),
             const SizedBox(height: 16),
             Text(
@@ -886,9 +886,9 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
                                 Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
-                                    color: Colors.orange.withOpacity(0.08),
+                                    color: Colors.orange.withValues(alpha: 0.08),
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                                    border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
                                   ),
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1109,7 +1109,7 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: Colors.black.withValues(alpha: 0.04),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -1183,7 +1183,7 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                                       margin: const EdgeInsets.only(right: 4),
                                       decoration: BoxDecoration(
-                                        color: Colors.blue.withOpacity(0.15),
+                                        color: Colors.blue.withValues(alpha: 0.15),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: const Text(
@@ -1200,7 +1200,7 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                                       margin: const EdgeInsets.only(right: 4),
                                       decoration: BoxDecoration(
-                                        color: Colors.purple.withOpacity(0.15),
+                                        color: Colors.purple.withValues(alpha: 0.15),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: const Text(
@@ -1217,8 +1217,8 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                     decoration: BoxDecoration(
                                       color: status == 'delivered'
-                                          ? Colors.green.withOpacity(0.15)
-                                          : Colors.orange.withOpacity(0.15),
+                                          ? Colors.green.withValues(alpha: 0.15)
+                                          : Colors.orange.withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(

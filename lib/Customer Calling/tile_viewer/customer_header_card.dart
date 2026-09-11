@@ -10,7 +10,7 @@ class CustomerHeaderCard extends StatelessWidget {
   final bool isCallDisabled;
 
   const CustomerHeaderCard({
-    Key? key,
+    super.key,
     required this.customerName,
     required this.contact1,
     required this.contact2,
@@ -18,7 +18,7 @@ class CustomerHeaderCard extends StatelessWidget {
     required this.primaryColor,
     required this.onCallPressed,
     this.isCallDisabled = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

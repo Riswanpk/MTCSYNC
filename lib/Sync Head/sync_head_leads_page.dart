@@ -150,16 +150,16 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
         ]);
 
         inProgressCount = mergeCount(
-          (results[0] as AggregateQuerySnapshot).count,
-          (results[1] as AggregateQuerySnapshot).count,
+          (results[0]).count,
+          (results[1]).count,
         );
         saleCount = mergeCount(
-          (results[2] as AggregateQuerySnapshot).count,
-          (results[3] as AggregateQuerySnapshot).count,
+          (results[2]).count,
+          (results[3]).count,
         );
         cancelledCount = mergeCount(
-          (results[4] as AggregateQuerySnapshot).count,
-          (results[5] as AggregateQuerySnapshot).count,
+          (results[4]).count,
+          (results[5]).count,
         );
       } else if (_statusFilter == 'Created in this Interval') {
         // Use count() aggregation for interval filter too — include both created_by AND assigned_to
@@ -239,16 +239,16 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
         ]);
 
         inProgressCount = mergeCount(
-          (results[0] as AggregateQuerySnapshot).count,
-          (results[1] as AggregateQuerySnapshot).count,
+          (results[0]).count,
+          (results[1]).count,
         );
         saleCount = mergeCount(
-          (results[2] as AggregateQuerySnapshot).count,
-          (results[3] as AggregateQuerySnapshot).count,
+          (results[2]).count,
+          (results[3]).count,
         );
         cancelledCount = mergeCount(
-          (results[4] as AggregateQuerySnapshot).count,
-          (results[5] as AggregateQuerySnapshot).count,
+          (results[4]).count,
+          (results[5]).count,
         );
       }
 
@@ -380,7 +380,7 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
                 _branchesLoading
                     ? const LinearProgressIndicator()
                     : DropdownButtonFormField<String>(
-                        value: _selectedBranch,
+                        initialValue: _selectedBranch,
                         decoration: InputDecoration(
                           labelText: 'Branch',
                           labelStyle:
@@ -431,7 +431,7 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
                 const SizedBox(height: 10),
                 // Status filter dropdown
                 DropdownButtonFormField<String>(
-                  value: _statusFilter,
+                  initialValue: _statusFilter,
                   decoration: InputDecoration(
                     labelText: 'Filter by Status',
                     labelStyle: const TextStyle(color: _primaryBlue),

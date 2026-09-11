@@ -8,13 +8,13 @@ class CustomerRemarksSection extends StatelessWidget {
   final VoidCallback? onSavePressed;
 
   const CustomerRemarksSection({
-    Key? key,
+    super.key,
     required this.remarksController,
     required this.called,
     required this.remarksEntered,
     required this.primaryColor,
     required this.onSavePressed,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

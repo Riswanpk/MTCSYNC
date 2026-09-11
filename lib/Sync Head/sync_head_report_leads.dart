@@ -232,7 +232,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         }
 
         // Helper to build query with optional date range
-        Query _buildQuery(String createdBy, String status) {
+        Query buildQuery(String createdBy, String status) {
           Query q = FirebaseFirestore.instance
             .collection('follow_ups')
             .where(createdBy, isEqualTo: uid)
@@ -250,22 +250,22 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         // then merge (SME/DME leads are assigned_to the user, not created_by).
         final results = await Future.wait([
           // In Progress — created by user
-          _buildQuery('created_by', 'In Progress').get(),
+          buildQuery('created_by', 'In Progress').get(),
           // In Progress — assigned to user
-          _buildQuery('assigned_to', 'In Progress').get(),
+          buildQuery('assigned_to', 'In Progress').get(),
           // Sale — created by user
-          _buildQuery('created_by', 'Sale').get(),
+          buildQuery('created_by', 'Sale').get(),
           // Sale — assigned to user
-          _buildQuery('assigned_to', 'Sale').get(),
+          buildQuery('assigned_to', 'Sale').get(),
           // Cancelled — created by user
-          _buildQuery('created_by', 'Cancelled').get(),
+          buildQuery('created_by', 'Cancelled').get(),
           // Cancelled — assigned to user
-          _buildQuery('assigned_to', 'Cancelled').get(),
+          buildQuery('assigned_to', 'Cancelled').get(),
         ]);
 
-        inProgressLeads = filterBySource(mergeDocs(results[0] as QuerySnapshot, results[1] as QuerySnapshot));
-        saleLeads       = filterBySource(mergeDocs(results[2] as QuerySnapshot, results[3] as QuerySnapshot));
-        cancelledLeads  = filterBySource(mergeDocs(results[4] as QuerySnapshot, results[5] as QuerySnapshot));
+        inProgressLeads = filterBySource(mergeDocs(results[0], results[1]));
+        saleLeads       = filterBySource(mergeDocs(results[2], results[3]));
+        cancelledLeads  = filterBySource(mergeDocs(results[4], results[5]));
         inProgressCount = inProgressLeads.length;
         saleCount       = saleLeads.length;
         cancelledCount  = cancelledLeads.length;
@@ -1339,7 +1339,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
             _branchesLoading
                 ? const LinearProgressIndicator()
                 : DropdownButtonFormField<String>(
-                    value: _selectedBranch,
+                    initialValue: _selectedBranch,
                     decoration: InputDecoration(
                       labelText: 'Branch',
                       labelStyle:
@@ -1387,7 +1387,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
             const SizedBox(height: 16),
             // ── Status filter dropdown ────────────────────────────────
             DropdownButtonFormField<String>(
-              value: _statusFilter,
+              initialValue: _statusFilter,
               decoration: InputDecoration(
                 labelText: 'Filter by Status',
                 labelStyle: const TextStyle(color: _primaryBlue),

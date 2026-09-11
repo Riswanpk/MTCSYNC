@@ -445,7 +445,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
             ),
             const SizedBox(height: 6),
             DropdownButtonFormField<String>(
-              value: _selectedRole,
+              initialValue: _selectedRole,
               decoration: InputDecoration(
                 filled: true,
                 fillColor: isDark ? const Color(0xFF181A20) : Colors.grey[100],
@@ -523,7 +523,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
               ),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
-                value: _branches.contains(_selectedBranch) ? _selectedBranch : null,
+                initialValue: _branches.contains(_selectedBranch) ? _selectedBranch : null,
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: isDark ? const Color(0xFF181A20) : Colors.grey[100],

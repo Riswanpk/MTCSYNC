@@ -8,7 +8,7 @@ const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
 
 class SupersaleAdminDashboard extends StatefulWidget {
-  const SupersaleAdminDashboard({Key? key}) : super(key: key);
+  const SupersaleAdminDashboard({super.key});
 
   @override
   State<SupersaleAdminDashboard> createState() => _SupersaleAdminDashboardState();
@@ -244,7 +244,7 @@ class _SupersaleAdminDashboardState extends State<SupersaleAdminDashboard> {
         border: Border.all(color: isDark ? Colors.white12 : Colors.grey[300]!),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -358,7 +358,7 @@ class _SupersaleAdminDashboardState extends State<SupersaleAdminDashboard> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -503,7 +503,7 @@ class _SupersaleAdminDashboardState extends State<SupersaleAdminDashboard> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: primaryGreen.withOpacity(0.3),
+              color: primaryGreen.withValues(alpha: 0.3),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -514,7 +514,7 @@ class _SupersaleAdminDashboardState extends State<SupersaleAdminDashboard> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Icon(Icons.analytics_rounded, color: Colors.white, size: 28),

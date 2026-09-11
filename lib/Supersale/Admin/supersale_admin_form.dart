@@ -16,13 +16,13 @@ class SupersaleFormPage extends StatefulWidget {
   final List<String>? branches;
 
   const SupersaleFormPage({
-    Key? key,
+    super.key,
     this.docId,
     this.item,
     this.bookingRange,
     this.deliveryRange,
     this.branches,
-  }) : super(key: key);
+  });
 
   @override
   State<SupersaleFormPage> createState() => _SupersaleFormPageState();
@@ -784,7 +784,7 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(
-                                        color: primaryGreen.withOpacity(0.15),
+                                        color: primaryGreen.withValues(alpha: 0.15),
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: const Text(

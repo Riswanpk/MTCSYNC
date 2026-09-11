@@ -3,10 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'camera_page.dart'; // Add this import
 import 'dart:io'; // Add this import
 import 'package:flutter/services.dart'; // Add this import
-import 'package:firebase_storage/firebase_storage.dart'; // Add this import
+// Add this import
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import '../Navigation/navigation_state.dart';

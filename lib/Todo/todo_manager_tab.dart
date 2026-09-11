@@ -13,12 +13,12 @@ class SalesTodosForManagerTab extends StatefulWidget {
   final Future<String> Function(String email) getUsernameByEmail;
 
   const SalesTodosForManagerTab({
-    Key? key,
+    super.key,
     required this.userEmail,
     required this.firestore,
     required this.auth,
     required this.getUsernameByEmail,
-  }) : super(key: key);
+  });
 
   @override
   State<SalesTodosForManagerTab> createState() =>
@@ -58,7 +58,7 @@ class _SalesTodosForManagerTabState extends State<SalesTodosForManagerTab> {
     final branchUsers = usersSnap.docs
         .where((doc) => doc.id != currentUid)
         .map((doc) => {
-              'uid': doc.id as String,
+              'uid': doc.id,
               'username': (doc.data()['username'] ??
                       doc.data()['email'] ??
                       'Unknown') as String,

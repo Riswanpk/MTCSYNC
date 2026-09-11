@@ -103,7 +103,7 @@ class _OrdersPageState extends State<OrdersPage> {
     if (ensureUserId != null && !users.any((u) => u['id'] == ensureUserId)) {
       final doc = await FirebaseFirestore.instance.collection('users').doc(ensureUserId).get();
       if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>?;
+        final data = doc.data();
         users.insert(0, {
           'id': doc.id,
           'username': data?['username'] ?? 'You',
@@ -188,7 +188,7 @@ class _OrdersPageState extends State<OrdersPage> {
       final map = <String, String>{};
       for (final doc in snap.docs) {
         final username =
-            (doc.data() as Map<String, dynamic>)['username'] as String? ?? 'Unknown';
+            (doc.data())['username'] as String? ?? 'Unknown';
         map[doc.id] = username;
       }
       if (mounted) {
@@ -266,7 +266,7 @@ class _OrdersPageState extends State<OrdersPage> {
                             children: [
                               Expanded(
                                 child: DropdownButtonFormField<String>(
-                                  value: selectedBranch,
+                                  initialValue: selectedBranch,
                                   hint: const Text('Select Branch'),
                                   items: availableBranches
                                       .map((b) => DropdownMenuItem(value: b, child: Text(b)))
@@ -296,7 +296,7 @@ class _OrdersPageState extends State<OrdersPage> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: DropdownButtonFormField<String>(
-                                  value: selectedUser,
+                                  initialValue: selectedUser,
                                   items: [
                                     const DropdownMenuItem(value: null, child: Text('All Users')),
                                     ...availableUsers.map((u) => DropdownMenuItem(value: u['id'], child: Text(u['username']))),
@@ -322,7 +322,7 @@ class _OrdersPageState extends State<OrdersPage> {
                           Padding(
                             padding: const EdgeInsets.only(bottom: 8),
                             child: DropdownButtonFormField<String>(
-                              value: selectedUser,
+                              initialValue: selectedUser,
                               items: [
                                 const DropdownMenuItem(value: null, child: Text('All Users')),
                                 ...availableUsers.map((u) => DropdownMenuItem(value: u['id'], child: Text(u['username']))),
@@ -346,7 +346,7 @@ class _OrdersPageState extends State<OrdersPage> {
                           children: [
                             Expanded(
                               child: DropdownButtonFormField<String>(
-                                value: selectedStatus,
+                                initialValue: selectedStatus,
                                 items: const [
                                   DropdownMenuItem(value: 'All', child: Text('All')),
                                   DropdownMenuItem(value: 'In Progress', child: Text('In Progress')),

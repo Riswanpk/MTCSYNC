@@ -37,7 +37,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
   // FocusNode for RawAutocomplete widget
   late FocusNode _nameFieldFocusNode;
 
-  String _priority = 'High';
+  final String _priority = 'High';
   String? _selectedPlatform;
   final TextEditingController _otherPlatformController = TextEditingController();
   List<Contact>? _deviceContacts;
@@ -113,7 +113,9 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
 
   Future<void> _loadDeviceContacts() async {
     if (_deviceContactsLoading ||
-        (_deviceContacts != null && _deviceContacts!.isNotEmpty)) return;
+        (_deviceContacts != null && _deviceContacts!.isNotEmpty)) {
+      return;
+    }
     setState(() => _deviceContactsLoading = true);
 
     try {
@@ -762,8 +764,9 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                                             setState(() {
                                               final digits = phone.replaceAll(RegExp(r'\D'), '');
                                               _phoneController.text = digits.length > 10 ? digits.substring(digits.length - 10) : digits;
-                                              if (name.isNotEmpty)
+                                              if (name.isNotEmpty) {
                                                 _nameController.text = name;
+                                              }
                                             });
                                           },
                                         );

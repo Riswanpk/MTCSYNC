@@ -14,11 +14,8 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'package:mtcsync/Misc/notification_permission_service.dart';
 import '../main.dart';
-import '../Todo/todo.dart';
 import '../Todo/todoform.dart';
 
-import '../Leads/presentfollowup.dart';
-import '../Homepage/home_widgets.dart';
 import '../Homepage/home_drawer.dart';
 import '../Homepage/home_body.dart';
 import '../Misc/battery_optimization_helper.dart';
@@ -59,7 +56,7 @@ class _HomePageState extends State<HomePage>
   int _transferredCount = 0;
   int _otherCount = 0;
   int _taskCount = 0;
-  int _complaintCount = 0;
+  final int _complaintCount = 0;
   StreamSubscription? _notificationListener;
   StreamSubscription? _assignedLeadsListener;
   StreamSubscription? _complaintsListener;

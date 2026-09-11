@@ -17,7 +17,7 @@ class TodoListBody extends StatelessWidget {
   final String? role;
 
   const TodoListBody({
-    Key? key,
+    super.key,
     required this.status,
     this.onlySelf = false,
     required this.userEmail,
@@ -27,7 +27,7 @@ class TodoListBody extends StatelessWidget {
     required this.onDelete,
     required this.getUsernameByEmail,
     this.role,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -51,8 +51,9 @@ class TodoListBody extends StatelessWidget {
               .limit(50)
               .snapshots(),
           builder: (context, snapshot) {
-            if (snapshot.hasError)
+            if (snapshot.hasError) {
               return const Center(child: Text('Error loading todos'));
+            }
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }

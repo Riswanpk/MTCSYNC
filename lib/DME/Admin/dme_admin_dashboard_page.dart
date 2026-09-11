@@ -278,7 +278,9 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
 
             for (var cb in (custBranchRes as List)) {
               if (_selectedBranchId != null &&
-                  cb['branch_id'] != _selectedBranchId) continue;
+                  cb['branch_id'] != _selectedBranchId) {
+                continue;
+              }
               final catId = cb['category_id'] as int?;
               final tId = cb['customer_type_id'] as int?;
               if (catId != null) catSales[catId] = (catSales[catId] ?? 0) + 1;

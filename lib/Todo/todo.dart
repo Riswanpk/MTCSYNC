@@ -15,7 +15,7 @@ import 'todo_manager_tab.dart';
 export 'task_detail_widgets.dart';
 
 class TodoPage extends StatefulWidget {
-  const TodoPage({Key? key}) : super(key: key);
+  const TodoPage({super.key});
 
   @override
   State<TodoPage> createState() => _TodoPageState();
@@ -276,8 +276,8 @@ class _TodoPageState extends State<TodoPage>
                       ),
                     );
                   },
-                  child: const Icon(Icons.add_rounded, size: 28),
                   tooltip: 'Add New Task',
+                  child: const Icon(Icons.add_rounded, size: 28),
                 ),
               ),
             ),

@@ -307,7 +307,7 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                                 children: [
                                   // --- Month-Year Dropdown ---
                                   DropdownButtonFormField<String>(
-                                    value: _selectedMonthYear,
+                                    initialValue: _selectedMonthYear,
                                     hint: Text('Select Month', style: TextStyle(color: primaryBlue)),
                                     items: _monthYears
                                         .map((m) => DropdownMenuItem(value: m, child: Text(m, style: TextStyle(color: primaryBlue))))
@@ -325,7 +325,7 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                                   // --- Branch Dropdown ---
                                   if (!widget.hideBranchDropdown)
                                     DropdownButtonFormField<String>(
-                                      value: _branches.contains(_selectedBranch) ? _selectedBranch : null,
+                                      initialValue: _branches.contains(_selectedBranch) ? _selectedBranch : null,
                                       hint: Text('Select Branch', style: TextStyle(color: primaryGreen)),
                                       items: _branches.isNotEmpty
                                           ? _branches
@@ -351,7 +351,7 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                                   if (!widget.hideBranchDropdown) const SizedBox(height: 16),
                                   // --- User Dropdown ---
                                   DropdownButtonFormField<String>(
-                                    value: _users.any((u) => u['email'] == _selectedUserEmail) ? _selectedUserEmail : null,
+                                    initialValue: _users.any((u) => u['email'] == _selectedUserEmail) ? _selectedUserEmail : null,
                                     hint: Text('Select User', style: TextStyle(color: primaryBlue)),
                                     items: _users.isNotEmpty
                                         ? _users
@@ -490,13 +490,13 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
           child: SizedBox(
             width: 500, //adjust as needed
             child: DataTable(
-              headingRowColor: MaterialStateProperty.resolveWith<Color>(
+              headingRowColor: WidgetStateProperty.resolveWith<Color>(
                 (states) => isDark
                     ? primaryGreen.withValues(alpha: 0.12)
                     : primaryBlue.withValues(alpha: 0.18), // blue for light
               ),
-              dataRowColor: MaterialStateProperty.resolveWith<Color>(
-                (states) => states.contains(MaterialState.selected)
+              dataRowColor: WidgetStateProperty.resolveWith<Color>(
+                (states) => states.contains(WidgetState.selected)
                     ? (isDark
                         ? primaryBlue.withValues(alpha: 0.18)
                         : primaryGreen.withValues(alpha: 0.12)) // green for light
@@ -540,7 +540,7 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                   final customer = sortedCustomers[index];
                   final isEven = index % 2 == 0;
                   return DataRow(
-                    color: MaterialStateProperty.resolveWith<Color>(
+                    color: WidgetStateProperty.resolveWith<Color>(
                       (states) => isDark
                           ? (isEven ? primaryGreen.withValues(alpha: 0.06) : primaryBlue.withValues(alpha: 0.06))
                           : (isEven ? primaryBlue.withValues(alpha: 0.06) : primaryGreen.withValues(alpha: 0.06)),

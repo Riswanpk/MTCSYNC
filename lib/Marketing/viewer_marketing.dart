@@ -144,7 +144,7 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: selectedBranch,
+                      initialValue: selectedBranch,
                       decoration: _dropdownDecoration(context, 'Branch'),
                       dropdownColor: theme.cardColor,
                       style: theme.textTheme.bodyMedium,
@@ -165,7 +165,7 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: selectedUsername,
+                      initialValue: selectedUsername,
                       decoration: _dropdownDecoration(context, 'Username'),
                       dropdownColor: theme.cardColor,
                       style: theme.textTheme.bodyMedium,

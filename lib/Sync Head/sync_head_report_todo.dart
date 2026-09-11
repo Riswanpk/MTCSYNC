@@ -701,7 +701,7 @@ class _SyncHeadReportTodoPageState extends State<SyncHeadReportTodoPage> {
               ),
               child: SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                activeColor: _primaryGreen,
+                activeThumbColor: _primaryGreen,
                 title: Text(
                   'Include Detailed Pending List',
                   style: TextStyle(

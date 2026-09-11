@@ -652,7 +652,7 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
           children: [
             // Month dropdown styled
             DropdownButtonFormField<String>(
-              value: _selectedMonthYear,
+              initialValue: _selectedMonthYear,
               decoration: InputDecoration(
                 labelText: 'Month',
                 labelStyle: const TextStyle(color: _primaryBlue),
@@ -690,7 +690,7 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
 
             // Branch dropdown styled
             DropdownButtonFormField<String>(
-              value: _selectedBranch,
+              initialValue: _selectedBranch,
               decoration: InputDecoration(
                 labelText: 'Branch',
                 labelStyle: const TextStyle(color: _primaryBlue),
