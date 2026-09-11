@@ -8,6 +8,7 @@ import '../dme_constants.dart';
 import '../dme_config.dart';
 import 'dme_whatsapp_proof_page.dart';
 import 'dme_assignment_service.dart';
+import 'dme_call_scanner_service.dart';
 
 class DmeReminderDetailPage extends StatefulWidget {
   final Map<String, dynamic> reminder;
@@ -161,10 +162,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
   }
 
   bool _numberMatches(String logNumber, String? contact) {
-    if (contact == null || contact.isEmpty) return false;
-    String clean = contact.replaceAll(RegExp(r'\D'), '');
-    if (clean.isEmpty) return false;
-    return logNumber.endsWith(clean) || clean.endsWith(logNumber);
+    return DmeCallScannerService.numberMatches(logNumber, contact);
   }
 
   Future<void> _makePhoneCall() async {

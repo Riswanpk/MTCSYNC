@@ -176,6 +176,36 @@ class DmeAssignmentService {
       }
     }
 
+    // Remove previous days' assignment logs from reminder_assignment table whenever assign is triggered
+    try {
+      await client
+          .from('reminder_assignment')
+          .delete()
+          .lt('assigned_date', dateStr);
+    } catch (_) {}
+    try {
+      await client
+          .from('reminder_assignment')
+          .delete()
+          .lt('assignment_date', dateStr);
+    } catch (_) {}
+    try {
+      await client
+          .from('dme_reminder_assignments')
+          .delete()
+          .lt('assignment_date', dateStr);
+    } catch (_) {}
+
+    // Reset any pending reminders assigned on previous days so they are cleanly re-divided today
+    try {
+      await client.from('dme_reminders').update({
+        'assigned_to': null,
+        'assigned_date': null,
+        'is_overdue_leftover': false,
+        'updated_at': nowIso,
+      }).eq('status', 'pending').lt('assigned_date', dateStr);
+    } catch (_) {}
+
     // Clean up previous assignment audit logs for today for these branches so absent users or old counts don't linger on re-assign
     try {
       final branchIdsStr = branchToActiveUserUids.keys.map((b) => b.toString()).toList();

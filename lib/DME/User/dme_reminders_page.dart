@@ -7,6 +7,8 @@ import '../dme_constants.dart';
 import '../dme_config.dart';
 import 'dme_reminder_detail_page.dart';
 import 'dme_assignment_service.dart';
+import 'dme_call_scanner_service.dart';
+import 'dme_remarks_pending_page.dart';
 
 class DmeRemindersPage extends StatefulWidget {
   const DmeRemindersPage({super.key});
@@ -15,7 +17,8 @@ class DmeRemindersPage extends StatefulWidget {
   State<DmeRemindersPage> createState() => _DmeRemindersPageState();
 }
 
-class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerProviderStateMixin {
+class _DmeRemindersPageState extends State<DmeRemindersPage>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabController;
   bool _isLoading = true;
   bool _isAssignedByAdminToday = false;
@@ -32,14 +35,23 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _tabController = TabController(length: 3, vsync: this);
     _loadData();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _scanCallLogs(silent: true);
+    }
   }
 
   Future<void> _loadData() async {
@@ -203,17 +215,110 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
     }
   }
 
+  Future<void> _scanCallLogs({bool silent = false}) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.email == null || _todayReminders.isEmpty) return;
+
+    if (!silent && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Scanning today\'s call logs...'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    }
+
+    try {
+      final detected = await DmeCallScannerService.scanTodayCallLog(
+        _todayReminders,
+        userEmail: user.email!,
+      );
+
+      if (detected.isNotEmpty) {
+        await _fetchUserReminders();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${detected.length} call(s) detected! Tap Remarks Pending to add remarks.'),
+              backgroundColor: Colors.green[700],
+              duration: const Duration(seconds: 4),
+              action: SnackBarAction(
+                label: 'View',
+                textColor: Colors.white,
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const DmeRemarksPendingPage()),
+                  ).then((_) => _fetchUserReminders());
+                },
+              ),
+            ),
+          );
+        }
+      } else if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No new calls detected for today.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error scanning DME call logs: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final leftoverCount = _todayReminders.where((r) => r['is_overdue_leftover'] == true).length;
+    final pendingRemarksCount = _todayReminders.where((r) {
+      final remarks = (r['remarks'] ?? '').toString().trim();
+      final status = (r['status'] ?? '').toString().toLowerCase();
+      final duration = int.tryParse(r['call_duration']?.toString() ?? '') ?? 0;
+      final calledTs = r['called_timestamp']?.toString();
+      final hasCall = duration > 0 || (calledTs != null && calledTs.isNotEmpty);
+      return hasCall && remarks.isEmpty && status != 'completed';
+    }).length;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('DME Call Reminders'),
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: Badge.count(
+              count: pendingRemarksCount,
+              isLabelVisible: pendingRemarksCount > 0,
+              backgroundColor: Colors.orange.shade700,
+              child: const Icon(Icons.rate_review_outlined),
+            ),
+            tooltip: pendingRemarksCount > 0
+                ? 'Remarks Pending ($pendingRemarksCount)'
+                : 'Remarks Pending List',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const DmeRemarksPendingPage(),
+                ),
+              ).then((_) => _fetchUserReminders());
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.phone_in_talk_rounded),
+            tooltip: 'Scan Call Logs',
+            onPressed: () => _scanCallLogs(silent: false),
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: 'Refresh',
+            onPressed: _isLoading ? null : _loadData,
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: const Color(0xFF8CC63F),
