@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../dme_constants.dart';
 import '../../dme_config.dart';
+import 'package:mtcsync/DME/User/dme_user_stats_service.dart';
 import 'dme_call_report_models.dart';
 import 'dme_user_call_detail_page.dart';
 
@@ -160,7 +161,7 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
       while (hasMoreRem) {
         var remindersQuery = client
             .from('dme_reminders')
-            .select('id, customer_id, reminder_date, last_purchase_branch, status, remarks, called_by, updated_at, dme_customers(id, name, phone, address, salesman)')
+            .select('id, customer_id, reminder_date, last_purchase_branch, status, remarks, called_by, call_duration, called_timestamp, updated_at, dme_customers(id, name, phone, address, salesman)')
             .inFilter('status', ['completed', 'called'])
             .gte('updated_at', '${startStr}T00:00:00')
             .lte('updated_at', '${endStr}T23:59:59');
@@ -175,7 +176,7 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
         try {
           batch = await remindersQuery.range(remOffset, remOffset + pageSize - 1);
         } catch (_) {
-          // Fallback if called_by not yet in DB schema
+          // Fallback if schema doesn't have called_by or call_duration
           var fallbackQuery = client
               .from('dme_reminders')
               .select('id, customer_id, reminder_date, last_purchase_branch, status, remarks, updated_at, dme_customers(id, name, phone, address, salesman)')
@@ -276,6 +277,10 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
           cleanRemarks = proofObj!['remarks'].toString();
         }
 
+        final callDuration = int.tryParse(r['call_duration']?.toString() ?? '');
+        final calledTsStr = r['called_timestamp']?.toString();
+        final calledTimestamp = calledTsStr != null ? DateTime.tryParse(calledTsStr) : null;
+
         allCallItems.add(DmeCustomerCallItem(
           reminderId: remId,
           customerId: custId,
@@ -292,65 +297,46 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
           uploadedBy: uploadedBy,
           calledBy: calledBy,
           proofImageUrl: proofUrl,
+          callDuration: callDuration,
+          calledTimestamp: calledTimestamp,
         ));
       }
 
-      // 5. Associate Call Items with DME Users
+      // 5. Fetch aggregated stats from dme_user_daily_stats table
+      final Map<String, Map<String, int>> dailyStats =
+          await DmeUserStatsService.fetchStatsForRange(
+        startDate: startStr,
+        endDate: endStr,
+      );
+
+      // 6. Associate Call Items with DME Users — strict explicit attribution only.
       final List<DmeUserCallStat> userStatsList = [];
       int grandCalls = 0;
       int grandWhatsApp = 0;
 
-      // Also create an 'Unassigned / General' category if some branch calls don't map to a specific user
-      final Set<int> attributedReminderIds = {};
-
       for (var u in rawUsers) {
         final email = u['email'] as String;
+        final uid = u['uid'] as String;
         final branches = u['assigned_branches'] as List<int>;
 
-        final List<DmeCustomerCallItem> matchedItems = [];
+        final List<DmeCustomerCallItem> matchedItems = allCallItems.where((item) {
+          if (item.calledBy != null && item.calledBy == email) return true;
+          if (item.uploadedBy != null && item.uploadedBy == email) return true;
+          return false;
+        }).toList();
 
-        for (var item in allCallItems) {
-          bool isMatch = false;
-
-          // 1. Match by explicit called_by email on the reminder (highest priority)
-          if (item.calledBy != null && item.calledBy == email) {
-            isMatch = true;
-          }
-          // 2. Match by explicit uploaded_by email (for WhatsApp proof)
-          else if (item.uploadedBy != null && item.uploadedBy == email) {
-            isMatch = true;
-          }
-          // 3. Match by branch assignment if called_by / uploaded_by is not explicitly set
-          else if (item.calledBy == null && item.uploadedBy == null && branches.contains(item.branchId)) {
-            isMatch = true;
-          }
-
-          if (isMatch) {
-            matchedItems.add(item);
-            attributedReminderIds.add(item.reminderId);
-          }
-        }
+        final userStats = dailyStats[uid];
 
         userStatsList.add(DmeUserCallStat(
-          uid: u['uid'] as String,
+          uid: uid,
           email: email,
           username: u['username'] as String,
           role: u['role'] as String,
           assignedBranches: branches,
           callItems: matchedItems,
-        ));
-      }
-
-      // If there are actions not attributed to any specific user, create a Branch Activity entry
-      final unattributedItems = allCallItems.where((i) => !attributedReminderIds.contains(i.reminderId)).toList();
-      if (unattributedItems.isNotEmpty) {
-        userStatsList.add(DmeUserCallStat(
-          uid: 'branch_system',
-          email: 'system@dme.local',
-          username: 'Other Branch Activities',
-          role: 'dme_user',
-          assignedBranches: unattributedItems.map((i) => i.branchId).toSet().toList(),
-          callItems: unattributedItems,
+          statsCallsCount:    userStats?['calls'],
+          statsWhatsAppCount: userStats?['whatsapp'],
+          statsOverdueCount:  userStats?['overdue'],
         ));
       }
 
@@ -682,7 +668,7 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
 
               const Divider(height: 20),
 
-              // Statistics Counters (Calls, WhatsApp, Total)
+              // Statistics Counters (Calls, WhatsApp, Overdue, Total)
               Row(
                 children: [
                   // Calls count
@@ -706,7 +692,7 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
 
                   // WhatsApp count
                   Expanded(
@@ -722,14 +708,38 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
                           const Icon(Icons.chat_bubble_rounded, size: 14, color: Color(0xFF1EBE5D)),
                           const SizedBox(width: 4),
                           Text(
-                            'WhatsApp: ${userStat.totalWhatsApp}',
+                            'WA: ${userStat.totalWhatsApp}',
                             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0E7A38)),
                           ),
                         ],
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
+
+                  // Overdue count (from stats table)
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.pending_actions_rounded, size: 14, color: Colors.orange),
+                          const SizedBox(width: 4),
+                          Text(
+                            'OD: ${userStat.overdueCount}',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
 
                   // Total
                   Container(
@@ -740,7 +750,7 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
                       border: Border.all(color: _primaryBlue.withValues(alpha: 0.3)),
                     ),
                     child: Text(
-                      'Total: ${userStat.totalActions}',
+                      'T: ${userStat.totalActions}',
                       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: _primaryBlue),
                     ),
                   ),
@@ -748,9 +758,11 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
               ),
               const SizedBox(height: 8),
 
-              // Footer: Active Days list hint
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
                 children: [
                   Text(
                     userStat.activeDays.isEmpty

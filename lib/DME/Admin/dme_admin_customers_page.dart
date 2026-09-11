@@ -5,9 +5,6 @@ import '../dme_constants.dart';
 import '../dme_config.dart';
 import 'dme_admin_customer_detail_page.dart';
 
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class DmeAdminCustomersPage extends StatefulWidget {
   final List<int>? userAssignedBranches;
 
@@ -57,27 +54,9 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
   }
 
   Future<void> _initBranchAccess() async {
-    if (widget.userAssignedBranches != null) {
-      _assignedBranches = widget.userAssignedBranches!;
-    } else {
-      try {
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-          if (!mounted) return;
-          final data = doc.data();
-          final role = data?['role']?.toString();
-          if (role == 'dme_user' && data?['assigned_branches'] is List) {
-            _assignedBranches = (data!['assigned_branches'] as List)
-                .map((e) => int.tryParse(e.toString()) ?? 0)
-                .where((e) => e > 0)
-                .toList();
-          }
-        }
-      } catch (e) {
-        debugPrint('Error loading user assigned branches: $e');
-      }
-    }
+    // Customer Directory now displays all customers regardless of assigned branch.
+    // Branch filtering is still optional via the filter bottom sheet.
+    _assignedBranches = [];
     if (!mounted) return;
     await _fetchCustomersDirectory(reset: true);
   }
@@ -432,7 +411,7 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
                           value: _selectedBranchId,
                           isExpanded: true,
                           items: [
-                            const DropdownMenuItem<int?>(value: null, child: Text('All Allowed Branches')),
+                            const DropdownMenuItem<int?>(value: null, child: Text('All Branches')),
                             ...availableBranches.map((b) {
                               return DropdownMenuItem<int?>(value: b.id, child: Text(b.name));
                             }),

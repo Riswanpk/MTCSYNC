@@ -167,21 +167,22 @@ class _DmeAdminCustomerDetailPageState extends State<DmeAdminCustomerDetailPage>
                                             if (salesman.isNotEmpty)
                                               Text('Salesman: $salesman', style: TextStyle(fontSize: 12, color: Colors.grey[700])),
                                             const SizedBox(height: 2),
-                                             Row(
-                                               children: [
-                                                 Text(
-                                                   'Last Purchase: ${_formatDate(lastPurchaseDate)}',
-                                                   style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500),
-                                                 ),
-                                                 if (_customer['creation_date'] != null || _customer['created_at'] != null) ...[
-                                                   const SizedBox(width: 8),
-                                                   Text(
-                                                     '• Created: ${_formatDate(_customer['creation_date'] ?? _customer['created_at'])}',
-                                                     style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500),
-                                                   ),
-                                                 ],
-                                               ],
-                                             ),
+                                            Wrap(
+                                              spacing: 8,
+                                              runSpacing: 2,
+                                              crossAxisAlignment: WrapCrossAlignment.center,
+                                              children: [
+                                                Text(
+                                                  'Last Purchase: ${_formatDate(lastPurchaseDate)}',
+                                                  style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500),
+                                                ),
+                                                if (_customer['creation_date'] != null || _customer['created_at'] != null)
+                                                  Text(
+                                                    '• Created: ${_formatDate(_customer['creation_date'] ?? _customer['created_at'])}',
+                                                    style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500),
+                                                  ),
+                                              ],
+                                            ),
                                             if (_customer['primary_branch'] != null) ...[
                                               const SizedBox(height: 4),
                                               Container(
@@ -196,9 +197,12 @@ class _DmeAdminCustomerDetailPageState extends State<DmeAdminCustomerDetailPage>
                                                   children: [
                                                     Icon(Icons.star_rounded, size: 14, color: Colors.green.shade800),
                                                     const SizedBox(width: 4),
-                                                    Text(
-                                                      'Primary Branch: ${DmeConstants.getBranchName(int.tryParse(_customer['primary_branch'].toString()))}',
-                                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green.shade900),
+                                                    Flexible(
+                                                      child: Text(
+                                                        'Primary Branch: ${DmeConstants.getBranchName(int.tryParse(_customer['primary_branch'].toString()))}',
+                                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green.shade900),
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
                                                     ),
                                                   ],
                                                 ),

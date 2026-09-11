@@ -95,16 +95,65 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
 
     setState(() => _isLoadingHistory = true);
     try {
-      final res = await client
-          .from('dme_sales')
-          .select('id, date, purchased_branch, salesman, category_id, customer_type_id, dme_sales_detail(products)')
-          .eq('customer_id', customerId)
-          .order('date', ascending: false)
-          .limit(10);
+      List<Map<String, dynamic>> salesList = [];
+      try {
+        final res = await client
+            .from('dme_sales')
+            .select('id, date, purchased_branch, salesman, category_id, customer_type_id, dme_sales_detail(products)')
+            .eq('customer_id', customerId)
+            .order('date', ascending: false)
+            .limit(10);
+        salesList = List<Map<String, dynamic>>.from(res);
+      } catch (_) {
+        // Fallback without relation join if foreign key not named
+        final res = await client
+            .from('dme_sales')
+            .select('id, date, purchased_branch, salesman, category_id, customer_type_id')
+            .eq('customer_id', customerId)
+            .order('date', ascending: false)
+            .limit(10);
+        salesList = List<Map<String, dynamic>>.from(res);
+      }
+
+      // Check if any sale is missing dme_sales_detail or needs explicit detail fetch
+      final saleIdsNeedingDetails = salesList.where((s) {
+        final dt = s['dme_sales_detail'];
+        if (dt == null) return true;
+        if (dt is List && dt.isEmpty) return true;
+        return false;
+      }).map((s) => s['id']).where((id) => id != null).toList();
+
+      if (saleIdsNeedingDetails.isNotEmpty) {
+        try {
+          final detailRows = await client
+              .from('dme_sales_detail')
+              .select('sale_id, products')
+              .inFilter('sale_id', saleIdsNeedingDetails);
+
+          final Map<dynamic, dynamic> detailMap = {};
+          for (var r in (detailRows as List)) {
+            final sId = r['sale_id'];
+            if (sId != null) {
+              detailMap[sId] = r['products'];
+            }
+          }
+
+          for (var s in salesList) {
+            final sId = s['id'];
+            if (detailMap.containsKey(sId)) {
+              s['dme_sales_detail'] = [
+                {'products': detailMap[sId]}
+              ];
+            }
+          }
+        } catch (detailErr) {
+          debugPrint('Error fetching dme_sales_detail fallback: $detailErr');
+        }
+      }
 
       if (mounted) {
         setState(() {
-          _salesHistory = List<Map<String, dynamic>>.from(res);
+          _salesHistory = salesList;
           _isLoadingHistory = false;
         });
       }
@@ -490,7 +539,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Reminder Details'),
+        title: const Text('Reminder Details', style: TextStyle(fontSize: 18)),
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
         actions: [
@@ -503,32 +552,32 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
           ),
           if (_callDuration != null)
             Container(
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              margin: const EdgeInsets.only(right: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
                 '${_callDuration}s',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
               ),
             ),
           Container(
-            margin: const EdgeInsets.only(right: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            margin: const EdgeInsets.only(right: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: _callMade
                   ? (_canReschedule ? Colors.orange[800] : Colors.green)
                   : (_callInitiatedTime != null && _callDuration == 0 ? Colors.red[700] : Colors.orange),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
               _callMade
-                  ? (_canReschedule ? 'CALL <= 10S' : 'CALL VERIFIED')
-                  : (_callInitiatedTime != null && _callDuration == 0 ? 'NOT ATTENDED' : 'CALL PENDING'),
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                  ? (_canReschedule ? '<= 10S' : 'VERIFIED')
+                  : (_callInitiatedTime != null && _callDuration == 0 ? 'MISSED' : 'PENDING'),
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
             ),
           ),
         ],
@@ -569,7 +618,10 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                                 ),
                               ),
                               const SizedBox(height: 4),
-                              Row(
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 4,
+                                crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -586,10 +638,8 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                                       ),
                                     ),
                                   ),
-                                  if (salesman.isNotEmpty) ...[
-                                    const SizedBox(width: 8),
+                                  if (salesman.isNotEmpty)
                                     Text('Salesman: $salesman', style: TextStyle(fontSize: 12, color: Colors.grey[700])),
-                                  ],
                                 ],
                               ),
                             ],
@@ -619,8 +669,10 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                       ),
                     ],
                     const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      spacing: 8,
+                      runSpacing: 4,
                       children: [
                         Text('Due Date: ${_formatDate(reminderDateStr)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF005BAC))),
                         Text('Last Purchase: ${_formatDate(lastPurchaseDateStr)}', style: TextStyle(fontSize: 12, color: Colors.grey[700])),
@@ -681,42 +733,106 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                           final bName = DmeConstants.getBranchName(s['purchased_branch'] as int?);
                           final catName = DmeConstants.getCategoryName(s['category_id'] as int?);
                           final details = s['dme_sales_detail'] as List?;
-                          final products = (details != null && details.isNotEmpty) ? details[0]['products'] as List? : null;
+                          // Extract products from details
+                          dynamic rawProducts;
+                          if (details != null && details.isNotEmpty) {
+                            rawProducts = details[0]['products'];
+                          } else if (s['dme_sales_detail'] is Map) {
+                            rawProducts = (s['dme_sales_detail'] as Map)['products'];
+                          }
 
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    _formatDate(dateStr),
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                  ),
-                                  Text(
-                                    '$bName • $catName',
-                                    style: TextStyle(fontSize: 12, color: Colors.grey[700], fontWeight: FontWeight.w600),
+                          List<dynamic> productsList = [];
+                          if (rawProducts is List) {
+                            productsList = rawProducts;
+                          } else if (rawProducts is Map) {
+                            productsList = [rawProducts];
+                          }
+
+                          return Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.grey[850] : Colors.grey[50],
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[300]!),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.calendar_today_rounded, size: 13, color: Color(0xFF005BAC)),
+                                        const SizedBox(width: 5),
+                                        Text(
+                                          _formatDate(dateStr),
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                        ),
+                                      ],
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF005BAC).withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        bName,
+                                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF005BAC)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  catName,
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[700], fontWeight: FontWeight.w600),
+                                ),
+                                const Divider(height: 14),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Icon(Icons.inventory_2_outlined, size: 14, color: Colors.grey),
+                                    const SizedBox(width: 6),
+                                    const Text(
+                                      'Items Detail: ',
+                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                    ),
+                                    if (productsList.isEmpty)
+                                      Text(
+                                        'No item details recorded',
+                                        style: TextStyle(fontSize: 12, color: Colors.grey[500], fontStyle: FontStyle.italic),
+                                      ),
+                                  ],
+                                ),
+                                if (productsList.isNotEmpty) ...[
+                                  const SizedBox(height: 6),
+                                  Wrap(
+                                    spacing: 6,
+                                    runSpacing: 4,
+                                    children: productsList.map((p) {
+                                      String itemName = '';
+                                      String qty = '';
+                                      if (p is Map) {
+                                        itemName = p['item_name']?.toString() ?? '';
+                                        qty = p['qty']?.toString() ?? '';
+                                      } else {
+                                        itemName = p.toString();
+                                      }
+                                      final label = qty.isNotEmpty ? '$itemName (Qty: $qty)' : itemName;
+                                      return Chip(
+                                        label: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                                        visualDensity: VisualDensity.compact,
+                                        backgroundColor: isDark ? Colors.grey[800] : const Color(0xFF8CC63F).withValues(alpha: 0.15),
+                                        side: BorderSide(color: isDark ? Colors.grey[700]! : Colors.green.withValues(alpha: 0.2)),
+                                      );
+                                    }).toList(),
                                   ),
                                 ],
-                              ),
-                              if (products != null && products.isNotEmpty) ...[
-                                const SizedBox(height: 6),
-                                Wrap(
-                                  spacing: 6,
-                                  runSpacing: 4,
-                                  children: products.map((p) {
-                                    final item = p['item_name'] ?? '';
-                                    final qty = p['qty'] ?? '';
-                                    return Chip(
-                                      label: Text('$item ($qty)', style: const TextStyle(fontSize: 11)),
-                                      padding: EdgeInsets.zero,
-                                      visualDensity: VisualDensity.compact,
-                                      backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200],
-                                    );
-                                  }).toList(),
-                                ),
                               ],
-                            ],
+                            ),
                           );
                         },
                       ),

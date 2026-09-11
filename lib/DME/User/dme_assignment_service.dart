@@ -2,8 +2,9 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import '../dme_config.dart';
-import '../dme_constants.dart';
+import 'package:mtcsync/DME/dme_config.dart';
+import 'package:mtcsync/DME/dme_constants.dart';
+import 'package:mtcsync/DME/User/dme_user_stats_service.dart';
 
 class DmeAssignmentService {
   /// Calculate the next working date for scheduling:
@@ -195,6 +196,61 @@ class DmeAssignmentService {
           .delete()
           .lt('assignment_date', dateStr);
     } catch (_) {}
+
+    // Before resetting, calculate how many pending reminders each user left overdue from previous days
+    // and record it in dme_user_daily_stats so it shows in the call report.
+    try {
+      final overdueRows = await client
+          .from('dme_reminders')
+          .select('assigned_to, assigned_date')
+          .eq('status', 'pending')
+          .not('assigned_to', 'is', null)
+          .lt('assigned_date', dateStr);
+
+      // Group by (assigned_to, assigned_date)
+      final Map<String, Map<String, int>> userDateOverdue = {};
+      for (final row in (overdueRows as List)) {
+        final uid = row['assigned_to']?.toString();
+        final aDate = row['assigned_date']?.toString();
+        if (uid == null || uid.isEmpty || aDate == null) continue;
+        final key = '$uid|$aDate';
+        userDateOverdue.putIfAbsent(key, () => {'count': 0, 'uid_ref': 0});
+        userDateOverdue[key]!['count'] = userDateOverdue[key]!['count']! + 1;
+      }
+
+      // Fetch email mapping from Firestore for UIDs found
+      final uidsFound = overdueRows
+          .map((r) => r['assigned_to']?.toString() ?? '')
+          .where((u) => u.isNotEmpty)
+          .toSet();
+
+      final Map<String, String> uidToEmail = {};
+      if (uidsFound.isNotEmpty && userUidToEmail != null) {
+        for (final uid in uidsFound) {
+          uidToEmail[uid] = userUidToEmail[uid] ?? uid;
+        }
+      } else {
+        for (final uid in uidsFound) {
+          uidToEmail[uid] = uid;
+        }
+      }
+
+      // Write overdue counts
+      for (final entry in userDateOverdue.entries) {
+        final parts = entry.key.split('|');
+        if (parts.length != 2) continue;
+        final uid = parts[0];
+        final aDate = parts[1];
+        await DmeUserStatsService.setOverdueCount(
+          userUid: uid,
+          userEmail: uidToEmail[uid] ?? uid,
+          statDate: aDate,
+          overdueCount: entry.value['count']!,
+        );
+      }
+    } catch (e) {
+      debugPrint('DmeAssignmentService: overdue stats recording error: $e');
+    }
 
     // Reset any pending reminders assigned on previous days so they are cleanly re-divided today
     try {

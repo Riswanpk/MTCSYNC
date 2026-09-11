@@ -224,7 +224,7 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
         var remindersQuery = client
             .from('dme_reminders')
             .select('id, status, updated_at')
-            .eq('status', 'completed')
+            .inFilter('status', ['completed', 'called'])
             .gte('updated_at', '${startStr}T00:00:00')
             .lte('updated_at', '${endStr}T23:59:59');
 

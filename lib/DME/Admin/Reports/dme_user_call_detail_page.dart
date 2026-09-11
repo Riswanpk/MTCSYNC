@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../dme_constants.dart';
+import '../../dme_config.dart';
 import 'dme_call_report_models.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);
@@ -27,6 +28,8 @@ class _DmeUserCallDetailPageState extends State<DmeUserCallDetailPage>
   late TabController _tabController;
   late List<int> _days;
   String _customerSearchQuery = '';
+  int? _pendingCount;
+  bool _isLoadingPending = false;
 
   @override
   void initState() {
@@ -36,6 +39,39 @@ class _DmeUserCallDetailPageState extends State<DmeUserCallDetailPage>
       _days = [widget.startDate.day];
     }
     _tabController = TabController(length: _days.length, vsync: this);
+    _fetchPendingCount();
+  }
+
+  Future<void> _fetchPendingCount() async {
+    final client = DmeConfig.client;
+    if (client == null) return;
+    setState(() => _isLoadingPending = true);
+    try {
+      // Query pending reminders assigned to this user
+      var query = client
+          .from('dme_reminders')
+          .select('id')
+          .eq('status', 'pending');
+
+      if (widget.userStat.uid != 'branch_system') {
+        query = query.eq('assigned_to', widget.userStat.uid);
+      } else if (widget.userStat.assignedBranches.isNotEmpty) {
+        query = query.inFilter('last_purchase_branch', widget.userStat.assignedBranches);
+      }
+
+      final res = await query;
+      if (mounted) {
+        setState(() {
+          _pendingCount = (res as List).length;
+          _isLoadingPending = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching pending reminders count: $e');
+      if (mounted) {
+        setState(() => _isLoadingPending = false);
+      }
+    }
   }
 
   @override
@@ -105,92 +141,179 @@ class _DmeUserCallDetailPageState extends State<DmeUserCallDetailPage>
                           Text(
                             widget.userStat.username,
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                            overflow: TextOverflow.ellipsis,
                           ),
                           Text(
                             widget.userStat.email,
                             style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
-                    // Total Action Pill
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _primaryBlue.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: _primaryBlue.withValues(alpha: 0.3)),
-                      ),
-                      child: Text(
-                        'Total: ${widget.userStat.totalActions}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: _primaryBlue,
+                    if (widget.userStat.assignedBranches.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            widget.userStat.assignedBranches
+                                .map((b) => DmeConstants.getBranchName(b))
+                                .join(', '),
+                            style: TextStyle(fontSize: 10, color: Colors.grey[700], fontWeight: FontWeight.w600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
 
-                // Action Breakdown (Calls vs WhatsApp) & Branches
+                // Summary KPI Cards Grid (Called, WhatsApp, Total Completed, Pending)
                 Row(
                   children: [
-                    // Calls pill
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.phone_in_talk_rounded, size: 14, color: _primaryBlue),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Calls: ${widget.userStat.totalCalls}',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _primaryBlue),
-                          ),
-                        ],
+                    // Called KPI
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue.withValues(alpha: 0.25)),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.phone_in_talk_rounded, size: 13, color: _primaryBlue),
+                                const SizedBox(width: 4),
+                                const Text(
+                                  'Called',
+                                  style: TextStyle(fontSize: 11, color: _primaryBlue, fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${widget.userStat.totalCalls}',
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _primaryBlue),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
 
-                    // WhatsApp pill
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _whatsappGreen.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: _whatsappGreen.withValues(alpha: 0.5)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.chat_bubble_rounded, size: 14, color: Color(0xFF1EBE5D)),
-                          const SizedBox(width: 4),
-                          Text(
-                            'WhatsApp: ${widget.userStat.totalWhatsApp}',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0E7A38)),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Spacer(),
-
-                    // Assigned Branches count / list
-                    if (widget.userStat.assignedBranches.isNotEmpty)
-                      Flexible(
-                        child: Text(
-                          'Branches: ${widget.userStat.assignedBranches.map((b) => DmeConstants.getBranchName(b)).join(', ')}',
-                          style: TextStyle(fontSize: 11, color: Colors.grey[700]),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                    // WhatsApp KPI
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+                        decoration: BoxDecoration(
+                          color: _whatsappGreen.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: _whatsappGreen.withValues(alpha: 0.3)),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.chat_bubble_rounded, size: 13, color: Color(0xFF1EBE5D)),
+                                const SizedBox(width: 4),
+                                const Text(
+                                  'WhatsApp',
+                                  style: TextStyle(fontSize: 11, color: Color(0xFF0E7A38), fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${widget.userStat.totalWhatsApp}',
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0E7A38)),
+                            ),
+                          ],
                         ),
                       ),
+                    ),
+                    const SizedBox(width: 8),
+
+                    // Total Completed KPI
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+                        decoration: BoxDecoration(
+                          color: _primaryBlue.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: _primaryBlue.withValues(alpha: 0.3)),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.check_circle_outline_rounded, size: 13, color: _primaryBlue),
+                                const SizedBox(width: 4),
+                                const Text(
+                                  'Completed',
+                                  style: TextStyle(fontSize: 11, color: _primaryBlue, fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${widget.userStat.totalActions}',
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _primaryBlue),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+
+                    // Pending Reminders KPI
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.pending_actions_rounded, size: 13, color: Colors.orange),
+                                const SizedBox(width: 4),
+                                const Text(
+                                  'Pending',
+                                  style: TextStyle(fontSize: 11, color: Colors.orange, fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            _isLoadingPending
+                                ? const SizedBox(
+                                    height: 16,
+                                    width: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.orange),
+                                  )
+                                : Text(
+                                    _pendingCount != null ? '$_pendingCount' : '-',
+                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.orange),
+                                  ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -358,15 +481,22 @@ class _DmeUserCallDetailPageState extends State<DmeUserCallDetailPage>
                     ],
                   ),
                   const SizedBox(height: 2),
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      const Icon(Icons.phone_android, size: 12, color: Colors.grey),
-                      const SizedBox(width: 4),
-                      Text(
-                        item.customerPhone.isNotEmpty ? item.customerPhone : 'No Mobile',
-                        style: TextStyle(fontSize: 12, color: Colors.grey[800], fontWeight: FontWeight.w500),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.phone_android, size: 12, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          Text(
+                            item.customerPhone.isNotEmpty ? item.customerPhone : 'No Mobile',
+                            style: TextStyle(fontSize: 12, color: Colors.grey[800], fontWeight: FontWeight.w500),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                         decoration: BoxDecoration(
@@ -378,6 +508,27 @@ class _DmeUserCallDetailPageState extends State<DmeUserCallDetailPage>
                           style: TextStyle(fontSize: 10, color: Colors.grey[800], fontWeight: FontWeight.bold),
                         ),
                       ),
+                      // New Call Duration chip if recorded
+                      if (item.formattedCallDuration != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.timer_outlined, size: 10, color: Colors.green),
+                              const SizedBox(width: 3),
+                              Text(
+                                item.formattedCallDuration!,
+                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green),
+                              ),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
 
@@ -422,7 +573,7 @@ class _DmeUserCallDetailPageState extends State<DmeUserCallDetailPage>
                             ),
                             const Spacer(),
                             Text(
-                              item.formattedTime,
+                              item.formattedCallTime,
                               style: TextStyle(fontSize: 10, color: Colors.grey[600]),
                             ),
                           ],
@@ -438,9 +589,9 @@ class _DmeUserCallDetailPageState extends State<DmeUserCallDetailPage>
                 ],
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
 
-            // Right Action Indicator (Call or WhatsApp Icon Badge)
+            // Right Type Badge (Pure status badge, no call button)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               decoration: BoxDecoration(
@@ -458,13 +609,13 @@ class _DmeUserCallDetailPageState extends State<DmeUserCallDetailPage>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    item.isWhatsApp ? Icons.chat_bubble_rounded : Icons.phone_in_talk_rounded,
-                    size: 20,
+                    item.isWhatsApp ? Icons.chat_bubble_rounded : Icons.phone_callback_rounded,
+                    size: 18,
                     color: item.isWhatsApp ? const Color(0xFF1EBE5D) : _primaryBlue,
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    item.isWhatsApp ? 'WhatsApp' : 'Call',
+                    item.isWhatsApp ? 'WhatsApp' : 'Called',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,

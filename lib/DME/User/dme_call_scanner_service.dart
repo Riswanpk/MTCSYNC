@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:call_log/call_log.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:intl/intl.dart';
 import '../dme_config.dart';
+import 'package:mtcsync/DME/User/dme_user_stats_service.dart';
 
 class DmeCallScannerService {
   /// Robust phone number matching:
@@ -34,7 +36,9 @@ class DmeCallScannerService {
   static Future<List<Map<String, dynamic>>> scanTodayCallLog(
     List<Map<String, dynamic>> reminders, {
     required String userEmail,
+    String? userUid,
   }) async {
+    final statDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
     var permStatus = await Permission.phone.status;
     if (!permStatus.isGranted) {
       permStatus = await Permission.phone.request();
@@ -112,10 +116,24 @@ class DmeCallScannerService {
 
               try {
                 await client.from('dme_reminders').update(payload).eq('id', remId);
+                // Record the call in daily stats table
+                final uid = userUid ?? userEmail;
+                await DmeUserStatsService.incrementCallCount(
+                  userUid: uid,
+                  userEmail: userEmail,
+                  statDate: statDate,
+                );
               } catch (err) {
                 if (err.toString().contains('called_by')) {
                   payload.remove('called_by');
                   await client.from('dme_reminders').update(payload).eq('id', remId);
+                  // Still record even after fallback
+                  final uid = userUid ?? userEmail;
+                  await DmeUserStatsService.incrementCallCount(
+                    userUid: uid,
+                    userEmail: userEmail,
+                    statDate: statDate,
+                  );
                 }
               }
             }

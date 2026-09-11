@@ -57,7 +57,7 @@ Widget buildDmeUserTiles(BuildContext context) {
       icon: Icons.alarm_on_rounded,
     ),
 
-    // 3. Customers (Assigned Branches only)
+    // 3. Customers (All Branches)
     NeumorphicButton(
       onTap: () {
         Navigator.push(
