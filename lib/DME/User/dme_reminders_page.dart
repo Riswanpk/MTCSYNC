@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../dme_constants.dart';
 import '../dme_config.dart';
 import 'dme_reminder_detail_page.dart';
+import 'dme_assignment_service.dart';
 
 class DmeRemindersPage extends StatefulWidget {
   const DmeRemindersPage({super.key});
@@ -43,6 +44,7 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
   Future<void> _loadData() async {
     if (mounted) setState(() => _isLoading = true);
     await _loadUserBranches();
+    await _fetchUserReminders();
     if (mounted) setState(() => _isLoading = false);
   }
 
@@ -59,120 +61,80 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
             .toList();
 
         _userAssignedBranches = branches;
-        _selectedBranchId = null; // Do not auto-select or auto-load
+        _selectedBranchId = null; // Default to all assigned branches
       }
     } catch (e) {
       debugPrint('Error loading assigned branches: $e');
     }
   }
 
-  Future<void> _fetchRemindersForBranch(int branchId) async {
-    final client = await DmeConfig.getClient();
-    if (client == null) return;
+  Future<void> _fetchUserReminders() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || _userAssignedBranches.isEmpty) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
 
     if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {
-      // Query reminders specifically for the selected branch (Paginated)
-      final List<dynamic> data = [];
-      int remOffset = 0;
-      const int pageSize = 1000;
-      bool hasMore = true;
+      // 1. Fetch today's assigned reminders (with yesterday's leftovers sorted on top)
+      final assignedToday = await DmeAssignmentService.fetchUserAssignedReminders(
+        userBranches: _userAssignedBranches,
+        currentUserId: user.uid,
+        filterBranchId: _selectedBranchId,
+      );
 
-      while (hasMore) {
-        final query = client
-            .from('dme_reminders')
-            .select('id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, dme_customers(id, name, phone, address, salesman)')
-            .eq('last_purchase_branch', branchId)
-            .range(remOffset, remOffset + pageSize - 1);
+      // 2. Fetch completed reminders for today
+      final completed = await DmeAssignmentService.fetchUserCompletedToday(
+        userBranches: _userAssignedBranches,
+        currentUserId: user.uid,
+        filterBranchId: _selectedBranchId,
+      );
 
-        final batch = await query;
-        final list = batch as List;
-        data.addAll(list);
-
-        if (list.length < pageSize) {
-          hasMore = false;
-        } else {
-          remOffset += pageSize;
-        }
-      }
-
-      final now = DateTime.now();
-      final currentDay = DateTime(now.year, now.month, now.day);
-
-      List<Map<String, dynamic>> today = [];
+      // 3. Fetch historical overdue reminders for the Overdue Tab
+      final client = await DmeConfig.getClient();
       List<Map<String, dynamic>> overdue = [];
-      List<Map<String, dynamic>> completed = [];
+      if (client != null) {
+        final branches = _selectedBranchId != null ? [_selectedBranchId!] : _userAssignedBranches;
+        final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-      for (var item in data) {
-        final reminder = Map<String, dynamic>.from(item);
-        final cust = reminder['dme_customers'] as Map<String, dynamic>?;
+        final res = await client
+            .from('dme_reminders')
+            .select(
+                'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, dme_customers(id, name, phone, address, salesman)')
+            .eq('status', 'pending')
+            .inFilter('last_purchase_branch', branches)
+            .lt('reminder_date', todayStr)
+            .limit(200);
 
-        reminder['customer_name'] = cust?['name'] ?? 'Unknown Customer';
-        reminder['customer_phone'] = cust?['phone'] ?? '';
-        reminder['customer_address'] = cust?['address'] ?? '';
-        reminder['customer_salesman'] = cust?['salesman'] ?? '';
-        reminder['branch_id'] = branchId;
-        reminder['branch_name'] = DmeConstants.getBranchName(branchId);
+        for (var item in (res as List)) {
+          final rem = Map<String, dynamic>.from(item);
+          final cust = rem['dme_customers'] as Map<String, dynamic>?;
+          final bId = int.tryParse(rem['last_purchase_branch']?.toString() ?? '');
 
-        final reminderDateStr = reminder['reminder_date']?.toString() ?? '';
-        final status = (reminder['status'] ?? 'pending').toString().toLowerCase();
-        final parsedDate = DateTime.tryParse(reminderDateStr);
-
-        if (status == 'completed' || status == 'called') {
-          // Only show calls completed on the current day
-          final updatedAtStr = reminder['updated_at']?.toString();
-          if (updatedAtStr != null && updatedAtStr.isNotEmpty) {
-            final updatedDate = DateTime.tryParse(updatedAtStr);
-            if (updatedDate != null) {
-              final updatedDay = DateTime(
-                updatedDate.toLocal().year,
-                updatedDate.toLocal().month,
-                updatedDate.toLocal().day,
-              );
-              if (updatedDay.isAtSameMomentAs(currentDay)) {
-                completed.add(reminder);
-              }
-            }
-          }
-        } else if (parsedDate != null) {
-          final reminderDay = DateTime(parsedDate.year, parsedDate.month, parsedDate.day);
-
-          if (reminderDay.isBefore(currentDay)) {
-            overdue.add(reminder);
-          } else if (reminderDay.isAtSameMomentAs(currentDay)) {
-            today.add(reminder);
-          }
-          // Future dates (reminderDay.isAfter(currentDay)) are excluded from Today & Overdue
+          rem['customer_name'] = cust?['name'] ?? 'Unknown Customer';
+          rem['customer_phone'] = cust?['phone'] ?? '';
+          rem['customer_address'] = cust?['address'] ?? '';
+          rem['customer_salesman'] = cust?['salesman'] ?? '';
+          rem['branch_id'] = bId;
+          rem['branch_name'] = DmeConstants.getBranchName(bId);
+          overdue.add(rem);
         }
       }
 
       if (mounted) {
         setState(() {
-          _todayReminders = today;
+          _todayReminders = assignedToday;
           _overdueReminders = overdue;
           _completedReminders = completed;
-          if (_selectedOverdueDay != null) {
-            final exists = overdue.any((r) {
-              final d = r['reminder_date']?.toString();
-              if (d == null) return false;
-              final p = DateTime.tryParse(d);
-              return p != null && DateFormat('yyyy-MM-dd').format(p) == _selectedOverdueDay;
-            });
-            if (!exists) _selectedOverdueDay = null;
-          }
           _isLoading = false;
         });
       }
     } catch (e) {
-      debugPrint('Error fetching reminders: $e');
+      debugPrint('Error fetching user reminders: $e');
       if (mounted) setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading reminders: $e'), backgroundColor: Colors.red),
-        );
-      }
     }
   }
 
@@ -190,7 +152,6 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
     return str;
   }
 
-
   void _openReminderDetail(Map<String, dynamic> reminder) async {
     final result = await Navigator.push(
       context,
@@ -198,16 +159,14 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
         builder: (_) => DmeReminderDetailPage(
           reminder: reminder,
           onUpdated: () {
-            if (_selectedBranchId != null) {
-              _fetchRemindersForBranch(_selectedBranchId!);
-            }
+            _fetchUserReminders();
           },
         ),
       ),
     );
 
-    if (result == true && _selectedBranchId != null) {
-      _fetchRemindersForBranch(_selectedBranchId!);
+    if (result == true) {
+      _fetchUserReminders();
     }
   }
 
@@ -215,6 +174,7 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final leftoverCount = _todayReminders.where((r) => r['is_overdue_leftover'] == true).length;
 
     return Scaffold(
       appBar: AppBar(
@@ -229,14 +189,14 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
           unselectedLabelColor: Colors.white70,
           tabs: [
             Tab(text: 'Today (${_todayReminders.length})'),
-            Tab(text: 'Overdue (${_overdueReminders.length})'),
+            Tab(text: 'Overdue Archive (${_overdueReminders.length})'),
             Tab(text: 'Completed (${_completedReminders.length})'),
           ],
         ),
       ),
       body: Column(
         children: [
-          // Branch Selection Dropdown (Required selection)
+          // Branch Selection Dropdown (Optional Filter)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
@@ -253,26 +213,33 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<int?>(
                       value: _selectedBranchId,
-                      hint: const Text('Select an assigned branch...', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                      hint: const Text('All Assigned Branches', style: TextStyle(fontSize: 13)),
                       isExpanded: true,
                       icon: const Icon(Icons.arrow_drop_down_circle_outlined, size: 20),
-                      items: _userAssignedBranches.map((bId) {
-                        return DropdownMenuItem<int?>(
-                          value: bId,
+                      items: [
+                        DropdownMenuItem<int?>(
+                          value: null,
                           child: Text(
-                            DmeConstants.getBranchName(bId),
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                            'All Assigned Branches (${_userAssignedBranches.length} branches)',
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF005BAC)),
                           ),
-                        );
-                      }).toList(),
+                        ),
+                        ..._userAssignedBranches.map((bId) {
+                          return DropdownMenuItem<int?>(
+                            value: bId,
+                            child: Text(
+                              DmeConstants.getBranchName(bId),
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                            ),
+                          );
+                        }),
+                      ],
                       onChanged: (val) {
-                        if (val != null) {
-                          setState(() {
-                            _selectedBranchId = val;
-                            _selectedOverdueDay = null;
-                          });
-                          _fetchRemindersForBranch(val);
-                        }
+                        setState(() {
+                          _selectedBranchId = val;
+                          _selectedOverdueDay = null;
+                        });
+                        _fetchUserReminders();
                       },
                     ),
                   ),
@@ -281,38 +248,77 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
             ),
           ),
 
-          // Search Box
-          if (_selectedBranchId != null)
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: TextField(
-                decoration: InputDecoration(
-                  hintText: 'Search customer name, mobile...',
-                  prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: isDark ? Colors.grey[900] : Colors.grey[100],
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                ),
-                onChanged: (val) => setState(() => _searchQuery = val.toLowerCase()),
-              ),
+          // Daily Target Summary Ribbon
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.grey[900] : const Color(0xFF005BAC).withValues(alpha: 0.04),
+              border: Border(bottom: BorderSide(color: Colors.grey.withValues(alpha: 0.15))),
             ),
+            child: Row(
+              children: [
+                const Icon(Icons.assignment_turned_in_outlined, size: 18, color: Color(0xFF005BAC)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _selectedBranchId == null
+                        ? 'Your Target: ${_todayReminders.length} calls today'
+                        : 'Your Target for ${DmeConstants.getBranchName(_selectedBranchId)}: ${_todayReminders.length} calls',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                if (leftoverCount > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.deepOrange,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '$leftoverCount Yesterday Overdue',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          // Search Box
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'Search customer name, mobile, branch...',
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: isDark ? Colors.grey[900] : Colors.grey[100],
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              ),
+              onChanged: (val) => setState(() => _searchQuery = val.toLowerCase()),
+            ),
+          ),
 
           // Body Views
           Expanded(
-            child: _selectedBranchId == null
+            child: _userAssignedBranches.isEmpty
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.storefront_outlined, size: 56, color: Colors.grey[400]),
+                        Icon(Icons.person_off_outlined, size: 56, color: Colors.grey[400]),
                         const SizedBox(height: 12),
                         Text(
-                          'Please select a branch from the dropdown above',
+                          'No branches are currently assigned to your account.',
                           style: TextStyle(fontSize: 14, color: Colors.grey[600], fontWeight: FontWeight.w500),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Please contact an administrator to assign branches.',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[500]),
                         ),
                       ],
                     ),
@@ -501,11 +507,11 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
       );
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return RefreshIndicator(
       onRefresh: () async {
-        if (_selectedBranchId != null) {
-          await _fetchRemindersForBranch(_selectedBranchId!);
-        }
+        await _fetchUserReminders();
       },
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -516,10 +522,20 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
           final phone = item['customer_phone'] ?? '';
           final dateStr = item['reminder_date']?.toString() ?? '';
           final remarks = item['remarks']?.toString();
+          final isLeftover = item['is_overdue_leftover'] == true;
+          final callDuration = item['call_duration'] as int?;
 
           return Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation: isLeftover ? 3 : 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: isLeftover
+                  ? const BorderSide(color: Colors.deepOrange, width: 1.5)
+                  : BorderSide.none,
+            ),
+            color: isLeftover
+                ? (isDark ? const Color(0xFF38201B) : const Color(0xFFFFF6ED))
+                : null,
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
               onTap: () => _openReminderDetail(item),
@@ -532,20 +548,26 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
                       radius: 22,
                       backgroundColor: isCompleted
                           ? Colors.green.withValues(alpha: 0.15)
-                          : isOverdue
-                              ? Colors.red.withValues(alpha: 0.15)
-                              : const Color(0xFF005BAC).withValues(alpha: 0.15),
+                          : isLeftover
+                              ? Colors.deepOrange.withValues(alpha: 0.2)
+                              : isOverdue
+                                  ? Colors.red.withValues(alpha: 0.15)
+                                  : const Color(0xFF005BAC).withValues(alpha: 0.15),
                       foregroundColor: isCompleted
                           ? Colors.green
-                          : isOverdue
-                              ? Colors.red
-                              : const Color(0xFF005BAC),
+                          : isLeftover
+                              ? Colors.deepOrange
+                              : isOverdue
+                                  ? Colors.red
+                                  : const Color(0xFF005BAC),
                       child: Icon(
                         isCompleted
                             ? Icons.check_rounded
-                            : isOverdue
-                                ? Icons.warning_amber_rounded
-                                : Icons.phone_forwarded_rounded,
+                            : isLeftover
+                                ? Icons.history_toggle_off_rounded
+                                : isOverdue
+                                    ? Icons.warning_amber_rounded
+                                    : Icons.phone_forwarded_rounded,
                         size: 22,
                       ),
                     ),
@@ -562,6 +584,26 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
                                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                                 ),
                               ),
+                              if (isLeftover) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.deepOrange,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.priority_high_rounded, size: 11, color: Colors.white),
+                                      Text(
+                                        "OVERDUE",
+                                        style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                              ],
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
@@ -592,16 +634,35 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              Icon(Icons.calendar_today, size: 12, color: isOverdue ? Colors.red : Colors.grey),
+                              Icon(
+                                isLeftover
+                                    ? Icons.history_rounded
+                                    : (isOverdue ? Icons.warning_amber_rounded : Icons.calendar_today),
+                                size: 12,
+                                color: isLeftover
+                                    ? Colors.deepOrange
+                                    : (isOverdue ? Colors.red : Colors.grey),
+                              ),
                               const SizedBox(width: 4),
                               Text(
-                                'Due: ${_formatDate(dateStr)}',
+                                isLeftover
+                                    ? 'Due: ${_formatDate(dateStr)} (Yesterday\'s Overdue)'
+                                    : 'Due: ${_formatDate(dateStr)}',
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
-                                  color: isOverdue ? Colors.red : Colors.grey[700],
+                                  color: isLeftover
+                                      ? Colors.deepOrange[800]
+                                      : (isOverdue ? Colors.red : Colors.grey[700]),
                                 ),
                               ),
+                              if (callDuration != null && callDuration > 0) ...[
+                                const SizedBox(width: 8),
+                                Text(
+                                  '• Call: ${callDuration}s',
+                                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                                ),
+                              ],
                             ],
                           ),
                           if (remarks != null && remarks.isNotEmpty) ...[

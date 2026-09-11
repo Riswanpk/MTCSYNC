@@ -145,6 +145,8 @@ class _DmeWhatsAppProofPageState extends State<DmeWhatsAppProofPage> {
       await client.from('dme_reminders').update({
         'status': 'completed',
         'remarks': '[WhatsApp] $remarks',
+        'call_duration': 0,
+        'called_timestamp': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', reminderId);
 
