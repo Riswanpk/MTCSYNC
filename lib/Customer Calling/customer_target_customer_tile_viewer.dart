@@ -15,13 +15,16 @@ import 'tile_viewer/add_to_leads_button.dart';
 class SalesCustomerTileViewer extends StatefulWidget {
   final Map<String, dynamic> customer;
   final Future<void> Function(String remarks)? onStatusChanged;
-  const SalesCustomerTileViewer({super.key, required this.customer, this.onStatusChanged});
+  const SalesCustomerTileViewer(
+      {super.key, required this.customer, this.onStatusChanged});
 
   @override
-  State<SalesCustomerTileViewer> createState() => _SalesCustomerTileViewerState();
+  State<SalesCustomerTileViewer> createState() =>
+      _SalesCustomerTileViewerState();
 }
 
-class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with WidgetsBindingObserver {
+class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
+    with WidgetsBindingObserver {
   late Map<String, dynamic> customer;
   bool called = false;
   TextEditingController remarksController = TextEditingController();
@@ -61,7 +64,10 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     final key = customerUniqueKey(customer);
     final savedNumber = prefs.getString('pending_call_number_$key');
     final savedTime = prefs.getInt('pending_call_time_$key');
-    if (savedNumber != null && savedNumber.isNotEmpty && savedTime != null && savedTime > 0) {
+    if (savedNumber != null &&
+        savedNumber.isNotEmpty &&
+        savedTime != null &&
+        savedTime > 0) {
       _pendingCallNumber = savedNumber;
       _callStartTime = DateTime.fromMillisecondsSinceEpoch(savedTime);
       _checkIfCallWasMade();
@@ -162,7 +168,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
   @override
   Widget build(BuildContext context) {
     final Color blue = const Color(0xFF005BAC);
-    final Color green = const Color.fromARGB(255, 108, 185, 13);
+    final Color green = const Color.fromARGB(255, 108, 186, 13);
     final primaryColor = called ? green : blue;
     final swappedColor = called ? green : blue;
 
@@ -202,7 +208,8 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
     };
 
     customer.forEach((key, value) {
-      if (ignoredKeys.contains(key) || ignoredKeys.contains(key.toLowerCase())) return;
+      if (ignoredKeys.contains(key) || ignoredKeys.contains(key.toLowerCase()))
+        return;
       fields.add(MapEntry(key, value));
     });
 
@@ -213,14 +220,18 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
       onPopInvokedWithResult: (didPop, result) async {
         if (!didPop && called && remarksController.text.trim().isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please enter remarks before leaving.'), backgroundColor: Colors.red),
+            const SnackBar(
+                content: Text('Please enter remarks before leaving.'),
+                backgroundColor: Colors.red),
           );
         }
       },
       child: Scaffold(
         appBar: AppBar(
           elevation: 0,
-          title: const Text('Customer Details', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+          title: const Text('Customer Details',
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
           backgroundColor: primaryColor,
           iconTheme: const IconThemeData(color: Colors.white),
           actions: [
@@ -232,18 +243,22 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
             IconButton(
               icon: Icon(
                 Icons.edit,
-                color: (customer['pendingEditing'] == true || customer['pendingDeletion'] == true)
+                color: (customer['pendingEditing'] == true ||
+                        customer['pendingDeletion'] == true)
                     ? Colors.white38
                     : Colors.white,
               ),
-              tooltip: (customer['pendingEditing'] == true || customer['pendingDeletion'] == true)
+              tooltip: (customer['pendingEditing'] == true ||
+                      customer['pendingDeletion'] == true)
                   ? 'Approval pending'
                   : 'Edit Customer',
               onPressed: () {
-                if (customer['pendingEditing'] == true || customer['pendingDeletion'] == true) {
+                if (customer['pendingEditing'] == true ||
+                    customer['pendingDeletion'] == true) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('This customer is already pending approval and cannot be edited.'),
+                      content: Text(
+                          'This customer is already pending approval and cannot be edited.'),
                       backgroundColor: Colors.orange,
                     ),
                   );
@@ -273,12 +288,15 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                 contact2: contact2,
                 called: called,
                 primaryColor: primaryColor,
-                isCallDisabled: customer['pendingEditing'] == true || customer['pendingDeletion'] == true,
+                isCallDisabled: customer['pendingEditing'] == true ||
+                    customer['pendingDeletion'] == true,
                 onCallPressed: () {
-                  if (customer['pendingEditing'] == true || customer['pendingDeletion'] == true) {
+                  if (customer['pendingEditing'] == true ||
+                      customer['pendingDeletion'] == true) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Calling is disabled while customer is pending approval.'),
+                        content: Text(
+                            'Calling is disabled while customer is pending approval.'),
                         backgroundColor: Colors.orange,
                       ),
                     );
@@ -334,7 +352,9 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer> with 
                               _remarksSaved = true;
                             });
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Remarks saved.'), backgroundColor: Colors.green),
+                              const SnackBar(
+                                  content: Text('Remarks saved.'),
+                                  backgroundColor: Colors.green),
                             );
                           }
                         }

@@ -359,7 +359,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     if (!context.mounted) return;
     final role = cache.role;
 
-    if (role == 'supersale_admin') {
+    if (role == 'supersale_admin' || role == 'sync_head') {
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => const LoadingOverlayPage(
@@ -553,6 +553,22 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           textColor: Colors.white,
           icon: Icons.phone_forwarded_rounded,
         ),
+      if (role == 'sync_head')
+        NeumorphicButton(
+          onTap: () => _navigateToSupersale(context),
+          text: 'Supersale',
+          color: const Color(0xFFFF5722),
+          textColor: Colors.white,
+          icon: Icons.flash_on_rounded,
+        ),
+      if (role == 'sync_head')
+        NeumorphicButton(
+          onTap: () => _navigateToMarketing(context),
+          text: 'Marketing',
+          color: primaryBlue.withBlue(180),
+          textColor: Colors.white,
+          icon: Icons.campaign_rounded,
+        ),
       if (role == 'manager' || role == 'asst_manager')
         NeumorphicButton(
           onTap: () => _navigateToDashboard(context),
@@ -718,6 +734,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       ),
       NeumorphicButton(
         onTap: () => _navigateToDashboard(context),
+        onLongPress: () => _navigateToSupersaleDashboard(context),
         text: 'Dashboard',
         color: primaryBlue,
         textColor: Colors.white,
