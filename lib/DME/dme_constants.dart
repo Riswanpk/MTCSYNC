@@ -87,6 +87,43 @@ class DmeConstants {
     DmeCategory(id: 13, name: 'GENERAL & OTHERS'),
   ];
 
+  /// IDs and keywords of categories excluded from reminder generation/updating:
+  /// AUDITORIUM (6), TRUST (7), INSTITUTION (8), VEHICLE SHOWROOM (11), GENERAL & OTHERS (13)
+  static const Set<int> excludedReminderCategoryIds = {6, 7, 8, 11, 13};
+
+  static bool isCategoryExcludedFromReminders({
+    int? categoryId,
+    String? categoryName,
+    String? typeName,
+  }) {
+    if (categoryId != null && excludedReminderCategoryIds.contains(categoryId)) {
+      return true;
+    }
+    final cName = (categoryName ?? '').toUpperCase().trim();
+    final tName = (typeName ?? '').toUpperCase().trim();
+
+    if (cName.contains('AUDITORIUM') ||
+        cName.contains('VEHICLE SHOWROOM') ||
+        cName.contains('VEHICE SHOWROOM') ||
+        cName.contains('TRUST') ||
+        cName.contains('INSTITUTION') ||
+        cName.contains('GENERAL') ||
+        cName.contains('OTHERS')) {
+      return true;
+    }
+
+    if (tName.contains('AUDITORIUM') ||
+        tName.contains('VEHICLE SHOWROOM') ||
+        tName.contains('VEHICE SHOWROOM') ||
+        tName.contains('INSTITUTION') ||
+        tName.contains('TRUST') ||
+        tName.contains('GENERAL')) {
+      return true;
+    }
+
+    return false;
+  }
+
   /// Master Branches
   static const List<DmeBranch> branches = [
     DmeBranch(id: 1, name: 'BGR'),

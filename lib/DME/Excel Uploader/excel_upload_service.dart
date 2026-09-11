@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'excel_uploader_models.dart';
+import '../dme_constants.dart';
 
 class ExcelUploadService {
   /// Check if the exact Excel file has already been uploaded by its SHA-256 hash
@@ -374,25 +375,14 @@ class ExcelUploadService {
       if (custId != null) {
         // Check if this sale's category is excluded from reminders
         // Excluded: AUDITORIUM (6), TRUST (7), INSTITUTION (8), VEHICLE SHOWROOM (11), GENERAL & OTHERS (13)
-        final catId = sale.categoryId;
-        final catName = sale.categoryName.toUpperCase().trim();
-        final typeName = sale.typeName.toUpperCase().trim();
-        final isExcludedCategory = catId == 6 ||
-            catId == 7 ||
-            catId == 8 ||
-            catId == 11 ||
-            catId == 13 ||
-            catName.contains('AUDITORIUM') ||
-            catName.contains('VEHICLE SHOWROOM') ||
-            catName.contains('VEHICE SHOWROOM') ||
-            catName.contains('TRUST') ||
-            catName.contains('INSTITUTION') ||
-            catName.contains('GENERAL') ||
-            typeName.contains('AUDITORIUM') ||
-            typeName.contains('VEHICLE SHOWROOM') ||
-            typeName.contains('VEHICE SHOWROOM');
+        final isExcludedCategory = DmeConstants.isCategoryExcludedFromReminders(
+          categoryId: sale.categoryId,
+          categoryName: sale.categoryName,
+          typeName: sale.typeName,
+        );
 
         // If this branch/sale is an eligible category, set/update reminder specifically for this branch
+        // If it is an excluded category (e.g. branch B purchase in an excluded category), DO NOT update reminders!
         if (!isExcludedCategory) {
           final reminderDate = sale.date.add(const Duration(days: 28));
           final existingReminderForCust = remindersByCustomer[custId];
