@@ -182,7 +182,7 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
       // 2. Query dme_customers
       dynamic query = client
           .from('dme_customers')
-          .select('id, name, phone, address, salesman, last_purchase_date, created_at, dme_customer_branches(branch_id, category_id, customer_type_id)');
+          .select('id, name, phone, address, salesman, last_purchase_date, created_at, primary_branch, dme_customer_branches(branch_id, category_id, customer_type_id)');
 
       if (filteredCustomerIds != null) {
         query = query.inFilter('id', filteredCustomerIds);
@@ -291,7 +291,7 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
 
       dynamic query = client
           .from('dme_customers')
-          .select('id, name, phone, address, salesman, last_purchase_date, created_at, dme_customer_branches(branch_id, category_id, customer_type_id)');
+          .select('id, name, phone, address, salesman, last_purchase_date, created_at, primary_branch, dme_customer_branches(branch_id, category_id, customer_type_id)');
 
       if (filteredCustomerIds != null) {
         query = query.inFilter('id', filteredCustomerIds);
@@ -800,6 +800,26 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
                                               spacing: 4,
                                               runSpacing: 4,
                                               children: [
+                                                if (c['primary_branch'] != null)
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.green.withValues(alpha: 0.15),
+                                                      borderRadius: BorderRadius.circular(4),
+                                                      border: Border.all(color: Colors.green.shade700, width: 0.8),
+                                                    ),
+                                                    child: Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Icon(Icons.star_rounded, size: 12, color: Colors.green.shade800),
+                                                        const SizedBox(width: 2),
+                                                        Text(
+                                                          'Primary: ${DmeConstants.getBranchName(int.tryParse(c['primary_branch'].toString()))}',
+                                                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green.shade900),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
                                                 ...branchIds.map((bId) {
                                                   return Container(
                                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

@@ -171,6 +171,28 @@ class _DmeAdminCustomerDetailPageState extends State<DmeAdminCustomerDetailPage>
                                               'Last Purchase: ${_formatDate(lastPurchaseDate)}',
                                               style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500),
                                             ),
+                                            if (_customer['primary_branch'] != null) ...[
+                                              const SizedBox(height: 4),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.green.withValues(alpha: 0.15),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(color: Colors.green.shade700, width: 0.8),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(Icons.star_rounded, size: 14, color: Colors.green.shade800),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      'Primary Branch: ${DmeConstants.getBranchName(int.tryParse(_customer['primary_branch'].toString()))}',
+                                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green.shade900),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
                                           ],
                                         ),
                                       ),

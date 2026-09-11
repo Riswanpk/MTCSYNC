@@ -100,14 +100,97 @@ class ExcelUploadService {
 
     onProgress(0.3, 'Syncing ${customersToUpsert.length} customer(s)...');
 
+    // Determine which customers already exist in dme_customers and check their primary_branch
+    final activePhones = customersToUpsert.keys.toList();
+    final Map<String, int?> existingCustomerPrimaryBranches = {};
+    for (int i = 0; i < activePhones.length; i += 500) {
+      final chunk = activePhones.sublist(
+        i,
+        (i + 500 > activePhones.length) ? activePhones.length : i + 500,
+      );
+      try {
+        final existingRows = await client
+            .from('dme_customers')
+            .select('phone, primary_branch')
+            .inFilter('phone', chunk);
+        for (var row in (existingRows as List)) {
+          final p = row['phone']?.toString();
+          if (p != null) {
+            existingCustomerPrimaryBranches[p] = row['primary_branch'] as int?;
+          }
+        }
+      } catch (e) {
+        debugPrint('Notice checking existing customers for primary branch: $e');
+      }
+    }
+
+    // Determine the earliest purchase branch for each customer in this batch
+    final Map<String, Map<String, dynamic>> earliestSaleByPhone = {};
+    for (var sale in groupedSales) {
+      final activePhone = activePhoneBySale['${sale.party}_${sale.phone}_${sale.date.millisecondsSinceEpoch}'] ?? sale.phone;
+      if (activePhone.isEmpty || sale.branchId == null) continue;
+
+      final current = earliestSaleByPhone[activePhone];
+      if (current == null) {
+        earliestSaleByPhone[activePhone] = {
+          'date': sale.date,
+          'branchId': sale.branchId,
+        };
+      } else {
+        final currentDate = current['date'] as DateTime;
+        if (sale.date.isBefore(currentDate)) {
+          earliestSaleByPhone[activePhone] = {
+            'date': sale.date,
+            'branchId': sale.branchId,
+          };
+        }
+      }
+    }
+
+    // Assign primary_branch:
+    // 1. For newly registered customers (not in existingCustomerPrimaryBranches)
+    // 2. For existing customers who currently have primary_branch == null
+    // If an existing customer already has a primary_branch, DO NOT overwrite it.
+    for (var entry in customersToUpsert.entries) {
+      final phone = entry.key;
+      final isExisting = existingCustomerPrimaryBranches.containsKey(phone);
+      final existingPrimary = existingCustomerPrimaryBranches[phone];
+
+      if (!isExisting || existingPrimary == null) {
+        final earliest = earliestSaleByPhone[phone];
+        if (earliest != null && earliest['branchId'] != null) {
+          entry.value['primary_branch'] = earliest['branchId'];
+        }
+      } else {
+        // Retain existing primary branch during upsert
+        entry.value['primary_branch'] = existingPrimary;
+      }
+    }
+
     // Upsert customers in bulk
-    final upsertedCustRes = await client
-        .from('dme_customers')
-        .upsert(
-          customersToUpsert.values.toList(),
-          onConflict: 'phone',
-        )
-        .select('id, phone');
+    dynamic upsertedCustRes;
+    try {
+      upsertedCustRes = await client
+          .from('dme_customers')
+          .upsert(
+            customersToUpsert.values.toList(),
+            onConflict: 'phone',
+          )
+          .select('id, phone');
+    } catch (upsertErr) {
+      // If primary_branch column has not been added to DB yet, fallback without it
+      debugPrint('Customers upsert with primary_branch failed: $upsertErr. Falling back without primary_branch.');
+      for (var map in customersToUpsert.values) {
+        map.remove('primary_branch');
+      }
+      upsertedCustRes = await client
+          .from('dme_customers')
+          .upsert(
+            customersToUpsert.values.toList(),
+            onConflict: 'phone',
+          )
+          .select('id, phone');
+    }
 
     final Map<String, int> phoneToCustomerId = {};
     for (var row in (upsertedCustRes as List)) {
