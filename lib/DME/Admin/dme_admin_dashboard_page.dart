@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 
 import '../dme_constants.dart';
 import '../dme_config.dart';
+import 'Reports/dme_new_customers_report_page.dart';
+import 'dme_admin_reminders_page.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -157,7 +159,7 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
         }
       }
 
-      // 2. Fetch ALL Customers created in date range (Paginated)
+      // 2. Fetch ALL Customers created in date range (checking creation_date with fallback to created_at)
       final startIso =
           DateTime(_startDate.year, _startDate.month, _startDate.day, 0, 0, 0)
               .toIso8601String();
@@ -172,9 +174,9 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
       while (hasMoreCusts) {
         var custQuery = client
             .from('dme_customers')
-            .select('id, created_at, dme_customer_branches(branch_id)')
-            .gte('created_at', startIso)
-            .lte('created_at', endIso);
+            .select(
+                'id, primary_branch, creation_date, created_at, dme_customer_branches(branch_id)')
+            .or('and(creation_date.gte.$startStr,creation_date.lte.$endStr),and(creation_date.is.null,created_at.gte.$startIso,created_at.lte.$endIso)');
 
         final batch =
             await custQuery.range(custOffset, custOffset + pageSize - 1);
@@ -188,25 +190,29 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
       }
 
       int newCustomersCount = 0;
-      if (_selectedBranchId != null) {
-        for (var c in allCreatedCusts) {
+      for (var c in allCreatedCusts) {
+        int? pBranch = c['primary_branch'] as int?;
+        if (pBranch == null) {
           final bList = c['dme_customer_branches'] as List?;
-          if (bList != null &&
-              bList.any((b) => b['branch_id'] == _selectedBranchId)) {
-            newCustomersCount++;
+          if (bList != null && bList.isNotEmpty) {
+            pBranch = bList.first['branch_id'] as int?;
           }
         }
-      } else if (_assignedBranches.isNotEmpty) {
-        // Filter by assigned branches — match the report page logic
-        for (var c in allCreatedCusts) {
-          final bList = c['dme_customer_branches'] as List?;
-          if (bList != null &&
-              bList.any((b) => _assignedBranches.contains(b['branch_id']))) {
+
+        if (_selectedBranchId != null) {
+          // Branch-specific: count only if primary/first branch matches selected branch
+          if (pBranch == _selectedBranchId) {
             newCustomersCount++;
           }
+        } else if (_assignedBranches.isNotEmpty) {
+          // Assigned branches filter: count if primary branch is within assigned branches
+          if (pBranch != null && _assignedBranches.contains(pBranch)) {
+            newCustomersCount++;
+          }
+        } else {
+          // All branches selected: each customer counted as exactly 1
+          newCustomersCount++;
         }
-      } else {
-        newCustomersCount = allCreatedCusts.length;
       }
 
       // 3. Fetch ALL Completed Call Reminders in Date Range (Paginated)
@@ -483,6 +489,19 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
                       subtitle: 'Created in period',
                       icon: Icons.person_add_alt_1_rounded,
                       color: const Color(0xFF8CC63F),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => DmeNewCustomersReportPage(
+                              userAssignedBranches: _assignedBranches,
+                              initialStartDate: _startDate,
+                              initialEndDate: _endDate,
+                              initialBranchId: _selectedBranchId,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -493,6 +512,16 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
                       subtitle: 'Calls verified',
                       icon: Icons.phone_callback_rounded,
                       color: Colors.orange,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => DmeAdminRemindersPage(
+                              userAssignedBranches: _assignedBranches,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -725,52 +754,57 @@ class _DmeAdminDashboardPageState extends State<DmeAdminDashboardPage> {
     required String subtitle,
     required IconData icon,
     required Color color,
+    VoidCallback? onTap,
   }) {
     return Card(
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Flexible(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Flexible(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 4),
-                CircleAvatar(
-                  radius: 11,
-                  backgroundColor: color.withValues(alpha: 0.15),
-                  child: Icon(icon, color: color, size: 13),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              value,
-              style: TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.bold, color: color),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              style: TextStyle(fontSize: 9, color: Colors.grey[600]),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+                  const SizedBox(width: 4),
+                  CircleAvatar(
+                    radius: 11,
+                    backgroundColor: color.withValues(alpha: 0.15),
+                    child: Icon(icon, color: color, size: 13),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                value,
+                style: TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.bold, color: color),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(fontSize: 9, color: Colors.grey[600]),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         ),
       ),
     );

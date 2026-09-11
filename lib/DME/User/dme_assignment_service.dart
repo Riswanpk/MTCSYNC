@@ -63,6 +63,242 @@ class DmeAssignmentService {
     return list.isNotEmpty ? list : [fallbackUserId];
   }
 
+  /// Check if the Admin has performed reminder assignment for today for these branches
+  static Future<bool> hasAdminAssignedToday({
+    required List<int> userBranches,
+    required String todayStr,
+  }) async {
+    if (userBranches.isEmpty) return false;
+    final client = await DmeConfig.getClient();
+    if (client == null) return false;
+
+    // 1. Try checking reminder_assignment table
+    try {
+      final res = await client
+          .from('reminder_assignment')
+          .select('id')
+          .eq('assignment_date', todayStr)
+          .inFilter('branch_id', userBranches)
+          .limit(1);
+      if ((res as List).isNotEmpty) {
+        return true;
+      }
+    } catch (_) {
+      try {
+        final res2 = await client
+            .from('dme_reminder_assignments')
+            .select('id')
+            .eq('assignment_date', todayStr)
+            .inFilter('branch_id', userBranches)
+            .limit(1);
+        if ((res2 as List).isNotEmpty) {
+          return true;
+        }
+      } catch (_) {}
+    }
+
+    // 2. Fallback: check if dme_reminders has any records with assigned_date = todayStr for these branches
+    try {
+      final res = await client
+          .from('dme_reminders')
+          .select('id')
+          .eq('assigned_date', todayStr)
+          .inFilter('last_purchase_branch', userBranches)
+          .limit(1);
+      return (res as List).isNotEmpty;
+    } catch (e) {
+      debugPrint('Error checking if admin assigned today: $e');
+      return false;
+    }
+  }
+
+  /// Get status map of which branches have been assigned for dateStr
+  static Future<Map<int, Map<String, dynamic>>> getBranchAssignmentStatus({
+    required String dateStr,
+  }) async {
+    final Map<int, Map<String, dynamic>> map = {};
+    final client = await DmeConfig.getClient();
+    if (client == null) return map;
+
+    try {
+      final res = await client
+          .from('reminder_assignment')
+          .select()
+          .eq('assignment_date', dateStr);
+      for (var item in (res as List)) {
+        final bId = int.tryParse(item['branch_id']?.toString() ?? '');
+        if (bId != null) {
+          map[bId] = Map<String, dynamic>.from(item);
+        }
+      }
+    } catch (_) {
+      try {
+        final res = await client
+            .from('dme_reminder_assignments')
+            .select()
+            .eq('assignment_date', dateStr);
+        for (var item in (res as List)) {
+          final bId = int.tryParse(item['branch_id']?.toString() ?? '');
+          if (bId != null) {
+            map[bId] = Map<String, dynamic>.from(item);
+          }
+        }
+      } catch (_) {}
+    }
+
+    return map;
+  }
+
+  /// Admin manual assignment of reminders across branches with explicitly chosen users.
+  /// If a user is on leave, they are simply excluded from the active user list for their branches.
+  static Future<Map<String, dynamic>> assignRemindersByAdmin({
+    required String dateStr,
+    required Map<int, List<String>> branchToActiveUserUids,
+    required Map<String, String> userUidToName,
+    required String adminEmail,
+  }) async {
+    final client = await DmeConfig.getClient();
+    if (client == null) throw Exception('Supabase client not initialized');
+
+    final Map<int, int> branchAssignedCounts = {};
+    int totalAssigned = 0;
+    final nowIso = DateTime.now().toIso8601String();
+    final currentDay = DateTime.tryParse(dateStr) ?? DateTime.now();
+
+    for (final entry in branchToActiveUserUids.entries) {
+      final branchId = entry.key;
+      final activeUsers = entry.value;
+
+      if (activeUsers.isEmpty) {
+        continue;
+      }
+
+      // 1. Fetch pending candidate reminders for this branch due on or before dateStr
+      final List<dynamic> allPending = [];
+      int offset = 0;
+      const int pageSize = 1000;
+      bool hasMore = true;
+
+      while (hasMore) {
+        final batch = await client
+            .from('dme_reminders')
+            .select('id, reminder_date')
+            .eq('status', 'pending')
+            .eq('last_purchase_branch', branchId)
+            .lte('reminder_date', '${dateStr}T23:59:59')
+            .range(offset, offset + pageSize - 1);
+
+        final list = batch as List;
+        allPending.addAll(list);
+        if (list.length < pageSize) {
+          hasMore = false;
+        } else {
+          offset += pageSize;
+        }
+      }
+
+      if (allPending.isEmpty) {
+        continue;
+      }
+
+      final List<int> leftoverIds = [];
+      final List<int> todayIds = [];
+
+      for (var item in allPending) {
+        final id = int.tryParse(item['id']?.toString() ?? '');
+        if (id == null) continue;
+
+        final rDateStr = item['reminder_date']?.toString();
+        final rDate = rDateStr != null ? DateTime.tryParse(rDateStr) : null;
+
+        if (rDate != null) {
+          final rDay = DateTime(rDate.year, rDate.month, rDate.day);
+          if (rDay.isBefore(DateTime(currentDay.year, currentDay.month, currentDay.day))) {
+            leftoverIds.add(id);
+          } else {
+            todayIds.add(id);
+          }
+        } else {
+          todayIds.add(id);
+        }
+      }
+
+      // Shuffle both pools
+      final rnd = Random();
+      leftoverIds.shuffle(rnd);
+      todayIds.shuffle(rnd);
+
+      final numUsers = activeUsers.length;
+      final Map<String, List<int>> userLeftovers = {for (var u in activeUsers) u: []};
+      final Map<String, List<int>> userTodays = {for (var u in activeUsers) u: []};
+
+      for (int i = 0; i < leftoverIds.length; i++) {
+        final targetUser = activeUsers[i % numUsers];
+        userLeftovers[targetUser]!.add(leftoverIds[i]);
+      }
+
+      for (int j = 0; j < todayIds.length; j++) {
+        final targetUser = activeUsers[j % numUsers];
+        userTodays[targetUser]!.add(todayIds[j]);
+      }
+
+      const int batchSize = 200;
+      for (var user in activeUsers) {
+        final lList = userLeftovers[user] ?? [];
+        for (int i = 0; i < lList.length; i += batchSize) {
+          final chunk = lList.sublist(i, min(i + batchSize, lList.length));
+          await client.from('dme_reminders').update({
+            'assigned_to': user,
+            'assigned_date': dateStr,
+            'is_overdue_leftover': true,
+            'updated_at': nowIso,
+          }).inFilter('id', chunk);
+        }
+
+        final tList = userTodays[user] ?? [];
+        for (int j = 0; j < tList.length; j += batchSize) {
+          final chunk = tList.sublist(j, min(j + batchSize, tList.length));
+          await client.from('dme_reminders').update({
+            'assigned_to': user,
+            'assigned_date': dateStr,
+            'is_overdue_leftover': false,
+            'updated_at': nowIso,
+          }).inFilter('id', chunk);
+        }
+      }
+
+      final branchCount = leftoverIds.length + todayIds.length;
+      branchAssignedCounts[branchId] = branchCount;
+      totalAssigned += branchCount;
+
+      // 2. Record in reminder_assignment audit table
+      final payload = {
+        'assignment_date': dateStr,
+        'branch_id': branchId,
+        'assigned_user_ids': activeUsers,
+        'assigned_user_names': activeUsers.map((u) => userUidToName[u] ?? u).toList(),
+        'total_reminders': branchCount,
+        'assigned_by': adminEmail,
+        'updated_at': nowIso,
+      };
+
+      try {
+        await client.from('reminder_assignment').upsert(payload, onConflict: 'assignment_date,branch_id');
+      } catch (tErr) {
+        try {
+          await client.from('dme_reminder_assignments').upsert(payload, onConflict: 'assignment_date,branch_id');
+        } catch (_) {
+          debugPrint('Notice saving reminder_assignment record: $tErr');
+        }
+      }
+    }
+
+    return {
+      'total_assigned': totalAssigned,
+      'branch_counts': branchAssignedCounts,
+    };
+  }
+
   /// Ensure reminders for today are partitioned and assigned across the eligible users
   static Future<void> ensureDailyAssignment({
     required List<int> userBranches,
@@ -199,7 +435,8 @@ class DmeAssignmentService {
     }
   }
 
-  /// Fetch today's assigned reminders for current user, prioritizing leftovers on top
+  /// Fetch today's assigned reminders for current user, prioritizing leftovers on top.
+  /// NOTE: Only displays reminders after the admin assigns everyday.
   static Future<List<Map<String, dynamic>>> fetchUserAssignedReminders({
     required List<int> userBranches,
     required String currentUserId,
@@ -210,9 +447,19 @@ class DmeAssignmentService {
 
     final today = DateTime.now();
     final todayStr = formatDate(today);
+    final branches = filterBranchId != null ? [filterBranchId] : userBranches;
+    if (branches.isEmpty) return [];
 
-    // Make sure assignment is initialized for today
-    await ensureDailyAssignment(userBranches: userBranches, currentUserId: currentUserId);
+    // 1. Check if Admin has assigned reminders for today
+    final isAssigned = await hasAdminAssignedToday(
+      userBranches: branches,
+      todayStr: todayStr,
+    );
+
+    if (!isAssigned) {
+      // Not assigned by admin yet! Do not display reminders.
+      return [];
+    }
 
     try {
       final List<dynamic> data = [];
@@ -259,7 +506,6 @@ class DmeAssignmentService {
         }
       }
 
-      // If results returned from assigned_to query, parse and sort leftovers to top
       if (data.isNotEmpty) {
         final reminders = _parseReminderList(data);
         reminders.sort((a, b) {
@@ -275,17 +521,10 @@ class DmeAssignmentService {
         return reminders;
       }
     } catch (e) {
-      debugPrint('fetchUserAssignedReminders error (falling back): $e');
+      debugPrint('fetchUserAssignedReminders error: $e');
     }
 
-    // Fallback: If assigned_to/assigned_date columns are not yet added in Supabase,
-    // gracefully fetch pending reminders for user branches and partition locally.
-    return _fallbackFetchReminders(
-      client: client,
-      userBranches: userBranches,
-      currentUserId: currentUserId,
-      filterBranchId: filterBranchId,
-    );
+    return [];
   }
 
   /// Parse raw Supabase response into UI-friendly reminder maps
@@ -311,89 +550,7 @@ class DmeAssignmentService {
     return list;
   }
 
-  /// Graceful in-memory fallback when database columns are pending migration
-  static Future<List<Map<String, dynamic>>> _fallbackFetchReminders({
-    required dynamic client,
-    required List<int> userBranches,
-    required String currentUserId,
-    int? filterBranchId,
-  }) async {
-    final today = DateTime.now();
-    final todayStr = formatDate(today);
-    final branches = filterBranchId != null ? [filterBranchId] : userBranches;
-    if (branches.isEmpty) return [];
 
-    try {
-      final List<dynamic> data = [];
-      int offset = 0;
-      const int pageSize = 1000;
-      bool hasMore = true;
-
-      while (hasMore) {
-        final query = client
-            .from('dme_reminders')
-            .select(
-                'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, dme_customers(id, name, phone, address, salesman)')
-            .eq('status', 'pending')
-            .inFilter('last_purchase_branch', branches)
-            .lte('reminder_date', '${todayStr}T23:59:59')
-            .range(offset, offset + pageSize - 1);
-
-        final batch = await query;
-        final list = batch as List;
-        data.addAll(list);
-        if (list.length < pageSize) {
-          hasMore = false;
-        } else {
-          offset += pageSize;
-        }
-      }
-
-      final parsed = _parseReminderList(data);
-      final currentDay = DateTime(today.year, today.month, today.day);
-
-      // Separate leftovers and today
-      final List<Map<String, dynamic>> leftovers = [];
-      final List<Map<String, dynamic>> todays = [];
-
-      for (var r in parsed) {
-        final dStr = r['reminder_date']?.toString();
-        final dt = dStr != null ? DateTime.tryParse(dStr) : null;
-        if (dt != null && DateTime(dt.year, dt.month, dt.day).isBefore(currentDay)) {
-          r['is_overdue_leftover'] = true;
-          leftovers.add(r);
-        } else {
-          r['is_overdue_leftover'] = false;
-          todays.add(r);
-        }
-      }
-
-      // Deterministic pseudo-random shuffle seeded by today's date
-      final dateSeed = today.year * 10000 + today.month * 100 + today.day;
-      leftovers.shuffle(Random(dateSeed));
-      todays.shuffle(Random(dateSeed + 1));
-
-      final eligibleUsers = await getEligibleUserIds(userBranches, currentUserId);
-      final userIndex = eligibleUsers.indexOf(currentUserId);
-      final activeIndex = userIndex >= 0 ? userIndex : 0;
-      final numUsers = eligibleUsers.length;
-
-      // Slice out current user's portion
-      final myLeftovers = [
-        for (int i = 0; i < leftovers.length; i++)
-          if (i % numUsers == activeIndex) leftovers[i]
-      ];
-      final myTodays = [
-        for (int j = 0; j < todays.length; j++)
-          if (j % numUsers == activeIndex) todays[j]
-      ];
-
-      return [...myLeftovers, ...myTodays];
-    } catch (e) {
-      debugPrint('Fallback fetch error: $e');
-      return [];
-    }
-  }
 
   /// Fetch completed calls for the current user for today
   static Future<List<Map<String, dynamic>>> fetchUserCompletedToday({

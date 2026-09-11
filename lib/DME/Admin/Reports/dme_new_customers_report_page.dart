@@ -45,16 +45,25 @@ class DmeNewCustomerReportItem {
 
 class DmeNewCustomersReportPage extends StatefulWidget {
   final List<int>? userAssignedBranches;
+  final DateTime? initialStartDate;
+  final DateTime? initialEndDate;
+  final int? initialBranchId;
 
-  const DmeNewCustomersReportPage({super.key, this.userAssignedBranches});
+  const DmeNewCustomersReportPage({
+    super.key,
+    this.userAssignedBranches,
+    this.initialStartDate,
+    this.initialEndDate,
+    this.initialBranchId,
+  });
 
   @override
   State<DmeNewCustomersReportPage> createState() => _DmeNewCustomersReportPageState();
 }
 
 class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
-  DateTime _startDate = DateTime(DateTime.now().year, DateTime.now().month, 1);
-  DateTime _endDate = DateTime.now();
+  late DateTime _startDate;
+  late DateTime _endDate;
 
   int? _selectedBranchId; // null means 'All Allowed Branches'
   List<int> _assignedBranches = [];
@@ -68,6 +77,10 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
   @override
   void initState() {
     super.initState();
+    final now = DateTime.now();
+    _startDate = widget.initialStartDate ?? DateTime(now.year, now.month, 1);
+    _endDate = widget.initialEndDate ?? now;
+    _selectedBranchId = widget.initialBranchId;
     _initBranchAccess();
   }
 
@@ -143,7 +156,14 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
       final startStr = DateFormat('yyyy-MM-dd').format(_startDate);
       final endStr = DateFormat('yyyy-MM-dd').format(_endDate);
 
-      // 1. Fetch Customers created in the date interval (Paginated)
+      final startIso =
+          DateTime(_startDate.year, _startDate.month, _startDate.day, 0, 0, 0)
+              .toIso8601String();
+      final endIso =
+          DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59, 59, 999)
+              .toIso8601String();
+
+      // 1. Fetch Customers created in the date interval (checking creation_date with fallback to created_at)
       final List<dynamic> custList = [];
       int custOffset = 0;
       const int pageSize = 1000;
@@ -152,9 +172,8 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
       while (hasMoreCusts) {
         final custQuery = client
             .from('dme_customers')
-            .select('id, name, phone, address, salesman, created_at')
-            .gte('created_at', '${startStr}T00:00:00')
-            .lte('created_at', '${endStr}T23:59:59')
+            .select('id, name, phone, address, salesman, created_at, creation_date, primary_branch')
+            .or('and(creation_date.gte.$startStr,creation_date.lte.$endStr),and(creation_date.is.null,created_at.gte.$startIso,created_at.lte.$endIso)')
             .range(custOffset, custOffset + pageSize - 1);
 
         final custBatch = await custQuery;
@@ -247,32 +266,37 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
         final address = (c['address'] ?? '').toString().trim();
 
         final branches = customerBranchesMap[cId] ?? [];
+
+        // Primary branch (first purchased branch)
+        int? primaryBranchId = c['primary_branch'] as int?;
+        if (primaryBranchId == null && branches.isNotEmpty) {
+          primaryBranchId = branches.first['branch_id'] as int?;
+        }
+
+        // Branchwise filter:
+        // - If a specific branch is selected, include customer ONLY for their primary/first purchased branch
+        // - If All Branches is selected, customer is listed once under their primary branch
         if (_selectedBranchId != null) {
-          final hasBranch = branches.any((b) => b['branch_id'] == _selectedBranchId);
-          if (!hasBranch) continue;
+          if (primaryBranchId != _selectedBranchId) continue;
         } else if (_assignedBranches.isNotEmpty) {
-          final hasAllowedBranch = branches.any((b) => _assignedBranches.contains(b['branch_id']));
-          if (!hasAllowedBranch) continue;
+          if (primaryBranchId == null || !_assignedBranches.contains(primaryBranchId)) {
+            continue;
+          }
         }
 
-        int? primaryBranchId;
-        int? categoryId;
-        int? typeId;
-
-        if (_selectedBranchId != null) {
-          final matched = branches.firstWhere(
-            (b) => b['branch_id'] == _selectedBranchId,
-            orElse: () => branches.isNotEmpty ? branches.first : {},
+        // Branch-specific category and type from primary branch
+        Map<String, dynamic>? branchData;
+        if (primaryBranchId != null) {
+          branchData = branches.firstWhere(
+            (b) => b['branch_id'] == primaryBranchId,
+            orElse: () => branches.isNotEmpty ? branches.first : <String, dynamic>{},
           );
-          primaryBranchId = matched['branch_id'] as int?;
-          categoryId = matched['category_id'] as int?;
-          typeId = matched['customer_type_id'] as int?;
         } else if (branches.isNotEmpty) {
-          final first = branches.first;
-          primaryBranchId = first['branch_id'] as int?;
-          categoryId = first['category_id'] as int?;
-          typeId = first['customer_type_id'] as int?;
+          branchData = branches.first;
         }
+
+        final categoryId = branchData?['category_id'] as int?;
+        final typeId = branchData?['customer_type_id'] as int?;
 
         final branchName = primaryBranchId != null
             ? DmeConstants.getBranchName(primaryBranchId)
@@ -286,9 +310,9 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
 
         final pDates = customerPurchaseDatesMap[cId] ?? [];
         if (pDates.isEmpty) {
-          final createdDateStr = c['created_at']?.toString();
-          if (createdDateStr != null) {
-            final cd = DateTime.tryParse(createdDateStr);
+          final cDateStr = c['creation_date']?.toString() ?? c['created_at']?.toString();
+          if (cDateStr != null) {
+            final cd = DateTime.tryParse(cDateStr);
             if (cd != null) {
               pDates.add(cd);
             }
@@ -347,7 +371,7 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
       final String dateIntervalTitle =
           '${DateFormat('dd MMM yyyy').format(_startDate)} to ${DateFormat('dd MMM yyyy').format(_endDate)}';
 
-      sheet.getRangeByName('A1:G1').merge();
+      sheet.getRangeByName('A1:H1').merge();
       final xlsio.Range titleRange = sheet.getRangeByName('A1');
       titleRange.setText('NEW CUSTOMERS REPORT - $branchTitle');
       titleRange.cellStyle.fontSize = 14;
@@ -358,7 +382,7 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
       titleRange.cellStyle.vAlign = xlsio.VAlignType.center;
       sheet.setRowHeightInPixels(1, 32);
 
-      sheet.getRangeByName('A2:G2').merge();
+      sheet.getRangeByName('A2:H2').merge();
       final xlsio.Range subTitleRange = sheet.getRangeByName('A2');
       subTitleRange.setText('Date Interval: $dateIntervalTitle  |  Total New Customers: ${_reportItems.length}');
       subTitleRange.cellStyle.fontSize = 11;
@@ -374,6 +398,7 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
         'SL NO',
         'CUSTOMER NAME',
         'PHONE NUMBER',
+        'PRIMARY BRANCH',
         'ADDRESS',
         'CATEGORY',
         'CUSTOMER TYPE',
@@ -416,26 +441,31 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
         phoneCell.setText(item.phone);
         phoneCell.cellStyle.hAlign = xlsio.HAlignType.center;
 
+        // Primary Branch
+        final branchCell = sheet.getRangeByIndex(rowIndex, 4);
+        branchCell.setText(item.branchName);
+        branchCell.cellStyle.hAlign = xlsio.HAlignType.center;
+
         // Address
-        final addrCell = sheet.getRangeByIndex(rowIndex, 4);
+        final addrCell = sheet.getRangeByIndex(rowIndex, 5);
         addrCell.setText(item.address.isNotEmpty ? item.address : '-');
 
         // Category
-        final catCell = sheet.getRangeByIndex(rowIndex, 5);
+        final catCell = sheet.getRangeByIndex(rowIndex, 6);
         catCell.setText(item.categoryName);
         catCell.cellStyle.hAlign = xlsio.HAlignType.center;
 
         // Customer Type
-        final typeCell = sheet.getRangeByIndex(rowIndex, 6);
+        final typeCell = sheet.getRangeByIndex(rowIndex, 7);
         typeCell.setText(item.customerTypeName);
         typeCell.cellStyle.hAlign = xlsio.HAlignType.center;
 
         // Purchase Date(s)
-        final dateCell = sheet.getRangeByIndex(rowIndex, 7);
+        final dateCell = sheet.getRangeByIndex(rowIndex, 8);
         dateCell.setText(item.purchaseDatesFormatted);
         dateCell.cellStyle.hAlign = xlsio.HAlignType.center;
 
-        for (int c = 1; c <= 7; c++) {
+        for (int c = 1; c <= 8; c++) {
           final cell = sheet.getRangeByIndex(rowIndex, c);
           cell.cellStyle.backColor = rowBgColor;
           cell.cellStyle.vAlign = xlsio.VAlignType.center;
@@ -448,11 +478,12 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
       // Column Widths
       sheet.setColumnWidthInPixels(1, 60);
       sheet.setColumnWidthInPixels(2, 200);
-      sheet.setColumnWidthInPixels(3, 140);
-      sheet.setColumnWidthInPixels(4, 220);
-      sheet.setColumnWidthInPixels(5, 140);
+      sheet.setColumnWidthInPixels(3, 130);
+      sheet.setColumnWidthInPixels(4, 150);
+      sheet.setColumnWidthInPixels(5, 200);
       sheet.setColumnWidthInPixels(6, 140);
-      sheet.setColumnWidthInPixels(7, 240);
+      sheet.setColumnWidthInPixels(7, 140);
+      sheet.setColumnWidthInPixels(8, 220);
 
       // 4. Save and Directly Share Excel File
       final List<int> bytes = workbook.saveAsStream();
@@ -491,6 +522,7 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
     return _reportItems.where((item) {
       return item.name.toLowerCase().contains(q) ||
           item.phone.toLowerCase().contains(q) ||
+          item.branchName.toLowerCase().contains(q) ||
           item.categoryName.toLowerCase().contains(q) ||
           item.customerTypeName.toLowerCase().contains(q) ||
           item.address.toLowerCase().contains(q);

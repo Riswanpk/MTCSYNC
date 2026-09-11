@@ -46,11 +46,11 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     _reminder = Map<String, dynamic>.from(widget.reminder);
     _remarksController = TextEditingController(text: _reminder['remarks'] ?? '');
     final status = (_reminder['status'] ?? '').toString().toLowerCase();
-    _callMade = (status == 'completed' || status == 'called');
-
     _callDuration = int.tryParse(_reminder['call_duration']?.toString() ?? '');
     final cTs = _reminder['called_timestamp']?.toString();
     _calledTimestamp = cTs != null ? DateTime.tryParse(cTs) : null;
+    final isAlreadyCompleted = (status == 'completed' || status == 'called');
+    _callMade = isAlreadyCompleted || (_callDuration != null && _callDuration! > 0);
     if (_callDuration != null && _callDuration! <= 10) {
       _canReschedule = true;
     }
@@ -274,21 +274,30 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
       }
 
       if (callFound) {
+        final bool isAttended = duration > 0;
         if (mounted) {
           setState(() {
             _callDuration = duration;
             _calledTimestamp = calledTime;
-            _callMade = true;
+            _callMade = isAttended;
             _canReschedule = duration <= 10;
           });
 
-          if (duration <= 10) {
+          if (!isAttended) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text(
+                  'Call not attended (0s). Remarks cannot be entered. Please reschedule or retry calling.',
+                ),
+                backgroundColor: Colors.orange[900],
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          } else if (duration <= 10) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  duration == 0
-                      ? 'Call not picked up. "Schedule for Tomorrow/Monday" is now enabled.'
-                      : 'Call lasted $duration sec (<= 10s). You can reschedule or complete with remarks.',
+                  'Call lasted $duration sec (<= 10s). You can reschedule or complete with remarks.',
                 ),
                 backgroundColor: Colors.orange[800],
                 duration: const Duration(seconds: 4),
@@ -297,7 +306,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Call detected ($duration sec)! Please add remarks.'),
+                content: Text('Call attended ($duration sec)! Please add remarks.'),
                 backgroundColor: Colors.green,
                 duration: const Duration(seconds: 2),
               ),
@@ -396,6 +405,17 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
   Future<void> _saveAndMarkCompleted() async {
     final client = await DmeConfig.getClient();
     if (client == null) return;
+
+    if (!_callMade || _callDuration == null || _callDuration == 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot complete reminder: Call was not attended. Please reschedule or retry calling.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
     final remarks = _remarksController.text.trim();
     if (remarks.isEmpty) {
@@ -503,13 +523,13 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
             decoration: BoxDecoration(
               color: _callMade
                   ? (_canReschedule ? Colors.orange[800] : Colors.green)
-                  : Colors.orange,
+                  : (_callInitiatedTime != null && _callDuration == 0 ? Colors.red[700] : Colors.orange),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
               _callMade
                   ? (_canReschedule ? 'CALL <= 10S' : 'CALL VERIFIED')
-                  : 'CALL PENDING',
+                  : (_callInitiatedTime != null && _callDuration == 0 ? 'NOT ATTENDED' : 'CALL PENDING'),
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
             ),
           ),
@@ -885,18 +905,40 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha: 0.1),
+                          color: (_callInitiatedTime != null && (_callDuration == 0 || _callDuration == null))
+                              ? Colors.red.withValues(alpha: 0.1)
+                              : Colors.orange.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                          border: Border.all(
+                            color: (_callInitiatedTime != null && (_callDuration == 0 || _callDuration == null))
+                                ? Colors.red.withValues(alpha: 0.3)
+                                : Colors.orange.withValues(alpha: 0.3),
+                          ),
                         ),
-                        child: const Row(
+                        child: Row(
                           children: [
-                            Icon(Icons.info_outline, color: Colors.orange, size: 20),
-                            SizedBox(width: 8),
+                            Icon(
+                              (_callInitiatedTime != null && (_callDuration == 0 || _callDuration == null))
+                                  ? Icons.phone_missed_rounded
+                                  : Icons.info_outline,
+                              color: (_callInitiatedTime != null && (_callDuration == 0 || _callDuration == null))
+                                  ? Colors.red[700]
+                                  : Colors.orange,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Make a call first using the Call button above to enter call remarks.',
-                                style: TextStyle(fontSize: 12, color: Colors.deepOrange),
+                                (_callInitiatedTime != null && (_callDuration == 0 || _callDuration == null))
+                                    ? 'Call was not attended (0 sec). Remarks cannot be entered. Please reschedule for tomorrow/next working day or tap Call to try again.'
+                                    : 'Make a call first using the Call button above to enter call remarks.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: (_callInitiatedTime != null && (_callDuration == 0 || _callDuration == null))
+                                      ? Colors.red[800]
+                                      : Colors.deepOrange,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
                           ],
@@ -911,7 +953,9 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                       decoration: InputDecoration(
                         hintText: _callMade
                             ? 'Enter discussion summary, customer feedback, etc...'
-                            : 'Disabled until call is made...',
+                            : (_callInitiatedTime != null && (_callDuration == 0 || _callDuration == null)
+                                ? 'Disabled: Call not attended...'
+                                : 'Disabled until call is made...'),
                         filled: true,
                         fillColor: !_callMade
                             ? (isDark ? Colors.grey[850] : Colors.grey[200])

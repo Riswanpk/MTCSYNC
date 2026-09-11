@@ -18,6 +18,7 @@ class DmeRemindersPage extends StatefulWidget {
 class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _isLoading = true;
+  bool _isAssignedByAdminToday = false;
   String _searchQuery = '';
 
   List<Map<String, dynamic>> _todayReminders = [];
@@ -79,6 +80,25 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
     setState(() => _isLoading = true);
 
     try {
+      final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final isAssigned = await DmeAssignmentService.hasAdminAssignedToday(
+        userBranches: _userAssignedBranches,
+        todayStr: todayStr,
+      );
+
+      if (!isAssigned) {
+        if (mounted) {
+          setState(() {
+            _isAssignedByAdminToday = false;
+            _todayReminders = [];
+            _completedReminders = [];
+            _overdueReminders = [];
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
       // 1. Fetch today's assigned reminders (with yesterday's leftovers sorted on top)
       final assignedToday = await DmeAssignmentService.fetchUserAssignedReminders(
         userBranches: _userAssignedBranches,
@@ -138,6 +158,7 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
 
       if (mounted) {
         setState(() {
+          _isAssignedByAdminToday = true;
           _todayReminders = assignedToday;
           _overdueReminders = overdue;
           _completedReminders = completed;
@@ -337,16 +358,68 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
                   )
                 : (_isLoading
                     ? const Center(child: CircularProgressIndicator())
-                    : TabBarView(
-                        controller: _tabController,
-                        children: [
-                          _buildReminderList(_todayReminders, isToday: true),
-                          _buildOverdueView(isDark),
-                          _buildReminderList(_completedReminders, isCompleted: true),
-                        ],
-                      )),
+                    : (!_isAssignedByAdminToday
+                        ? _buildAwaitingAdminAssignmentView(isDark)
+                        : TabBarView(
+                            controller: _tabController,
+                            children: [
+                              _buildReminderList(_todayReminders, isToday: true),
+                              _buildOverdueView(isDark),
+                              _buildReminderList(_completedReminders, isCompleted: true),
+                            ],
+                          ))),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAwaitingAdminAssignmentView(bool isDark) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(28.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(22),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.schedule_send_rounded,
+                size: 64,
+                color: Colors.orange,
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              "Today's Reminders Not Assigned Yet",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              "DME Admin has not performed the daily reminder division for today yet. Only after the admin assigns everyday will your reminders be displayed here.",
+              style: TextStyle(fontSize: 13, color: Colors.grey[600], height: 1.4),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadData,
+              icon: const Icon(Icons.refresh_rounded, size: 20),
+              label: const Text('Check Again / Refresh', style: TextStyle(fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF005BAC),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                elevation: 2,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

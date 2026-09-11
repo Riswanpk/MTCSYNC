@@ -138,7 +138,8 @@ class _DmeWhatsAppProofPageState extends State<DmeWhatsAppProofPage> {
           'uploaded_by': uploaderEmail,
         });
       } catch (tableErr) {
-        debugPrint('dme_whatsapp_proofs table insert note: $tableErr');
+        debugPrint('dme_whatsapp_proofs table insert error: $tableErr');
+        throw Exception('Failed to record WhatsApp proof in database: $tableErr. (Check table RLS policy)');
       }
 
       // 3. Mark reminder status as 'completed' with called_by user email

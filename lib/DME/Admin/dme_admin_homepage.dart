@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'dme_user_management_page.dart';
 import 'dme_admin_customers_page.dart';
 import 'dme_admin_dashboard_page.dart';
+import 'dme_admin_reminders_page.dart';
+import 'dme_admin_reminder_assign_page.dart';
 import 'Reports/dme_reports_page.dart';
 import '../../Homepage/home_widgets.dart';
 import '../../Navigation/loading_page.dart';
@@ -21,7 +23,7 @@ class DmeAdminHomePage extends StatelessWidget {
 /// Builds the DME Admin tiles:
 /// Row 1: Customers (Primary Green), Dashboard (Primary Blue)
 /// Row 2: Complaints (Primary Green), Manage Users (Primary Blue)
-/// Row 3: Reports (Primary Green)
+/// Row 3: Reports (Primary Green), Reminders (Primary Blue)
 Widget buildDmeAdminTiles(BuildContext context) {
   final List<Widget> buttons = [
     // 1. Customers
@@ -111,6 +113,42 @@ Widget buildDmeAdminTiles(BuildContext context) {
       textColor: Colors.white,
       icon: Icons.assessment_rounded,
     ),
+
+    // 6. Reminders Management (By Branch / By User)
+    NeumorphicButton(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const LoadingOverlayPage(
+              child: DmeAdminRemindersPage(),
+            ),
+          ),
+        );
+      },
+      text: 'Reminders',
+      color: primaryBlue,
+      textColor: Colors.white,
+      icon: Icons.notifications_active_rounded,
+    ),
+
+    // 7. Reminder Assign (Daily User Selection & Division)
+    NeumorphicButton(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const LoadingOverlayPage(
+              child: DmeAdminReminderAssignPage(),
+            ),
+          ),
+        );
+      },
+      text: 'Reminder Assign',
+      color: primaryGreen,
+      textColor: Colors.white,
+      icon: Icons.assignment_ind_rounded,
+    ),
   ];
 
   return Column(
@@ -134,6 +172,14 @@ Widget buildDmeAdminTiles(BuildContext context) {
       Row(
         children: [
           Expanded(child: buttons[4]),
+          const SizedBox(width: 16),
+          Expanded(child: buttons[5]),
+        ],
+      ),
+      const SizedBox(height: 16),
+      Row(
+        children: [
+          Expanded(child: buttons[6]),
           const SizedBox(width: 16),
           const Expanded(child: SizedBox()),
         ],
