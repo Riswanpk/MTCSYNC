@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../Misc/theme_notifier.dart';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../DME/dme_config.dart';
 
 class SettingsPage extends StatelessWidget {
   final String userRole;
@@ -112,6 +113,145 @@ class SettingsPage extends StatelessWidget {
     controller.dispose();
   }
 
+  Future<void> _fixPendingRemindersWithRemarks(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.phone_forwarded_rounded, color: Colors.teal),
+            SizedBox(width: 8),
+            Text('Update Pending Calls'),
+          ],
+        ),
+        content: const Text(
+          'This will find all reminders with existing remarks and call status "pending", and update their status to "called".\n\nAre you sure you want to proceed?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Proceed'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Updating reminders with remarks...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final client = await DmeConfig.getClient();
+      if (client == null) {
+        if (context.mounted) Navigator.pop(context);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Supabase client not initialized')),
+          );
+        }
+        return;
+      }
+
+      int offset = 0;
+      const int pageSize = 1000;
+      bool hasMore = true;
+      final List<int> candidateIds = [];
+
+      while (hasMore) {
+        final batch = await client
+            .from('dme_reminders')
+            .select('id, remarks')
+            .eq('status', 'pending')
+            .not('remarks', 'is', null)
+            .range(offset, offset + pageSize - 1);
+
+        final list = batch as List;
+        for (var row in list) {
+          final rem = row['remarks']?.toString().trim() ?? '';
+          if (rem.isNotEmpty) {
+            final id = int.tryParse(row['id']?.toString() ?? '');
+            if (id != null) {
+              candidateIds.add(id);
+            }
+          }
+        }
+
+        if (list.length < pageSize) {
+          hasMore = false;
+        } else {
+          offset += pageSize;
+        }
+      }
+
+      int updatedCount = 0;
+      if (candidateIds.isNotEmpty) {
+        const int batchSize = 200;
+        final nowIso = DateTime.now().toIso8601String();
+
+        for (int i = 0; i < candidateIds.length; i += batchSize) {
+          final chunk = candidateIds.sublist(i, min(i + batchSize, candidateIds.length));
+          await client.from('dme_reminders').update({
+            'status': 'called',
+            'updated_at': nowIso,
+          }).inFilter('id', chunk);
+          updatedCount += chunk.length;
+        }
+      }
+
+      if (context.mounted) Navigator.pop(context); // Dismiss loading
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              updatedCount > 0
+                  ? 'Successfully updated $updatedCount reminder(s) to "called".'
+                  : 'No pending reminders with remarks found.',
+            ),
+            backgroundColor: updatedCount > 0 ? Colors.green : Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context); // Dismiss loading
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update reminders: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<String?> getUserRole() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return null;
@@ -194,7 +334,8 @@ class SettingsPage extends StatelessWidget {
                           final isSyncHead = role == 'sync head' ||
                               role == 'synchead' ||
                               role == 'sync-head';
-                          if (isAdmin || isSyncHead) {
+                          final isDmeAdmin = role == 'dme admin' || role == 'dme_admin';
+                          if (isAdmin || isSyncHead || isDmeAdmin) {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
@@ -223,6 +364,19 @@ class SettingsPage extends StatelessWidget {
                                     ),
                                   ),
                                 ],
+                                const SizedBox(height: 16),
+                                ElevatedButton.icon(
+                                  onPressed: () =>
+                                      _fixPendingRemindersWithRemarks(context),
+                                  icon: const Icon(
+                                      Icons.phone_forwarded_rounded),
+                                  label: const Text(
+                                      'Mark Pending with Remarks as Called [TEMP]'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.teal[700],
+                                    foregroundColor: Colors.white,
+                                  ),
+                                ),
                                 const SizedBox(height: 32),
                               ],
                             );

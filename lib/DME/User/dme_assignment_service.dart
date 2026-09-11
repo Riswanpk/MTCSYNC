@@ -72,26 +72,26 @@ class DmeAssignmentService {
     final client = await DmeConfig.getClient();
     if (client == null) return false;
 
-    // 1. Try checking reminder_assignment table
+    // 1. Try checking reminder_assignment table (checks assigned_date first, then assignment_date)
     try {
       final res = await client
           .from('reminder_assignment')
           .select('id')
-          .eq('assignment_date', todayStr)
-          .inFilter('branch_id', userBranches)
+          .eq('assigned_date', todayStr)
+          .inFilter('branch_id', userBranches.map((b) => b.toString()).toList())
           .limit(1);
       if ((res as List).isNotEmpty) {
         return true;
       }
     } catch (_) {
       try {
-        final res2 = await client
-            .from('dme_reminder_assignments')
+        final resLegacy = await client
+            .from('reminder_assignment')
             .select('id')
             .eq('assignment_date', todayStr)
             .inFilter('branch_id', userBranches)
             .limit(1);
-        if ((res2 as List).isNotEmpty) {
+        if ((resLegacy as List).isNotEmpty) {
           return true;
         }
       } catch (_) {}
@@ -124,7 +124,7 @@ class DmeAssignmentService {
       final res = await client
           .from('reminder_assignment')
           .select()
-          .eq('assignment_date', dateStr);
+          .eq('assigned_date', dateStr);
       for (var item in (res as List)) {
         final bId = int.tryParse(item['branch_id']?.toString() ?? '');
         if (bId != null) {
@@ -134,7 +134,7 @@ class DmeAssignmentService {
     } catch (_) {
       try {
         final res = await client
-            .from('dme_reminder_assignments')
+            .from('reminder_assignment')
             .select()
             .eq('assignment_date', dateStr);
         for (var item in (res as List)) {
@@ -155,6 +155,7 @@ class DmeAssignmentService {
     required String dateStr,
     required Map<int, List<String>> branchToActiveUserUids,
     required Map<String, String> userUidToName,
+    Map<String, String>? userUidToEmail,
     required String adminEmail,
   }) async {
     final client = await DmeConfig.getClient();
@@ -164,6 +165,33 @@ class DmeAssignmentService {
     int totalAssigned = 0;
     final nowIso = DateTime.now().toIso8601String();
     final currentDay = DateTime.tryParse(dateStr) ?? DateTime.now();
+
+    // Track total calls and leftovers assigned across all branches for each user today to ensure fair distribution
+    final Map<String, int> globalUserLeftoverCount = {};
+    final Map<String, int> globalUserTotalCount = {};
+    for (final users in branchToActiveUserUids.values) {
+      for (final u in users) {
+        globalUserLeftoverCount.putIfAbsent(u, () => 0);
+        globalUserTotalCount.putIfAbsent(u, () => 0);
+      }
+    }
+
+    // Clean up previous assignment audit logs for today for these branches so absent users or old counts don't linger on re-assign
+    try {
+      final branchIdsStr = branchToActiveUserUids.keys.map((b) => b.toString()).toList();
+      await client
+          .from('reminder_assignment')
+          .delete()
+          .eq('assigned_date', dateStr)
+          .inFilter('branch_id', branchIdsStr);
+    } catch (_) {}
+    try {
+      await client
+          .from('dme_reminder_assignments')
+          .delete()
+          .eq('assignment_date', dateStr)
+          .inFilter('branch_id', branchToActiveUserUids.keys.toList());
+    } catch (_) {}
 
     for (final entry in branchToActiveUserUids.entries) {
       final branchId = entry.key;
@@ -223,23 +251,39 @@ class DmeAssignmentService {
         }
       }
 
-      // Shuffle both pools
+      // Shuffle both pools for randomness
       final rnd = Random();
       leftoverIds.shuffle(rnd);
       todayIds.shuffle(rnd);
 
-      final numUsers = activeUsers.length;
       final Map<String, List<int>> userLeftovers = {for (var u in activeUsers) u: []};
       final Map<String, List<int>> userTodays = {for (var u in activeUsers) u: []};
 
-      for (int i = 0; i < leftoverIds.length; i++) {
-        final targetUser = activeUsers[i % numUsers];
-        userLeftovers[targetUser]!.add(leftoverIds[i]);
+      // Fairly distribute leftovers:
+      // Always pick the present user of this branch who currently has the fewest assigned leftovers (breaking ties with fewest total calls)
+      for (final id in leftoverIds) {
+        final sortedUsers = List<String>.from(activeUsers)..sort((a, b) {
+          final lDiff = (globalUserLeftoverCount[a] ?? 0).compareTo(globalUserLeftoverCount[b] ?? 0);
+          if (lDiff != 0) return lDiff;
+          return (globalUserTotalCount[a] ?? 0).compareTo(globalUserTotalCount[b] ?? 0);
+        });
+        final targetUser = sortedUsers.first;
+        userLeftovers[targetUser]!.add(id);
+        globalUserLeftoverCount[targetUser] = (globalUserLeftoverCount[targetUser] ?? 0) + 1;
+        globalUserTotalCount[targetUser] = (globalUserTotalCount[targetUser] ?? 0) + 1;
       }
 
-      for (int j = 0; j < todayIds.length; j++) {
-        final targetUser = activeUsers[j % numUsers];
-        userTodays[targetUser]!.add(todayIds[j]);
+      // Fairly distribute today's reminders:
+      // Always pick the present user of this branch who currently has the fewest total calls (breaking ties with fewest today calls)
+      for (final id in todayIds) {
+        final sortedUsers = List<String>.from(activeUsers)..sort((a, b) {
+          final tDiff = (globalUserTotalCount[a] ?? 0).compareTo(globalUserTotalCount[b] ?? 0);
+          if (tDiff != 0) return tDiff;
+          return (userTodays[a]?.length ?? 0).compareTo(userTodays[b]?.length ?? 0);
+        });
+        final targetUser = sortedUsers.first;
+        userTodays[targetUser]!.add(id);
+        globalUserTotalCount[targetUser] = (globalUserTotalCount[targetUser] ?? 0) + 1;
       }
 
       const int batchSize = 200;
@@ -272,31 +316,156 @@ class DmeAssignmentService {
       totalAssigned += branchCount;
 
       // 2. Record in reminder_assignment audit table
-      final payload = {
-        'assignment_date': dateStr,
-        'branch_id': branchId,
-        'assigned_user_ids': activeUsers,
-        'assigned_user_names': activeUsers.map((u) => userUidToName[u] ?? u).toList(),
-        'total_reminders': branchCount,
-        'assigned_by': adminEmail,
-        'updated_at': nowIso,
-      };
-
-      try {
-        await client.from('reminder_assignment').upsert(payload, onConflict: 'assignment_date,branch_id');
-      } catch (tErr) {
+      for (var user in activeUsers) {
+        final uEmail = userUidToEmail?[user] ?? user;
+        final count = (userLeftovers[user]?.length ?? 0) + (userTodays[user]?.length ?? 0);
         try {
-          await client.from('dme_reminder_assignments').upsert(payload, onConflict: 'assignment_date,branch_id');
-        } catch (_) {
-          debugPrint('Notice saving reminder_assignment record: $tErr');
+          await client.from('reminder_assignment').upsert({
+            'assigned_date': dateStr,
+            'branch_id': branchId.toString(),
+            'user_email': uEmail,
+            'reminder_count': count,
+          }, onConflict: 'assigned_date,branch_id,user_email');
+        } catch (tErr) {
+          debugPrint('Error inserting reminder_assignment for $uEmail in branch $branchId: $tErr');
         }
       }
+
+      // Also attempt fallback or legacy structure if dme_reminder_assignments exists
+      try {
+        await client.from('dme_reminder_assignments').upsert({
+          'assignment_date': dateStr,
+          'branch_id': branchId,
+          'assigned_user_ids': activeUsers,
+          'assigned_user_names': activeUsers.map((u) => userUidToName[u] ?? u).toList(),
+          'total_reminders': branchCount,
+          'assigned_by': adminEmail,
+          'updated_at': nowIso,
+        }, onConflict: 'assignment_date,branch_id');
+      } catch (_) {}
     }
 
     return {
       'total_assigned': totalAssigned,
       'branch_counts': branchAssignedCounts,
     };
+  }
+
+  /// Undo reminder assignments for the given date (defaults to today):
+  /// 1. Finds all pending reminders that were assigned for dateStr or overdue with pending assigned.
+  /// 2. Resets their assigned_to = null, assigned_date = null, is_overdue_leftover = false.
+  /// 3. Deletes audit records from reminder_assignment and dme_reminder_assignments for dateStr.
+  /// Returns the number of reminders unassigned.
+  static Future<int> undoTodayAssignments({
+    required String dateStr,
+    List<int>? branchIds,
+  }) async {
+    final client = await DmeConfig.getClient();
+    if (client == null) throw Exception('Supabase client not initialized');
+
+    final Set<int> candidateIdSet = {};
+
+    // 1. Fetch pending reminders where assigned_date == dateStr
+    int offset = 0;
+    const int pageSize = 1000;
+    bool hasMore = true;
+
+    while (hasMore) {
+      var query = client
+          .from('dme_reminders')
+          .select('id')
+          .eq('status', 'pending')
+          .eq('assigned_date', dateStr);
+
+      if (branchIds != null && branchIds.isNotEmpty) {
+        query = query.inFilter('last_purchase_branch', branchIds);
+      }
+
+      final batch = await query.range(offset, offset + pageSize - 1);
+      final list = batch as List;
+      for (var item in list) {
+        final id = int.tryParse(item['id']?.toString() ?? '');
+        if (id != null) candidateIdSet.add(id);
+      }
+
+      if (list.length < pageSize) {
+        hasMore = false;
+      } else {
+        offset += pageSize;
+      }
+    }
+
+    // Also check pending reminders that have assigned_to != null and reminder_date <= dateStrT23:59:59
+    offset = 0;
+    hasMore = true;
+    while (hasMore) {
+      var query = client
+          .from('dme_reminders')
+          .select('id')
+          .eq('status', 'pending')
+          .not('assigned_to', 'is', null)
+          .lte('reminder_date', '${dateStr}T23:59:59');
+
+      if (branchIds != null && branchIds.isNotEmpty) {
+        query = query.inFilter('last_purchase_branch', branchIds);
+      }
+
+      final batch = await query.range(offset, offset + pageSize - 1);
+      final list = batch as List;
+      for (var item in list) {
+        final id = int.tryParse(item['id']?.toString() ?? '');
+        if (id != null) candidateIdSet.add(id);
+      }
+
+      if (list.length < pageSize) {
+        hasMore = false;
+      } else {
+        offset += pageSize;
+      }
+    }
+
+    final candidateIds = candidateIdSet.toList();
+
+    // 2. Batch update reminders to unassign them
+    const int batchSize = 200;
+    final nowIso = DateTime.now().toIso8601String();
+    for (int i = 0; i < candidateIds.length; i += batchSize) {
+      final chunk = candidateIds.sublist(i, min(i + batchSize, candidateIds.length));
+      await client.from('dme_reminders').update({
+        'assigned_to': null,
+        'assigned_date': null,
+        'is_overdue_leftover': false,
+        'updated_at': nowIso,
+      }).inFilter('id', chunk);
+    }
+
+    // 3. Delete records from reminder_assignment audit table
+    try {
+      var query = client.from('reminder_assignment').delete().eq('assigned_date', dateStr);
+      if (branchIds != null && branchIds.isNotEmpty) {
+        query = query.inFilter('branch_id', branchIds.map((b) => b.toString()).toList());
+      }
+      await query;
+    } catch (_) {
+      try {
+        var queryLegacy = client.from('reminder_assignment').delete().eq('assignment_date', dateStr);
+        if (branchIds != null && branchIds.isNotEmpty) {
+          queryLegacy = queryLegacy.inFilter('branch_id', branchIds);
+        }
+        await queryLegacy;
+      } catch (_) {}
+    }
+
+    // 4. Delete records from dme_reminder_assignments legacy table
+    try {
+      var queryLegacy = client.from('dme_reminder_assignments').delete().eq('assignment_date', dateStr);
+      if (branchIds != null && branchIds.isNotEmpty) {
+        queryLegacy = queryLegacy.inFilter('branch_id', branchIds);
+      }
+      await queryLegacy;
+    } catch (_) {}
+
+    return candidateIds.length;
   }
 
   /// Ensure reminders for today are partitioned and assigned across the eligible users
@@ -387,18 +556,32 @@ class DmeAssignmentService {
       leftoverIds.shuffle(rnd);
       todayIds.shuffle(rnd);
 
-      // 5. Group by assigned user
       final Map<String, List<int>> userLeftovers = {for (var u in eligibleUsers) u: []};
       final Map<String, List<int>> userTodays = {for (var u in eligibleUsers) u: []};
+      final Map<String, int> userLeftoverCount = {for (var u in eligibleUsers) u: 0};
+      final Map<String, int> userTotalCount = {for (var u in eligibleUsers) u: 0};
 
-      for (int i = 0; i < leftoverIds.length; i++) {
-        final targetUser = eligibleUsers[i % numUsers];
-        userLeftovers[targetUser]!.add(leftoverIds[i]);
+      for (final id in leftoverIds) {
+        final sortedUsers = List<String>.from(eligibleUsers)..sort((a, b) {
+          final lDiff = (userLeftoverCount[a] ?? 0).compareTo(userLeftoverCount[b] ?? 0);
+          if (lDiff != 0) return lDiff;
+          return (userTotalCount[a] ?? 0).compareTo(userTotalCount[b] ?? 0);
+        });
+        final targetUser = sortedUsers.first;
+        userLeftovers[targetUser]!.add(id);
+        userLeftoverCount[targetUser] = (userLeftoverCount[targetUser] ?? 0) + 1;
+        userTotalCount[targetUser] = (userTotalCount[targetUser] ?? 0) + 1;
       }
 
-      for (int j = 0; j < todayIds.length; j++) {
-        final targetUser = eligibleUsers[j % numUsers];
-        userTodays[targetUser]!.add(todayIds[j]);
+      for (final id in todayIds) {
+        final sortedUsers = List<String>.from(eligibleUsers)..sort((a, b) {
+          final tDiff = (userTotalCount[a] ?? 0).compareTo(userTotalCount[b] ?? 0);
+          if (tDiff != 0) return tDiff;
+          return (userTodays[a]?.length ?? 0).compareTo(userTodays[b]?.length ?? 0);
+        });
+        final targetUser = sortedUsers.first;
+        userTodays[targetUser]!.add(id);
+        userTotalCount[targetUser] = (userTotalCount[targetUser] ?? 0) + 1;
       }
 
       // 6. Write assignments to Supabase in chunks
