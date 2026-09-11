@@ -97,14 +97,14 @@ class _InsightsPageState extends State<InsightsPage> {
     String worstLeadUserId = '';
     int worstLeadCount = 1 << 30; // Large number
 
-    leadsCount.forEach((uid, count) {
-      if (count > topLeadCount) {
+    leadsCount.forEach((uid, totalCount) {
+      if (totalCount > topLeadCount) {
         topLeadUserId = uid;
-        topLeadCount = count;
+        topLeadCount = totalCount;
       }
-      if (count < worstLeadCount) {
+      if (totalCount < worstLeadCount) {
         worstLeadUserId = uid;
-        worstLeadCount = count;
+        worstLeadCount = totalCount;
       }
     });
 
@@ -173,14 +173,14 @@ class _InsightsPageState extends State<InsightsPage> {
     String worstTodoUserId = '';
     int worstTodoCount = 1 << 30;
 
-    todosCount.forEach((uid, count) {
-      if (count > topTodoCount) {
+    todosCount.forEach((uid, totalCount) {
+      if (totalCount > topTodoCount) {
         topTodoUserId = uid;
-        topTodoCount = count;
+        topTodoCount = totalCount;
       }
-      if (count < worstTodoCount) {
+      if (totalCount < worstTodoCount) {
         worstTodoUserId = uid;
-        worstTodoCount = count;
+        worstTodoCount = totalCount;
       }
     });
 

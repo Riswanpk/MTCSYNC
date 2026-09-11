@@ -231,7 +231,7 @@ class ShrinkOnTouchCard extends StatefulWidget {
   const ShrinkOnTouchCard({super.key, required this.child});
 
   @override
-  _ShrinkOnTouchCardState createState() => _ShrinkOnTouchCardState();
+  State<ShrinkOnTouchCard> createState() => _ShrinkOnTouchCardState();
 }
 
 class _ShrinkOnTouchCardState extends State<ShrinkOnTouchCard> with SingleTickerProviderStateMixin {
