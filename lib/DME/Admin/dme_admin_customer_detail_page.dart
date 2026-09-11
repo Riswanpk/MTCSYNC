@@ -167,10 +167,21 @@ class _DmeAdminCustomerDetailPageState extends State<DmeAdminCustomerDetailPage>
                                             if (salesman.isNotEmpty)
                                               Text('Salesman: $salesman', style: TextStyle(fontSize: 12, color: Colors.grey[700])),
                                             const SizedBox(height: 2),
-                                            Text(
-                                              'Last Purchase: ${_formatDate(lastPurchaseDate)}',
-                                              style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500),
-                                            ),
+                                             Row(
+                                               children: [
+                                                 Text(
+                                                   'Last Purchase: ${_formatDate(lastPurchaseDate)}',
+                                                   style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500),
+                                                 ),
+                                                 if (_customer['creation_date'] != null || _customer['created_at'] != null) ...[
+                                                   const SizedBox(width: 8),
+                                                   Text(
+                                                     '• Created: ${_formatDate(_customer['creation_date'] ?? _customer['created_at'])}',
+                                                     style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500),
+                                                   ),
+                                                 ],
+                                               ],
+                                             ),
                                             if (_customer['primary_branch'] != null) ...[
                                               const SizedBox(height: 4),
                                               Container(

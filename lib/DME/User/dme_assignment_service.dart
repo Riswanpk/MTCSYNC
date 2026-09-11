@@ -221,19 +221,34 @@ class DmeAssignmentService {
       bool hasMore = true;
 
       while (hasMore) {
-        var query = client
-            .from('dme_reminders')
-            .select(
-                'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, assigned_to, assigned_date, is_overdue_leftover, dme_customers(id, name, phone, address, salesman)')
-            .eq('assigned_to', currentUserId)
-            .eq('assigned_date', todayStr)
-            .eq('status', 'pending');
+        dynamic batch;
+        try {
+          var query = client
+              .from('dme_reminders')
+              .select(
+                  'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, called_by, assigned_to, assigned_date, is_overdue_leftover, dme_customers(id, name, phone, address, salesman)')
+              .eq('assigned_to', currentUserId)
+              .eq('assigned_date', todayStr)
+              .eq('status', 'pending');
 
-        if (filterBranchId != null) {
-          query = query.eq('last_purchase_branch', filterBranchId);
+          if (filterBranchId != null) {
+            query = query.eq('last_purchase_branch', filterBranchId);
+          }
+          batch = await query.range(offset, offset + pageSize - 1);
+        } catch (_) {
+          var fallbackQuery = client
+              .from('dme_reminders')
+              .select(
+                  'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, assigned_to, assigned_date, is_overdue_leftover, dme_customers(id, name, phone, address, salesman)')
+              .eq('assigned_to', currentUserId)
+              .eq('assigned_date', todayStr)
+              .eq('status', 'pending');
+
+          if (filterBranchId != null) {
+            fallbackQuery = fallbackQuery.eq('last_purchase_branch', filterBranchId);
+          }
+          batch = await fallbackQuery.range(offset, offset + pageSize - 1);
         }
-
-        final batch = await query.range(offset, offset + pageSize - 1);
         final list = batch as List;
         data.addAll(list);
 
@@ -400,16 +415,29 @@ class DmeAssignmentService {
       bool hasMore = true;
 
       while (hasMore) {
-        var query = client
-            .from('dme_reminders')
-            .select(
-                'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, assigned_to, dme_customers(id, name, phone, address, salesman)')
-            .inFilter('status', ['completed', 'called'])
-            .inFilter('last_purchase_branch', branches)
-            .gte('updated_at', '${todayStr}T00:00:00')
-            .lte('updated_at', '${todayStr}T23:59:59');
+        dynamic batch;
+        try {
+          batch = await client
+              .from('dme_reminders')
+              .select(
+                  'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, called_by, assigned_to, dme_customers(id, name, phone, address, salesman)')
+              .inFilter('status', ['completed', 'called'])
+              .inFilter('last_purchase_branch', branches)
+              .gte('updated_at', '${todayStr}T00:00:00')
+              .lte('updated_at', '${todayStr}T23:59:59')
+              .range(offset, offset + pageSize - 1);
+        } catch (_) {
+          batch = await client
+              .from('dme_reminders')
+              .select(
+                  'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, assigned_to, dme_customers(id, name, phone, address, salesman)')
+              .inFilter('status', ['completed', 'called'])
+              .inFilter('last_purchase_branch', branches)
+              .gte('updated_at', '${todayStr}T00:00:00')
+              .lte('updated_at', '${todayStr}T23:59:59')
+              .range(offset, offset + pageSize - 1);
+        }
 
-        final batch = await query.range(offset, offset + pageSize - 1);
         final list = batch as List;
         data.addAll(list);
         if (list.length < pageSize) {
@@ -420,9 +448,14 @@ class DmeAssignmentService {
       }
 
       final parsed = _parseReminderList(data);
-      // Filter to current user if assigned_to is present, or show branch completions
+      // Filter to current user if assigned_to or called_by matches
       final userFiltered = parsed.where((r) {
         final assigned = r['assigned_to']?.toString();
+        final called = r['called_by']?.toString().toLowerCase();
+        if (called != null && called.isNotEmpty) {
+          // If called_by email is set, show it to matching branch user or assigned user
+          return true;
+        }
         if (assigned != null && assigned.isNotEmpty) {
           return assigned == currentUserId;
         }

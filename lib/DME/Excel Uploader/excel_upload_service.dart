@@ -101,9 +101,10 @@ class ExcelUploadService {
 
     onProgress(0.3, 'Syncing ${customersToUpsert.length} customer(s)...');
 
-    // Determine which customers already exist in dme_customers and check their primary_branch
+    // Determine which customers already exist in dme_customers and check their primary_branch and creation_date
     final activePhones = customersToUpsert.keys.toList();
     final Map<String, int?> existingCustomerPrimaryBranches = {};
+    final Map<String, String?> existingCustomerCreationDates = {};
     for (int i = 0; i < activePhones.length; i += 500) {
       final chunk = activePhones.sublist(
         i,
@@ -112,24 +113,25 @@ class ExcelUploadService {
       try {
         final existingRows = await client
             .from('dme_customers')
-            .select('phone, primary_branch')
+            .select('phone, primary_branch, creation_date')
             .inFilter('phone', chunk);
         for (var row in (existingRows as List)) {
           final p = row['phone']?.toString();
           if (p != null) {
             existingCustomerPrimaryBranches[p] = row['primary_branch'] as int?;
+            existingCustomerCreationDates[p] = row['creation_date']?.toString();
           }
         }
       } catch (e) {
-        debugPrint('Notice checking existing customers for primary branch: $e');
+        debugPrint('Notice checking existing customers for primary branch / creation date: $e');
       }
     }
 
-    // Determine the earliest purchase branch for each customer in this batch
+    // Determine the earliest purchase branch and earliest purchase date for each customer in this batch
     final Map<String, Map<String, dynamic>> earliestSaleByPhone = {};
     for (var sale in groupedSales) {
       final activePhone = activePhoneBySale['${sale.party}_${sale.phone}_${sale.date.millisecondsSinceEpoch}'] ?? sale.phone;
-      if (activePhone.isEmpty || sale.branchId == null) continue;
+      if (activePhone.isEmpty) continue;
 
       final current = earliestSaleByPhone[activePhone];
       if (current == null) {
@@ -142,29 +144,41 @@ class ExcelUploadService {
         if (sale.date.isBefore(currentDate)) {
           earliestSaleByPhone[activePhone] = {
             'date': sale.date,
-            'branchId': sale.branchId,
+            'branchId': sale.branchId ?? current['branchId'],
           };
+        } else if (current['branchId'] == null && sale.branchId != null) {
+          current['branchId'] = sale.branchId;
         }
       }
     }
 
-    // Assign primary_branch:
+    // Assign primary_branch and creation_date:
     // 1. For newly registered customers (not in existingCustomerPrimaryBranches)
-    // 2. For existing customers who currently have primary_branch == null
-    // If an existing customer already has a primary_branch, DO NOT overwrite it.
+    // 2. For existing customers who currently have primary_branch == null or creation_date == null
+    // If an existing customer already has a primary_branch or creation_date, DO NOT overwrite it.
     for (var entry in customersToUpsert.entries) {
       final phone = entry.key;
       final isExisting = existingCustomerPrimaryBranches.containsKey(phone);
       final existingPrimary = existingCustomerPrimaryBranches[phone];
+      final existingCreationDate = existingCustomerCreationDates[phone];
+      final earliest = earliestSaleByPhone[phone];
 
       if (!isExisting || existingPrimary == null) {
-        final earliest = earliestSaleByPhone[phone];
         if (earliest != null && earliest['branchId'] != null) {
           entry.value['primary_branch'] = earliest['branchId'];
         }
       } else {
         // Retain existing primary branch during upsert
         entry.value['primary_branch'] = existingPrimary;
+      }
+
+      if (!isExisting || existingCreationDate == null || existingCreationDate.isEmpty) {
+        if (earliest != null && earliest['date'] != null) {
+          entry.value['creation_date'] = DateFormat('yyyy-MM-dd').format(earliest['date'] as DateTime);
+        }
+      } else {
+        // Retain existing creation date during upsert
+        entry.value['creation_date'] = existingCreationDate;
       }
     }
 
@@ -179,10 +193,11 @@ class ExcelUploadService {
           )
           .select('id, phone');
     } catch (upsertErr) {
-      // If primary_branch column has not been added to DB yet, fallback without it
-      debugPrint('Customers upsert with primary_branch failed: $upsertErr. Falling back without primary_branch.');
+      // If primary_branch or creation_date column has not been added to DB yet, fallback gracefully
+      debugPrint('Customers upsert failed: $upsertErr. Falling back without extra columns.');
       for (var map in customersToUpsert.values) {
         map.remove('primary_branch');
+        map.remove('creation_date');
       }
       upsertedCustRes = await client
           .from('dme_customers')

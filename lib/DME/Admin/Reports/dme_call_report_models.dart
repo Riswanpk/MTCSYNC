@@ -15,6 +15,7 @@ class DmeCustomerCallItem {
   final bool isWhatsApp;
   final DateTime completedAt;
   final String? uploadedBy;
+  final String? calledBy;
   final String? proofImageUrl;
 
   DmeCustomerCallItem({
@@ -31,6 +32,7 @@ class DmeCustomerCallItem {
     required this.isWhatsApp,
     required this.completedAt,
     this.uploadedBy,
+    this.calledBy,
     this.proofImageUrl,
   });
 

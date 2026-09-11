@@ -141,14 +141,28 @@ class _DmeWhatsAppProofPageState extends State<DmeWhatsAppProofPage> {
         debugPrint('dme_whatsapp_proofs table insert note: $tableErr');
       }
 
-      // 3. Mark reminder status as 'completed'
-      await client.from('dme_reminders').update({
+      // 3. Mark reminder status as 'completed' with called_by user email
+      final updatePayload = <String, dynamic>{
         'status': 'completed',
         'remarks': '[WhatsApp] $remarks',
         'call_duration': 0,
         'called_timestamp': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', reminderId);
+      };
+      if (uploaderEmail.isNotEmpty && uploaderEmail != 'unknown') {
+        updatePayload['called_by'] = uploaderEmail;
+      }
+
+      try {
+        await client.from('dme_reminders').update(updatePayload).eq('id', reminderId);
+      } catch (remErr) {
+        if (remErr.toString().contains('called_by')) {
+          updatePayload.remove('called_by');
+          await client.from('dme_reminders').update(updatePayload).eq('id', reminderId);
+        } else {
+          rethrow;
+        }
+      }
 
       setState(() => _isUploading = false);
 

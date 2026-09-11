@@ -100,14 +100,26 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
         final branches = _selectedBranchId != null ? [_selectedBranchId!] : _userAssignedBranches;
         final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-        final res = await client
-            .from('dme_reminders')
-            .select(
-                'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, dme_customers(id, name, phone, address, salesman)')
-            .eq('status', 'pending')
-            .inFilter('last_purchase_branch', branches)
-            .lt('reminder_date', todayStr)
-            .limit(200);
+        dynamic res;
+        try {
+          res = await client
+              .from('dme_reminders')
+              .select(
+                  'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, called_by, dme_customers(id, name, phone, address, salesman)')
+              .eq('status', 'pending')
+              .inFilter('last_purchase_branch', branches)
+              .lt('reminder_date', todayStr)
+              .limit(200);
+        } catch (_) {
+          res = await client
+              .from('dme_reminders')
+              .select(
+                  'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, dme_customers(id, name, phone, address, salesman)')
+              .eq('status', 'pending')
+              .inFilter('last_purchase_branch', branches)
+              .lt('reminder_date', todayStr)
+              .limit(200);
+        }
 
         for (var item in (res as List)) {
           final rem = Map<String, dynamic>.from(item);
@@ -524,6 +536,7 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
           final remarks = item['remarks']?.toString();
           final isLeftover = item['is_overdue_leftover'] == true;
           final callDuration = item['call_duration'] as int?;
+          final calledBy = item['called_by']?.toString();
 
           return Card(
             elevation: isLeftover ? 3 : 2,
@@ -665,6 +678,19 @@ class _DmeRemindersPageState extends State<DmeRemindersPage> with SingleTickerPr
                               ],
                             ],
                           ),
+                          if (calledBy != null && calledBy.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const Icon(Icons.person_pin_rounded, size: 12, color: Colors.green),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Called by: $calledBy',
+                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.green),
+                                ),
+                              ],
+                            ),
+                          ],
                           if (remarks != null && remarks.isNotEmpty) ...[
                             const SizedBox(height: 6),
                             Container(

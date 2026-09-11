@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:call_log/call_log.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../dme_constants.dart';
 import '../dme_config.dart';
 import 'dme_whatsapp_proof_page.dart';
@@ -120,13 +121,25 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
 
     setState(() => _isLoadingCallHistory = true);
     try {
-      final res = await client
-          .from('dme_reminders')
-          .select('id, reminder_date, last_purchase_branch, status, remarks, call_duration, called_timestamp, updated_at')
-          .eq('customer_id', customerId)
-          .inFilter('status', ['completed', 'called'])
-          .order('updated_at', ascending: false)
-          .limit(10);
+      dynamic res;
+      try {
+        res = await client
+            .from('dme_reminders')
+            .select('id, reminder_date, last_purchase_branch, status, remarks, call_duration, called_timestamp, called_by, updated_at')
+            .eq('customer_id', customerId)
+            .inFilter('status', ['completed', 'called'])
+            .order('updated_at', ascending: false)
+            .limit(10);
+      } catch (_) {
+        // Fallback if called_by column not in DB yet
+        res = await client
+            .from('dme_reminders')
+            .select('id, reminder_date, last_purchase_branch, status, remarks, call_duration, called_timestamp, updated_at')
+            .eq('customer_id', customerId)
+            .inFilter('status', ['completed', 'called'])
+            .order('updated_at', ascending: false)
+            .limit(10);
+      }
 
       final List<Map<String, dynamic>> list = [];
       for (var item in (res as List)) {
@@ -329,8 +342,9 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
           ? 'Call not picked up - Rescheduled for $formattedDisplay'
           : 'Call under 10s (${dur}s) - Rescheduled for $formattedDisplay';
       final finalRemarks = userRemarks.isNotEmpty ? userRemarks : defaultRemark;
+      final userEmail = FirebaseAuth.instance.currentUser?.email;
 
-      await client.from('dme_reminders').update({
+      final updatePayload = <String, dynamic>{
         'reminder_date': targetDateStr,
         'status': 'pending',
         'remarks': finalRemarks,
@@ -340,7 +354,22 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
         'assigned_date': null,
         'is_overdue_leftover': false,
         'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', reminderId);
+      };
+      if (userEmail != null && userEmail.isNotEmpty) {
+        updatePayload['called_by'] = userEmail;
+      }
+
+      try {
+        await client.from('dme_reminders').update(updatePayload).eq('id', reminderId);
+      } catch (err) {
+        // Fallback if called_by column has not been added to Supabase table yet
+        if (err.toString().contains('called_by')) {
+          updatePayload.remove('called_by');
+          await client.from('dme_reminders').update(updatePayload).eq('id', reminderId);
+        } else {
+          rethrow;
+        }
+      }
 
       setState(() => _isSaving = false);
 
@@ -380,15 +409,31 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     setState(() => _isSaving = true);
     try {
       final reminderId = _reminder['id'];
+      final userEmail = FirebaseAuth.instance.currentUser?.email;
 
-      // Mark current reminder as completed with call duration and timestamp
-      await client.from('dme_reminders').update({
+      // Mark current reminder as completed with call duration, timestamp, and called_by email
+      final updatePayload = <String, dynamic>{
         'status': 'completed',
         'remarks': remarks,
         'call_duration': _callDuration,
         'called_timestamp': (_calledTimestamp ?? DateTime.now()).toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', reminderId);
+      };
+      if (userEmail != null && userEmail.isNotEmpty) {
+        updatePayload['called_by'] = userEmail;
+      }
+
+      try {
+        await client.from('dme_reminders').update(updatePayload).eq('id', reminderId);
+      } catch (err) {
+        // Fallback if called_by column has not been added to Supabase table yet
+        if (err.toString().contains('called_by')) {
+          updatePayload.remove('called_by');
+          await client.from('dme_reminders').update(updatePayload).eq('id', reminderId);
+        } else {
+          rethrow;
+        }
+      }
 
       setState(() => _isSaving = false);
 
@@ -563,6 +608,19 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                         Text('Last Purchase: ${_formatDate(lastPurchaseDateStr)}', style: TextStyle(fontSize: 12, color: Colors.grey[700])),
                       ],
                     ),
+                    if (_reminder['called_by'] != null && _reminder['called_by'].toString().isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(Icons.person_pin_rounded, size: 16, color: Colors.green),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Called by: ${_reminder['called_by']}',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.green),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -734,6 +792,19 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                                     fontStyle: FontStyle.italic,
                                     color: isDark ? Colors.white70 : Colors.grey[800],
                                   ),
+                                ),
+                              ],
+                              if (h['called_by'] != null && h['called_by'].toString().isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.person_outline_rounded, size: 12, color: Colors.grey),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Called by: ${h['called_by']}',
+                                      style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ],

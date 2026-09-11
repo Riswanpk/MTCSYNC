@@ -160,7 +160,7 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
       while (hasMoreRem) {
         var remindersQuery = client
             .from('dme_reminders')
-            .select('id, customer_id, reminder_date, last_purchase_branch, status, remarks, updated_at, dme_customers(id, name, phone, address, salesman)')
+            .select('id, customer_id, reminder_date, last_purchase_branch, status, remarks, called_by, updated_at, dme_customers(id, name, phone, address, salesman)')
             .inFilter('status', ['completed', 'called'])
             .gte('updated_at', '${startStr}T00:00:00')
             .lte('updated_at', '${endStr}T23:59:59');
@@ -171,7 +171,25 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
           remindersQuery = remindersQuery.inFilter('last_purchase_branch', _allowedBranches);
         }
 
-        final batch = await remindersQuery.range(remOffset, remOffset + pageSize - 1);
+        dynamic batch;
+        try {
+          batch = await remindersQuery.range(remOffset, remOffset + pageSize - 1);
+        } catch (_) {
+          // Fallback if called_by not yet in DB schema
+          var fallbackQuery = client
+              .from('dme_reminders')
+              .select('id, customer_id, reminder_date, last_purchase_branch, status, remarks, updated_at, dme_customers(id, name, phone, address, salesman)')
+              .inFilter('status', ['completed', 'called'])
+              .gte('updated_at', '${startStr}T00:00:00')
+              .lte('updated_at', '${endStr}T23:59:59');
+          if (_selectedBranchId != null) {
+            fallbackQuery = fallbackQuery.eq('last_purchase_branch', _selectedBranchId!);
+          } else if (_allowedBranches.isNotEmpty) {
+            fallbackQuery = fallbackQuery.inFilter('last_purchase_branch', _allowedBranches);
+          }
+          batch = await fallbackQuery.range(remOffset, remOffset + pageSize - 1);
+        }
+
         final list = batch as List<dynamic>;
         remList.addAll(list);
 
@@ -234,6 +252,7 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
         final branchName = DmeConstants.getBranchName(bId);
         final status = (r['status'] ?? 'completed').toString();
         final remarks = (r['remarks'] ?? '').toString().trim();
+        final calledBy = r['called_by']?.toString().trim().toLowerCase();
         final updatedAtStr = (r['updated_at'] ?? r['reminder_date'])?.toString() ?? '';
         final completedAt = DateTime.tryParse(updatedAtStr) ?? DateTime.now();
 
@@ -271,6 +290,7 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
           isWhatsApp: isWhatsApp,
           completedAt: completedAt,
           uploadedBy: uploadedBy,
+          calledBy: calledBy,
           proofImageUrl: proofUrl,
         ));
       }
@@ -292,12 +312,16 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
         for (var item in allCallItems) {
           bool isMatch = false;
 
-          // Match by explicit uploaded_by email
-          if (item.uploadedBy != null && item.uploadedBy == email) {
+          // 1. Match by explicit called_by email on the reminder (highest priority)
+          if (item.calledBy != null && item.calledBy == email) {
             isMatch = true;
           }
-          // Match by branch assignment
-          else if (branches.contains(item.branchId)) {
+          // 2. Match by explicit uploaded_by email (for WhatsApp proof)
+          else if (item.uploadedBy != null && item.uploadedBy == email) {
+            isMatch = true;
+          }
+          // 3. Match by branch assignment if called_by / uploaded_by is not explicitly set
+          else if (item.calledBy == null && item.uploadedBy == null && branches.contains(item.branchId)) {
             isMatch = true;
           }
 
