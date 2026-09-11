@@ -35,6 +35,8 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
 
   List<Map<String, dynamic>> _salesHistory = [];
   bool _isLoadingHistory = false;
+  List<Map<String, dynamic>> _callHistory = [];
+  bool _isLoadingCallHistory = false;
 
   @override
   void initState() {
@@ -53,6 +55,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     }
 
     _fetchCustomerSalesHistory();
+    _fetchCustomerCallHistory();
   }
 
   @override
@@ -106,6 +109,41 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     } catch (e) {
       debugPrint('Error fetching sales history: $e');
       if (mounted) setState(() => _isLoadingHistory = false);
+    }
+  }
+
+  Future<void> _fetchCustomerCallHistory() async {
+    final client = await DmeConfig.getClient();
+    final customerId = _reminder['customer_id'];
+    final currentReminderId = _reminder['id'];
+    if (client == null || customerId == null) return;
+
+    setState(() => _isLoadingCallHistory = true);
+    try {
+      final res = await client
+          .from('dme_reminders')
+          .select('id, reminder_date, last_purchase_branch, status, remarks, call_duration, called_timestamp, updated_at')
+          .eq('customer_id', customerId)
+          .inFilter('status', ['completed', 'called'])
+          .order('updated_at', ascending: false)
+          .limit(10);
+
+      final List<Map<String, dynamic>> list = [];
+      for (var item in (res as List)) {
+        if (item['id'] != currentReminderId) {
+          list.add(Map<String, dynamic>.from(item));
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _callHistory = list;
+          _isLoadingCallHistory = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching call history: $e');
+      if (mounted) setState(() => _isLoadingCallHistory = false);
     }
   }
 
@@ -611,6 +649,103 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
               ),
             ),
             const SizedBox(height: 16),
+
+            // 2.5 Previous Call History (if any)
+            if (_isLoadingCallHistory)
+              const Center(child: Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator()))
+            else if (_callHistory.isNotEmpty) ...[
+              Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.history_edu_rounded, size: 20, color: Color(0xFF005BAC)),
+                          const SizedBox(width: 8),
+                          Text('Previous Call History (${_callHistory.length})',
+                              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _callHistory.length,
+                        separatorBuilder: (_, __) => const Divider(height: 16),
+                        itemBuilder: (context, idx) {
+                          final h = _callHistory[idx];
+                          final calledTs = h['called_timestamp'] ?? h['updated_at'];
+                          final dur = h['call_duration'] as int?;
+                          final remRemarks = h['remarks']?.toString() ?? '';
+                          final bId = h['last_purchase_branch'] as int?;
+                          final bName = DmeConstants.getBranchName(bId);
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    _formatDate(calledTs),
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                  Row(
+                                    children: [
+                                      if (dur != null && dur > 0) ...[
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.green.withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            '${dur}s',
+                                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                      ],
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF005BAC).withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          bName,
+                                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF005BAC)),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              if (remRemarks.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  remRemarks,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontStyle: FontStyle.italic,
+                                    color: isDark ? Colors.white70 : Colors.grey[800],
+                                  ),
+                                ),
+                              ],
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
 
             // 3. Call and WhatsApp Action Buttons
             SizedBox(

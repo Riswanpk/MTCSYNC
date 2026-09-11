@@ -6,11 +6,61 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'excel_uploader_models.dart';
 
 class ExcelUploadService {
+  /// Check if the exact Excel file has already been uploaded by its SHA-256 hash
+  static Future<Map<String, dynamic>?> checkDuplicateFile({
+    required SupabaseClient client,
+    required String fileHash,
+  }) async {
+    try {
+      final res = await client
+          .from('dme_excel_uploads')
+          .select('id, file_name, file_hash, uploaded_by, uploaded_at, sales_count, rows_count')
+          .eq('file_hash', fileHash)
+          .maybeSingle();
+      if (res != null) {
+        debugPrint('Duplicate file detected in dme_excel_uploads with hash: $fileHash');
+      }
+      return res != null ? Map<String, dynamic>.from(res) : null;
+    } catch (e) {
+      debugPrint('Error/Notice checking duplicate file upload in dme_excel_uploads: $e');
+      return null;
+    }
+  }
+
+  /// Records an uploaded file metadata and hash to prevent duplicate uploads in future
+  static Future<void> recordUpload({
+    required SupabaseClient client,
+    required String fileName,
+    required String fileHash,
+    required String uploadedBy,
+    required int salesCount,
+    required int rowsCount,
+  }) async {
+    try {
+      debugPrint('Recording upload into dme_excel_uploads: $fileName (hash: $fileHash)');
+      await client.from('dme_excel_uploads').insert({
+        'file_name': fileName,
+        'file_hash': fileHash,
+        'uploaded_by': uploadedBy,
+        'uploaded_at': DateTime.now().toIso8601String(),
+        'sales_count': salesCount,
+        'rows_count': rowsCount,
+      });
+      debugPrint('✓ Recorded upload $fileName in dme_excel_uploads successfully');
+    } catch (e) {
+      debugPrint('Error recording file upload hash in dme_excel_uploads: $e');
+      rethrow;
+    }
+  }
+
   /// Uploads all processed data to Supabase in fast batch operations
   static Future<int> uploadSales({
     required SupabaseClient client,
     required List<GroupedSale> groupedSales,
     required List<CustomerConflict> conflicts,
+    String? fileName,
+    String? fileHash,
+    int? rowsCount,
     required Function(double progress, String status) onProgress,
     required Function(String log) onLog,
   }) async {
@@ -304,9 +354,13 @@ class ExcelUploadService {
       }
     }
 
+    final List<Map<String, dynamic>> remindersToInsert = [];
+    final List<Map<String, dynamic>> remindersToUpdate = [];
+
     // Check existing reminders in database to ensure we advance due dates for existing customers
     final List<int> customerIdsWithNewReminders = remindersByCustomer.keys.toList();
     if (customerIdsWithNewReminders.isNotEmpty) {
+      final Map<int, List<Map<String, dynamic>>> existingRemindersByCustomer = {};
       try {
         // Fetch existing database reminders in chunks of 500
         for (int i = 0; i < customerIdsWithNewReminders.length; i += 500) {
@@ -321,38 +375,68 @@ class ExcelUploadService {
 
           for (var dbRow in (existingDbReminders as List)) {
             final cId = dbRow['customer_id'] as int?;
-            if (cId != null && remindersByCustomer.containsKey(cId)) {
-              final dbLastPurchaseStr = dbRow['last_purchase_date']?.toString();
-              final dbLastPurchase = dbLastPurchaseStr != null ? DateTime.tryParse(dbLastPurchaseStr) : null;
-
-              final currentObj = remindersByCustomer[cId]!;
-              final newLastPurchaseStr = currentObj['last_purchase_date']?.toString();
-              final newLastPurchase = newLastPurchaseStr != null ? DateTime.tryParse(newLastPurchaseStr) : null;
-
-              // If existing DB last purchase is newer than Excel, preserve the DB one
-              if (dbLastPurchase != null && newLastPurchase != null && dbLastPurchase.isAfter(newLastPurchase)) {
-                remindersByCustomer[cId] = {
-                  'customer_id': cId,
-                  'reminder_date': dbRow['reminder_date'],
-                  'last_purchase_date': dbRow['last_purchase_date'],
-                  'last_purchase_branch': currentObj['last_purchase_branch'],
-                  'status': dbRow['status'],
-                  'updated_at': DateTime.now().toIso8601String(),
-                };
-              } else {
-                // The newly uploaded invoice is newer: Reset status to 'pending' and advance reminder_date forward!
-                currentObj['status'] = 'pending';
-                currentObj['updated_at'] = DateTime.now().toIso8601String();
-              }
+            if (cId != null) {
+              existingRemindersByCustomer.putIfAbsent(cId, () => []).add(Map<String, dynamic>.from(dbRow));
             }
           }
         }
       } catch (checkErr) {
         debugPrint('Notice checking existing reminders: $checkErr');
       }
+
+      for (var entry in remindersByCustomer.entries) {
+        final cId = entry.key;
+        final newObj = entry.value;
+        final existingList = existingRemindersByCustomer[cId] ?? [];
+
+        // Check if there is an active pending reminder that hasn't been called yet
+        final pendingList = existingList.where((r) {
+          final st = (r['status'] ?? '').toString().toLowerCase();
+          return st == 'pending';
+        }).toList();
+
+        if (pendingList.isNotEmpty) {
+          // An active pending reminder exists: update it if new invoice is newer
+          final activePending = pendingList.first;
+          final dbLastPurchaseStr = activePending['last_purchase_date']?.toString();
+          final dbLastPurchase = dbLastPurchaseStr != null ? DateTime.tryParse(dbLastPurchaseStr) : null;
+
+          final newLastPurchaseStr = newObj['last_purchase_date']?.toString();
+          final newLastPurchase = newLastPurchaseStr != null ? DateTime.tryParse(newLastPurchaseStr) : null;
+
+          if (dbLastPurchase != null && newLastPurchase != null && dbLastPurchase.isAfter(newLastPurchase)) {
+            // DB invoice is newer, preserve existing reminder date
+            remindersToUpdate.add({
+              'id': activePending['id'],
+              'customer_id': cId,
+              'reminder_date': activePending['reminder_date'],
+              'last_purchase_date': activePending['last_purchase_date'],
+              'last_purchase_branch': newObj['last_purchase_branch'],
+              'status': 'pending',
+              'updated_at': DateTime.now().toIso8601String(),
+            });
+          } else {
+            // Excel invoice is newer: update existing pending reminder with new dates
+            remindersToUpdate.add({
+              'id': activePending['id'],
+              'customer_id': cId,
+              'reminder_date': newObj['reminder_date'],
+              'last_purchase_date': newObj['last_purchase_date'],
+              'last_purchase_branch': newObj['last_purchase_branch'],
+              'status': 'pending',
+              'updated_at': DateTime.now().toIso8601String(),
+            });
+          }
+        } else {
+          // No pending reminder exists! (Customer is new, or previous reminders are completed/called)
+          // Preserves old completed reminders as history, and inserts a brand new reminder!
+          remindersToInsert.add(newObj);
+        }
+      }
+    } else {
+      // Empty remindersByCustomer
     }
 
-    final remindersToUpsert = remindersByCustomer.values.toList();
     final customerBranchesToInsert = branchesByCustBranch.values.toList();
 
     // Execute batch operations concurrently for maximum speed
@@ -368,13 +452,29 @@ class ExcelUploadService {
         }
       }());
     }
-    if (remindersToUpsert.isNotEmpty) {
+    if (remindersToUpdate.isNotEmpty) {
       parallelTasks.add(() async {
         try {
-          await client.from('dme_reminders').upsert(remindersToUpsert, onConflict: 'customer_id');
-        } catch (reminderErr) {
-          debugPrint('Reminders upsert failed: $reminderErr');
-          onLog('⚠ Reminders upsert error: $reminderErr');
+          await client.from('dme_reminders').upsert(remindersToUpdate, onConflict: 'id');
+        } catch (updateErr) {
+          debugPrint('Reminders update error: $updateErr');
+          onLog('⚠ Reminders update error: $updateErr');
+        }
+      }());
+    }
+    if (remindersToInsert.isNotEmpty) {
+      parallelTasks.add(() async {
+        try {
+          await client.from('dme_reminders').insert(remindersToInsert);
+        } catch (insertErr) {
+          debugPrint('Reminders insert notice: $insertErr');
+          // If unique constraint on customer_id still exists in Supabase, fallback to upsert on customer_id
+          try {
+            await client.from('dme_reminders').upsert(remindersToInsert, onConflict: 'customer_id');
+            onLog('⚠ Note: Reminder updated (To preserve history, drop customer_id unique constraint in Supabase)');
+          } catch (fallbackErr) {
+            onLog('⚠ Reminders insert error: $fallbackErr');
+          }
         }
       }());
     }
@@ -397,7 +497,25 @@ class ExcelUploadService {
 
     await Future.wait(parallelTasks);
 
-    onLog('✓ Saved ${detailsToInsert.length} sale detail batches & ${remindersToUpsert.length} reminders');
+    final totalRemindersSaved = remindersToInsert.length + remindersToUpdate.length;
+    onLog('✓ Saved ${detailsToInsert.length} sale detail batches & $totalRemindersSaved reminders');
+
+    // If fileName and fileHash are provided, record to dme_excel_uploads to disallow duplicate uploads
+    if (fileName != null && fileHash != null) {
+      try {
+        await recordUpload(
+          client: client,
+          fileName: fileName,
+          fileHash: fileHash,
+          uploadedBy: uploadedBy,
+          salesCount: insertedSalesList.length,
+          rowsCount: rowsCount ?? 0,
+        );
+        onLog('✓ Recorded file hash in upload history');
+      } catch (recordErr) {
+        onLog('⚠ Could not record file upload hash: $recordErr');
+      }
+    }
 
     return insertedSalesList.length;
   }

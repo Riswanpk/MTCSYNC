@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:crypto/crypto.dart';
 
 import '../dme_config.dart';
 import 'excel_uploader_models.dart';
@@ -24,7 +25,7 @@ class DmeExcelUploaderPage extends StatefulWidget {
 
 class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with SingleTickerProviderStateMixin {
   String? _selectedFileName;
-  Uint8List? _fileBytes;
+  String? _fileHash;
   bool _isParsing = false;
   bool _isUploading = false;
   double _uploadProgress = 0.0;
@@ -78,9 +79,107 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
       if (result == null || result.files.isEmpty) return;
 
       final file = result.files.first;
+      Uint8List? pickedBytes = file.bytes;
+      if (pickedBytes == null && file.path != null) {
+        pickedBytes = await File(file.path!).readAsBytes();
+      }
+
+      if (pickedBytes == null) {
+        _showSnackBar('Could not read file data', isError: true);
+        return;
+      }
+
+      // Calculate SHA-256 hash of file content to detect duplicate uploads
+      final hash = sha256.convert(pickedBytes).toString();
+
+      // Check if this exact file was already uploaded to Supabase
+      final client = _supabaseClient;
+      if (client != null && DmeConfig.isConfigured) {
+        final existingUpload = await ExcelUploadService.checkDuplicateFile(
+          client: client,
+          fileHash: hash,
+        );
+
+        if (existingUpload != null) {
+          if (!mounted) return;
+          final uploadedAtStr = existingUpload['uploaded_at']?.toString();
+          String formattedDate = uploadedAtStr ?? 'a previous session';
+          if (uploadedAtStr != null) {
+            final parsedDt = DateTime.tryParse(uploadedAtStr);
+            if (parsedDt != null) {
+              formattedDate = DateFormat('dd MMM yyyy, hh:mm a').format(parsedDt.toLocal());
+            }
+          }
+          final uploader = existingUpload['uploaded_by'] ?? 'another user';
+          final originalName = existingUpload['file_name'] ?? file.name;
+
+          await showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text('Duplicate File Detected'),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'This exact Excel file has already been uploaded and processed into the database.',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('• File Name: $originalName', style: const TextStyle(fontSize: 13)),
+                        const SizedBox(height: 4),
+                        Text('• Uploaded At: $formattedDate', style: const TextStyle(fontSize: 13)),
+                        const SizedBox(height: 4),
+                        Text('• Uploaded By: $uploader', style: const TextStyle(fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'To prevent duplicate sales and inaccurate reminder schedules, re-uploading the same file is blocked.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+              actions: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange.shade700,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+          return;
+        }
+      }
+
       setState(() {
         _selectedFileName = file.name;
-        _fileBytes = file.bytes;
+        _fileHash = hash;
         _parsedRows.clear();
         _groupedSales.clear();
         _customerList.clear();
@@ -89,12 +188,7 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
         _statusMessage = 'File selected: ${file.name}';
       });
 
-      if (_fileBytes != null) {
-        await _parseExcel(_fileBytes!);
-      } else if (file.path != null) {
-        final bytes = await File(file.path!).readAsBytes();
-        await _parseExcel(bytes);
-      }
+      await _parseExcel(pickedBytes);
     } catch (e) {
       _showSnackBar('Error picking file: $e', isError: true);
     }
@@ -347,6 +441,91 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
       return;
     }
 
+    // Check duplicate file right before upload begins
+    if (_fileHash != null) {
+      final existingUpload = await ExcelUploadService.checkDuplicateFile(
+        client: client,
+        fileHash: _fileHash!,
+      );
+      if (existingUpload != null) {
+        final uploadedAtStr = existingUpload['uploaded_at']?.toString();
+        String formattedDate = uploadedAtStr ?? 'a previous session';
+        if (uploadedAtStr != null) {
+          final parsedDt = DateTime.tryParse(uploadedAtStr);
+          if (parsedDt != null) {
+            formattedDate = DateFormat('dd MMM yyyy, hh:mm a').format(parsedDt.toLocal());
+          }
+        }
+        final uploader = existingUpload['uploaded_by'] ?? 'another user';
+        final originalName = existingUpload['file_name'] ?? _selectedFileName ?? 'this file';
+
+        if (mounted) {
+          _showSnackBar('Duplicate file: already uploaded on $formattedDate', isError: true);
+          await showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text('Duplicate File Detected'),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'This exact Excel file has already been uploaded and processed into the database.',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('• File Name: $originalName', style: const TextStyle(fontSize: 13)),
+                        const SizedBox(height: 4),
+                        Text('• Uploaded At: $formattedDate', style: const TextStyle(fontSize: 13)),
+                        const SizedBox(height: 4),
+                        Text('• Uploaded By: $uploader', style: const TextStyle(fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'To prevent duplicate sales and inaccurate reminder schedules, re-uploading the same file is blocked.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+              actions: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange.shade700,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+    }
+
     setState(() {
       _isUploading = true;
       _uploadProgress = 0.1;
@@ -359,6 +538,9 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
         client: client,
         groupedSales: _groupedSales,
         conflicts: _conflicts,
+        fileName: _selectedFileName,
+        fileHash: _fileHash,
+        rowsCount: _parsedRows.length,
         onProgress: (progress, status) {
           if (mounted) {
             setState(() {

@@ -83,6 +83,8 @@ class _DmeAdminCustomerDetailPageState extends State<DmeAdminCustomerDetailPage>
             .from('dme_reminders')
             .select()
             .eq('customer_id', customerId)
+            .order('reminder_date', ascending: false)
+            .limit(1)
             .maybeSingle(),
       ]);
 
