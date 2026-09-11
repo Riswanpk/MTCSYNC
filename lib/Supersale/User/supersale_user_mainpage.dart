@@ -1,3 +1,4 @@
+// ignore_for_file: deprecated_member_use
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -23,6 +24,7 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   String? _userBranch;
+  // ignore: unused_field
   String? _userEmail;
   bool _isLoadingBranch = true;
   bool _isLoadingEntries = true;
@@ -189,19 +191,6 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
         );
       }
     }
-  }
-
-  String _formatDate(dynamic dateField) {
-    if (dateField == null) return 'N/A';
-    DateTime dt;
-    if (dateField is Timestamp) {
-      dt = dateField.toDate();
-    } else if (dateField is String) {
-      dt = DateTime.tryParse(dateField) ?? DateTime.now();
-    } else {
-      return 'N/A';
-    }
-    return DateFormat('dd MMM yyyy').format(dt.toLocal());
   }
 
   String _formatSimpleDate(dynamic dateField) {
@@ -669,7 +658,6 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
         final quantity = data['quantity'] ?? 0;
         final rate = data['rate'] ?? 0.0;
         final advance = data['advance'] ?? 0.0;
-        final createdAt = data['created_at'];
         final status = data['status'] ?? 'pending';
         final billedPhone = data['billedPhone'];
 

@@ -368,12 +368,12 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Deleted \$deleted old marketing form(s).')),
+        SnackBar(content: Text('Deleted $deleted old marketing form(s).')),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error deleting old forms: \$e')),
+        SnackBar(content: Text('Error deleting old forms: $e')),
       );
     } finally {
       if (mounted) setState(() => _isDeletingOldForms = false);

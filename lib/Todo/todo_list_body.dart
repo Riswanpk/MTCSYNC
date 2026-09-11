@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../Navigation/user_cache_service.dart';
 import 'todo_widgets.dart';
 
 /// Builds the pending or completed todo list for a user.
@@ -39,8 +38,6 @@ class TodoListBody extends StatelessWidget {
     if (user == null) {
       return const Center(child: CircularProgressIndicator());
     }
-
-    final resolvedRole = role ?? UserCacheService.instance.role;
 
     return StreamBuilder<QuerySnapshot>(
           stream: firestore

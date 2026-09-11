@@ -18,6 +18,7 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
   int _selectedMonth = DateTime.now().month;
   int _selectedYear = DateTime.now().year;
   String? _selectedBranch;
+  // ignore: unused_field
   String? _currentUserRole;
   List<String> _branches = [];
   List<Map<String, dynamic>> _usersForBranch = [];

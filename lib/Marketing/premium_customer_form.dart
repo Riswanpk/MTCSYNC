@@ -1,3 +1,4 @@
+// ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -22,6 +23,7 @@ class PremiumCustomerForm extends StatefulWidget {
     required this.branch,
   });
 
+  // ignore: constant_identifier_names
   static const String DRAFT_KEY = 'premium_form_draft';
 
   @override

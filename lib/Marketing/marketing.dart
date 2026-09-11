@@ -159,10 +159,6 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
         );
     }
 
-    final String? userRole = ModalRoute.of(context)?.settings.arguments is Map
-        ? (ModalRoute.of(context)!.settings.arguments as Map)['role'] as String?
-        : null;
-
     return Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(

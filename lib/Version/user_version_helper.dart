@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
@@ -15,7 +16,7 @@ Future<void> updateUserVersionInfo() async {
         stackTrace,
         reason: 'Failed to update user version info after retries',
       );
-      print('Error updating user version info: $e');
+      debugPrint('Error updating user version info: $e');
     }
   }
 }
@@ -49,7 +50,7 @@ Future<void> _updateUserVersionInfoWithRetry(User user) async {
       if (e.code == 'unavailable' && attempt < maxAttempts) {
         // Calculate exponential backoff: 1s, 2s, 4s
         final delayMs = initialDelayMs * (1 << (attempt - 1));
-        print(
+        debugPrint(
             'Firestore unavailable (attempt $attempt/$maxAttempts). Retrying in ${delayMs}ms...');
         await Future.delayed(Duration(milliseconds: delayMs));
       } else {

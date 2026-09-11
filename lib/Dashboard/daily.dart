@@ -139,6 +139,7 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
   }
 
   // Fetch both managers and assistant managers and merge them (no duplicates).
+  // ignore: unused_element
   Future<List<Map<String, dynamic>>> _fetchManagersAndAsst() async {
     final managers = await _fetchUsersAndLeads(role: 'manager');
     final assts = await _fetchUsersAndLeads(role: 'asst_manager');

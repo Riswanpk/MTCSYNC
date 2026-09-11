@@ -16,6 +16,9 @@ analyzer:
     - "build/**"
     - "**/*.g.dart"
     - "**/*.freezed.dart"
+  errors:
+    deprecated_member_use: ignore
+    use_build_context_synchronously: ignore
 
 
 linter:

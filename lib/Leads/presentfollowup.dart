@@ -21,7 +21,8 @@ class PresentFollowUp extends StatefulWidget {
 }
 
 class _PresentFollowUpState extends State<PresentFollowUp> {
-    String? _originalUserName;
+  // ignore: unused_field
+  String? _originalUserName;
   String? _transferredByName;
   bool _isEditing = false;
   bool _isSaving = false;

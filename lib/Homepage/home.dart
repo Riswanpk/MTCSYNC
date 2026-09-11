@@ -44,7 +44,9 @@ class _HomePageState extends State<HomePage>
 
   bool _showTodoWarning = false;
   int _logoTapCount = 0;
+  // ignore: unused_field
   List<Contact>? _cachedContacts;
+  // ignore: unused_field
   bool _contactsLoaded = false;
   DateTime? _lastTodoWarningCheck;
 
@@ -528,6 +530,7 @@ class _HomePageState extends State<HomePage>
     }
   }
 
+  // ignore: unused_element
   Future<void> _printCustomClaims() async {
     if (!kDebugMode) return;
     final user = FirebaseAuth.instance.currentUser;

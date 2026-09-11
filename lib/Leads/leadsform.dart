@@ -14,6 +14,7 @@ import 'contact_picker_modal.dart';
 
 
 class FollowUpForm extends StatefulWidget {
+  // ignore: constant_identifier_names
   static const String DRAFT_KEY = 'leads_form_draft';
 
   final String? docId;
@@ -66,6 +67,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
   bool _deviceContactsLoading = false;
   bool _isSaving = false;
 
+  // ignore: unused_element
   Future<void> _scheduleNotification(DateTime dateTime) async {
     await NotificationPermissionService.instance.safeCreateNotification(
       content: NotificationContent(
@@ -287,6 +289,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
     }
   }
 
+  // ignore: unused_element
   Future<void> _autoFillFromCustomer(String phone) async {
     final snap = await FirebaseFirestore.instance
         .collection('customer')
@@ -828,8 +831,11 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                   Color color;
                                   if (p == 'High') {
                                     color = const Color(0xFFEF4444);
-                                  } else if (p == 'Medium') color = const Color(0xFFF59E0B);
-                                  else color = const Color(0xFF10B981);
+                                  } else if (p == 'Medium') {
+                                    color = const Color(0xFFF59E0B);
+                                  } else {
+                                    color = const Color(0xFF10B981);
+                                  }
 
                                   return Expanded(
                                     child: GestureDetector(

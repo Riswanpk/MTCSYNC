@@ -1612,25 +1612,4 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
       ],
     );
   }
-
-  Widget _infoLine(IconData icon, String text, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Icon(icon,
-              size: 16,
-              color: isDark ? Colors.white38 : Colors.black38),
-          const SizedBox(width: 8),
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 13,
-              color: isDark ? Colors.white60 : Colors.black54,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

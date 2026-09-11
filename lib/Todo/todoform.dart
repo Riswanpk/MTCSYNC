@@ -92,6 +92,7 @@ class TodoFormPage extends StatefulWidget {
   final String? docId; // <-- Add this
   const TodoFormPage({super.key, this.docId});
 
+  // ignore: constant_identifier_names
   static const String DRAFT_KEY = 'todo_form_draft';
 
   @override

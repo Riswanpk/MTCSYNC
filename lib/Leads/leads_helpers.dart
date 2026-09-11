@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -86,7 +87,7 @@ Future<List<Map<String, dynamic>>> fetchCustomersByName(String query) async {
       'address': e['address'] ?? '',
     }).toList();
   } catch (e) {
-    print('Error fetching customers by name: $e');
+    debugPrint('Error fetching customers by name: $e');
     return [];
   }
 }
@@ -123,7 +124,7 @@ Future<Map<String, dynamic>?> fetchCustomerByPhone(String phone) async {
     
     return null;
   } catch (e) {
-    print('Error fetching customer by phone: $e');
+    debugPrint('Error fetching customer by phone: $e');
     return null;
   }
 }

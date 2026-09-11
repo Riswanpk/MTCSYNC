@@ -326,13 +326,14 @@ class _TodoPageState extends State<TodoPage>
     }
   }
 
+  // ignore: unused_element
   Future<void> _sendTodo() async {
     final text = _todoController.text.trim();
     if (text.isEmpty || _userEmail == null) return;
 
     final now = DateTime.now();
     try {
-      final docRef = await _firestore.collection('todo').add({
+      await _firestore.collection('todo').add({
         'text': text,
         'email': _userEmail,
         'timestamp': now,
@@ -352,6 +353,7 @@ class _TodoPageState extends State<TodoPage>
     }
   }
 
+  // ignore: unused_element
   DateTime _dateOnly(DateTime dateTime) {
     return DateTime(dateTime.year, dateTime.month, dateTime.day);
   }

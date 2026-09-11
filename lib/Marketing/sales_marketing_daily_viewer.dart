@@ -224,7 +224,7 @@ class MarketingFormDetailsPage extends StatelessWidget {
 
     // Helper to format phone number as +91 XXXXX YYYYY
     String formatIndianPhone(String raw) {
-      final digits = RegExp(r'\d').allMatches(raw ?? '').map((m) => m.group(0)).join();
+      final digits = RegExp(r'\d').allMatches(raw).map((m) => m.group(0)).join();
       if (digits.length >= 10) {
         final tenDigits = digits.substring(digits.length - 10);
         return '+91 ${tenDigits.substring(0, 5)} ${tenDigits.substring(5)}';
@@ -434,7 +434,7 @@ class _EditMarketingFormPageState extends State<EditMarketingFormPage> {
 
     final picked = await showDatePicker(
       context: context,
-      initialDate: initialDate ?? DateTime.now(),
+      initialDate: initialDate,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );

@@ -269,6 +269,7 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
   }
 
   // Helper to get month name
+  // ignore: unused_element
   String _monthName(int month) {
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -277,6 +278,7 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
     return months[month - 1];
   }
 
+  // ignore: unused_element
   Widget _customerPreviewTable() {
     if (_customers == null) return const SizedBox();
     if (_customers!.isEmpty) return const Text('No customers in Excel.');

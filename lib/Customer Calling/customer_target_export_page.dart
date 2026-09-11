@@ -22,6 +22,7 @@ class CustomerTargetExportPage extends StatefulWidget {
 class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
   String? _selectedMonthYear;
   bool _loading = false;
+  // ignore: unused_field
   String? _error;
   bool _detailedReport = false;
   bool _datewiseReport = false;
@@ -614,8 +615,7 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
       String monthYear, String fileMonth) async {
     final HttpsCallable callable = FirebaseFunctions.instance
         .httpsCallable('exportCustomerTargetIndividualReport');
-    final result =
-        await callable.call({'monthYear': monthYear, 'fileMonth': fileMonth});
+    await callable.call({'monthYear': monthYear, 'fileMonth': fileMonth});
     // Handle result (e.g., show a dialog with the download link)
   }
 
@@ -831,23 +831,6 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _infoLine(IconData icon, String text, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: isDark ? Colors.white38 : Colors.black38),
-          const SizedBox(width: 8),
-          Text(
-            text,
-            style: TextStyle(
-                fontSize: 13, color: isDark ? Colors.white60 : Colors.black54),
-          ),
-        ],
       ),
     );
   }

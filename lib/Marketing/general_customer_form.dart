@@ -1,3 +1,4 @@
+// ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'camera_page.dart'; // Add this import
@@ -23,6 +24,7 @@ class GeneralCustomerForm extends StatefulWidget {
     required this.branch,
   });
 
+  // ignore: constant_identifier_names
   static const String DRAFT_KEY = 'general_form_draft';
 
   @override
