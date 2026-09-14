@@ -7,10 +7,12 @@ import 'presentfollowup.dart';
 import '../SME/sme_assigned_leads_page.dart';
 import '../Task/task_sales.dart';
 import '../Task/task_admin.dart';
+import '../DME/dme_config.dart';
+import '../DME/Complaints/User/complaint_detail_page.dart';
 
 // ─── Notification Types ────────────────────────────────────────────────────
 
-enum _NotifType { transfer, leadAssignment, coreTask }
+enum _NotifType { transfer, leadAssignment, coreTask, complaint }
 
 class _NotifItem {
   final _NotifType type;
@@ -69,6 +71,7 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
         _fetchTransferredLeads(uid, items),
         _fetchAssignedLeads(uid, items),
         _fetchCoreTasks(uid, items),
+        _fetchAssignedComplaints(uid, items),
       ]);
     } catch (e) {
       debugPrint('Error fetching notifications: $e');
@@ -295,6 +298,39 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
     }
   }
 
+  Future<void> _fetchAssignedComplaints(String uid, List<_NotifItem> items) async {
+    try {
+      final client = await DmeConfig.getClient();
+      if (client == null) return;
+
+      final res = await client
+          .from('dme_complaints')
+          .select('id, customer_name, description, created_by_name, status, created_at')
+          .eq('assigned_to_uid', uid)
+          .neq('status', 'resolved')
+          .order('created_at', ascending: false)
+          .limit(30);
+
+      for (var row in (res as List)) {
+        final cId = row['id'].toString();
+        final cName = row['customer_name']?.toString() ?? 'Customer';
+        final desc = row['description']?.toString() ?? '';
+        final creator = row['created_by_name']?.toString() ?? 'DME';
+        final ts = row['created_at'] != null ? DateTime.tryParse(row['created_at'].toString()) : null;
+
+        items.add(_NotifItem(
+          type: _NotifType.complaint,
+          id: cId,
+          title: cName,
+          subtitle: 'Complaint assigned by $creator: $desc',
+          time: ts,
+        ));
+      }
+    } catch (e) {
+      debugPrint('Error fetching assigned complaints: $e');
+    }
+  }
+
   // ─── Tap Handlers ─────────────────────────────────────────────────────────
 
   Future<void> _handleTap(_NotifItem item) async {
@@ -410,6 +446,22 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
       if (mounted) {
         await _fetchAll();
       }
+    } else if (item.type == _NotifType.complaint) {
+      final complaintId = int.tryParse(item.id);
+      if (complaintId != null) {
+        if (mounted) {
+          setState(() {
+            _items.removeWhere((i) => i.id == item.id);
+          });
+        }
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => ComplaintDetailPage(complaintId: complaintId)),
+        );
+        if (mounted) {
+          await _fetchAll();
+        }
+      }
     }
   }
 
@@ -497,6 +549,10 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
         accentColor = const Color(0xFFE65100);
         iconData = Icons.assignment_late_rounded;
         typeLabel = 'Core Task';
+      case _NotifType.complaint:
+        accentColor = const Color(0xFFD32F2F);
+        iconData = Icons.report_problem_rounded;
+        typeLabel = 'Complaint Assigned';
     }
 
     return Card(

@@ -9,6 +9,7 @@ import 'dme_whatsapp_proof_page.dart';
 // ignore: unused_import
 import 'dme_assignment_service.dart';
 import 'dme_call_scanner_service.dart';
+import '../Complaints/Dme/dme_register_complaint_page.dart';
 
 class DmeReminderDetailPage extends StatefulWidget {
   final Map<String, dynamic> reminder;
@@ -583,6 +584,22 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
           backgroundColor: const Color(0xFF005BAC),
           foregroundColor: Colors.white,
           actions: [
+          if (isCompleted || isCalledWithoutRemarks || _callMade)
+            IconButton(
+              icon: const Icon(Icons.report_problem_rounded, color: Colors.amber),
+              tooltip: 'Raise Complaint',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => DmeRegisterComplaintPage(
+                      reminder: _reminder,
+                      initialSalesHistory: _salesHistory,
+                    ),
+                  ),
+                );
+              },
+            ),
           IconButton(
             icon: const Icon(Icons.sync_rounded),
             tooltip: 'Check Call Logs / Reload',
@@ -1205,6 +1222,38 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                 ),
               ),
             ),
+
+            // 5. Raise Complaint Button (Enabled when call status is completed or called)
+            if (isCompleted || isCalledWithoutRemarks || _callMade) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DmeRegisterComplaintPage(
+                          reminder: _reminder,
+                          initialSalesHistory: _salesHistory,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.report_problem_rounded, color: Colors.deepOrange, size: 22),
+                  label: const Text(
+                    'Raise Customer Complaint',
+                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange, fontSize: 15),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.deepOrange, width: 1.5),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
           ],
         ),
       ),

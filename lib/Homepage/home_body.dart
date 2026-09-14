@@ -34,6 +34,9 @@ import '../Task/task_admin.dart';
 import '../Task/task_sales.dart';
 import '../DME/User/dme_user_homepage.dart';
 import '../DME/Admin/dme_admin_homepage.dart';
+import '../DME/Complaints/User/user_complaints_list_page.dart';
+import '../DME/Complaints/User/manager_complaints_page.dart';
+import '../DME/Complaints/Admin/dme_admin_complaints_page.dart';
 
 /// App brand colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -388,6 +391,35 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     );
   }
 
+  Future<void> _navigateToComplaints(BuildContext context) async {
+    final role = widget.role;
+    if (role == 'manager') {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const LoadingOverlayPage(
+            child: ManagerComplaintsPage(),
+          ),
+        ),
+      );
+    } else if (role == 'admin' || role == 'dme_admin') {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const LoadingOverlayPage(
+            child: DmeAdminComplaintsPage(),
+          ),
+        ),
+      );
+    } else {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const LoadingOverlayPage(
+            child: UserComplaintsListPage(),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final role = widget.role;
@@ -402,8 +434,9 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       return _buildOriginalHomePage(context);
     }
 
-    // Height to accommodate 3 rows of buttons + spacing + shadows
-    const double pageViewHeight = 280.0;
+    // Height to accommodate rows of buttons + spacing + shadows
+    final bool hasExtraRow = (role == 'sales' || role == 'manager' || role == 'asst_manager' || role == 'admin');
+    final double pageViewHeight = hasExtraRow ? 360.0 : 280.0;
 
     return SizedBox(
       height: pageViewHeight,
@@ -706,6 +739,16 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           color: primaryGreen,
           textColor: Colors.white,
           icon: Icons.support_agent_rounded,
+        ),
+      // Button 7: Complaints (sales, asst_manager, manager, admin)
+      if (role == 'sales' || role == 'manager' || role == 'asst_manager' || role == 'admin')
+        NeumorphicButton(
+          onTap: () => _navigateToComplaints(context),
+          text: 'Complaints',
+          color: primaryBlue,
+          textColor: Colors.white,
+          icon: Icons.feedback_rounded,
+          badgeCount: widget.complaintCount > 0 ? widget.complaintCount : null,
         ),
     ];
 

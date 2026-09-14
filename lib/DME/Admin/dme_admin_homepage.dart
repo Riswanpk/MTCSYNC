@@ -4,6 +4,7 @@ import 'dme_admin_customers_page.dart';
 import 'Dashboard/dme_admin_dashboard_page.dart';
 import 'dme_admin_reminders_page.dart';
 import 'dme_admin_reminder_assign_page.dart';
+import '../Complaints/Admin/dme_admin_complaints_page.dart';
 import '../../Homepage/home_widgets.dart';
 import '../../Navigation/loading_page.dart';
 
@@ -64,10 +65,12 @@ Widget buildDmeAdminTiles(BuildContext context) {
     // 3. Complaints
     NeumorphicButton(
       onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('DME Admin: Complaints module coming soon'),
-            duration: Duration(seconds: 1),
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const LoadingOverlayPage(
+              child: DmeAdminComplaintsPage(),
+            ),
           ),
         );
       },

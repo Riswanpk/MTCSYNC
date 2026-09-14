@@ -24,6 +24,7 @@ import 'Task/task_sales.dart';
 import 'Task/task_admin.dart';
 import 'Supersale/User/supersale_user_mainpage.dart';
 import 'Misc/network_guard.dart';
+import 'DME/Complaints/User/complaint_detail_page.dart';
 
 /// Top-level background message handler for FCM Push Notifications
 @pragma('vm:entry-point')
@@ -604,6 +605,16 @@ class NotificationController {
     if (isSupersaleOpen || notifType == 'supersale') {
       _doPush((_) => const SupersaleUserMainPage());
       return;
+    }
+
+    // Handle DME Complaint notifications navigation
+    if (notifType == 'dme_complaint' || notifType == 'complaint_assigned' || notifType == 'complaint' || channelKey == 'dme_complaints_channel') {
+      final complaintIdStr = payload?['complaintId'] ?? payload?['leadDocId'] ?? payload?['docId'];
+      final complaintId = int.tryParse(complaintIdStr?.toString() ?? '');
+      if (complaintId != null) {
+        _doPush((_) => ComplaintDetailPage(complaintId: complaintId));
+        return;
+      }
     }
 
     final docId = payload?['docId'] ?? payload?['leadDocId'];

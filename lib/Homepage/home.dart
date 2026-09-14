@@ -23,6 +23,7 @@ import '../Navigation/user_cache_service.dart';
 import '../SME/sme_notification_service.dart';
 import '../Leads/leads_notification.dart';
 import '../Task/task_sales.dart' show syncTaskReminders;
+import '../DME/Complaints/services/dme_complaints_service.dart';
 
 // Top-level function for compute to decode contacts JSON
 List<dynamic> decodeContactsJson(String json) {
@@ -58,7 +59,7 @@ class _HomePageState extends State<HomePage>
   int _transferredCount = 0;
   int _otherCount = 0;
   int _taskCount = 0;
-  final int _complaintCount = 0;
+  int _complaintCount = 0;
   StreamSubscription? _notificationListener;
   StreamSubscription? _assignedLeadsListener;
   StreamSubscription? _complaintsListener;
@@ -338,11 +339,16 @@ class _HomePageState extends State<HomePage>
         }
       } catch (_) {}
 
+      int complaintCount = 0;
+      try {
+        complaintCount = await DmeComplaintsService.instance.fetchActiveAssignedCount(uid);
+      } catch (_) {}
+
       if (mounted) {
         setState(() {
           _otherCount = count;
           _taskCount = taskCount;
-         
+          _complaintCount = complaintCount;
         });
       }
     } finally {
