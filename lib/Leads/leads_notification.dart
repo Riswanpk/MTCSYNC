@@ -100,24 +100,24 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
           .where('branch', isEqualTo: widget.userBranch)
           .where('created_by', isEqualTo: uid)
           .where('transferred_at', isNull: false)
-          .orderBy('transferred_at', descending: true)
-          .limit(30)  // Limit to prevent loading too many items
           .get();
 
-      // Batch-check which transferred leads have been seen by this user
-      final seenLeadIds = <String>{};
+      if (snapshot.docs.isEmpty) return;
+
+      // Batch-check which transferred leads have been seen by this user (matching home.dart format)
+      final docIds = snapshot.docs.map((d) => '${d.id}__$uid').take(30).toList();
+      final seenDocIds = <String>{};
       try {
-        final seenSnapshot = await FirebaseFirestore.instance
+        final seenSnap = await FirebaseFirestore.instance
             .collection('user_seen_leads')
-            .where('user_id', isEqualTo: uid)
+            .where(FieldPath.documentId, whereIn: docIds)
             .get();
-        seenLeadIds.addAll(
-          seenSnapshot.docs.map((d) => d.data()['lead_id'] as String? ?? '').where((id) => id.isNotEmpty),
-        );
+        seenDocIds.addAll(seenSnap.docs.map((d) => d.id));
       } catch (_) {}
 
       // Batch-resolve transferredBy UIDs
-      final uniqueUids = snapshot.docs
+      final unseenDocs = snapshot.docs.where((d) => !seenDocIds.contains('${d.id}__$uid')).toList();
+      final uniqueUids = unseenDocs
           .map((d) => d.data()['transferred_by'] as String? ?? '')
           .where((u) => u.isNotEmpty)
           .toSet();
@@ -138,10 +138,7 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
       }
 
       // Add transferred leads that haven't been seen yet
-      for (final doc in snapshot.docs) {
-        // Skip if already seen by this user
-        if (seenLeadIds.contains(doc.id)) continue;
-        
+      for (final doc in unseenDocs) {
         final data = doc.data();
         final byUid = data['transferred_by'] as String? ?? '';
         final byName = uidToName[byUid] ?? 'Unknown';
@@ -164,23 +161,35 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
       final snapshot = await FirebaseFirestore.instance
           .collection('follow_ups')
           .where('assigned_to', isEqualTo: uid)
-          .limit(50)  // Limit to prevent loading too many items
           .get();
 
-      // Batch-check which assigned leads have been seen by this user
-      final seenLeadIds = <String>{};
-      try {
-        final seenSnapshot = await FirebaseFirestore.instance
-            .collection('user_seen_leads')
-            .where('user_id', isEqualTo: uid)
-            .get();
-        seenLeadIds.addAll(
-          seenSnapshot.docs.map((d) => d.data()['lead_id'] as String? ?? '').where((id) => id.isNotEmpty),
-        );
-      } catch (_) {}
+      final eligibleDocs = snapshot.docs.where((doc) {
+        final source =
+            (doc.data()['source'] as String? ?? '').toLowerCase().trim();
+        final status = doc.data()['status'] as String? ?? '';
+        return (source == 'sme' || source == 'dme') && status == 'In Progress';
+      }).toList();
+
+      if (eligibleDocs.isEmpty) return;
+
+      // Batch-check which assigned leads have been seen by this user (matching home.dart format)
+      final docIds = eligibleDocs.map((d) => '${d.id}__$uid').toList();
+      final seenDocIds = <String>{};
+      for (var i = 0; i < docIds.length; i += 30) {
+        final chunk = docIds.sublist(i, i + 30 > docIds.length ? docIds.length : i + 30);
+        try {
+          final seenSnap = await FirebaseFirestore.instance
+              .collection('user_seen_leads')
+              .where(FieldPath.documentId, whereIn: chunk)
+              .get();
+          seenDocIds.addAll(seenSnap.docs.map((d) => d.id));
+        } catch (_) {}
+      }
+
+      final unseenDocs = eligibleDocs.where((d) => !seenDocIds.contains('${d.id}__$uid')).toList();
 
       // Batch-resolve assignedBy UIDs
-      final uniqueUids = snapshot.docs
+      final uniqueUids = unseenDocs
           .map((d) => d.data()['assigned_by'] as String? ?? '')
           .where((u) => u.isNotEmpty)
           .toSet();
@@ -197,18 +206,10 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
         } catch (_) {}
       }
 
-      for (final doc in snapshot.docs) {
-        // Skip if already seen by this user
-        if (seenLeadIds.contains(doc.id)) continue;
-        
+      for (final doc in unseenDocs) {
         final data = doc.data();
         final source =
             (data['source'] as String? ?? '').toLowerCase().trim();
-        final status = data['status'] as String? ?? '';
-        if ((source != 'sme' && source != 'dme') || status != 'In Progress') {
-          continue;
-        }
-        
         final sourceLabel = source == 'sme' ? 'SME' : 'DME';
         final assignedByUid = data['assigned_by'] as String? ?? '';
         final assignedByName = assignerNames[assignedByUid] ?? 'Unknown';
@@ -263,22 +264,27 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
             .where('status', isEqualTo: 'completed')
             .get();
 
-        // Filter out seen ones using user_seen_leads
-        final seenLeadIds = <String>{};
-        try {
-          final seenSnapshot = await FirebaseFirestore.instance
-              .collection('user_seen_leads')
-              .where('user_id', isEqualTo: uid)
-              .get();
-          seenLeadIds.addAll(
-            seenSnapshot.docs.map((d) => d.data()['lead_id'] as String? ?? '').where((id) => id.isNotEmpty),
-          );
-        } catch (_) {}
+        // Filter out seen ones using user_seen_leads (matching home.dart format)
+        final nonMassDocs = snapshot.docs
+            .where((d) => d.data()['is_mass_task'] != true)
+            .toList();
 
-        for (final doc in snapshot.docs) {
+        final docIds = nonMassDocs.map((d) => '${d.id}__$uid').toList();
+        final seenDocIds = <String>{};
+        for (var i = 0; i < docIds.length; i += 30) {
+          final chunk = docIds.sublist(i, i + 30 > docIds.length ? docIds.length : i + 30);
+          try {
+            final seenSnap = await FirebaseFirestore.instance
+                .collection('user_seen_leads')
+                .where(FieldPath.documentId, whereIn: chunk)
+                .get();
+            seenDocIds.addAll(seenSnap.docs.map((d) => d.id));
+          } catch (_) {}
+        }
+
+        for (final doc in nonMassDocs) {
+          if (seenDocIds.contains('${doc.id}__$uid')) continue;
           final data = doc.data();
-          if (data['is_mass_task'] == true) continue;
-          if (seenLeadIds.contains(doc.id)) continue;
           final title = data['title'] ?? 'Task Completed';
           final assignedTo = data['assigned_to_name'] ?? 'User';
           final note = data['note'] ?? '';

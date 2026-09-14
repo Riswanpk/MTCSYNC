@@ -193,6 +193,7 @@ class DmeComplaintsService {
     required String verifiedByName,
     String? remarks,
     required String assignedToUid,
+    String? createdByUid,
     required String customerName,
   }) async {
     final client = await DmeConfig.getClient();
@@ -223,13 +224,27 @@ class DmeComplaintsService {
       debugPrint('Warning: Failed to insert timeline update: $e');
     }
 
-    // 3. Send notification to assigned user
-    unawaited(sendComplaintNotification(
-      recipientUid: assignedToUid,
-      title: 'Complaint Resolved ✓',
-      body: 'Complaint for "$customerName" has been marked as resolved.',
-      complaintId: complaintId,
-    ));
+    // 3. Send notification with complaint_resolved sound to raised DME user
+    if (createdByUid != null && createdByUid.isNotEmpty && createdByUid != verifiedByUid) {
+      unawaited(sendComplaintNotification(
+        recipientUid: createdByUid,
+        title: 'Complaint Resolved ✓',
+        body: 'Complaint for "$customerName" has been marked as resolved.',
+        complaintId: complaintId,
+        notifType: 'complaint_resolved',
+      ));
+    }
+
+    // 4. Also notify assigned user with complaint_resolved sound if different
+    if (assignedToUid.isNotEmpty && assignedToUid != verifiedByUid && assignedToUid != createdByUid) {
+      unawaited(sendComplaintNotification(
+        recipientUid: assignedToUid,
+        title: 'Complaint Resolved ✓',
+        body: 'Complaint for "$customerName" has been marked as resolved.',
+        complaintId: complaintId,
+        notifType: 'complaint_resolved',
+      ));
+    }
   }
 
   /// DME User marks complaint as Not Resolved (sends back to assigned user with remarks)

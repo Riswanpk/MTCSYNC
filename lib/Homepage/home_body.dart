@@ -434,9 +434,8 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       return _buildOriginalHomePage(context);
     }
 
-    // Height to accommodate rows of buttons + spacing + shadows
-    final bool hasExtraRow = (role == 'sales' || role == 'manager' || role == 'asst_manager' || role == 'admin');
-    final double pageViewHeight = hasExtraRow ? 360.0 : 280.0;
+    // Height to accommodate 3 rows of buttons + spacing + shadows
+    const double pageViewHeight = 280.0;
 
     return SizedBox(
       height: pageViewHeight,
@@ -610,6 +609,16 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           textColor: Colors.white,
           icon: Icons.dashboard_rounded,
         ),
+      // Complaints button in 2nd page for sales, managers and asst.managers
+      if (role == 'sales' || role == 'manager' || role == 'asst_manager' || role == 'admin')
+        NeumorphicButton(
+          onTap: () => _navigateToComplaints(context),
+          text: 'Complaints',
+          color: (role == 'sales') ? primaryBlue : primaryGreen,
+          textColor: Colors.white,
+          icon: Icons.feedback_rounded,
+          badgeCount: widget.complaintCount > 0 ? widget.complaintCount : null,
+        ),
     ];
 
     return _buildButtonGrid(buttons);
@@ -739,16 +748,6 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           color: primaryGreen,
           textColor: Colors.white,
           icon: Icons.support_agent_rounded,
-        ),
-      // Button 7: Complaints (sales, asst_manager, manager, admin)
-      if (role == 'sales' || role == 'manager' || role == 'asst_manager' || role == 'admin')
-        NeumorphicButton(
-          onTap: () => _navigateToComplaints(context),
-          text: 'Complaints',
-          color: primaryBlue,
-          textColor: Colors.white,
-          icon: Icons.feedback_rounded,
-          badgeCount: widget.complaintCount > 0 ? widget.complaintCount : null,
         ),
     ];
 

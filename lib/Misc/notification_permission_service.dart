@@ -135,6 +135,7 @@ class NotificationPermissionService {
         'sme_lead_channel': 'resource://raw/sme_leads_assigned',
         'task_completion_channel': 'resource://raw/task_completed',
         'dme_complaints_channel': 'resource://raw/complaint_raised',
+        'dme_complaints_resolved_channel': 'resource://raw/complaint_resolved',
         'delivery_reminder_channel': 'resource://raw/delivery_reminder',
         'supersale_open_channel': 'resource://raw/supersale_bookings_open',
         'supersale_closed_channel': 'resource://raw/supersale_bookins_closed',

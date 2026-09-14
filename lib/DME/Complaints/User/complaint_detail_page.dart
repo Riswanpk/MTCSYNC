@@ -203,6 +203,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
         verifiedByUid: _currentUserUid ?? '',
         verifiedByName: _currentUserName ?? 'DME User',
         assignedToUid: _complaint!.assignedToUid,
+        createdByUid: _complaint!.createdByUid,
         customerName: _complaint!.customerName,
       );
 

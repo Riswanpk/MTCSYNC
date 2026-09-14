@@ -167,6 +167,8 @@ Future<void> _setupFirebaseMessaging() async {
       String channelKey = 'basic_channel_v2';
       if (type == 'customer_editing_request' || type == 'customer_deletion_request' || type == 'customer_approval') {
         channelKey = 'customer_approval_channel';
+      } else if (type == 'complaint_resolved' || type == 'dme_complaint_resolved') {
+        channelKey = 'dme_complaints_resolved_channel';
       } else if (type == 'dme_complaint' || type == 'complaint_assigned' || type == 'complaint_raised') {
         channelKey = 'dme_complaints_channel';
       } else if (type == 'todo' || type == 'todo_reminder') {
@@ -293,6 +295,18 @@ Future<void> _initializeNotifications() async {
       defaultColor: const Color(0xFFFFA500),
       ledColor: Colors.orange,
       soundSource: 'resource://raw/complaint_raised',
+      importance: NotificationImportance.Max,
+      channelShowBadge: true,
+      criticalAlerts: true,
+      playSound: true,
+    ),
+    NotificationChannel(
+      channelKey: 'dme_complaints_resolved_channel',
+      channelName: 'DME Complaints Resolved',
+      channelDescription: 'Channel for DME complaints marked as resolved',
+      defaultColor: const Color(0xFF28A745),
+      ledColor: Colors.green,
+      soundSource: 'resource://raw/complaint_resolved',
       importance: NotificationImportance.Max,
       channelShowBadge: true,
       criticalAlerts: true,
@@ -608,7 +622,14 @@ class NotificationController {
     }
 
     // Handle DME Complaint notifications navigation
-    if (notifType == 'dme_complaint' || notifType == 'complaint_assigned' || notifType == 'complaint' || channelKey == 'dme_complaints_channel') {
+    if (notifType == 'dme_complaint' ||
+        notifType == 'complaint_assigned' ||
+        notifType == 'complaint_raised' ||
+        notifType == 'complaint_resolved' ||
+        notifType == 'dme_complaint_resolved' ||
+        notifType == 'complaint' ||
+        channelKey == 'dme_complaints_channel' ||
+        channelKey == 'dme_complaints_resolved_channel') {
       final complaintIdStr = payload?['complaintId'] ?? payload?['leadDocId'] ?? payload?['docId'];
       final complaintId = int.tryParse(complaintIdStr?.toString() ?? '');
       if (complaintId != null) {
