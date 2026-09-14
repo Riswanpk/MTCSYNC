@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../dme_constants.dart';
 import '../dme_config.dart';
 import 'dme_whatsapp_proof_page.dart';
@@ -54,8 +55,31 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     _callMade = isAlreadyCompleted || (_callDuration != null && _callDuration! > 10);
     _callAttempts = int.tryParse(_reminder['call_attempts']?.toString() ?? '') ?? 0;
 
+    _loadUserNames();
     _fetchCustomerSalesHistory();
     _fetchCustomerCallHistory();
+  }
+
+  final Map<String, String> _userNames = {};
+
+  Future<void> _loadUserNames() async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection('users').get();
+      for (var doc in snap.docs) {
+        final data = doc.data();
+        final uid = doc.id;
+        final email = data['email']?.toString() ?? '';
+        final username = data['username']?.toString() ??
+            data['name']?.toString() ??
+            (email.isNotEmpty ? email.split('@').first : 'User');
+        _userNames[uid] = username;
+        if (email.isNotEmpty) {
+          _userNames[email] = username;
+          _userNames[email.toLowerCase()] = username;
+        }
+      }
+      if (mounted) setState(() {});
+    } catch (_) {}
   }
 
   @override
@@ -90,6 +114,8 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     if (userIdentifier == null) return '';
     final raw = userIdentifier.toString().trim();
     if (raw.isEmpty) return '';
+    if (_userNames.containsKey(raw)) return _userNames[raw]!;
+    if (_userNames.containsKey(raw.toLowerCase())) return _userNames[raw.toLowerCase()]!;
     if (raw.contains('@')) {
       final prefix = raw.split('@').first;
       if (prefix.isNotEmpty) {
@@ -518,13 +544,45 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     final branchName = _reminder['branch_name'] ?? 'Branch';
     final reminderDateStr = _reminder['reminder_date']?.toString();
     final lastPurchaseDateStr = _reminder['last_purchase_date']?.toString();
+    final status = (_reminder['status'] ?? '').toString().toLowerCase();
+    final bool isCompleted = (status == 'completed');
+    final bool isCalledWithoutRemarks = (status == 'called' || _callMade) && !isCompleted;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Reminder Details', style: TextStyle(fontSize: 18)),
-        backgroundColor: const Color(0xFF005BAC),
-        foregroundColor: Colors.white,
-        actions: [
+    return PopScope(
+      canPop: !isCalledWithoutRemarks,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please enter remarks and tap "Save Remarks & Mark Completed" before leaving.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              if (isCalledWithoutRemarks) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter remarks and tap "Save Remarks & Mark Completed" before leaving.'),
+                    backgroundColor: Colors.orange,
+                    duration: Duration(seconds: 3),
+                  ),
+                );
+              } else {
+                Navigator.of(context).pop();
+              }
+            },
+          ),
+          title: const Text('Reminder Details', style: TextStyle(fontSize: 18)),
+          backgroundColor: const Color(0xFF005BAC),
+          foregroundColor: Colors.white,
+          actions: [
           IconButton(
             icon: const Icon(Icons.sync_rounded),
             tooltip: 'Check Call Logs / Reload',
@@ -957,7 +1015,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
               const SizedBox(height: 16),
             ],
 
-            // 3. Call and WhatsApp Action Buttons
+            // 3. Call and WhatsApp Action Buttons (hidden if called or completed)
             if (_callAttempts > 0)
               Container(
                 margin: const EdgeInsets.only(bottom: 12),
@@ -993,68 +1051,42 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                 ),
               ),
 
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _makePhoneCall,
-                icon: const Icon(Icons.call, size: 22),
-                label: Text(_callAttempts > 0 && !_callMade ? 'Call Customer Again ($customerPhone)' : 'Call $customerPhone'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF8CC63F),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 2,
+            if (!_callMade && status != 'called' && status != 'completed') ...[
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _makePhoneCall,
+                  icon: const Icon(Icons.call, size: 22),
+                  label: Text(_callAttempts > 0 ? 'Call Customer Again ($customerPhone)' : 'Call $customerPhone'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8CC63F),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 2,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 10),
+              const SizedBox(height: 10),
 
-            // Fetch Call Details / Verify Call Button
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _isCheckingCall ? null : _checkCallLogAfterCall,
-                icon: _isCheckingCall
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.sync_rounded, size: 20),
-                label: Text(
-                  _isCheckingCall
-                      ? 'Fetching Call Details...'
-                      : (_callMade ? 'Refresh Call Duration / Details' : 'Fetch Call Details / Verify Call'),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF005BAC),
-                  side: const BorderSide(color: Color(0xFF005BAC), width: 1.5),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              // Send WhatsApp Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _sendWhatsAppMessage,
+                  icon: const Icon(Icons.chat_rounded, size: 22),
+                  label: const Text('Send WhatsApp Message & Upload Proof'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF25D366),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 2,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 10),
-
-            // Send WhatsApp Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _sendWhatsAppMessage,
-                icon: const Icon(Icons.chat_rounded, size: 22),
-                label: const Text('Send WhatsApp Message & Upload Proof'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF25D366),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 2,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
+            ],
 
             // 4. Call Remarks Section (Only accessible when _callMade is true)
             Card(
@@ -1176,6 +1208,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 }

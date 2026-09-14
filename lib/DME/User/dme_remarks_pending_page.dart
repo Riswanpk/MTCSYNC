@@ -70,7 +70,7 @@ class _DmeRemarksPendingPageState extends State<DmeRemarksPendingPage> {
         final status = (r['status'] ?? '').toString().toLowerCase();
         final duration = int.tryParse(r['call_duration']?.toString() ?? '') ?? 0;
 
-        final bool hasAttendedCall = duration > 0;
+        final bool hasAttendedCall = duration > 10;
         final bool isCompleted = (status == 'completed');
 
         if (hasAttendedCall && remarks.isEmpty && !isCompleted) {
@@ -96,7 +96,7 @@ class _DmeRemarksPendingPageState extends State<DmeRemarksPendingPage> {
             final remRemarks = (rem['remarks'] ?? '').toString().trim();
             final remDuration = int.tryParse(rem['call_duration']?.toString() ?? '') ?? 0;
             final remId = rem['id'];
-            if (remDuration > 0 && remRemarks.isEmpty && !pending.any((p) => p['id'] == remId)) {
+            if (remDuration > 10 && remRemarks.isEmpty && !pending.any((p) => p['id'] == remId)) {
               final cust = rem['dme_customers'] as Map<String, dynamic>?;
               final bId = int.tryParse(rem['last_purchase_branch']?.toString() ?? '');
               rem['customer_name'] = cust?['name'] ?? 'Unknown Customer';

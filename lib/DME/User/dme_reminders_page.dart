@@ -32,6 +32,8 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
   int? _selectedBranchId; // null means 'All Assigned Branches'
   String? _selectedOverdueDay; // yyyy-MM-dd, null means 'All Overdue Days'
 
+  final Map<String, String> _userIdentifierToName = {};
+
   @override
   void initState() {
     super.initState();
@@ -47,9 +49,51 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
 
   Future<void> _loadData() async {
     if (mounted) setState(() => _isLoading = true);
+    await _loadUserNames();
     await _loadUserBranches();
     await _fetchUserReminders();
     if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _loadUserNames() async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection('users').get();
+      for (var doc in snap.docs) {
+        final data = doc.data();
+        final uid = doc.id;
+        final email = data['email']?.toString() ?? '';
+        final username = data['username']?.toString() ??
+            data['name']?.toString() ??
+            (email.isNotEmpty ? email.split('@').first : 'User');
+        _userIdentifierToName[uid] = username;
+        if (email.isNotEmpty) {
+          _userIdentifierToName[email] = username;
+          _userIdentifierToName[email.toLowerCase()] = username;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading user names: $e');
+    }
+  }
+
+  String _getUserDisplayName(String? userIdentifier) {
+    if (userIdentifier == null) return '';
+    final raw = userIdentifier.trim();
+    if (raw.isEmpty) return '';
+    if (_userIdentifierToName.containsKey(raw)) {
+      return _userIdentifierToName[raw]!;
+    }
+    if (_userIdentifierToName.containsKey(raw.toLowerCase())) {
+      return _userIdentifierToName[raw.toLowerCase()]!;
+    }
+    if (raw.contains('@')) {
+      final prefix = raw.split('@').first;
+      if (prefix.isNotEmpty) {
+        return prefix[0].toUpperCase() + prefix.substring(1);
+      }
+      return prefix;
+    }
+    return raw;
   }
 
   Future<void> _loadUserBranches() async {
@@ -215,7 +259,7 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
       final remarks = (r['remarks'] ?? '').toString().trim();
       final status = (r['status'] ?? '').toString().toLowerCase();
       final duration = int.tryParse(r['call_duration']?.toString() ?? '') ?? 0;
-      return duration > 0 && remarks.isEmpty && status != 'completed';
+      return duration > 10 && remarks.isEmpty && status != 'completed';
     }).length;
 
     // Filter customers who were called today but haven't picked up yet
@@ -223,7 +267,7 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
       final status = (r['status'] ?? '').toString().toLowerCase();
       final attempts = int.tryParse(r['call_attempts']?.toString() ?? '') ?? 0;
       final duration = int.tryParse(r['call_duration']?.toString() ?? '') ?? 0;
-      return status != 'completed' && duration == 0 && attempts >= 1;
+      return status != 'completed' && duration <= 10 && attempts >= 1;
     }).toList();
 
     final multipleAttemptsReminders = notPickedUpReminders.where((r) {
@@ -742,7 +786,7 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
           final calledBy = item['called_by']?.toString();
           final attempts = int.tryParse(item['call_attempts']?.toString() ?? '') ?? 0;
           final bool isCalledWithoutRemarks =
-              (status == 'called' || (callDuration != null && callDuration > 0)) &&
+              (status == 'called' || (callDuration != null && callDuration > 10)) &&
               (remarks == null || remarks.trim().isEmpty);
 
           return Card(
@@ -914,15 +958,6 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
                             'Mobile: $phone',
                             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                           ),
-                          if ((item['customer_address'] ?? '').toString().isNotEmpty) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              item['customer_address'],
-                              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
                           const SizedBox(height: 4),
                           Wrap(
                             crossAxisAlignment: WrapCrossAlignment.center,
@@ -956,7 +991,7 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
                                   ),
                                 ],
                               ),
-                              if (callDuration != null && callDuration > 0) ...[
+                              if (callDuration != null && callDuration > 10) ...[
                                 Text(
                                   attempts > 0
                                       ? '• Call: ${callDuration}s (Attempt #$attempts)'
@@ -978,7 +1013,7 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
                                 const Icon(Icons.person_pin_rounded, size: 12, color: Colors.green),
                                 const SizedBox(width: 4),
                                 Text(
-                                  'Called by: $calledBy',
+                                  'Called by: ${_getUserDisplayName(calledBy)}',
                                   style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.green),
                                 ),
                               ],

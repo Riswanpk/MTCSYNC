@@ -327,7 +327,7 @@ class DmeAssignmentService {
         final status = (item['status'] ?? '').toString().toLowerCase();
         final remarks = (item['remarks'] ?? '').toString().trim();
         final duration = int.tryParse(item['call_duration']?.toString() ?? '') ?? 0;
-        final bool isCalledWithoutRemarks = (status == 'called' || duration > 0) && remarks.isEmpty;
+        final bool isCalledWithoutRemarks = (status == 'called' || duration > 10) && remarks.isEmpty;
 
         // If reminder is in called status without remarks, assign it back to the same person who called it
         if (isCalledWithoutRemarks) {
@@ -660,7 +660,7 @@ class DmeAssignmentService {
         final status = (item['status'] ?? '').toString().toLowerCase();
         final remarks = (item['remarks'] ?? '').toString().trim();
         final duration = int.tryParse(item['call_duration']?.toString() ?? '') ?? 0;
-        final bool isCalledWithoutRemarks = (status == 'called' || duration > 0) && remarks.isEmpty;
+        final bool isCalledWithoutRemarks = (status == 'called' || duration > 10) && remarks.isEmpty;
 
         // If reminder is in called status without remarks, assign it back to the same person who called it
         if (isCalledWithoutRemarks) {
