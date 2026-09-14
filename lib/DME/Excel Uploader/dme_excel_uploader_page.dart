@@ -7,11 +7,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:crypto/crypto.dart';
 
 import '../dme_config.dart';
+import '../dme_constants.dart';
 import 'excel_uploader_models.dart';
 import 'excel_parsing_service.dart';
 import 'excel_upload_service.dart';
 import 'missing_phone_dialog.dart';
-import 'phone_conflict_dialog.dart';
+import 'missing_branch_dialog.dart';
 import 'customer_preview_section.dart';
 
 export 'excel_uploader_models.dart';
@@ -36,6 +37,7 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
   List<ParsedCustomerItem> _customerList = [];
   List<CustomerConflict> _conflicts = [];
   List<MissingPhoneCustomer> _missingPhones = [];
+  List<MissingBranchSale> _missingBranches = [];
   final List<String> _logs = [];
 
   String _customerFilter = 'all'; // 'all', 'new', 'existing', 'conflict'
@@ -222,27 +224,25 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
     }
   }
 
-  /// Groups by phone number and queries Supabase + checks Excel within itself for repeated phones
+  /// Groups by phone number, checks missing phones & branches, queries database for existing records & applies the PREMIUM rule
   Future<void> _analyzeCustomerList() async {
     final client = _supabaseClient;
 
     setState(() {
       _isParsing = true;
-      _statusMessage = 'Checking duplicate phone numbers & database records...';
+      _statusMessage = 'Checking phone numbers, branches & customer records...';
     });
 
     try {
       final List<ParsedCustomerItem> customerItems = [];
-      final List<CustomerConflict> detectedConflicts = [];
       final List<MissingPhoneCustomer> detectedMissingPhones = [];
+      final List<MissingBranchSale> detectedMissingBranches = [];
       final Map<String, dynamic> dbCache = {};
-      final Map<String, String> excelPhonePartyMap = {}; // phone -> first party seen in this excel
+      final Set<String> premiumPhones = {};
 
+      // 1. First pass: Detect missing phones, missing branches, and Excel PREMIUM customer types
       for (var sale in _groupedSales) {
-        bool isExisting = false;
-        String? existingDbName;
-        int? existingDbId;
-
+        // Missing Phone check
         if (sale.phone.isEmpty) {
           if (!detectedMissingPhones.any((m) => m.partyName.toLowerCase() == sale.party.toLowerCase() && m.branchName == sale.branchName)) {
             detectedMissingPhones.add(MissingPhoneCustomer(
@@ -256,111 +256,190 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
               date: sale.date,
             ));
           }
-        } else {
-          // 1. Check if same phone is repeated within the same Excel with different party names
-          if (excelPhonePartyMap.containsKey(sale.phone)) {
-            final firstPartyInExcel = excelPhonePartyMap[sale.phone]!;
-            if (firstPartyInExcel.toLowerCase() != sale.party.toLowerCase()) {
-              if (!detectedConflicts.any((c) => c.originalPhone == sale.phone && c.newName == sale.party)) {
-                detectedConflicts.add(CustomerConflict(
-                  originalPhone: sale.phone,
-                  existingName: '$firstPartyInExcel (in Excel)',
-                  existingCustomerId: null,
-                  isFromDatabase: false,
-                  newName: sale.party,
-                  newAddress: sale.address,
-                  newSalesman: sale.salesman,
-                ));
+        }
+
+        // Missing Branch check
+        final hasInvalidBranch = sale.branchId == null ||
+            sale.branchName.trim().isEmpty ||
+            DmeConstants.getBranchIdByName(sale.branchName) == null;
+        if (hasInvalidBranch) {
+          if (!detectedMissingBranches.any((m) =>
+              (m.voucherNo.isNotEmpty && m.voucherNo == sale.voucherNo) ||
+              (m.partyName.toLowerCase() == sale.party.toLowerCase() &&
+               m.date.year == sale.date.year &&
+               m.date.month == sale.date.month &&
+               m.date.day == sale.date.day))) {
+            detectedMissingBranches.add(MissingBranchSale(
+              voucherNo: sale.voucherNo,
+              partyName: sale.party,
+              phone: sale.phone,
+              date: sale.date,
+              rawBranchName: sale.branchName,
+            ));
+          }
+        }
+
+        // Check if customer is marked PREMIUM in any row/branch in this Excel
+        final isExcelPremium = sale.typeId == 1 || sale.typeName.trim().toUpperCase() == 'PREMIUM';
+        if (isExcelPremium && sale.phone.isNotEmpty) {
+          premiumPhones.add(sale.phone);
+        }
+      }
+
+      // 2. Query Supabase for existing customers (chunked) to check DB PREMIUM status
+      final uniquePhones = _groupedSales
+          .map((s) => s.phone)
+          .where((p) => p.isNotEmpty)
+          .toSet()
+          .toList();
+
+      final Map<String, int> phoneToDbCustomerId = {};
+
+      if (client != null && DmeConfig.isConfigured && uniquePhones.isNotEmpty) {
+        for (int i = 0; i < uniquePhones.length; i += 500) {
+          final chunk = uniquePhones.sublist(
+            i,
+            (i + 500 > uniquePhones.length) ? uniquePhones.length : i + 500,
+          );
+          try {
+            final res = await client
+                .from('dme_customers')
+                .select('id, name, phone, address, salesman')
+                .inFilter('phone', chunk);
+
+            for (var row in (res as List)) {
+              final ph = row['phone']?.toString();
+              final id = row['id'] as int?;
+              if (ph != null) {
+                dbCache[ph] = row;
+                if (id != null) phoneToDbCustomerId[ph] = id;
               }
             }
-          } else {
-            excelPhonePartyMap[sale.phone] = sale.party;
+          } catch (dbErr) {
+            debugPrint('DB lookup failed for customer chunk: $dbErr');
           }
+        }
 
-          // 2. Check with Supabase database for existing record
-          if (client != null && DmeConfig.isConfigured) {
+        // Check if any existing customer has customer_type_id = 1 (PREMIUM) in dme_customer_branches or dme_sales
+        final existingCustIds = phoneToDbCustomerId.values.toSet().toList();
+        if (existingCustIds.isNotEmpty) {
+          for (int i = 0; i < existingCustIds.length; i += 500) {
+            final chunk = existingCustIds.sublist(
+              i,
+              (i + 500 > existingCustIds.length) ? existingCustIds.length : i + 500,
+            );
             try {
-              if (dbCache.containsKey(sale.phone)) {
-                final res = dbCache[sale.phone];
-                if (res != null) {
-                  isExisting = true;
-                  existingDbId = res['id'] as int?;
-                  existingDbName = (res['name'] ?? '').toString().trim();
-                }
-              } else {
-                final res = await client
-                    .from('dme_customers')
-                    .select('id, name, phone, address, salesman')
-                    .eq('phone', sale.phone)
-                    .maybeSingle();
+              final brRes = await client
+                  .from('dme_customer_branches')
+                  .select('customer_id')
+                  .inFilter('customer_id', chunk)
+                  .eq('customer_type_id', 1);
 
-                dbCache[sale.phone] = res;
-
-                if (res != null) {
-                  isExisting = true;
-                  existingDbId = res['id'] as int?;
-                  existingDbName = (res['name'] ?? '').toString().trim();
-
-                  if (existingDbName.isNotEmpty &&
-                      sale.party.isNotEmpty &&
-                      existingDbName.toLowerCase() != sale.party.toLowerCase()) {
-                    if (!detectedConflicts.any((c) => c.originalPhone == sale.phone)) {
-                      detectedConflicts.add(CustomerConflict(
-                        originalPhone: sale.phone,
-                        existingName: existingDbName,
-                        existingCustomerId: existingDbId,
-                        isFromDatabase: true,
-                        newName: sale.party,
-                        newAddress: sale.address,
-                        newSalesman: sale.salesman,
-                      ));
-                    }
-                  }
+              for (var row in (brRes as List)) {
+                final id = row['customer_id'] as int?;
+                if (id != null) {
+                  final ph = phoneToDbCustomerId.entries.firstWhere((e) => e.value == id, orElse: () => const MapEntry('', 0)).key;
+                  if (ph.isNotEmpty) premiumPhones.add(ph);
                 }
               }
-            } catch (dbErr) {
-              debugPrint('DB lookup failed for phone ${sale.phone}: $dbErr');
+            } catch (e) {
+              debugPrint('Check premium in dme_customer_branches failed: $e');
+            }
+
+            try {
+              final slRes = await client
+                  .from('dme_sales')
+                  .select('customer_id')
+                  .inFilter('customer_id', chunk)
+                  .eq('customer_type_id', 1);
+
+              for (var row in (slRes as List)) {
+                final id = row['customer_id'] as int?;
+                if (id != null) {
+                  final ph = phoneToDbCustomerId.entries.firstWhere((e) => e.value == id, orElse: () => const MapEntry('', 0)).key;
+                  if (ph.isNotEmpty) premiumPhones.add(ph);
+                }
+              }
+            } catch (e) {
+              debugPrint('Check premium in dme_sales failed: $e');
             }
           }
         }
+      }
+
+      // 3. Enforce PREMIUM customer rule across all grouped sales and parsed rows:
+      // "premium customers will always be premium, when uploading just check that if it has premium and if it has then change to premium from whatever customer type it has in excel."
+      if (premiumPhones.isNotEmpty) {
+        for (var sale in _groupedSales) {
+          if (premiumPhones.contains(sale.phone)) {
+            sale.typeId = 1;
+            sale.typeName = 'PREMIUM';
+          }
+        }
+        for (var row in _parsedRows) {
+          if (premiumPhones.contains(row.phone)) {
+            row.typeId = 1;
+            row.typeName = 'PREMIUM';
+          }
+        }
+      }
+
+      // 4. Build preview list of customers (taking Excel name automatically without asking user)
+      for (var sale in _groupedSales) {
+        bool isExisting = false;
+        String? existingDbName;
+        int? existingDbId;
+
+        if (sale.phone.isNotEmpty && dbCache.containsKey(sale.phone)) {
+          final res = dbCache[sale.phone];
+          if (res != null) {
+            isExisting = true;
+            existingDbId = res['id'] as int?;
+            existingDbName = (res['name'] ?? '').toString().trim();
+          }
+        }
+
+        final isPremium = premiumPhones.contains(sale.phone);
+        final effectiveTypeName = isPremium ? 'PREMIUM' : sale.typeName;
 
         customerItems.add(ParsedCustomerItem(
           phone: sale.phone.isNotEmpty ? sale.phone : 'Missing Phone',
           partyName: sale.party.isNotEmpty ? sale.party : 'Unnamed Party',
           address: sale.address,
-          branchName: sale.branchName,
+          branchName: sale.branchName.isNotEmpty ? sale.branchName : 'Unknown Branch',
           salesman: sale.salesman,
           categoryName: sale.categoryName,
-          typeName: sale.typeName,
+          typeName: effectiveTypeName,
           totalSalesCount: 1,
           totalItemsCount: sale.products.length,
           isExisting: isExisting,
           existingDbName: existingDbName,
           existingDbId: existingDbId,
-          resolution: detectedConflicts.any((c) => c.originalPhone == sale.phone)
-              ? ConflictResolution.keepExisting
-              : null,
         ));
       }
 
       setState(() {
         _customerList = customerItems;
-        _conflicts = detectedConflicts;
+        _conflicts = []; // Name differences are automatically taken from Excel without asking user
         _missingPhones = detectedMissingPhones;
+        _missingBranches = detectedMissingBranches;
         _isParsing = false;
         if (_missingPhones.isNotEmpty) {
           _statusMessage = 'Found ${_missingPhones.length} customer(s) with missing phone number. Please enter phone numbers before uploading.';
-        } else if (_conflicts.isNotEmpty) {
-          _statusMessage = 'Found ${_conflicts.length} duplicate/conflict phone number(s). Review choices below.';
+        } else if (_missingBranches.isNotEmpty) {
+          _statusMessage = 'Found ${_missingBranches.length} transaction(s) with missing branch name. Please select branches before uploading.';
         } else {
           _statusMessage = 'Found ${_groupedSales.length} sale(s): ${_customerList.where((c) => !c.isExisting).length} New, ${_customerList.where((c) => c.isExisting).length} Existing.';
         }
       });
 
+      // ONLY show clarification popups for:
+      // 1. Missing phone numbers
+      // 2. Missing branch names
       if (_missingPhones.isNotEmpty && mounted) {
         await _showMissingPhoneDialog();
-      } else if (_conflicts.isNotEmpty && mounted) {
-        await _showConflictDialog();
+      } else if (_missingBranches.isNotEmpty && mounted) {
+        await _showMissingBranchDialog();
       }
     } catch (e) {
       setState(() {
@@ -382,22 +461,25 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
         customerList: _customerList,
         onCompleted: () {
           setState(() {});
-          if (_conflicts.isNotEmpty && mounted) {
-            _showConflictDialog();
+          if (_missingBranches.isNotEmpty && mounted) {
+            _showMissingBranchDialog();
           }
         },
       ),
     );
   }
 
-  /// Dialog allowing the user to choose which customer to keep or change phone number
-  Future<void> _showConflictDialog() async {
+  /// Dialog requiring the user to select a branch for sales with missing branch names
+  Future<void> _showMissingBranchDialog() async {
     await showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => PhoneConflictDialog(
-        conflicts: _conflicts,
-        onApplied: () {
+      builder: (ctx) => MissingBranchDialog(
+        missingBranches: _missingBranches,
+        groupedSales: _groupedSales,
+        parsedRows: _parsedRows,
+        customerList: _customerList,
+        onCompleted: () {
           setState(() {});
         },
       ),
@@ -417,7 +499,7 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
       return;
     }
 
-    // STRICT CHECK: Ensure no customer has a missing phone number before uploading
+    // STRICT CHECK 1: Ensure no customer has a missing phone number before uploading
     final missingPhoneSales = _groupedSales.where((s) => s.phone.trim().isEmpty).toList();
     if (missingPhoneSales.isNotEmpty || _missingPhones.isNotEmpty) {
       if (_missingPhones.isEmpty) {
@@ -438,6 +520,35 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
       }
       _showSnackBar('Please fill in missing phone numbers before uploading.', isError: true);
       await _showMissingPhoneDialog();
+      return;
+    }
+
+    // STRICT CHECK 2: Ensure no sale has a missing branch name before uploading
+    final missingBranchSales = _groupedSales.where((s) =>
+        s.branchId == null ||
+        s.branchName.trim().isEmpty ||
+        DmeConstants.getBranchIdByName(s.branchName) == null).toList();
+    if (missingBranchSales.isNotEmpty || _missingBranches.isNotEmpty) {
+      if (_missingBranches.isEmpty) {
+        for (var s in missingBranchSales) {
+          if (!_missingBranches.any((m) =>
+              (m.voucherNo.isNotEmpty && m.voucherNo == s.voucherNo) ||
+              (m.partyName.toLowerCase() == s.party.toLowerCase() &&
+               m.date.year == s.date.year &&
+               m.date.month == s.date.month &&
+               m.date.day == s.date.day))) {
+            _missingBranches.add(MissingBranchSale(
+              voucherNo: s.voucherNo,
+              partyName: s.party,
+              phone: s.phone,
+              date: s.date,
+              rawBranchName: s.branchName,
+            ));
+          }
+        }
+      }
+      _showSnackBar('Please select branch names before uploading.', isError: true);
+      await _showMissingBranchDialog();
       return;
     }
 
@@ -655,14 +766,14 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
         actions: [
-          if (_conflicts.isNotEmpty)
+          if (_missingBranches.isNotEmpty)
             IconButton(
               icon: Badge(
-                label: Text('${_conflicts.length}'),
-                child: const Icon(Icons.warning_amber_rounded),
+                label: Text('${_missingBranches.length}'),
+                child: const Icon(Icons.business_rounded),
               ),
-              tooltip: 'Review Duplicates',
-              onPressed: _showConflictDialog,
+              tooltip: 'Missing Branches',
+              onPressed: _showMissingBranchDialog,
             ),
         ],
       ),
@@ -779,7 +890,7 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
                 customerSearch: _customerSearch,
                 onFilterChanged: (filter) => setState(() => _customerFilter = filter),
                 onSearchChanged: (val) => setState(() => _customerSearch = val),
-                onResolveConflictsPressed: _showConflictDialog,
+                onResolveConflictsPressed: () {},
               ),
               const SizedBox(height: 16),
             ],

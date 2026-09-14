@@ -7,7 +7,6 @@ import '../dme_constants.dart';
 import '../dme_config.dart';
 import 'dme_reminder_detail_page.dart';
 import 'dme_assignment_service.dart';
-import 'dme_call_scanner_service.dart';
 import 'dme_remarks_pending_page.dart';
 
 class DmeRemindersPage extends StatefulWidget {
@@ -18,11 +17,12 @@ class DmeRemindersPage extends StatefulWidget {
 }
 
 class _DmeRemindersPageState extends State<DmeRemindersPage>
-    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _isLoading = true;
   bool _isAssignedByAdminToday = false;
   String _searchQuery = '';
+  bool _filterOnlyMultipleAttempts = true;
 
   List<Map<String, dynamic>> _todayReminders = [];
   List<Map<String, dynamic>> _overdueReminders = [];
@@ -35,23 +35,14 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _loadData();
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _scanCallLogs(silent: true);
-    }
   }
 
   Future<void> _loadData() async {
@@ -138,7 +129,7 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
               .from('dme_reminders')
               .select(
                   'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, called_by, dme_customers(id, name, phone, address, salesman)')
-              .eq('status', 'pending')
+              .inFilter('status', ['pending', 'called'])
               .inFilter('last_purchase_branch', branches)
               .lt('reminder_date', todayStr)
               .limit(200);
@@ -147,7 +138,7 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
               .from('dme_reminders')
               .select(
                   'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, dme_customers(id, name, phone, address, salesman)')
-              .eq('status', 'pending')
+              .inFilter('status', ['pending', 'called'])
               .inFilter('last_purchase_branch', branches)
               .lt('reminder_date', todayStr)
               .limit(200);
@@ -215,60 +206,6 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
     }
   }
 
-  Future<void> _scanCallLogs({bool silent = false}) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null || user.email == null || _todayReminders.isEmpty) return;
-
-    if (!silent && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Scanning today\'s call logs...'),
-          duration: Duration(seconds: 1),
-        ),
-      );
-    }
-
-    try {
-      final detected = await DmeCallScannerService.scanTodayCallLog(
-        _todayReminders,
-        userEmail: user.email!,
-      );
-
-      if (detected.isNotEmpty) {
-        await _fetchUserReminders();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${detected.length} call(s) detected! Tap Remarks Pending to add remarks.'),
-              backgroundColor: Colors.green[700],
-              duration: const Duration(seconds: 4),
-              action: SnackBarAction(
-                label: 'View',
-                textColor: Colors.white,
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const DmeRemarksPendingPage()),
-                  ).then((_) => _fetchUserReminders());
-                },
-              ),
-            ),
-          );
-        }
-      } else if (!silent && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No new calls detected for today.'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('Error scanning DME call logs: $e');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -278,10 +215,21 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
       final remarks = (r['remarks'] ?? '').toString().trim();
       final status = (r['status'] ?? '').toString().toLowerCase();
       final duration = int.tryParse(r['call_duration']?.toString() ?? '') ?? 0;
-      final calledTs = r['called_timestamp']?.toString();
-      final hasCall = duration > 0 || (calledTs != null && calledTs.isNotEmpty);
-      return hasCall && remarks.isEmpty && status != 'completed';
+      return duration > 0 && remarks.isEmpty && status != 'completed';
     }).length;
+
+    // Filter customers who were called today but haven't picked up yet
+    final notPickedUpReminders = _todayReminders.where((r) {
+      final status = (r['status'] ?? '').toString().toLowerCase();
+      final attempts = int.tryParse(r['call_attempts']?.toString() ?? '') ?? 0;
+      final duration = int.tryParse(r['call_duration']?.toString() ?? '') ?? 0;
+      return status != 'completed' && duration == 0 && attempts >= 1;
+    }).toList();
+
+    final multipleAttemptsReminders = notPickedUpReminders.where((r) {
+      final attempts = int.tryParse(r['call_attempts']?.toString() ?? '') ?? 0;
+      return attempts >= 2;
+    }).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -309,11 +257,6 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
             },
           ),
           IconButton(
-            icon: const Icon(Icons.phone_in_talk_rounded),
-            tooltip: 'Scan Call Logs',
-            onPressed: () => _scanCallLogs(silent: false),
-          ),
-          IconButton(
             icon: const Icon(Icons.refresh_rounded),
             tooltip: 'Refresh',
             onPressed: _isLoading ? null : _loadData,
@@ -325,8 +268,11 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
           indicatorWeight: 3,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           tabs: [
             Tab(text: 'Today (${_todayReminders.length})'),
+            Tab(text: 'Not Picked Up (${multipleAttemptsReminders.length})'),
             Tab(text: 'Overdue Archive (${_overdueReminders.length})'),
             Tab(text: 'Completed (${_completedReminders.length})'),
           ],
@@ -469,6 +415,7 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
                             controller: _tabController,
                             children: [
                               _buildReminderList(_todayReminders, isToday: true),
+                              _buildNotPickedUpView(isDark, multipleAttemptsReminders, notPickedUpReminders),
                               _buildOverdueView(isDark),
                               _buildReminderList(_completedReminders, isCompleted: true),
                             ],
@@ -658,7 +605,78 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
     );
   }
 
-  Widget _buildReminderList(List<Map<String, dynamic>> list, {bool isToday = false, bool isOverdue = false, bool isCompleted = false}) {
+  Widget _buildNotPickedUpView(
+    bool isDark,
+    List<Map<String, dynamic>> multiAttempts,
+    List<Map<String, dynamic>> allUnpicked,
+  ) {
+    final list = _filterOnlyMultipleAttempts ? multiAttempts : allUnpicked;
+
+    return Column(
+      children: [
+        Container(
+          margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.grey[850] : Colors.orange.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.orange.withValues(alpha: 0.25)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      ChoiceChip(
+                        label: Text('Called Multiple Times (${multiAttempts.length})'),
+                        selected: _filterOnlyMultipleAttempts,
+                        selectedColor: Colors.orange.withValues(alpha: 0.3),
+                        labelStyle: TextStyle(
+                          fontSize: 12,
+                          fontWeight: _filterOnlyMultipleAttempts ? FontWeight.bold : FontWeight.normal,
+                          color: _filterOnlyMultipleAttempts ? Colors.orange[900] : (isDark ? Colors.white70 : Colors.black87),
+                        ),
+                        onSelected: (val) {
+                          if (val) setState(() => _filterOnlyMultipleAttempts = true);
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      ChoiceChip(
+                        label: Text('All Unanswered (${allUnpicked.length})'),
+                        selected: !_filterOnlyMultipleAttempts,
+                        selectedColor: const Color(0xFF005BAC).withValues(alpha: 0.2),
+                        labelStyle: TextStyle(
+                          fontSize: 12,
+                          fontWeight: !_filterOnlyMultipleAttempts ? FontWeight.bold : FontWeight.normal,
+                          color: !_filterOnlyMultipleAttempts ? const Color(0xFF005BAC) : (isDark ? Colors.white70 : Colors.black87),
+                        ),
+                        onSelected: (val) {
+                          if (val) setState(() => _filterOnlyMultipleAttempts = false);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _buildReminderList(list, isToday: true, isNotPickedUpTab: true),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReminderList(
+    List<Map<String, dynamic>> list, {
+    bool isToday = false,
+    bool isOverdue = false,
+    bool isCompleted = false,
+    bool isNotPickedUpTab = false,
+  }) {
     final filtered = list.where((item) {
       if (_searchQuery.isEmpty) return true;
       final name = (item['customer_name'] ?? '').toString().toLowerCase();
@@ -677,9 +695,11 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
                   ? Icons.check_circle_outline_rounded
                   : isOverdue
                       ? Icons.event_busy_rounded
-                      : Icons.alarm_on_rounded,
+                      : isNotPickedUpTab
+                          ? Icons.phone_missed_rounded
+                          : Icons.alarm_on_rounded,
               size: 48,
-              color: Colors.grey[400],
+              color: isNotPickedUpTab ? Colors.orange[400] : Colors.grey[400],
             ),
             const SizedBox(height: 12),
             Text(
@@ -689,7 +709,11 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
                       ? (_selectedOverdueDay != null
                           ? 'No overdue reminders for this selected date.'
                           : 'Great job! No overdue reminders.')
-                      : 'No calls scheduled for today.',
+                      : isNotPickedUpTab
+                          ? (_filterOnlyMultipleAttempts
+                              ? 'No customers with multiple unanswered calls.'
+                              : 'No customers with unanswered calls today.')
+                          : 'No calls scheduled for today.',
               style: TextStyle(color: Colors.grey[600], fontSize: 14),
             ),
           ],
@@ -712,21 +736,30 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
           final phone = item['customer_phone'] ?? '';
           final dateStr = item['reminder_date']?.toString() ?? '';
           final remarks = item['remarks']?.toString();
+          final status = (item['status'] ?? '').toString().toLowerCase();
           final isLeftover = item['is_overdue_leftover'] == true;
           final callDuration = item['call_duration'] as int?;
           final calledBy = item['called_by']?.toString();
+          final attempts = int.tryParse(item['call_attempts']?.toString() ?? '') ?? 0;
+          final bool isCalledWithoutRemarks =
+              (status == 'called' || (callDuration != null && callDuration > 0)) &&
+              (remarks == null || remarks.trim().isEmpty);
 
           return Card(
-            elevation: isLeftover ? 3 : 2,
+            elevation: isLeftover || isCalledWithoutRemarks ? 3 : 2,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: isLeftover
-                  ? const BorderSide(color: Colors.deepOrange, width: 1.5)
-                  : BorderSide.none,
+              side: isCalledWithoutRemarks
+                  ? const BorderSide(color: Color(0xFFF59E0B), width: 1.8) // Yellow/amber outline if remarks needed
+                  : (isLeftover
+                      ? const BorderSide(color: Colors.deepOrange, width: 1.5)
+                      : BorderSide.none),
             ),
-            color: isLeftover
-                ? (isDark ? const Color(0xFF38201B) : const Color(0xFFFFF6ED))
-                : null,
+            color: isCalledWithoutRemarks
+                ? (isDark ? const Color(0xFF332B12) : const Color(0xFFFFFBEB))
+                : (isLeftover
+                    ? (isDark ? const Color(0xFF38201B) : const Color(0xFFFFF6ED))
+                    : null),
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
               onTap: () => _openReminderDetail(item),
@@ -739,26 +772,38 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
                       radius: 22,
                       backgroundColor: isCompleted
                           ? Colors.green.withValues(alpha: 0.15)
-                          : isLeftover
-                              ? Colors.deepOrange.withValues(alpha: 0.2)
-                              : isOverdue
-                                  ? Colors.red.withValues(alpha: 0.15)
-                                  : const Color(0xFF005BAC).withValues(alpha: 0.15),
+                          : isCalledWithoutRemarks
+                              ? Colors.amber.withValues(alpha: 0.2)
+                              : isLeftover
+                                  ? Colors.deepOrange.withValues(alpha: 0.2)
+                                  : isOverdue
+                                      ? Colors.red.withValues(alpha: 0.15)
+                                      : (attempts >= 2 && (callDuration == null || callDuration == 0)
+                                          ? Colors.orange.withValues(alpha: 0.2)
+                                          : const Color(0xFF005BAC).withValues(alpha: 0.15)),
                       foregroundColor: isCompleted
                           ? Colors.green
-                          : isLeftover
-                              ? Colors.deepOrange
-                              : isOverdue
-                                  ? Colors.red
-                                  : const Color(0xFF005BAC),
+                          : isCalledWithoutRemarks
+                              ? Colors.amber[900]
+                              : isLeftover
+                                  ? Colors.deepOrange
+                                  : isOverdue
+                                      ? Colors.red
+                                      : (attempts >= 2 && (callDuration == null || callDuration == 0)
+                                          ? Colors.orange[800]
+                                          : const Color(0xFF005BAC)),
                       child: Icon(
                         isCompleted
                             ? Icons.check_rounded
-                            : isLeftover
-                                ? Icons.history_toggle_off_rounded
-                                : isOverdue
-                                    ? Icons.warning_amber_rounded
-                                    : Icons.phone_forwarded_rounded,
+                            : isCalledWithoutRemarks
+                                ? Icons.rate_review_rounded
+                                : isLeftover
+                                    ? Icons.history_toggle_off_rounded
+                                    : isOverdue
+                                        ? Icons.warning_amber_rounded
+                                        : (attempts >= 2 && (callDuration == null || callDuration == 0)
+                                            ? Icons.phone_missed_rounded
+                                            : Icons.phone_forwarded_rounded),
                         size: 22,
                       ),
                     ),
@@ -775,7 +820,27 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
                                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                                 ),
                               ),
-                              if (isLeftover) ...[
+                              if (isCalledWithoutRemarks) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.shade800,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.edit_note_rounded, size: 11, color: Colors.white),
+                                      SizedBox(width: 2),
+                                      Text(
+                                        "REMARKS NEEDED",
+                                        style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                              ] else if (isLeftover) ...[
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
@@ -794,6 +859,42 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
                                   ),
                                 ),
                                 const SizedBox(width: 4),
+                              ],
+                              if (callDuration == null || callDuration == 0) ...[
+                                if (attempts >= 2) ...[
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.shade800,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.phone_missed_rounded, size: 10, color: Colors.white),
+                                        const SizedBox(width: 2),
+                                        Text(
+                                          "$attempts ATTEMPTS",
+                                          style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                ] else if (attempts == 1) ...[
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.amber.shade800,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text(
+                                      "1 ATTEMPT",
+                                      style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                ],
                               ],
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -823,35 +924,49 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
                             ),
                           ],
                           const SizedBox(height: 4),
-                          Row(
+                          Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            runSpacing: 4,
                             children: [
-                              Icon(
-                                isLeftover
-                                    ? Icons.history_rounded
-                                    : (isOverdue ? Icons.warning_amber_rounded : Icons.calendar_today),
-                                size: 12,
-                                color: isLeftover
-                                    ? Colors.deepOrange
-                                    : (isOverdue ? Colors.red : Colors.grey),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                isLeftover
-                                    ? 'Due: ${_formatDate(dateStr)} (Yesterday\'s Overdue)'
-                                    : 'Due: ${_formatDate(dateStr)}',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: isLeftover
-                                      ? Colors.deepOrange[800]
-                                      : (isOverdue ? Colors.red : Colors.grey[700]),
-                                ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    isLeftover
+                                        ? Icons.history_rounded
+                                        : (isOverdue ? Icons.warning_amber_rounded : Icons.calendar_today),
+                                    size: 12,
+                                    color: isLeftover
+                                        ? Colors.deepOrange
+                                        : (isOverdue ? Colors.red : Colors.grey),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    isLeftover
+                                        ? 'Due: ${_formatDate(dateStr)} (Yesterday\'s Overdue)'
+                                        : 'Due: ${_formatDate(dateStr)}',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: isLeftover
+                                          ? Colors.deepOrange[800]
+                                          : (isOverdue ? Colors.red : Colors.grey[700]),
+                                    ),
+                                  ),
+                                ],
                               ),
                               if (callDuration != null && callDuration > 0) ...[
-                                const SizedBox(width: 8),
                                 Text(
-                                  '• Call: ${callDuration}s',
+                                  attempts > 0
+                                      ? '• Call: ${callDuration}s (Attempt #$attempts)'
+                                      : '• Call: ${callDuration}s',
                                   style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                                ),
+                              ] else if (attempts > 0) ...[
+                                Text(
+                                  '• $attempts call${attempts > 1 ? 's' : ''} attempted (Unanswered)',
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.orange[800]),
                                 ),
                               ],
                             ],

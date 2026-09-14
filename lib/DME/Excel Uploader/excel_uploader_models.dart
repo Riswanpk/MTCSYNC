@@ -9,15 +9,15 @@ enum ConflictResolution {
 
 /// Parsed row from the Excel file
 class ParsedExcelRow {
-  final String branchName;
-  final int? branchId;
+  String branchName;
+  int? branchId;
   final DateTime date;
   final String voucherNo;
   final String party;
   final String address;
   String phone;
-  final String typeName;
-  final int? typeId;
+  String typeName;
+  int? typeId;
   final String categoryName;
   final int? categoryId;
   final String salesman;
@@ -47,14 +47,14 @@ class ParsedExcelRow {
 /// Grouped Sale by Party and continuous items
 class GroupedSale {
   final String voucherNo;
-  final String branchName;
-  final int? branchId;
+  String branchName;
+  int? branchId;
   final DateTime date;
   String party;
   String address;
   String phone;
-  final String typeName;
-  final int? typeId;
+  String typeName;
+  int? typeId;
   final String categoryName;
   final int? categoryId;
   final String salesman;
@@ -82,10 +82,10 @@ class ParsedCustomerItem {
   String phone;
   final String partyName;
   final String address;
-  final String branchName;
+  String branchName;
   final String salesman;
   final String categoryName;
-  final String typeName;
+  String typeName;
   final int totalSalesCount;
   final int totalItemsCount;
   final bool isExisting;
@@ -168,3 +168,25 @@ class MissingPhoneCustomer {
   })  : assignedPhone = phone ?? '',
         phoneController = TextEditingController(text: phone ?? '');
 }
+
+/// Information about a sale record with missing or unrecognized branch
+class MissingBranchSale {
+  final String voucherNo;
+  final String partyName;
+  final String phone;
+  final DateTime date;
+  final String rawBranchName;
+  int? selectedBranchId;
+  String? selectedBranchName;
+
+  MissingBranchSale({
+    required this.voucherNo,
+    required this.partyName,
+    required this.phone,
+    required this.date,
+    required this.rawBranchName,
+    this.selectedBranchId,
+    this.selectedBranchName,
+  });
+}
+

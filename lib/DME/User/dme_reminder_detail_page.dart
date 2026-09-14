@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:call_log/call_log.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../dme_constants.dart';
 import '../dme_config.dart';
 import 'dme_whatsapp_proof_page.dart';
+// ignore: unused_import
 import 'dme_assignment_service.dart';
 import 'dme_call_scanner_service.dart';
 
@@ -33,7 +32,8 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
 
   int? _callDuration;
   DateTime? _calledTimestamp;
-  bool _canReschedule = false;
+  int _callAttempts = 0;
+  bool _isCheckingCall = false;
 
   List<Map<String, dynamic>> _salesHistory = [];
   bool _isLoadingHistory = false;
@@ -50,11 +50,9 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     _callDuration = int.tryParse(_reminder['call_duration']?.toString() ?? '');
     final cTs = _reminder['called_timestamp']?.toString();
     _calledTimestamp = cTs != null ? DateTime.tryParse(cTs) : null;
-    final isAlreadyCompleted = (status == 'completed' || status == 'called');
-    _callMade = isAlreadyCompleted || (_callDuration != null && _callDuration! > 0);
-    if (_callDuration != null && _callDuration! <= 10) {
-      _canReschedule = true;
-    }
+    final isAlreadyCompleted = (status == 'completed');
+    _callMade = isAlreadyCompleted || (_callDuration != null && _callDuration! > 10);
+    _callAttempts = int.tryParse(_reminder['call_attempts']?.toString() ?? '') ?? 0;
 
     _fetchCustomerSalesHistory();
     _fetchCustomerCallHistory();
@@ -69,7 +67,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _callInitiatedTime != null && !_callMade) {
+    if (state == AppLifecycleState.resumed && _callInitiatedTime != null) {
       _checkCallLogAfterCall();
     }
   }
@@ -86,6 +84,20 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
       return DateFormat('dd-MM-yyyy').format(parsed);
     }
     return str;
+  }
+
+  String _getUserDisplayName(dynamic userIdentifier) {
+    if (userIdentifier == null) return '';
+    final raw = userIdentifier.toString().trim();
+    if (raw.isEmpty) return '';
+    if (raw.contains('@')) {
+      final prefix = raw.split('@').first;
+      if (prefix.isNotEmpty) {
+        return prefix[0].toUpperCase() + prefix.substring(1);
+      }
+      return prefix;
+    }
+    return raw;
   }
 
   Future<void> _fetchCustomerSalesHistory() async {
@@ -106,13 +118,13 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
         salesList = List<Map<String, dynamic>>.from(res);
       } catch (_) {
         // Fallback without relation join if foreign key not named
-        final res = await client
+        final resFallback = await client
             .from('dme_sales')
             .select('id, date, purchased_branch, salesman, category_id, customer_type_id')
             .eq('customer_id', customerId)
             .order('date', ascending: false)
             .limit(10);
-        salesList = List<Map<String, dynamic>>.from(res);
+        salesList = List<Map<String, dynamic>>.from(resFallback);
       }
 
       // Check if any sale is missing dme_sales_detail or needs explicit detail fetch
@@ -166,38 +178,21 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
   Future<void> _fetchCustomerCallHistory() async {
     final client = await DmeConfig.getClient();
     final customerId = _reminder['customer_id'];
-    final currentReminderId = _reminder['id'];
     if (client == null || customerId == null) return;
 
     setState(() => _isLoadingCallHistory = true);
     try {
-      dynamic res;
-      try {
-        res = await client
-            .from('dme_reminders')
-            .select('id, reminder_date, last_purchase_branch, status, remarks, call_duration, called_timestamp, called_by, updated_at')
-            .eq('customer_id', customerId)
-            .inFilter('status', ['completed', 'called'])
-            .order('updated_at', ascending: false)
-            .limit(10);
-      } catch (_) {
-        // Fallback if called_by column not in DB yet
-        res = await client
-            .from('dme_reminders')
-            .select('id, reminder_date, last_purchase_branch, status, remarks, call_duration, called_timestamp, updated_at')
-            .eq('customer_id', customerId)
-            .inFilter('status', ['completed', 'called'])
-            .order('updated_at', ascending: false)
-            .limit(10);
-      }
+      final currentReminderId = _reminder['id'];
+      final res = await client
+          .from('dme_reminders')
+          .select('id, reminder_date, last_purchase_branch, status, remarks, call_duration, called_timestamp, called_by, updated_at')
+          .inFilter('status', ['completed', 'called'])
+          .eq('customer_id', customerId)
+          .neq('id', currentReminderId)
+          .order('called_timestamp', ascending: false)
+          .limit(10);
 
-      final List<Map<String, dynamic>> list = [];
-      for (var item in (res as List)) {
-        if (item['id'] != currentReminderId) {
-          list.add(Map<String, dynamic>.from(item));
-        }
-      }
-
+      final list = List<Map<String, dynamic>>.from(res);
       if (mounted) {
         setState(() {
           _callHistory = list;
@@ -205,13 +200,30 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
         });
       }
     } catch (e) {
+      try {
+        // Fallback if called_by column not in DB yet
+        final currentReminderId = _reminder['id'];
+        final resFallback = await client
+            .from('dme_reminders')
+            .select('id, reminder_date, last_purchase_branch, status, remarks, call_duration, called_timestamp, updated_at')
+            .inFilter('status', ['completed', 'called'])
+            .eq('customer_id', customerId)
+            .neq('id', currentReminderId)
+            .order('called_timestamp', ascending: false)
+            .limit(10);
+        final list = List<Map<String, dynamic>>.from(resFallback);
+        if (mounted) {
+          setState(() {
+            _callHistory = list;
+            _isLoadingCallHistory = false;
+          });
+        }
+      } catch (_) {
+        if (mounted) setState(() => _isLoadingCallHistory = false);
+      }
       debugPrint('Error fetching call history: $e');
       if (mounted) setState(() => _isLoadingCallHistory = false);
     }
-  }
-
-  bool _numberMatches(String logNumber, String? contact) {
-    return DmeCallScannerService.numberMatches(logNumber, contact);
   }
 
   Future<void> _makePhoneCall() async {
@@ -225,7 +237,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
 
     final uri = Uri.parse('tel:$phone');
     if (await canLaunchUrl(uri)) {
-      _callInitiatedTime = DateTime.now().subtract(const Duration(seconds: 10));
+      _callInitiatedTime = DateTime.now();
       await launchUrl(uri);
     } else {
       if (mounted) {
@@ -233,6 +245,26 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
           const SnackBar(content: Text('Could not open phone dialer')),
         );
       }
+    }
+  }
+
+  Future<void> _updateCallAttemptsInDb(int attempts) async {
+    try {
+      final client = await DmeConfig.getClient();
+      final reminderId = _reminder['id'];
+      if (client != null && reminderId != null) {
+        try {
+          await client.from('dme_reminders').update({
+            'call_attempts': attempts,
+            'updated_at': DateTime.now().toIso8601String(),
+          }).eq('id', reminderId);
+          widget.onUpdated?.call();
+        } catch (_) {
+          // Column might not exist yet, fallback gracefully
+        }
+      }
+    } catch (e) {
+      debugPrint('Error updating call_attempts: $e');
     }
   }
 
@@ -275,175 +307,121 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
   }
 
   Future<void> _checkCallLogAfterCall() async {
-    final permStatus = await Permission.phone.request();
-    if (!permStatus.isGranted) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Call log permission is required to verify calls.'), backgroundColor: Colors.red),
-        );
-      }
-      return;
-    }
+    if (_isCheckingCall) return;
+    setState(() => _isCheckingCall = true);
 
     try {
-      final now = DateTime.now();
-      final startOfDay = DateTime(now.year, now.month, now.day);
-      final Iterable<CallLogEntry> entries = await CallLog.query(
-        dateFrom: startOfDay.millisecondsSinceEpoch,
-        dateTo: now.millisecondsSinceEpoch,
+      final contact = _reminder['customer_phone']?.toString() ?? '';
+      final entry = await DmeCallScannerService.fetchLatestCallForContact(
+        contact,
+        sinceTime: _callInitiatedTime,
       );
 
-      final contact = _reminder['customer_phone']?.toString() ?? '';
+      final wasInitiated = _callInitiatedTime != null;
+      _callInitiatedTime = null; // Clear so it only checks once per call initiation
 
-      final matchingEntries = entries.where((entry) {
-        String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
-        if (logNumber.isEmpty) return false;
-        return _numberMatches(logNumber, contact);
-      }).toList()
-        ..sort((a, b) => (b.timestamp ?? 0).compareTo(a.timestamp ?? 0));
-
+      final now = DateTime.now();
       int duration = 0;
       DateTime calledTime = now;
-      bool callFound = false;
 
-      if (matchingEntries.isNotEmpty) {
-        final entry = matchingEntries.first;
-        callFound = true;
+      if (entry != null) {
         duration = entry.duration ?? 0;
         if (entry.timestamp != null && entry.timestamp! > 0) {
           calledTime = DateTime.fromMillisecondsSinceEpoch(entry.timestamp!);
         }
-      } else if (_callInitiatedTime != null) {
-        // Dialer opened but no logged outgoing call found or instantaneous disconnect
-        callFound = true;
-        duration = 0;
-        calledTime = _callInitiatedTime!;
-      }
 
-      if (callFound) {
-        final bool isAttended = duration > 0;
+        // Count attempts from device call log
+        final actualAttempts = await DmeCallScannerService.getTodayOutgoingAttemptCount(contact);
+        _callAttempts = actualAttempts > 0 ? actualAttempts : (_callAttempts + 1);
+        _reminder['call_attempts'] = _callAttempts;
+        _updateCallAttemptsInDb(_callAttempts);
+
+        // Attended call strictly requires duration > 10 seconds to allow remarks
+        final bool isAttended = duration > 10;
         if (mounted) {
           setState(() {
             _callDuration = duration;
             _calledTimestamp = calledTime;
             _callMade = isAttended;
-            _canReschedule = duration <= 10;
+            _reminder['call_duration'] = duration;
+            _reminder['called_timestamp'] = calledTime.toIso8601String();
+            if (isAttended) {
+              _reminder['status'] = 'called';
+            }
+            _isCheckingCall = false;
           });
 
-          if (!isAttended) {
+          // If call attended (>10s), update Supabase with status 'called' and caller email
+          if (isAttended) {
+            final userEmail = FirebaseAuth.instance.currentUser?.email;
+            final client = await DmeConfig.getClient();
+            final remId = _reminder['id'];
+            if (client != null && remId != null) {
+              final payload = <String, dynamic>{
+                'call_duration': duration,
+                'called_timestamp': calledTime.toIso8601String(),
+                'call_attempts': _callAttempts,
+                'status': 'called',
+                'updated_at': now.toIso8601String(),
+              };
+              if (userEmail != null && userEmail.isNotEmpty) {
+                payload['called_by'] = userEmail;
+              }
+              try {
+                await client.from('dme_reminders').update(payload).eq('id', remId);
+                widget.onUpdated?.call();
+              } catch (err) {
+                if (err.toString().contains('called_by')) {
+                  payload.remove('called_by');
+                  await client.from('dme_reminders').update(payload).eq('id', remId);
+                  widget.onUpdated?.call();
+                }
+              }
+            }
+
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: const Text(
-                  'Call not attended (0s). Remarks cannot be entered. Please reschedule or retry calling.',
-                ),
-                backgroundColor: Colors.orange[900],
-                duration: const Duration(seconds: 4),
-              ),
-            );
-          } else if (duration <= 10) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Call lasted $duration sec (<= 10s). You can reschedule or complete with remarks.',
-                ),
-                backgroundColor: Colors.orange[800],
-                duration: const Duration(seconds: 4),
+                content: Text('Call attended ($duration sec)! Please add remarks below.'),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 3),
               ),
             );
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Call attended ($duration sec)! Please add remarks.'),
-                backgroundColor: Colors.green,
-                duration: const Duration(seconds: 2),
+                content: Text(
+                  duration == 0
+                      ? 'Customer did not pick up (0s). Call attempt #$_callAttempts recorded. Remarks require a call over 10s.'
+                      : 'Call was under 10s (${duration}s). Call attempt #$_callAttempts recorded. Remarks require a call over 10s.',
+                ),
+                backgroundColor: Colors.orange[900],
+                duration: const Duration(seconds: 4),
               ),
             );
           }
         }
       } else {
         if (mounted) {
+          setState(() => _isCheckingCall = false);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No outgoing call found today for this contact.'),
+            SnackBar(
+              content: Text(
+                wasInitiated
+                    ? 'No call was detected in your call log. Call attempt was not recorded.'
+                    : 'No outgoing call log found for this customer.',
+              ),
               backgroundColor: Colors.orange,
-              duration: Duration(seconds: 2),
+              duration: const Duration(seconds: 3),
             ),
           );
         }
       }
     } catch (e) {
-      debugPrint('Error reloading call status: $e');
+      debugPrint('Error checking call log: $e');
       if (mounted) {
+        setState(() => _isCheckingCall = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error checking call log: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  Future<void> _rescheduleForTomorrow() async {
-    final client = await DmeConfig.getClient();
-    if (client == null) return;
-
-    setState(() => _isSaving = true);
-    try {
-      final reminderId = _reminder['id'];
-      final targetDate = DmeAssignmentService.getNextWorkingDate();
-      final targetDateStr = DateFormat('yyyy-MM-dd').format(targetDate);
-      final formattedDisplay = DateFormat('dd-MM-yyyy (EEE)').format(targetDate);
-
-      final userRemarks = _remarksController.text.trim();
-      final dur = _callDuration ?? 0;
-      final defaultRemark = dur == 0
-          ? 'Call not picked up - Rescheduled for $formattedDisplay'
-          : 'Call under 10s (${dur}s) - Rescheduled for $formattedDisplay';
-      final finalRemarks = userRemarks.isNotEmpty ? userRemarks : defaultRemark;
-      final userEmail = FirebaseAuth.instance.currentUser?.email;
-
-      final updatePayload = <String, dynamic>{
-        'reminder_date': targetDateStr,
-        'status': 'pending',
-        'remarks': finalRemarks,
-        'call_duration': dur,
-        'called_timestamp': (_calledTimestamp ?? DateTime.now()).toIso8601String(),
-        'assigned_to': null,
-        'assigned_date': null,
-        'is_overdue_leftover': false,
-        'updated_at': DateTime.now().toIso8601String(),
-      };
-      if (userEmail != null && userEmail.isNotEmpty) {
-        updatePayload['called_by'] = userEmail;
-      }
-
-      try {
-        await client.from('dme_reminders').update(updatePayload).eq('id', reminderId);
-      } catch (err) {
-        // Fallback if called_by column has not been added to Supabase table yet
-        if (err.toString().contains('called_by')) {
-          updatePayload.remove('called_by');
-          await client.from('dme_reminders').update(updatePayload).eq('id', reminderId);
-        } else {
-          rethrow;
-        }
-      }
-
-      setState(() => _isSaving = false);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Call rescheduled for $formattedDisplay'),
-            backgroundColor: Colors.blue[700],
-          ),
-        );
-        widget.onUpdated?.call();
-        Navigator.pop(context, true);
-      }
-    } catch (e) {
-      setState(() => _isSaving = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error rescheduling reminder: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -453,11 +431,15 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     final client = await DmeConfig.getClient();
     if (client == null) return;
 
-    if (!_callMade || _callDuration == null || _callDuration == 0) {
+    if (!_callMade || _callDuration == null || _callDuration! <= 10) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Cannot complete reminder: Call was not attended. Please reschedule or retry calling.'),
+        SnackBar(
+          content: Text(
+            _callDuration == null || _callDuration == 0
+                ? 'Cannot complete reminder: Call was not attended. Please call customer first.'
+                : 'Cannot complete reminder: Call must be above 10 seconds to enter remarks (${_callDuration}s recorded).',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -569,14 +551,14 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: _callMade
-                  ? (_canReschedule ? Colors.orange[800] : Colors.green)
-                  : (_callInitiatedTime != null && _callDuration == 0 ? Colors.red[700] : Colors.orange),
+                  ? Colors.green
+                  : (_callDuration != null && _callDuration! <= 10 ? Colors.orange[800] : Colors.grey[700]),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
               _callMade
-                  ? (_canReschedule ? '<= 10S' : 'VERIFIED')
-                  : (_callInitiatedTime != null && _callDuration == 0 ? 'MISSED' : 'PENDING'),
+                  ? 'VERIFIED'
+                  : (_callDuration != null && _callDuration! <= 10 ? '<= 10S' : 'PENDING'),
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
             ),
           ),
@@ -685,8 +667,31 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                           const Icon(Icons.person_pin_rounded, size: 16, color: Colors.green),
                           const SizedBox(width: 6),
                           Text(
-                            'Called by: ${_reminder['called_by']}',
+                            'Called by: ${_getUserDisplayName(_reminder['called_by'])}',
                             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.green),
+                          ),
+                        ],
+                      ),
+                    ],
+                    if (_callAttempts > 0) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(
+                            _callMade ? Icons.phone_callback_rounded : Icons.phone_missed_rounded,
+                            size: 16,
+                            color: _callMade ? Colors.green : Colors.orange[800],
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _callMade
+                                ? 'Calls attempted today: $_callAttempts (Connected)'
+                                : 'Calls attempted today: $_callAttempts (Unanswered)',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: _callMade ? Colors.green[800] : Colors.orange[900],
+                            ),
                           ),
                         ],
                       ),
@@ -935,7 +940,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                                     const Icon(Icons.person_outline_rounded, size: 12, color: Colors.grey),
                                     const SizedBox(width: 4),
                                     Text(
-                                      'Called by: ${h['called_by']}',
+                                      'Called by: ${_getUserDisplayName(h['called_by'])}',
                                       style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                                     ),
                                   ],
@@ -953,18 +958,81 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
             ],
 
             // 3. Call and WhatsApp Action Buttons
+            if (_callAttempts > 0)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: _callMade ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _callMade ? Colors.green.withValues(alpha: 0.4) : Colors.orange.withValues(alpha: 0.4),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _callMade ? Icons.check_circle_outline_rounded : Icons.phone_missed_rounded,
+                      size: 20,
+                      color: _callMade ? Colors.green[800] : Colors.orange[900],
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _callMade
+                            ? 'Call connected (${_callDuration ?? 0}s) on attempt #$_callAttempts today'
+                            : '$_callAttempts call attempt${_callAttempts > 1 ? 's' : ''} made today — customer hasn\'t picked up yet',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _callMade ? Colors.green[900] : Colors.orange[900],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: _makePhoneCall,
                 icon: const Icon(Icons.call, size: 22),
-                label: Text('Call $customerPhone'),
+                label: Text(_callAttempts > 0 && !_callMade ? 'Call Customer Again ($customerPhone)' : 'Call $customerPhone'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF8CC63F),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   elevation: 2,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Fetch Call Details / Verify Call Button
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _isCheckingCall ? null : _checkCallLogAfterCall,
+                icon: _isCheckingCall
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.sync_rounded, size: 20),
+                label: Text(
+                  _isCheckingCall
+                      ? 'Fetching Call Details...'
+                      : (_callMade ? 'Refresh Call Duration / Details' : 'Fetch Call Details / Verify Call'),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF005BAC),
+                  side: const BorderSide(color: Color(0xFF005BAC), width: 1.5),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
             ),
@@ -1019,38 +1087,40 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: (_callInitiatedTime != null && (_callDuration == 0 || _callDuration == null))
-                              ? Colors.red.withValues(alpha: 0.1)
-                              : Colors.orange.withValues(alpha: 0.1),
+                          color: (_callDuration != null && _callDuration! <= 10)
+                              ? Colors.orange.withValues(alpha: 0.12)
+                              : Colors.grey.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: (_callInitiatedTime != null && (_callDuration == 0 || _callDuration == null))
-                                ? Colors.red.withValues(alpha: 0.3)
-                                : Colors.orange.withValues(alpha: 0.3),
+                            color: (_callDuration != null && _callDuration! <= 10)
+                                ? Colors.orange.withValues(alpha: 0.3)
+                                : Colors.grey.withValues(alpha: 0.3),
                           ),
                         ),
                         child: Row(
                           children: [
                             Icon(
-                              (_callInitiatedTime != null && (_callDuration == 0 || _callDuration == null))
+                              (_callDuration != null && _callDuration! <= 10)
                                   ? Icons.phone_missed_rounded
                                   : Icons.info_outline,
-                              color: (_callInitiatedTime != null && (_callDuration == 0 || _callDuration == null))
-                                  ? Colors.red[700]
-                                  : Colors.orange,
+                              color: (_callDuration != null && _callDuration! <= 10)
+                                  ? Colors.orange[800]
+                                  : Colors.grey[700],
                               size: 20,
                             ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                (_callInitiatedTime != null && (_callDuration == 0 || _callDuration == null))
-                                    ? 'Call was not attended (0 sec). Remarks cannot be entered. Please reschedule for tomorrow/next working day or tap Call to try again.'
-                                    : 'Make a call first using the Call button above to enter call remarks.',
+                                (_callDuration != null && _callDuration! <= 10)
+                                    ? (_callDuration == 0
+                                        ? 'Call was not answered (0s). Remarks are only allowed for calls lasting more than 10 seconds. Please try calling again.'
+                                        : 'Call was under 10 seconds (${_callDuration}s). Remarks are only allowed for calls lasting more than 10 seconds. Please try calling again.')
+                                    : 'Please make a call to the customer first. Remarks are enabled once an attended call lasting more than 10 seconds is verified.',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: (_callInitiatedTime != null && (_callDuration == 0 || _callDuration == null))
-                                      ? Colors.red[800]
-                                      : Colors.deepOrange,
+                                  color: (_callDuration != null && _callDuration! <= 10)
+                                      ? Colors.orange[900]
+                                      : Colors.grey[800],
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -1067,9 +1137,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                       decoration: InputDecoration(
                         hintText: _callMade
                             ? 'Enter discussion summary, customer feedback, etc...'
-                            : (_callInitiatedTime != null && (_callDuration == 0 || _callDuration == null)
-                                ? 'Disabled: Call not attended...'
-                                : 'Disabled until call is made...'),
+                            : 'Remarks disabled (call must exceed 10s)...',
                         filled: true,
                         fillColor: !_callMade
                             ? (isDark ? Colors.grey[850] : Colors.grey[200])
@@ -1081,58 +1149,6 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                       ),
                     ),
                     const SizedBox(height: 16),
-                    if (_canReschedule) ...[
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.amber.withValues(alpha: 0.5)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.schedule_rounded, color: Colors.orange, size: 22),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    _callDuration == 0 ? 'Call Not Picked Up' : 'Short Call Detected (${_callDuration}s)',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.deepOrange),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Call was under 10 seconds. You can reschedule for tomorrow (or Monday if tomorrow is Sunday).',
-                                    style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.grey[800]),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _isSaving ? null : _rescheduleForTomorrow,
-                          icon: const Icon(Icons.event_repeat_rounded, size: 20),
-                          label: Text(
-                            'Schedule for ${DateFormat('EEE, dd MMM').format(DmeAssignmentService.getNextWorkingDate())}',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.amber[800],
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            elevation: 2,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(

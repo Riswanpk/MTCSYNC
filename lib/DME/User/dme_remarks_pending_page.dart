@@ -7,7 +7,6 @@ import '../dme_constants.dart';
 import '../dme_config.dart';
 import 'dme_assignment_service.dart';
 import 'dme_reminder_detail_page.dart';
-import 'dme_call_scanner_service.dart';
 
 class DmeRemarksPendingPage extends StatefulWidget {
   const DmeRemarksPendingPage({super.key});
@@ -63,28 +62,23 @@ class _DmeRemarksPendingPageState extends State<DmeRemarksPendingPage> {
         currentUserId: user.uid,
       );
 
-      // 3. Optional quick scan of call logs to catch any calls made just now
-      if (assigned.isNotEmpty && user.email != null) {
-        await DmeCallScannerService.scanTodayCallLog(assigned, userEmail: user.email!);
-      }
-
-      // 4. Filter for reminders where call was made/detected, but remarks are still empty
+      // 3. Filter strictly for reminders where call was ATTENDED (duration > 0),
+      // but remarks are still empty. Unanswered calls (duration == 0) do NOT need remarks.
       final List<Map<String, dynamic>> pending = [];
       for (var r in assigned) {
         final remarks = (r['remarks'] ?? '').toString().trim();
         final status = (r['status'] ?? '').toString().toLowerCase();
         final duration = int.tryParse(r['call_duration']?.toString() ?? '') ?? 0;
-        final calledTs = r['called_timestamp']?.toString();
 
-        final bool hasCall = duration > 0 || (calledTs != null && calledTs.isNotEmpty);
+        final bool hasAttendedCall = duration > 0;
         final bool isCompleted = (status == 'completed');
 
-        if (hasCall && remarks.isEmpty && !isCompleted) {
+        if (hasAttendedCall && remarks.isEmpty && !isCompleted) {
           pending.add(r);
         }
       }
 
-      // Also check if any called reminders from Supabase for today are missing remarks
+      // Also check if any called reminders from Supabase for today with duration > 0 are missing remarks
       final client = await DmeConfig.getClient();
       if (client != null) {
         final todayStr = DmeAssignmentService.formatDate(DateTime.now());
@@ -100,8 +94,9 @@ class _DmeRemarksPendingPageState extends State<DmeRemarksPendingPage> {
           for (var item in (res as List)) {
             final rem = Map<String, dynamic>.from(item);
             final remRemarks = (rem['remarks'] ?? '').toString().trim();
+            final remDuration = int.tryParse(rem['call_duration']?.toString() ?? '') ?? 0;
             final remId = rem['id'];
-            if (remRemarks.isEmpty && !pending.any((p) => p['id'] == remId)) {
+            if (remDuration > 0 && remRemarks.isEmpty && !pending.any((p) => p['id'] == remId)) {
               final cust = rem['dme_customers'] as Map<String, dynamic>?;
               final bId = int.tryParse(rem['last_purchase_branch']?.toString() ?? '');
               rem['customer_name'] = cust?['name'] ?? 'Unknown Customer';

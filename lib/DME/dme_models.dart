@@ -215,6 +215,7 @@ class DmeReminder {
   final String? assignedTo;
   final String? assignedDate;
   final bool isOverdueLeftover;
+  final int callAttempts;
 
   DmeReminder({
     this.id,
@@ -230,6 +231,7 @@ class DmeReminder {
     this.assignedTo,
     this.assignedDate,
     this.isOverdueLeftover = false,
+    this.callAttempts = 0,
   });
 
   Map<String, dynamic> toMap() {
@@ -247,6 +249,7 @@ class DmeReminder {
       'assigned_to': assignedTo,
       'assigned_date': assignedDate,
       'is_overdue_leftover': isOverdueLeftover,
+      'call_attempts': callAttempts,
     };
   }
 
@@ -279,6 +282,7 @@ class DmeReminder {
       isOverdueLeftover: map['is_overdue_leftover'] == true ||
           map['is_overdue_leftover'] == 'true' ||
           map['is_overdue_leftover'] == 1,
+      callAttempts: int.tryParse(map['call_attempts']?.toString() ?? '') ?? 0,
     );
   }
 }

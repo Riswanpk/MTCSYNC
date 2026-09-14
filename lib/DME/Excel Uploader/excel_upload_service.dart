@@ -251,6 +251,66 @@ class ExcelUploadService {
       }
     }
 
+    // Identify PREMIUM customers from this Excel upload and existing DB records:
+    // "For customers who have a customer type as premium in one of the branches, when the same customer comes in a different branch in excel as any of the other types then dont take that custoemr type, premium customers will always be premium"
+    final Set<int> premiumCustomerIds = {};
+    final Set<String> premiumPhones = {};
+
+    for (var sale in groupedSales) {
+      final activePhone = activePhoneBySale['${sale.party}_${sale.phone}_${sale.date.millisecondsSinceEpoch}'] ?? sale.phone;
+      if (sale.typeId == 1 || sale.typeName.trim().toUpperCase() == 'PREMIUM') {
+        if (activePhone.isNotEmpty) premiumPhones.add(activePhone);
+      }
+    }
+
+    if (customerIds.isNotEmpty) {
+      for (int i = 0; i < customerIds.length; i += 500) {
+        final chunk = customerIds.sublist(
+          i,
+          (i + 500 > customerIds.length) ? customerIds.length : i + 500,
+        );
+        try {
+          final brRes = await client
+              .from('dme_customer_branches')
+              .select('customer_id')
+              .inFilter('customer_id', chunk)
+              .eq('customer_type_id', 1);
+
+          for (var r in (brRes as List)) {
+            final cId = r['customer_id'] as int?;
+            if (cId != null) premiumCustomerIds.add(cId);
+          }
+        } catch (e) {
+          debugPrint('Check premium in dme_customer_branches: $e');
+        }
+
+        try {
+          final slRes = await client
+              .from('dme_sales')
+              .select('customer_id')
+              .inFilter('customer_id', chunk)
+              .eq('customer_type_id', 1);
+
+          for (var r in (slRes as List)) {
+            final cId = r['customer_id'] as int?;
+            if (cId != null) premiumCustomerIds.add(cId);
+          }
+        } catch (e) {
+          debugPrint('Check premium in dme_sales: $e');
+        }
+      }
+    }
+
+    // Correlate premium phones and customer IDs
+    for (var entry in phoneToCustomerId.entries) {
+      if (premiumCustomerIds.contains(entry.value)) {
+        premiumPhones.add(entry.key);
+      }
+      if (premiumPhones.contains(entry.key)) {
+        premiumCustomerIds.add(entry.value);
+      }
+    }
+
     // Prepare sales strictly deduplicated by (customer_id, date) to satisfy uq_sale_date_customer
     final List<Map<String, dynamic>> salesToInsert = [];
     final Map<String, int> saleGroupToIdx = {};
@@ -260,6 +320,9 @@ class ExcelUploadService {
       final activePhone = activePhoneBySale['${sale.party}_${sale.phone}_${sale.date.millisecondsSinceEpoch}'] ?? sale.phone;
       final custId = phoneToCustomerId[activePhone];
       if (custId == null) continue;
+
+      final isPremium = premiumCustomerIds.contains(custId) || premiumPhones.contains(activePhone);
+      final customerTypeIdToUse = isPremium ? 1 : sale.typeId;
 
       final dateStr = DateFormat('yyyy-MM-dd').format(sale.date);
       final saleKey = '${custId}_$dateStr';
@@ -272,7 +335,7 @@ class ExcelUploadService {
           'purchased_branch': sale.branchId,
           'salesman': sale.salesman.isNotEmpty ? sale.salesman : null,
           'category_id': sale.categoryId,
-          'customer_type_id': sale.typeId,
+          'customer_type_id': customerTypeIdToUse,
           'uploaded_by': uploadedBy,
         };
 
@@ -431,12 +494,15 @@ class ExcelUploadService {
 
         // Branch junction (recorded for all branches)
         if (sale.branchId != null) {
+          final isPremium = premiumCustomerIds.contains(custId) || premiumPhones.contains(activePhone);
+          final customerTypeIdToUse = isPremium ? 1 : sale.typeId;
+
           final branchKey = '${custId}_${sale.branchId}';
           branchesByCustBranch[branchKey] = {
             'customer_id': custId,
             'branch_id': sale.branchId,
             'category_id': sale.categoryId,
-            'customer_type_id': sale.typeId,
+            'customer_type_id': customerTypeIdToUse,
           };
         }
       }
@@ -584,6 +650,26 @@ class ExcelUploadService {
     }
 
     await Future.wait(parallelTasks);
+
+    // If any customers were identified as PREMIUM, enforce customer_type_id = 1 across all existing branch records
+    if (premiumCustomerIds.isNotEmpty) {
+      try {
+        final premList = premiumCustomerIds.toList();
+        for (int i = 0; i < premList.length; i += 500) {
+          final chunk = premList.sublist(
+            i,
+            (i + 500 > premList.length) ? premList.length : i + 500,
+          );
+          await client
+              .from('dme_customer_branches')
+              .update({'customer_type_id': 1})
+              .inFilter('customer_id', chunk);
+        }
+        onLog('✓ Enforced PREMIUM customer type across all branches for ${premiumCustomerIds.length} customer(s)');
+      } catch (e) {
+        debugPrint('Notice updating existing customer branches to PREMIUM: $e');
+      }
+    }
 
     final totalRemindersSaved = remindersToInsert.length + remindersToUpdate.length;
     onLog('✓ Saved ${detailsToInsert.length} sale detail batches & $totalRemindersSaved reminders');

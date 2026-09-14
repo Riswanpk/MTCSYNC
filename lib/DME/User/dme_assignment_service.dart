@@ -203,7 +203,7 @@ class DmeAssignmentService {
       final overdueRows = await client
           .from('dme_reminders')
           .select('assigned_to, assigned_date')
-          .eq('status', 'pending')
+          .inFilter('status', ['pending', 'called'])
           .not('assigned_to', 'is', null)
           .lt('assigned_date', dateStr);
 
@@ -252,14 +252,14 @@ class DmeAssignmentService {
       debugPrint('DmeAssignmentService: overdue stats recording error: $e');
     }
 
-    // Reset any pending reminders assigned on previous days so they are cleanly re-divided today
+    // Reset uncalled pending reminders assigned on previous days so they are cleanly re-divided today
     try {
       await client.from('dme_reminders').update({
         'assigned_to': null,
         'assigned_date': null,
         'is_overdue_leftover': false,
         'updated_at': nowIso,
-      }).eq('status', 'pending').lt('assigned_date', dateStr);
+      }).eq('status', 'pending').isFilter('called_by', null).lt('assigned_date', dateStr);
     } catch (_) {}
 
     // Clean up previous assignment audit logs for today for these branches so absent users or old counts don't linger on re-assign
@@ -296,8 +296,8 @@ class DmeAssignmentService {
       while (hasMore) {
         final batch = await client
             .from('dme_reminders')
-            .select('id, reminder_date')
-            .eq('status', 'pending')
+            .select('id, reminder_date, status, remarks, call_duration, called_by, assigned_to')
+            .inFilter('status', ['pending', 'called'])
             .eq('last_purchase_branch', branchId)
             .lte('reminder_date', '${dateStr}T23:59:59')
             .range(offset, offset + pageSize - 1);
@@ -315,12 +315,46 @@ class DmeAssignmentService {
         continue;
       }
 
+      final Map<String, List<int>> userLeftovers = {for (var u in activeUsers) u: []};
+      final Map<String, List<int>> userTodays = {for (var u in activeUsers) u: []};
       final List<int> leftoverIds = [];
       final List<int> todayIds = [];
 
       for (var item in allPending) {
         final id = int.tryParse(item['id']?.toString() ?? '');
         if (id == null) continue;
+
+        final status = (item['status'] ?? '').toString().toLowerCase();
+        final remarks = (item['remarks'] ?? '').toString().trim();
+        final duration = int.tryParse(item['call_duration']?.toString() ?? '') ?? 0;
+        final bool isCalledWithoutRemarks = (status == 'called' || duration > 0) && remarks.isEmpty;
+
+        // If reminder is in called status without remarks, assign it back to the same person who called it
+        if (isCalledWithoutRemarks) {
+          String? targetCaller;
+          final prevAssigned = item['assigned_to']?.toString();
+          if (prevAssigned != null && activeUsers.contains(prevAssigned)) {
+            targetCaller = prevAssigned;
+          } else {
+            final calledEmail = item['called_by']?.toString().toLowerCase().trim();
+            if (calledEmail != null && calledEmail.isNotEmpty) {
+              for (var u in activeUsers) {
+                final uEmail = (userUidToEmail?[u] ?? '').toLowerCase().trim();
+                if (uEmail == calledEmail || u.toLowerCase() == calledEmail) {
+                  targetCaller = u;
+                  break;
+                }
+              }
+            }
+          }
+
+          if (targetCaller != null) {
+            userLeftovers[targetCaller]!.add(id);
+            globalUserLeftoverCount[targetCaller] = (globalUserLeftoverCount[targetCaller] ?? 0) + 1;
+            globalUserTotalCount[targetCaller] = (globalUserTotalCount[targetCaller] ?? 0) + 1;
+            continue;
+          }
+        }
 
         final rDateStr = item['reminder_date']?.toString();
         final rDate = rDateStr != null ? DateTime.tryParse(rDateStr) : null;
@@ -341,9 +375,6 @@ class DmeAssignmentService {
       final rnd = Random();
       leftoverIds.shuffle(rnd);
       todayIds.shuffle(rnd);
-
-      final Map<String, List<int>> userLeftovers = {for (var u in activeUsers) u: []};
-      final Map<String, List<int>> userTodays = {for (var u in activeUsers) u: []};
 
       // Fairly distribute leftovers:
       // Always pick the present user of this branch who currently has the fewest assigned leftovers (breaking ties with fewest total calls)
@@ -460,7 +491,7 @@ class DmeAssignmentService {
       var query = client
           .from('dme_reminders')
           .select('id')
-          .eq('status', 'pending')
+          .inFilter('status', ['pending', 'called'])
           .eq('assigned_date', dateStr);
 
       if (branchIds != null && branchIds.isNotEmpty) {
@@ -488,7 +519,7 @@ class DmeAssignmentService {
       var query = client
           .from('dme_reminders')
           .select('id')
-          .eq('status', 'pending')
+          .inFilter('status', ['pending', 'called'])
           .not('assigned_to', 'is', null)
           .lte('reminder_date', '${dateStr}T23:59:59');
 
@@ -597,8 +628,8 @@ class DmeAssignmentService {
       while (hasMore) {
         final batch = await client
             .from('dme_reminders')
-            .select('id, reminder_date')
-            .eq('status', 'pending')
+            .select('id, reminder_date, status, remarks, call_duration, called_by, assigned_to')
+            .inFilter('status', ['pending', 'called'])
             .inFilter('last_purchase_branch', userBranches)
             .lte('reminder_date', '${todayStr}T23:59:59')
             .range(offset, offset + pageSize - 1);
@@ -615,12 +646,36 @@ class DmeAssignmentService {
       if (allPending.isEmpty) return;
 
       final currentDay = DateTime(today.year, today.month, today.day);
+      final Map<String, List<int>> userLeftovers = {for (var u in eligibleUsers) u: []};
+      final Map<String, List<int>> userTodays = {for (var u in eligibleUsers) u: []};
+      final Map<String, int> userLeftoverCount = {for (var u in eligibleUsers) u: 0};
+      final Map<String, int> userTotalCount = {for (var u in eligibleUsers) u: 0};
       final List<int> leftoverIds = [];
       final List<int> todayIds = [];
 
       for (var item in allPending) {
         final id = int.tryParse(item['id']?.toString() ?? '');
         if (id == null) continue;
+
+        final status = (item['status'] ?? '').toString().toLowerCase();
+        final remarks = (item['remarks'] ?? '').toString().trim();
+        final duration = int.tryParse(item['call_duration']?.toString() ?? '') ?? 0;
+        final bool isCalledWithoutRemarks = (status == 'called' || duration > 0) && remarks.isEmpty;
+
+        // If reminder is in called status without remarks, assign it back to the same person who called it
+        if (isCalledWithoutRemarks) {
+          String? targetCaller;
+          final prevAssigned = item['assigned_to']?.toString();
+          if (prevAssigned != null && eligibleUsers.contains(prevAssigned)) {
+            targetCaller = prevAssigned;
+          }
+          if (targetCaller != null) {
+            userLeftovers[targetCaller]!.add(id);
+            userLeftoverCount[targetCaller] = (userLeftoverCount[targetCaller] ?? 0) + 1;
+            userTotalCount[targetCaller] = (userTotalCount[targetCaller] ?? 0) + 1;
+            continue;
+          }
+        }
 
         final rDateStr = item['reminder_date']?.toString();
         final rDate = rDateStr != null ? DateTime.tryParse(rDateStr) : null;
@@ -641,11 +696,6 @@ class DmeAssignmentService {
       final rnd = Random();
       leftoverIds.shuffle(rnd);
       todayIds.shuffle(rnd);
-
-      final Map<String, List<int>> userLeftovers = {for (var u in eligibleUsers) u: []};
-      final Map<String, List<int>> userTodays = {for (var u in eligibleUsers) u: []};
-      final Map<String, int> userLeftoverCount = {for (var u in eligibleUsers) u: 0};
-      final Map<String, int> userTotalCount = {for (var u in eligibleUsers) u: 0};
 
       for (final id in leftoverIds) {
         final sortedUsers = List<String>.from(eligibleUsers)..sort((a, b) {
@@ -742,28 +792,43 @@ class DmeAssignmentService {
           var query = client
               .from('dme_reminders')
               .select(
-                  'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, called_by, assigned_to, assigned_date, is_overdue_leftover, dme_customers(id, name, phone, address, salesman)')
+                  'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, called_by, assigned_to, assigned_date, is_overdue_leftover, call_attempts, dme_customers(id, name, phone, address, salesman)')
               .eq('assigned_to', currentUserId)
               .eq('assigned_date', todayStr)
-              .eq('status', 'pending');
+              .inFilter('status', ['pending', 'called']);
 
           if (filterBranchId != null) {
             query = query.eq('last_purchase_branch', filterBranchId);
           }
           batch = await query.range(offset, offset + pageSize - 1);
         } catch (_) {
-          var fallbackQuery = client
-              .from('dme_reminders')
-              .select(
-                  'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, assigned_to, assigned_date, is_overdue_leftover, dme_customers(id, name, phone, address, salesman)')
-              .eq('assigned_to', currentUserId)
-              .eq('assigned_date', todayStr)
-              .eq('status', 'pending');
+          try {
+            var fallbackQuery = client
+                .from('dme_reminders')
+                .select(
+                    'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, called_by, assigned_to, assigned_date, is_overdue_leftover, dme_customers(id, name, phone, address, salesman)')
+                .eq('assigned_to', currentUserId)
+                .eq('assigned_date', todayStr)
+                .inFilter('status', ['pending', 'called']);
 
-          if (filterBranchId != null) {
-            fallbackQuery = fallbackQuery.eq('last_purchase_branch', filterBranchId);
+            if (filterBranchId != null) {
+              fallbackQuery = fallbackQuery.eq('last_purchase_branch', filterBranchId);
+            }
+            batch = await fallbackQuery.range(offset, offset + pageSize - 1);
+          } catch (_) {
+            var fallbackQuery2 = client
+                .from('dme_reminders')
+                .select(
+                    'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, assigned_to, assigned_date, is_overdue_leftover, dme_customers(id, name, phone, address, salesman)')
+                .eq('assigned_to', currentUserId)
+                .eq('assigned_date', todayStr)
+                .inFilter('status', ['pending', 'called']);
+
+            if (filterBranchId != null) {
+              fallbackQuery2 = fallbackQuery2.eq('last_purchase_branch', filterBranchId);
+            }
+            batch = await fallbackQuery2.range(offset, offset + pageSize - 1);
           }
-          batch = await fallbackQuery.range(offset, offset + pageSize - 1);
         }
         final list = batch as List;
         data.addAll(list);
@@ -813,6 +878,7 @@ class DmeAssignmentService {
       rem['is_overdue_leftover'] = rem['is_overdue_leftover'] == true ||
           rem['is_overdue_leftover'] == 'true' ||
           rem['is_overdue_leftover'] == 1;
+      rem['call_attempts'] = int.tryParse(rem['call_attempts']?.toString() ?? '') ?? 0;
 
       list.add(rem);
     }
