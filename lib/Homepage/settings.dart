@@ -65,7 +65,7 @@ class SettingsPage extends StatelessWidget {
               decoration: const InputDecoration(
                 labelText: 'Minimum Build Number (versionCode)',
                 border: OutlineInputBorder(),
-                hintText: 'e.g. 185',
+                hintText: 'e.g. 187',
               ),
             ),
           ],
@@ -216,7 +216,8 @@ class SettingsPage extends StatelessWidget {
         final nowIso = DateTime.now().toIso8601String();
 
         for (int i = 0; i < candidateIds.length; i += batchSize) {
-          final chunk = candidateIds.sublist(i, min(i + batchSize, candidateIds.length));
+          final chunk =
+              candidateIds.sublist(i, min(i + batchSize, candidateIds.length));
           await client.from('dme_reminders').update({
             'status': 'called',
             'updated_at': nowIso,
@@ -334,7 +335,8 @@ class SettingsPage extends StatelessWidget {
                           final isSyncHead = role == 'sync head' ||
                               role == 'synchead' ||
                               role == 'sync-head';
-                          final isDmeAdmin = role == 'dme admin' || role == 'dme_admin';
+                          final isDmeAdmin =
+                              role == 'dme admin' || role == 'dme_admin';
                           if (isAdmin || isSyncHead || isDmeAdmin) {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -368,8 +370,8 @@ class SettingsPage extends StatelessWidget {
                                 ElevatedButton.icon(
                                   onPressed: () =>
                                       _fixPendingRemindersWithRemarks(context),
-                                  icon: const Icon(
-                                      Icons.phone_forwarded_rounded),
+                                  icon:
+                                      const Icon(Icons.phone_forwarded_rounded),
                                   label: const Text(
                                       'Mark Pending with Remarks as Called [TEMP]'),
                                   style: ElevatedButton.styleFrom(
