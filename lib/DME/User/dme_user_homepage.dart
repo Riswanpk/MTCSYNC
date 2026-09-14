@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../dme_excel_uploader.dart';
 import 'dme_reminders_page.dart';
 import '../Admin/dme_admin_customers_page.dart';
-import '../Admin/dme_admin_dashboard_page.dart';
 import '../../Homepage/home_widgets.dart';
 import '../../Navigation/loading_page.dart';
 
@@ -18,7 +17,7 @@ class DmeUserHomePage extends StatelessWidget {
   }
 }
 
-/// Builds the DME User buttons: Upload, Reminders, Customers, Dashboard, Complaints, Leads
+/// Builds the DME User buttons: Upload, Reminders, Customers, Complaints, Leads
 Widget buildDmeUserTiles(BuildContext context) {
   final List<Widget> buttons = [
     // 1. Upload
@@ -75,25 +74,7 @@ Widget buildDmeUserTiles(BuildContext context) {
       icon: Icons.people_alt_rounded,
     ),
 
-    // 4. Dashboard (Assigned Branches only)
-    NeumorphicButton(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const LoadingOverlayPage(
-              child: DmeAdminDashboardPage(),
-            ),
-          ),
-        );
-      },
-      text: 'Dashboard',
-      color: primaryGreen,
-      textColor: Colors.white,
-      icon: Icons.dashboard_rounded,
-    ),
-
-    // 5. Complaints
+    // 4. Complaints
     NeumorphicButton(
       onTap: () {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -104,12 +85,12 @@ Widget buildDmeUserTiles(BuildContext context) {
         );
       },
       text: 'Complaints',
-      color: primaryBlue,
+      color: primaryGreen,
       textColor: Colors.white,
       icon: Icons.feedback_rounded,
     ),
 
-    // 6. Leads
+    // 5. Leads
     NeumorphicButton(
       onTap: () {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -148,7 +129,7 @@ Widget buildDmeUserTiles(BuildContext context) {
         children: [
           Expanded(child: buttons[4]),
           const SizedBox(width: 16),
-          Expanded(child: buttons[5]),
+          const Expanded(child: SizedBox()),
         ],
       ),
     ],
