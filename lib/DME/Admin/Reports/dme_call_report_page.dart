@@ -161,10 +161,10 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
       while (hasMoreRem) {
         var remindersQuery = client
             .from('dme_reminders')
-            .select('id, customer_id, reminder_date, last_purchase_branch, status, remarks, called_by, call_duration, called_timestamp, updated_at, dme_customers(id, name, phone, address, salesman)')
+            .select('id, customer_id, reminder_date, last_purchase_branch, status, remarks, called_by, assigned_to, call_duration, called_timestamp, updated_at, dme_customers(id, name, phone, address, salesman)')
             .inFilter('status', ['completed', 'called'])
-            .gte('updated_at', '${startStr}T00:00:00')
-            .lte('updated_at', '${endStr}T23:59:59');
+            .gte('reminder_date', startStr)
+            .lte('reminder_date', '${endStr}T23:59:59');
 
         if (_selectedBranchId != null) {
           remindersQuery = remindersQuery.eq('last_purchase_branch', _selectedBranchId!);
@@ -181,8 +181,8 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
               .from('dme_reminders')
               .select('id, customer_id, reminder_date, last_purchase_branch, status, remarks, updated_at, dme_customers(id, name, phone, address, salesman)')
               .inFilter('status', ['completed', 'called'])
-              .gte('updated_at', '${startStr}T00:00:00')
-              .lte('updated_at', '${endStr}T23:59:59');
+              .gte('reminder_date', startStr)
+              .lte('reminder_date', '${endStr}T23:59:59');
           if (_selectedBranchId != null) {
             fallbackQuery = fallbackQuery.eq('last_purchase_branch', _selectedBranchId!);
           } else if (_allowedBranches.isNotEmpty) {
@@ -254,8 +254,9 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
         final status = (r['status'] ?? 'completed').toString();
         final remarks = (r['remarks'] ?? '').toString().trim();
         final calledBy = r['called_by']?.toString().trim().toLowerCase();
-        final updatedAtStr = (r['updated_at'] ?? r['reminder_date'])?.toString() ?? '';
-        final completedAt = DateTime.tryParse(updatedAtStr) ?? DateTime.now();
+        final assignedTo = r['assigned_to']?.toString().trim().toLowerCase();
+        final rDateStr = r['reminder_date']?.toString() ?? '';
+        final reminderDate = DateTime.tryParse(rDateStr);
 
         final cust = r['dme_customers'] as Map<String, dynamic>?;
         final custName = (cust?['name'] ?? 'Unknown Customer').toString();
@@ -280,8 +281,10 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
         final callDuration = int.tryParse(r['call_duration']?.toString() ?? '');
         final calledTsStr = r['called_timestamp']?.toString();
         final calledTimestamp = calledTsStr != null ? DateTime.tryParse(calledTsStr) : null;
+        final updatedAtStr = (r['updated_at'] ?? r['reminder_date'])?.toString() ?? '';
+        final completedAt = calledTimestamp ?? (DateTime.tryParse(updatedAtStr) ?? DateTime.now());
 
-        allCallItems.add(DmeCustomerCallItem(
+        final item = DmeCustomerCallItem(
           reminderId: remId,
           customerId: custId,
           customerName: custName,
@@ -294,12 +297,16 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
           remarks: cleanRemarks,
           isWhatsApp: isWhatsApp,
           completedAt: completedAt,
+          reminderDate: reminderDate,
           uploadedBy: uploadedBy,
           calledBy: calledBy,
+          assignedTo: assignedTo,
           proofImageUrl: proofUrl,
           callDuration: callDuration,
           calledTimestamp: calledTimestamp,
-        ));
+        );
+
+        allCallItems.add(item);
       }
 
       // 5. Fetch aggregated stats from dme_user_daily_stats table
@@ -309,7 +316,7 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
         endDate: endStr,
       );
 
-      // 6. Associate Call Items with DME Users — strict explicit attribution only.
+      // 6. Associate Call Items with DME Users
       final List<DmeUserCallStat> userStatsList = [];
       int grandCalls = 0;
       int grandWhatsApp = 0;
@@ -322,6 +329,7 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
         final List<DmeCustomerCallItem> matchedItems = allCallItems.where((item) {
           if (item.calledBy != null && item.calledBy == email) return true;
           if (item.uploadedBy != null && item.uploadedBy == email) return true;
+          if (item.assignedTo != null && (item.assignedTo == uid || item.assignedTo == email)) return true;
           return false;
         }).toList();
 

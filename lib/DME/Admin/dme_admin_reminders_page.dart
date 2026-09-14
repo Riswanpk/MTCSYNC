@@ -10,6 +10,7 @@ import 'dme_admin_reminder_detail_page.dart';
 const Color _primaryBlue = Color(0xFF005BAC);
 const Color _whatsappGreen = Color(0xFF25D366);
 const Color _pendingOrange = Color(0xFFFF9800);
+const Color _overdueRed = Color(0xFFE53935);
 
 enum AdminReminderViewMode { byBranch, byUser }
 
@@ -231,37 +232,56 @@ class _DmeAdminRemindersPageState extends State<DmeAdminRemindersPage> {
         }
       } else {
         // --- BY BRANCH MODE ---
-        var query = client
-            .from('dme_reminders')
-            .select(
-                'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, called_by, assigned_to, assigned_date, is_overdue_leftover, dme_customers(id, name, phone, address, salesman)');
+        // Fetch all matching rows with pagination without being restricted to 1000 limit
+        int offset = 0;
+        const int pageSize = 1000;
+        bool hasMore = true;
 
-        // Branch filter
-        if (_selectedBranchId != null) {
-          query = query.eq('last_purchase_branch', _selectedBranchId!);
-        } else if (_assignedBranches.isNotEmpty) {
-          query = query.inFilter('last_purchase_branch', _assignedBranches);
-        }
+        while (hasMore) {
+          var query = client
+              .from('dme_reminders')
+              .select(
+                  'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, called_by, assigned_to, assigned_date, is_overdue_leftover, dme_customers(id, name, phone, address, salesman)');
 
-        // Status filter
-        if (_selectedStatusFilter != 'all') {
-          query = query.eq('status', _selectedStatusFilter);
-        }
+          // Branch filter
+          if (_selectedBranchId != null) {
+            query = query.eq('last_purchase_branch', _selectedBranchId!);
+          } else if (_assignedBranches.isNotEmpty) {
+            query = query.inFilter('last_purchase_branch', _assignedBranches);
+          }
 
-        // Date filter
-        if (_dateFilterOption == 'today') {
-          query = query.or('and(reminder_date.eq.$todayStr),and(assigned_date.eq.$todayStr)');
-        } else if (_dateFilterOption == 'custom' && _customDateRange != null) {
-          final sStr = DateFormat('yyyy-MM-dd').format(_customDateRange!.start);
-          final eStr = DateFormat('yyyy-MM-dd').format(_customDateRange!.end);
-          query = query.gte('reminder_date', sStr).lte('reminder_date', eStr);
-        }
+          // Status filter
+          if (_selectedStatusFilter != 'all') {
+            query = query.eq('status', _selectedStatusFilter);
+          }
 
-        final res = await query.order('id', ascending: false).limit(1000);
-        for (var item in (res as List)) {
-          final rem = Map<String, dynamic>.from(item);
-          _populateReminderMetadata(rem, proofsMap);
-          resultList.add(rem);
+          // Date filter
+          if (_dateFilterOption == 'today') {
+            query = query.or('and(reminder_date.eq.$todayStr),and(assigned_date.eq.$todayStr)');
+          } else if (_dateFilterOption == 'overdue') {
+            query = query.lt('reminder_date', todayStr).eq('status', 'pending');
+          } else if (_dateFilterOption == 'custom' && _customDateRange != null) {
+            final sStr = DateFormat('yyyy-MM-dd').format(_customDateRange!.start);
+            final eStr = DateFormat('yyyy-MM-dd').format(_customDateRange!.end);
+            query = query.gte('reminder_date', sStr).lte('reminder_date', eStr);
+          }
+
+          final batch = await query
+              .order('id', ascending: false)
+              .range(offset, offset + pageSize - 1);
+
+          final list = batch as List;
+          for (var item in list) {
+            final rem = Map<String, dynamic>.from(item);
+            _populateReminderMetadata(rem, proofsMap);
+            resultList.add(rem);
+          }
+
+          if (list.length < pageSize) {
+            hasMore = false;
+          } else {
+            offset += pageSize;
+          }
         }
       }
 
@@ -311,6 +331,14 @@ class _DmeAdminRemindersPageState extends State<DmeAdminRemindersPage> {
   int get _calledCount => _reminders
       .where((r) => (r['status'] ?? '').toString().toLowerCase() == 'completed' && r['is_whatsapp'] != true)
       .length;
+  int get _overdueCount {
+    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    return _reminders.where((r) {
+      final status = (r['status'] ?? '').toString().toLowerCase();
+      final rDate = r['reminder_date']?.toString();
+      return status == 'pending' && rDate != null && rDate.compareTo(todayStr) < 0;
+    }).length;
+  }
 
   List<Map<String, dynamic>> _getFilteredList() {
     var list = _reminders;
@@ -318,6 +346,13 @@ class _DmeAdminRemindersPageState extends State<DmeAdminRemindersPage> {
     // Filter tab
     if (_activeQuickFilter == 'pending') {
       list = list.where((r) => (r['status'] ?? '').toString().toLowerCase() == 'pending').toList();
+    } else if (_activeQuickFilter == 'overdue') {
+      final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      list = list.where((r) {
+        final status = (r['status'] ?? '').toString().toLowerCase();
+        final rDate = r['reminder_date']?.toString();
+        return status == 'pending' && rDate != null && rDate.compareTo(todayStr) < 0;
+      }).toList();
     } else if (_activeQuickFilter == 'called') {
       list = list
           .where((r) => (r['status'] ?? '').toString().toLowerCase() == 'completed' && r['is_whatsapp'] != true)
@@ -638,6 +673,7 @@ class _DmeAdminRemindersPageState extends State<DmeAdminRemindersPage> {
                         value: _dateFilterOption,
                         items: const [
                           DropdownMenuItem(value: 'today', child: Text('Today', style: TextStyle(fontSize: 12))),
+                          DropdownMenuItem(value: 'overdue', child: Text('Overdue', style: TextStyle(fontSize: 12))),
                           DropdownMenuItem(value: 'all', child: Text('All Dates', style: TextStyle(fontSize: 12))),
                           DropdownMenuItem(value: 'custom', child: Text('Range', style: TextStyle(fontSize: 12))),
                         ],
@@ -740,9 +776,22 @@ class _DmeAdminRemindersPageState extends State<DmeAdminRemindersPage> {
                   onTap: () => setState(() => _activeQuickFilter = 'all'),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
 
-              // 2. Called
+              // 2. Overdue
+              Expanded(
+                child: _buildSummaryMetricItem(
+                  label: 'Overdue',
+                  value: '$_overdueCount',
+                  icon: Icons.history_toggle_off_rounded,
+                  color: _overdueRed,
+                  isSelected: _activeQuickFilter == 'overdue',
+                  onTap: () => setState(() => _activeQuickFilter = 'overdue'),
+                ),
+              ),
+              const SizedBox(width: 6),
+
+              // 3. Called
               Expanded(
                 child: _buildSummaryMetricItem(
                   label: 'Called',
@@ -753,9 +802,9 @@ class _DmeAdminRemindersPageState extends State<DmeAdminRemindersPage> {
                   onTap: () => setState(() => _activeQuickFilter = 'called'),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
 
-              // 3. Pending
+              // 4. Pending
               Expanded(
                 child: _buildSummaryMetricItem(
                   label: 'Pending',
@@ -766,9 +815,9 @@ class _DmeAdminRemindersPageState extends State<DmeAdminRemindersPage> {
                   onTap: () => setState(() => _activeQuickFilter = 'pending'),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
 
-              // 4. Whatsapped
+              // 5. WhatsApp
               Expanded(
                 child: _buildSummaryMetricItem(
                   label: 'WhatsApp',

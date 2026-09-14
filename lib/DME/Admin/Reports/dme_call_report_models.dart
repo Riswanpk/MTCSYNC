@@ -1,4 +1,4 @@
-﻿import 'package:intl/intl.dart';
+import 'package:intl/intl.dart';
 
 /// Single completed call or WhatsApp message record in DME
 class DmeCustomerCallItem {
@@ -14,8 +14,10 @@ class DmeCustomerCallItem {
   final String remarks;
   final bool isWhatsApp;
   final DateTime completedAt;
+  final DateTime? reminderDate;
   final String? uploadedBy;
   final String? calledBy;
+  final String? assignedTo;
   final String? proofImageUrl;
   final int? callDuration;
   final DateTime? calledTimestamp;
@@ -33,20 +35,26 @@ class DmeCustomerCallItem {
     required this.remarks,
     required this.isWhatsApp,
     required this.completedAt,
+    this.reminderDate,
     this.uploadedBy,
     this.calledBy,
+    this.assignedTo,
     this.proofImageUrl,
     this.callDuration,
     this.calledTimestamp,
   });
 
+  /// The authoritative DateTime when this call or action was performed.
+  DateTime get actionDate => calledTimestamp ?? completedAt;
+
   DateTime get completedAtIst {
-    final utc = completedAt.isUtc ? completedAt : completedAt.toUtc();
+    final d = actionDate;
+    final utc = d.isUtc ? d : d.toUtc();
     return utc.add(const Duration(hours: 5, minutes: 30));
   }
 
-  int get dayKey => completedAtIst.day;
-  String get formattedDate => DateFormat('dd-MM-yyyy').format(completedAtIst);
+  int get dayKey => (reminderDate ?? completedAtIst).day;
+  String get formattedDate => DateFormat('dd-MM-yyyy').format(reminderDate ?? completedAtIst);
   String get formattedTime => '${DateFormat('hh:mm a').format(completedAtIst)} IST';
 
   String get formattedCallTime {
@@ -78,7 +86,7 @@ class DmeUserCallStat {
   final List<int> assignedBranches;
   final List<DmeCustomerCallItem> callItems;
 
-  /// Counts from dme_user_daily_stats table (preferred over scanning callItems).
+  /// Counts from dme_user_daily_stats table.
   final int? statsCallsCount;
   final int? statsWhatsAppCount;
   final int? statsOverdueCount;
@@ -95,8 +103,8 @@ class DmeUserCallStat {
     this.statsOverdueCount,
   });
 
-  int get totalCalls    => statsCallsCount    ?? callItems.where((i) => !i.isWhatsApp).length;
-  int get totalWhatsApp => statsWhatsAppCount ?? callItems.where((i) => i.isWhatsApp).length;
+  int get totalCalls    => callItems.where((i) => !i.isWhatsApp).length;
+  int get totalWhatsApp => callItems.where((i) => i.isWhatsApp).length;
   int get totalActions  => totalCalls + totalWhatsApp;
   int get overdueCount  => statsOverdueCount ?? 0;
 
@@ -108,7 +116,7 @@ class DmeUserCallStat {
 
   List<DmeCustomerCallItem> getItemsForDay(int day) {
     final list = callItems.where((i) => i.dayKey == day).toList();
-    list.sort((a, b) => b.completedAt.compareTo(a.completedAt));
+    list.sort((a, b) => b.actionDate.compareTo(a.actionDate));
     return list;
   }
 }

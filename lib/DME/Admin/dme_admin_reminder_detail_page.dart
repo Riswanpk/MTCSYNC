@@ -1161,8 +1161,22 @@ class _DmeAdminReminderDetailPageState extends State<DmeAdminReminderDetailPage>
         final bName = DmeConstants.getBranchName(int.tryParse(sale['purchased_branch']?.toString() ?? ''));
         final catName = DmeConstants.getCategoryName(int.tryParse(sale['category_id']?.toString() ?? ''));
         final sm = sale['salesman']?.toString() ?? '';
-        final detail = sale['dme_sales_detail'] as Map<String, dynamic>?;
-        final products = detail?['products']?.toString() ?? '';
+        final detailRaw = sale['dme_sales_detail'];
+        dynamic rawProducts;
+        if (detailRaw is List && detailRaw.isNotEmpty) {
+          rawProducts = detailRaw[0] is Map ? detailRaw[0]['products'] : detailRaw[0];
+        } else if (detailRaw is Map) {
+          rawProducts = detailRaw['products'];
+        }
+
+        List<dynamic> productsList = [];
+        if (rawProducts is List) {
+          productsList = rawProducts;
+        } else if (rawProducts is Map) {
+          productsList = [rawProducts];
+        }
+
+        final productsStr = productsList.isEmpty && rawProducts != null ? rawProducts.toString() : '';
 
         return Container(
           padding: const EdgeInsets.all(10),
@@ -1184,9 +1198,33 @@ class _DmeAdminReminderDetailPageState extends State<DmeAdminReminderDetailPage>
               const SizedBox(height: 4),
               Text('Category: $catName${sm.isNotEmpty ? ' • Salesman: $sm' : ''}',
                   style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-              if (products.isNotEmpty) ...[
+              if (productsList.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: productsList.map((p) {
+                    String itemName = '';
+                    String qty = '';
+                    if (p is Map) {
+                      itemName = p['item_name']?.toString() ?? '';
+                      qty = p['qty']?.toString() ?? '';
+                    } else {
+                      itemName = p.toString();
+                    }
+                    final label = qty.isNotEmpty ? '$itemName (Qty: $qty)' : itemName;
+                    return Chip(
+                      label: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      visualDensity: VisualDensity.compact,
+                      backgroundColor: isDark ? Colors.grey[800] : const Color(0xFF8CC63F).withValues(alpha: 0.15),
+                      side: BorderSide(color: isDark ? Colors.grey[700]! : Colors.green.withValues(alpha: 0.2)),
+                    );
+                  }).toList(),
+                ),
+              ] else if (productsStr.isNotEmpty) ...[
                 const SizedBox(height: 4),
-                Text('Items: $products', style: const TextStyle(fontSize: 12)),
+                Text('Items: $productsStr', style: const TextStyle(fontSize: 12)),
               ],
             ],
           ),
