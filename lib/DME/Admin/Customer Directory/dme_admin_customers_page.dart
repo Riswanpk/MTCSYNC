@@ -1,8 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../dme_constants.dart';
-import '../dme_config.dart';
+import '../../dme_constants.dart';
+import '../../dme_config.dart';
 import 'dme_admin_customer_detail_page.dart';
 
 class DmeAdminCustomersPage extends StatefulWidget {
@@ -21,6 +22,7 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
   bool _isLoading = false;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  Timer? _searchDebouncer;
 
   final ScrollController _scrollController = ScrollController();
   List<Map<String, dynamic>> _customers = [];
@@ -47,9 +49,32 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
 
   @override
   void dispose() {
+    _searchDebouncer?.cancel();
     _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged(String val) {
+    _searchDebouncer?.cancel();
+    final newQuery = val.trim();
+    if (newQuery.isEmpty) {
+      setState(() {
+        _searchQuery = '';
+        _customers = [];
+        _isLoading = false;
+        _hasMore = false;
+        _isLoadingMore = false;
+      });
+      return;
+    }
+
+    _searchDebouncer = Timer(const Duration(milliseconds: 600), () {
+      if (mounted) {
+        _searchQuery = newQuery;
+        _fetchCustomersDirectory(reset: true);
+      }
+    });
   }
 
   String _formatDate(dynamic date) {
@@ -224,13 +249,19 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
               decoration: InputDecoration(
                 hintText: 'Search by customer name, phone, address, salesman...',
                 prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchQuery.isNotEmpty
+                suffixIcon: (_searchController.text.isNotEmpty || _searchQuery.isNotEmpty)
                     ? IconButton(
                         icon: const Icon(Icons.clear, size: 18),
                         onPressed: () {
+                          _searchDebouncer?.cancel();
                           _searchController.clear();
-                          _searchQuery = '';
-                          _fetchCustomersDirectory(reset: true);
+                          setState(() {
+                            _searchQuery = '';
+                            _customers = [];
+                            _isLoading = false;
+                            _hasMore = false;
+                            _isLoadingMore = false;
+                          });
                         },
                       )
                     : null,
@@ -242,10 +273,7 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
                 ),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               ),
-              onChanged: (val) {
-                _searchQuery = val.trim();
-                _fetchCustomersDirectory(reset: true);
-              },
+              onChanged: _onSearchChanged,
             ),
           ),
 

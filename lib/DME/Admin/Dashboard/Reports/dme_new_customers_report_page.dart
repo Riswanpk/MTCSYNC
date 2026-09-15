@@ -7,8 +7,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 
-import '../../dme_constants.dart';
-import '../../dme_config.dart';
+import '../../../dme_constants.dart';
+import '../../../dme_config.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);
 const Color _primaryGreen = Color(0xFF8CC63F);

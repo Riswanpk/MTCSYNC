@@ -9,8 +9,8 @@ import '../widgets/metric_kpi_card.dart';
 import '../widgets/branch_distribution_card.dart';
 import '../widgets/category_distribution_card.dart';
 import '../widgets/customer_type_card.dart';
-import '../../Reports/dme_new_customers_report_page.dart';
-import '../../dme_admin_reminders_page.dart';
+import '../Reports/dme_new_customers_report_page.dart';
+import '../../Reminder/dme_admin_reminders_page.dart';
 
 class DmeVisitAnalyticsPage extends StatefulWidget {
   final List<int>? userAssignedBranches;

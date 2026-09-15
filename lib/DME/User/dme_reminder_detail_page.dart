@@ -42,6 +42,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
   List<Map<String, dynamic>> _callHistory = [];
   bool _isLoadingCallHistory = false;
   List<Map<String, dynamic>> _customerBranches = [];
+  bool _isPurchaseHistoryExpanded = true;
 
   @override
   void initState() {
@@ -677,19 +678,6 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
               _checkCallLogAfterCall();
             },
           ),
-          if (_callDuration != null)
-            Container(
-              margin: const EdgeInsets.only(right: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                '${_callDuration}s',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
-              ),
-            ),
           Container(
             margin: const EdgeInsets.only(right: 12),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -926,136 +914,106 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.shopping_bag_outlined, size: 20, color: Color(0xFF005BAC)),
-                        const SizedBox(width: 8),
-                        Text('Purchase History', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    if (_isLoadingHistory)
-                      const Center(child: Padding(padding: EdgeInsets.all(12.0), child: CircularProgressIndicator()))
-                    else if (_salesHistory.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Center(child: Text('No previous sales found.', style: TextStyle(color: Colors.grey[600], fontSize: 13))),
-                      )
-                    else
-                      ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _salesHistory.length,
-                        separatorBuilder: (_, __) => const Divider(height: 16),
-                        itemBuilder: (context, idx) {
-                          final s = _salesHistory[idx];
-                          final dateStr = s['date']?.toString();
-                          final bName = DmeConstants.getBranchName(s['purchased_branch'] as int?);
-                          final catName = DmeConstants.getCategoryName(s['category_id'] as int?);
-                          final details = s['dme_sales_detail'] as List?;
-                          // Extract products from details
-                          dynamic rawProducts;
-                          if (details != null && details.isNotEmpty) {
-                            rawProducts = details[0]['products'];
-                          } else if (s['dme_sales_detail'] is Map) {
-                            rawProducts = (s['dme_sales_detail'] as Map)['products'];
-                          }
-
-                          List<dynamic> productsList = [];
-                          if (rawProducts is List) {
-                            productsList = rawProducts;
-                          } else if (rawProducts is Map) {
-                            productsList = [rawProducts];
-                          }
-
-                          return Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: isDark ? Colors.grey[850] : Colors.grey[50],
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[300]!),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                    InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () {
+                        setState(() {
+                          _isPurchaseHistoryExpanded = !_isPurchaseHistoryExpanded;
+                        });
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
                               children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        const Icon(Icons.calendar_today_rounded, size: 13, color: Color(0xFF005BAC)),
-                                        const SizedBox(width: 5),
-                                        Text(
-                                          _formatDate(dateStr),
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                        ),
-                                      ],
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF005BAC).withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        bName,
-                                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF005BAC)),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
+                                const Icon(Icons.shopping_bag_outlined, size: 20, color: Color(0xFF005BAC)),
+                                const SizedBox(width: 8),
                                 Text(
-                                  catName,
-                                  style: TextStyle(fontSize: 12, color: Colors.grey[700], fontWeight: FontWeight.w600),
+                                  'Purchase History (${_salesHistory.length})',
+                                  style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                                 ),
-                                const Divider(height: 14),
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Icon(Icons.inventory_2_outlined, size: 14, color: Colors.grey),
-                                    const SizedBox(width: 6),
-                                    const Text(
-                                      'Items Detail: ',
-                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                    ),
-                                    if (productsList.isEmpty)
-                                      Text(
-                                        'No item details recorded',
-                                        style: TextStyle(fontSize: 12, color: Colors.grey[500], fontStyle: FontStyle.italic),
-                                      ),
-                                  ],
-                                ),
-                                if (productsList.isNotEmpty) ...[
-                                  const SizedBox(height: 6),
-                                  Wrap(
-                                    spacing: 6,
-                                    runSpacing: 4,
-                                    children: productsList.map((p) {
-                                      String itemName = '';
-                                      String qty = '';
-                                      if (p is Map) {
-                                        itemName = p['item_name']?.toString() ?? '';
-                                        qty = p['qty']?.toString() ?? '';
-                                      } else {
-                                        itemName = p.toString();
-                                      }
-                                      final label = qty.isNotEmpty ? '$itemName (Qty: $qty)' : itemName;
-                                      return Chip(
-                                        label: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
-                                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                                        visualDensity: VisualDensity.compact,
-                                        backgroundColor: isDark ? Colors.grey[800] : const Color(0xFF8CC63F).withValues(alpha: 0.15),
-                                        side: BorderSide(color: isDark ? Colors.grey[700]! : Colors.green.withValues(alpha: 0.2)),
-                                      );
-                                    }).toList(),
-                                  ),
-                                ],
                               ],
                             ),
-                          );
-                        },
+                            AnimatedRotation(
+                              turns: _isPurchaseHistoryExpanded ? 0.5 : 0.0,
+                              duration: const Duration(milliseconds: 200),
+                              child: const Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                                size: 24,
+                                color: Color(0xFF005BAC),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
+                    ),
+                    if (_isPurchaseHistoryExpanded) ...[
+                      const SizedBox(height: 12),
+                      if (_isLoadingHistory)
+                        const Center(child: Padding(padding: EdgeInsets.all(12.0), child: CircularProgressIndicator()))
+                      else if (_salesHistory.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Center(child: Text('No previous sales found.', style: TextStyle(color: Colors.grey[600], fontSize: 13))),
+                        )
+                      else
+                        ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: _salesHistory.length,
+                          separatorBuilder: (_, __) => const Divider(height: 14),
+                          itemBuilder: (context, idx) {
+                            final s = _salesHistory[idx];
+                            final details = s['dme_sales_detail'] as List?;
+                            // Extract products from details
+                            dynamic rawProducts;
+                            if (details != null && details.isNotEmpty) {
+                              rawProducts = details[0]['products'];
+                            } else if (s['dme_sales_detail'] is Map) {
+                              rawProducts = (s['dme_sales_detail'] as Map)['products'];
+                            }
+
+                            List<dynamic> productsList = [];
+                            if (rawProducts is List) {
+                              productsList = rawProducts;
+                            } else if (rawProducts is Map) {
+                              productsList = [rawProducts];
+                            }
+
+                            if (productsList.isEmpty) {
+                              return Text(
+                                'No item details recorded',
+                                style: TextStyle(fontSize: 12, color: Colors.grey[500], fontStyle: FontStyle.italic),
+                              );
+                            }
+
+                            return Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
+                              children: productsList.map((p) {
+                                String itemName = '';
+                                String qty = '';
+                                if (p is Map) {
+                                  itemName = p['item_name']?.toString() ?? '';
+                                  qty = p['qty']?.toString() ?? '';
+                                } else {
+                                  itemName = p.toString();
+                                }
+                                final label = qty.isNotEmpty ? '$itemName : $qty' : itemName;
+                                return Chip(
+                                  label: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                  visualDensity: VisualDensity.compact,
+                                  backgroundColor: isDark ? Colors.grey[800] : const Color(0xFF8CC63F).withValues(alpha: 0.15),
+                                  side: BorderSide(color: isDark ? Colors.grey[700]! : Colors.green.withValues(alpha: 0.2)),
+                                );
+                              }).toList(),
+                            );
+                          },
+                        ),
+                    ],
                   ],
                 ),
               ),
@@ -1362,38 +1320,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                 ),
               ),
             ),
-
-            // 5. Raise Complaint Button (Enabled when call status is completed or called)
-            if (isCompleted || isCalledWithoutRemarks || _callMade) ...[
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => DmeRegisterComplaintPage(
-                          reminder: _reminder,
-                          initialSalesHistory: _salesHistory,
-                        ),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.report_problem_rounded, color: Colors.deepOrange, size: 22),
-                  label: const Text(
-                    'Raise Customer Complaint',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange, fontSize: 15),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.deepOrange, width: 1.5),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
+            const SizedBox(height: 16),
           ],
         ),
       ),

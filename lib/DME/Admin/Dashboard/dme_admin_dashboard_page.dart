@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'pages/dme_visit_analytics_page.dart';
 import 'widgets/dashboard_option_card.dart';
-import '../Reports/dme_new_customers_report_page.dart';
-import '../Reports/dme_call_report_page.dart';
+import 'Reports/dme_new_customers_report_page.dart';
+import 'Reports/dme_call_report_page.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);
 const Color _primaryGreen = Color(0xFF8CC63F);

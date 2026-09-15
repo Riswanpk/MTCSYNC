@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../dme_constants.dart';
-import '../dme_config.dart';
+import '../../dme_constants.dart';
+import '../../dme_config.dart';
 
 class DmeAdminCustomerDetailPage extends StatefulWidget {
   final Map<String, dynamic> customer;

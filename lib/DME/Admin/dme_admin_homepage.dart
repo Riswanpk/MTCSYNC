@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dme_user_management_page.dart';
-import 'dme_admin_customers_page.dart';
+import 'Customer Directory/dme_admin_customers_page.dart';
 import 'Dashboard/dme_admin_dashboard_page.dart';
-import 'dme_admin_reminders_page.dart';
-import 'dme_admin_reminder_assign_page.dart';
+import 'Reminder/dme_admin_reminders_page.dart';
+import 'Reminder/dme_admin_reminder_assign_page.dart';
 import '../Complaints/Admin/dme_admin_complaints_page.dart';
 import '../../Homepage/home_widgets.dart';
 import '../../Navigation/loading_page.dart';
