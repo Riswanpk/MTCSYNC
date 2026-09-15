@@ -180,6 +180,13 @@ class ExcelUploadService {
         // Retain existing creation date during upsert
         entry.value['creation_date'] = existingCreationDate;
       }
+
+      // If customer is associated with CBE branch (branchId == 2), set preference to Whatsapp
+      final currentPrimaryBranch = entry.value['primary_branch'] as int?;
+      final earliestBranch = earliest?['branchId'] as int?;
+      if (currentPrimaryBranch == 2 || earliestBranch == 2) {
+        entry.value['preference'] = 'Whatsapp';
+      }
     }
 
     // Upsert customers in bulk
@@ -492,18 +499,35 @@ class ExcelUploadService {
           }
         }
 
-        // Branch junction (recorded for all branches)
+        // Branch junction (recorded for all branches) - always keep the customer type from the latest sale
         if (sale.branchId != null) {
           final isPremium = premiumCustomerIds.contains(custId) || premiumPhones.contains(activePhone);
           final customerTypeIdToUse = isPremium ? 1 : sale.typeId;
 
           final branchKey = '${custId}_${sale.branchId}';
-          branchesByCustBranch[branchKey] = {
-            'customer_id': custId,
-            'branch_id': sale.branchId,
-            'category_id': sale.categoryId,
-            'customer_type_id': customerTypeIdToUse,
-          };
+          final existingBranchEntry = branchesByCustBranch[branchKey];
+
+          if (existingBranchEntry == null) {
+            branchesByCustBranch[branchKey] = {
+              'customer_id': custId,
+              'branch_id': sale.branchId,
+              'category_id': sale.categoryId,
+              'customer_type_id': customerTypeIdToUse,
+              '_sale_date': sale.date,
+            };
+          } else {
+            // If another sale in this batch exists for the same customer and branch, pick the type from the latest sale date
+            final existingDate = existingBranchEntry['_sale_date'] as DateTime?;
+            if (existingDate == null || sale.date.isAfter(existingDate)) {
+              branchesByCustBranch[branchKey] = {
+                'customer_id': custId,
+                'branch_id': sale.branchId,
+                'category_id': sale.categoryId,
+                'customer_type_id': customerTypeIdToUse,
+                '_sale_date': sale.date,
+              };
+            }
+          }
         }
       }
     }
@@ -582,16 +606,46 @@ class ExcelUploadService {
             });
           }
         } else {
-          // No pending reminder exists! (Customer is new, or previous reminders are completed/called)
-          // Preserves old completed reminders as history, and inserts a brand new reminder!
-          remindersToInsert.add(newObj);
+          // No active pending reminder exists.
+          // Check if the customer already has a completed reminder for this purchase date (or a newer purchase date).
+          // If so, do NOT re-create or duplicate a reminder for a sale that has already been reminded and completed!
+          final newLastPurchaseStr = newObj['last_purchase_date']?.toString();
+          final newLastPurchase = newLastPurchaseStr != null ? DateTime.tryParse(newLastPurchaseStr) : null;
+
+          bool isAlreadyCompletedForThisOrNewerSale = false;
+          for (var r in existingList) {
+            final st = (r['status'] ?? '').toString().toLowerCase();
+            if (st == 'completed') {
+              final compLastPurchaseStr = r['last_purchase_date']?.toString();
+              final compLastPurchase = compLastPurchaseStr != null ? DateTime.tryParse(compLastPurchaseStr) : null;
+              if (compLastPurchase != null && newLastPurchase != null) {
+                // If the completed reminder's purchase date is the same day or newer than the Excel sale, skip!
+                if (!newLastPurchase.isAfter(compLastPurchase)) {
+                  isAlreadyCompletedForThisOrNewerSale = true;
+                  break;
+                }
+              } else if (compLastPurchaseStr != null && compLastPurchaseStr == newLastPurchaseStr) {
+                isAlreadyCompletedForThisOrNewerSale = true;
+                break;
+              }
+            }
+          }
+
+          if (!isAlreadyCompletedForThisOrNewerSale) {
+            // Only insert a fresh reminder if the customer is brand new, or if this sale is genuinely newer than all previous completed sales
+            remindersToInsert.add(newObj);
+          }
         }
       }
     } else {
       // Empty remindersByCustomer
     }
 
-    final customerBranchesToInsert = branchesByCustBranch.values.toList();
+    final customerBranchesToInsert = branchesByCustBranch.values.map((map) {
+      final clean = Map<String, dynamic>.from(map);
+      clean.remove('_sale_date');
+      return clean;
+    }).toList();
 
     // Execute batch operations concurrently for maximum speed
     final List<Future<dynamic>> parallelTasks = [];

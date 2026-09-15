@@ -3,6 +3,7 @@ import 'pages/dme_visit_analytics_page.dart';
 import 'widgets/dashboard_option_card.dart';
 import 'Reports/dme_new_customers_report_page.dart';
 import 'Reports/dme_call_report_page.dart';
+import 'Reports/dme_excel_upload_report_page.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);
 const Color _primaryGreen = Color(0xFF8CC63F);
@@ -167,6 +168,25 @@ class DmeAdminDashboardPage extends StatelessWidget {
                     builder: (_) => DmeCallReportPage(
                       userAssignedBranches: userAssignedBranches,
                     ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+
+            // 4. Excel Upload Report Card Button
+            DashboardOptionCard(
+              title: 'Excel Upload Report',
+              subtitle:
+                  'Audit and inspect every uploaded Excel transaction batch. View file hashes, dates, uploader details, synced sales & raw row volumes.',
+              icon: Icons.upload_file_rounded,
+              accentColor: Colors.deepPurple,
+              badgeText: 'Upload Logs & Audit',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const DmeExcelUploadReportPage(),
                   ),
                 );
               },

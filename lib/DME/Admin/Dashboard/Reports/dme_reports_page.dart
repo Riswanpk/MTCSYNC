@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dme_new_customers_report_page.dart';
 import 'dme_call_report_page.dart';
+import 'dme_excel_upload_report_page.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);
 const Color _primaryGreen = Color(0xFF8CC63F);
@@ -136,6 +137,26 @@ class DmeReportsPage extends StatelessWidget {
                     builder: (_) => DmeCallReportPage(
                       userAssignedBranches: userAssignedBranches,
                     ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+
+            // 3. Excel Uploads History Report Card Button
+            _buildReportOptionCard(
+              context: context,
+              title: 'Excel Upload History',
+              subtitle:
+                  'Inspect all uploaded Excel transaction files. Examine file hashes, uploader information, sync timestamps, sales count & raw rows.',
+              icon: Icons.upload_file_rounded,
+              accentColor: Colors.deepPurple,
+              badgeText: 'Upload Audit',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const DmeExcelUploadReportPage(),
                   ),
                 );
               },

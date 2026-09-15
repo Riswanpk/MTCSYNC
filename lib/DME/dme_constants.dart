@@ -95,14 +95,16 @@ class DmeConstants {
   static bool isCategoryExcludedFromReminders({
     int? categoryId,
     String? categoryName,
-    String? typeName,
+    String? typeName, // Retained for backwards-compatibility of signature, but customer type never stops reminder creation
   }) {
+    // 1. Check ID of category against excluded categories:
+    // AUDITORIUM (6), TRUST (7), INSTITUTION (8), VEHICLE SHOWROOM (11), GENERAL & OTHERS (13)
     if (categoryId != null && excludedReminderCategoryIds.contains(categoryId)) {
       return true;
     }
-    final cName = (categoryName ?? '').toUpperCase().trim();
-    final tName = (typeName ?? '').toUpperCase().trim();
 
+    // 2. Check name of category
+    final cName = (categoryName ?? '').toUpperCase().trim();
     if (cName.contains('AUDITORIUM') ||
         cName.contains('VEHICLE SHOWROOM') ||
         cName.contains('VEHICE SHOWROOM') ||
@@ -113,15 +115,7 @@ class DmeConstants {
       return true;
     }
 
-    if (tName.contains('AUDITORIUM') ||
-        tName.contains('VEHICLE SHOWROOM') ||
-        tName.contains('VEHICE SHOWROOM') ||
-        tName.contains('INSTITUTION') ||
-        tName.contains('TRUST') ||
-        tName.contains('GENERAL')) {
-      return true;
-    }
-
+    // Note: Never stop reminder creation based on the customer type (PREMIUM, REGULAR, GENERAL, etc.)
     return false;
   }
 

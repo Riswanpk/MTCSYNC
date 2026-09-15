@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../Misc/theme_notifier.dart';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../DME/temporary.dart';
 
 class SettingsPage extends StatelessWidget {
   final String userRole;
@@ -211,6 +212,30 @@ class SettingsPage extends StatelessWidget {
                                     foregroundColor: Colors.white,
                                   ),
                                 ),
+                                if (isAdmin || isDmeAdmin) ...[
+                                  const SizedBox(height: 16),
+                                  ElevatedButton.icon(
+                                    onPressed: () =>
+                                        DmeCustomerTypeFixer.showFixDialog(context),
+                                    icon: const Icon(Icons.sync_alt_rounded),
+                                    label: const Text('Reconcile DME Customer Types (Temporary)'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.indigo,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  ElevatedButton.icon(
+                                    onPressed: () =>
+                                        DmeCustomerTypeFixer.showCbeWhatsappDialog(context),
+                                    icon: const Icon(Icons.chat_rounded),
+                                    label: const Text('Set CBE Customers to WhatsApp (Temporary)'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF25D366),
+                                      foregroundColor: Colors.white,
+                                    ),
+                                  ),
+                                ],
                                 if (isAdmin) ...[
                                   const SizedBox(height: 16),
                                   ElevatedButton.icon(

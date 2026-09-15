@@ -37,6 +37,7 @@ import '../DME/Admin/dme_admin_homepage.dart';
 import '../DME/Complaints/User/user_complaints_list_page.dart';
 import '../DME/Complaints/User/manager_complaints_page.dart';
 import '../DME/Complaints/Admin/dme_admin_complaints_page.dart';
+import '../DME/Admin/Approvals/dme_admin_approvals_page.dart';
 
 /// App brand colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -430,7 +431,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     if (role == 'core_team') {
       return _buildCoreTeamTiles(context);
     }
-    if (role == 'sme' || role == 'dme_admin' || role == 'dme_user') {
+    if (role == 'sme' || role == 'dme_user') {
       return _buildOriginalHomePage(context);
     }
 
@@ -618,6 +619,24 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           textColor: Colors.white,
           icon: Icons.feedback_rounded,
           badgeCount: widget.complaintCount > 0 ? widget.complaintCount : null,
+        ),
+      // Approvals button on 2nd page for dme_admin
+      if (role == 'dme_admin')
+        NeumorphicButton(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const LoadingOverlayPage(
+                  child: DmeAdminApprovalsPage(),
+                ),
+              ),
+            );
+          },
+          text: 'Approvals',
+          color: primaryGreen,
+          textColor: Colors.white,
+          icon: Icons.fact_check_rounded,
         ),
     ];
 

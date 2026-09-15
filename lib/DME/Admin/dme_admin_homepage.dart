@@ -4,8 +4,8 @@ import 'Customer Directory/dme_admin_customers_page.dart';
 import 'Dashboard/dme_admin_dashboard_page.dart';
 import 'Reminder/dme_admin_reminders_page.dart';
 import 'Reminder/dme_admin_reminder_assign_page.dart';
+import 'Reminder/dme_admin_jbl_reminder_assign_page.dart';
 import '../Complaints/Admin/dme_admin_complaints_page.dart';
-import 'Approvals/dme_admin_approvals_page.dart';
 import '../../Homepage/home_widgets.dart';
 import '../../Navigation/loading_page.dart';
 
@@ -118,6 +118,8 @@ Widget buildDmeAdminTiles(BuildContext context) {
     ),
 
     // 6. Reminder Assign (Daily User Selection & Division)
+    // Regular Tap -> All Branches Reminder Assign
+    // Long Press / Hold -> JBL Test Branch Reminder Assign
     NeumorphicButton(
       onTap: () {
         Navigator.push(
@@ -129,29 +131,22 @@ Widget buildDmeAdminTiles(BuildContext context) {
           ),
         );
       },
+      onLongPress: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const LoadingOverlayPage(
+              child: DmeAdminJblReminderAssignPage(),
+            ),
+          ),
+        );
+      },
       text: 'Reminder Assign',
       color: primaryBlue,
       textColor: Colors.white,
       icon: Icons.assignment_ind_rounded,
     ),
 
-    // 7. Approvals (Phone & Preference Change Requests)
-    NeumorphicButton(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const LoadingOverlayPage(
-              child: DmeAdminApprovalsPage(),
-            ),
-          ),
-        );
-      },
-      text: 'Approvals',
-      color: primaryGreen,
-      textColor: Colors.white,
-      icon: Icons.fact_check_rounded,
-    ),
   ];
 
   return Column(
@@ -177,14 +172,6 @@ Widget buildDmeAdminTiles(BuildContext context) {
           Expanded(child: buttons[4]),
           const SizedBox(width: 16),
           Expanded(child: buttons[5]),
-        ],
-      ),
-      const SizedBox(height: 16),
-      Row(
-        children: [
-          Expanded(child: buttons[6]),
-          const SizedBox(width: 16),
-          const Spacer(),
         ],
       ),
     ],
