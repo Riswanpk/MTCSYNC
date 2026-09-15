@@ -10,6 +10,7 @@ import 'dme_whatsapp_proof_page.dart';
 import 'dme_assignment_service.dart';
 import 'dme_call_scanner_service.dart';
 import '../Complaints/Dme/dme_register_complaint_page.dart';
+import 'dme_raise_request_page.dart';
 
 class DmeReminderDetailPage extends StatefulWidget {
   final Map<String, dynamic> reminder;
@@ -59,6 +60,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     _callAttempts = int.tryParse(_reminder['call_attempts']?.toString() ?? '') ?? 0;
 
     _loadUserNames();
+    _fetchCustomerDetails();
     _fetchCustomerBranches();
     _fetchCustomerSalesHistory();
     _fetchCustomerCallHistory();
@@ -84,6 +86,63 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
       }
       if (mounted) setState(() {});
     } catch (_) {}
+  }
+
+  Future<void> _fetchCustomerDetails() async {
+    final client = await DmeConfig.getClient();
+    final customerId = _reminder['customer_id'];
+    if (client == null || customerId == null) return;
+    try {
+      final res = await client
+          .from('dme_customers')
+          .select('phone, preference')
+          .eq('id', customerId)
+          .maybeSingle();
+      if (res != null && mounted) {
+        setState(() {
+          if (res['phone'] != null) _reminder['customer_phone'] = res['phone'];
+          _reminder['customer_preference'] = res['preference'] ?? 'Call';
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _openRaiseRequestPage() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DmeRaiseRequestPage(reminder: _reminder),
+      ),
+    );
+
+    if (result != null && result is Map && result['success'] == true) {
+      final requestType = result['type'];
+      if (requestType == 'phone_number_change') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Phone change request submitted! Reminder is locked until approved by Admin.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 4),
+            ),
+          );
+          widget.onUpdated?.call();
+          Navigator.pop(context, true);
+        }
+      } else if (requestType == 'preference_change') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Preference change request submitted to DME Admin (New: ${result['new_value']})'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+          _fetchCustomerDetails();
+          widget.onUpdated?.call();
+        }
+      }
+    }
   }
 
   @override
@@ -678,21 +737,20 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
               _checkCallLogAfterCall();
             },
           ),
-          Container(
-            margin: const EdgeInsets.only(right: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: _callMade
-                  ? Colors.green
-                  : (_callDuration != null && _callDuration! <= 10 ? Colors.orange[800] : Colors.grey[700]),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              _callMade
-                  ? 'VERIFIED'
-                  : (_callDuration != null && _callDuration! <= 10 ? '<= 10S' : 'PENDING'),
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.rate_review_outlined, size: 14),
+              label: const Text('Request', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: const Color(0xFF005BAC),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                visualDensity: VisualDensity.compact,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                elevation: 1,
+              ),
+              onPressed: _openRaiseRequestPage,
             ),
           ),
         ],
@@ -768,6 +826,47 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                         const Icon(Icons.phone, size: 18, color: Colors.grey),
                         const SizedBox(width: 8),
                         Text('Phone: $customerPhone', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(
+                          (widget.reminder['customer_preference'] ?? _reminder['customer_preference'] ?? 'Call').toString().toLowerCase() == 'whatsapp'
+                              ? Icons.chat_bubble_outline_rounded
+                              : Icons.phone_in_talk_rounded,
+                          size: 18,
+                          color: (widget.reminder['customer_preference'] ?? _reminder['customer_preference'] ?? 'Call').toString().toLowerCase() == 'whatsapp'
+                              ? Colors.green
+                              : const Color(0xFF005BAC),
+                        ),
+                        const SizedBox(width: 8),
+                        Text('Preference: ', style: TextStyle(fontSize: 13, color: Colors.grey[700])),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: (widget.reminder['customer_preference'] ?? _reminder['customer_preference'] ?? 'Call').toString().toLowerCase() == 'whatsapp'
+                                ? Colors.green.withValues(alpha: 0.1)
+                                : const Color(0xFF005BAC).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: (widget.reminder['customer_preference'] ?? _reminder['customer_preference'] ?? 'Call').toString().toLowerCase() == 'whatsapp'
+                                  ? Colors.green.withValues(alpha: 0.5)
+                                  : const Color(0xFF005BAC).withValues(alpha: 0.5),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Text(
+                            (widget.reminder['customer_preference'] ?? _reminder['customer_preference'] ?? 'Call').toString(),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: (widget.reminder['customer_preference'] ?? _reminder['customer_preference'] ?? 'Call').toString().toLowerCase() == 'whatsapp'
+                                  ? Colors.green[800]
+                                  : const Color(0xFF005BAC),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                     if (customerAddress.isNotEmpty) ...[

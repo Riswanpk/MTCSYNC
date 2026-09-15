@@ -69,6 +69,7 @@ class DmeConstants {
   static const String tableSalesDetail = 'dme_sales_detail';
   static const String tableReminders = 'dme_reminders';
   static const String tableCustomerBranches = 'dme_customer_branches';
+  static const String tableChangeRequests = 'dme_change_requests';
 
   /// Master Categories
   static const List<DmeCategory> categories = [

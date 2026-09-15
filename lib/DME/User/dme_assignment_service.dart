@@ -792,7 +792,7 @@ class DmeAssignmentService {
           var query = client
               .from('dme_reminders')
               .select(
-                  'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, called_by, assigned_to, assigned_date, is_overdue_leftover, call_attempts, dme_customers(id, name, phone, address, salesman)')
+                  'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, called_by, assigned_to, assigned_date, is_overdue_leftover, call_attempts, dme_customers(id, name, phone, address, salesman, preference)')
               .eq('assigned_to', currentUserId)
               .eq('assigned_date', todayStr)
               .inFilter('status', ['pending', 'called']);
@@ -873,6 +873,7 @@ class DmeAssignmentService {
       rem['customer_phone'] = cust?['phone'] ?? '';
       rem['customer_address'] = cust?['address'] ?? '';
       rem['customer_salesman'] = cust?['salesman'] ?? '';
+      rem['customer_preference'] = cust?['preference'] ?? 'Call';
       rem['branch_id'] = bId;
       rem['branch_name'] = DmeConstants.getBranchName(bId);
       rem['is_overdue_leftover'] = rem['is_overdue_leftover'] == true ||

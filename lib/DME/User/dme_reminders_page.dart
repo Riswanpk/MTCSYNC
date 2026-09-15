@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
 import '../dme_constants.dart';
+import '../dme_config.dart';
 import 'dme_reminder_detail_page.dart';
 import 'dme_assignment_service.dart';
 import 'dme_remarks_pending_page.dart';
@@ -156,6 +157,40 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
         filterBranchId: _selectedBranchId,
       );
 
+      // 3. Fetch pending phone change requests to lock/grey out affected reminders
+      Set<int> pendingPhoneCustomerIds = {};
+      Set<int> pendingPhoneReminderIds = {};
+      try {
+        final client = await DmeConfig.getClient();
+        if (client != null) {
+          final pendingRes = await client
+              .from('dme_change_requests')
+              .select('customer_id, reminder_id')
+              .eq('request_type', 'phone_number_change')
+              .eq('status', 'pending');
+          for (var row in (pendingRes as List)) {
+            final cId = int.tryParse(row['customer_id']?.toString() ?? '');
+            if (cId != null) pendingPhoneCustomerIds.add(cId);
+            final rId = int.tryParse(row['reminder_id']?.toString() ?? '');
+            if (rId != null) pendingPhoneReminderIds.add(rId);
+          }
+        }
+      } catch (_) {}
+
+      for (var r in assignedToday) {
+        final cId = int.tryParse(r['customer_id']?.toString() ?? '');
+        final rId = int.tryParse(r['id']?.toString() ?? '');
+        r['is_phone_change_pending'] = (cId != null && pendingPhoneCustomerIds.contains(cId)) ||
+            (rId != null && pendingPhoneReminderIds.contains(rId));
+      }
+
+      for (var r in completed) {
+        final cId = int.tryParse(r['customer_id']?.toString() ?? '');
+        final rId = int.tryParse(r['id']?.toString() ?? '');
+        r['is_phone_change_pending'] = (cId != null && pendingPhoneCustomerIds.contains(cId)) ||
+            (rId != null && pendingPhoneReminderIds.contains(rId));
+      }
+
       if (mounted) {
         setState(() {
           _isAssignedByAdminToday = true;
@@ -185,6 +220,19 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
   }
 
   void _openReminderDetail(Map<String, dynamic> reminder) async {
+    if (reminder['is_phone_change_pending'] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'This reminder is locked because a phone number change request is pending admin approval.',
+          ),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -605,25 +653,31 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
           final callDuration = item['call_duration'] as int?;
           final calledBy = item['called_by']?.toString();
           final attempts = int.tryParse(item['call_attempts']?.toString() ?? '') ?? 0;
+          final isPhonePending = item['is_phone_change_pending'] == true;
           final bool isCalledWithoutRemarks =
+              !isPhonePending &&
               (status == 'called' || (callDuration != null && callDuration > 10)) &&
               (remarks == null || remarks.trim().isEmpty);
 
           return Card(
-            elevation: isLeftover || isCalledWithoutRemarks ? 3 : 2,
+            elevation: isPhonePending ? 1 : (isLeftover || isCalledWithoutRemarks ? 3 : 2),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: isCalledWithoutRemarks
-                  ? const BorderSide(color: Color(0xFFF59E0B), width: 1.8) // Yellow/amber outline if remarks needed
-                  : (isLeftover
-                      ? const BorderSide(color: Colors.deepOrange, width: 1.5)
-                      : BorderSide.none),
+              side: isPhonePending
+                  ? BorderSide(color: Colors.grey.shade400, width: 1.2)
+                  : (isCalledWithoutRemarks
+                      ? const BorderSide(color: Color(0xFFF59E0B), width: 1.8)
+                      : (isLeftover
+                          ? const BorderSide(color: Colors.deepOrange, width: 1.5)
+                          : BorderSide.none)),
             ),
-            color: isCalledWithoutRemarks
-                ? (isDark ? const Color(0xFF332B12) : const Color(0xFFFFFBEB))
-                : (isLeftover
-                    ? (isDark ? const Color(0xFF38201B) : const Color(0xFFFFF6ED))
-                    : null),
+            color: isPhonePending
+                ? (isDark ? const Color(0xFF262626) : const Color(0xFFF3F4F6))
+                : (isCalledWithoutRemarks
+                    ? (isDark ? const Color(0xFF332B12) : const Color(0xFFFFFBEB))
+                    : (isLeftover
+                        ? (isDark ? const Color(0xFF38201B) : const Color(0xFFFFF6ED))
+                        : null)),
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
               onTap: () => _openReminderDetail(item),
@@ -634,40 +688,46 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
                   children: [
                     CircleAvatar(
                       radius: 22,
-                      backgroundColor: isCompleted
-                          ? Colors.green.withValues(alpha: 0.15)
-                          : isCalledWithoutRemarks
-                              ? Colors.amber.withValues(alpha: 0.2)
-                              : isLeftover
-                                  ? Colors.deepOrange.withValues(alpha: 0.2)
-                                  : isOverdue
-                                      ? Colors.red.withValues(alpha: 0.15)
-                                      : (attempts >= 2 && (callDuration == null || callDuration == 0)
-                                          ? Colors.orange.withValues(alpha: 0.2)
-                                          : const Color(0xFF005BAC).withValues(alpha: 0.15)),
-                      foregroundColor: isCompleted
-                          ? Colors.green
-                          : isCalledWithoutRemarks
-                              ? Colors.amber[900]
-                              : isLeftover
-                                  ? Colors.deepOrange
-                                  : isOverdue
-                                      ? Colors.red
-                                      : (attempts >= 2 && (callDuration == null || callDuration == 0)
-                                          ? Colors.orange[800]
-                                          : const Color(0xFF005BAC)),
+                      backgroundColor: isPhonePending
+                          ? Colors.grey.withValues(alpha: 0.2)
+                          : (isCompleted
+                              ? Colors.green.withValues(alpha: 0.15)
+                              : isCalledWithoutRemarks
+                                  ? Colors.amber.withValues(alpha: 0.2)
+                                  : isLeftover
+                                      ? Colors.deepOrange.withValues(alpha: 0.2)
+                                      : isOverdue
+                                          ? Colors.red.withValues(alpha: 0.15)
+                                          : (attempts >= 2 && (callDuration == null || callDuration == 0)
+                                              ? Colors.orange.withValues(alpha: 0.2)
+                                              : const Color(0xFF005BAC).withValues(alpha: 0.15))),
+                      foregroundColor: isPhonePending
+                          ? Colors.grey[600]
+                          : (isCompleted
+                              ? Colors.green
+                              : isCalledWithoutRemarks
+                                  ? Colors.amber[900]
+                                  : isLeftover
+                                      ? Colors.deepOrange
+                                      : isOverdue
+                                          ? Colors.red
+                                          : (attempts >= 2 && (callDuration == null || callDuration == 0)
+                                              ? Colors.orange[800]
+                                              : const Color(0xFF005BAC))),
                       child: Icon(
-                        isCompleted
-                            ? Icons.check_rounded
-                            : isCalledWithoutRemarks
-                                ? Icons.rate_review_rounded
-                                : isLeftover
-                                    ? Icons.history_toggle_off_rounded
-                                    : isOverdue
-                                        ? Icons.warning_amber_rounded
-                                        : (attempts >= 2 && (callDuration == null || callDuration == 0)
-                                            ? Icons.phone_missed_rounded
-                                            : Icons.phone_forwarded_rounded),
+                        isPhonePending
+                            ? Icons.phonelink_lock_rounded
+                            : (isCompleted
+                                ? Icons.check_rounded
+                                : isCalledWithoutRemarks
+                                    ? Icons.rate_review_rounded
+                                    : isLeftover
+                                        ? Icons.history_toggle_off_rounded
+                                        : isOverdue
+                                            ? Icons.warning_amber_rounded
+                                            : (attempts >= 2 && (callDuration == null || callDuration == 0)
+                                                ? Icons.phone_missed_rounded
+                                                : Icons.phone_forwarded_rounded)),
                         size: 22,
                       ),
                     ),
@@ -681,10 +741,36 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
                               Expanded(
                                 child: Text(
                                   item['customer_name'] ?? 'Customer',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    color: isPhonePending
+                                        ? (isDark ? Colors.white60 : Colors.grey[700])
+                                        : null,
+                                  ),
                                 ),
                               ),
-                              if (isCalledWithoutRemarks) ...[
+                              if (isPhonePending) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade600,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.lock_clock_rounded, size: 11, color: Colors.white),
+                                      SizedBox(width: 2),
+                                      Text(
+                                        "PHONE CHANGE PENDING",
+                                        style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                              ] else if (isCalledWithoutRemarks) ...[
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(

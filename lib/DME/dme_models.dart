@@ -55,6 +55,7 @@ class DmeCustomer {
   final String phone;
   final String? address;
   final String? salesman;
+  final String preference; // 'Call' or 'Whatsapp' (default: 'Call')
   final DateTime? lastPurchaseDate;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -65,6 +66,7 @@ class DmeCustomer {
     required this.phone,
     this.address,
     this.salesman,
+    this.preference = 'Call',
     this.lastPurchaseDate,
     this.createdAt,
     this.updatedAt,
@@ -77,6 +79,7 @@ class DmeCustomer {
       'phone': phone,
       'address': address,
       'salesman': salesman,
+      'preference': preference,
       'last_purchase_date': lastPurchaseDate?.toIso8601String(),
       'created_at': createdAt?.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
@@ -90,6 +93,7 @@ class DmeCustomer {
       phone: map['phone'] as String? ?? '',
       address: map['address'] as String?,
       salesman: map['salesman'] as String?,
+      preference: map['preference'] as String? ?? 'Call',
       lastPurchaseDate: map['last_purchase_date'] != null
           ? DateTime.tryParse(map['last_purchase_date'].toString())
           : null,
@@ -332,3 +336,84 @@ class DmeCustomerBranch {
     );
   }
 }
+
+class DmeChangeRequest {
+  final int? id;
+  final int? reminderId;
+  final int customerId;
+  final String? customerName;
+  final String? customerPhone;
+  final String requestType; // 'phone_number_change' or 'preference_change'
+  final String? currentValue;
+  final String? newValue;
+  final String? reason;
+  final String status; // 'pending', 'approved', 'rejected'
+  final String? requestedBy;
+  final String? reviewedBy;
+  final String? adminNotes;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  DmeChangeRequest({
+    this.id,
+    this.reminderId,
+    required this.customerId,
+    this.customerName,
+    this.customerPhone,
+    required this.requestType,
+    this.currentValue,
+    this.newValue,
+    this.reason,
+    this.status = 'pending',
+    this.requestedBy,
+    this.reviewedBy,
+    this.adminNotes,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      if (id != null) 'id': id,
+      if (reminderId != null) 'reminder_id': reminderId,
+      'customer_id': customerId,
+      'customer_name': customerName,
+      'customer_phone': customerPhone,
+      'request_type': requestType,
+      'current_value': currentValue,
+      'new_value': newValue,
+      'reason': reason,
+      'status': status,
+      'requested_by': requestedBy,
+      'reviewed_by': reviewedBy,
+      'admin_notes': adminNotes,
+      'created_at': createdAt?.toIso8601String(),
+      'updated_at': updatedAt?.toIso8601String(),
+    };
+  }
+
+  factory DmeChangeRequest.fromMap(Map<String, dynamic> map) {
+    return DmeChangeRequest(
+      id: map['id'] != null ? int.tryParse(map['id'].toString()) : null,
+      reminderId: map['reminder_id'] != null ? int.tryParse(map['reminder_id'].toString()) : null,
+      customerId: int.tryParse(map['customer_id']?.toString() ?? '') ?? 0,
+      customerName: map['customer_name'] as String?,
+      customerPhone: map['customer_phone'] as String?,
+      requestType: map['request_type'] as String? ?? 'phone_number_change',
+      currentValue: map['current_value'] as String?,
+      newValue: map['new_value'] as String?,
+      reason: map['reason'] as String?,
+      status: map['status'] as String? ?? 'pending',
+      requestedBy: map['requested_by'] as String?,
+      reviewedBy: map['reviewed_by'] as String?,
+      adminNotes: map['admin_notes'] as String?,
+      createdAt: map['created_at'] != null
+          ? DateTime.tryParse(map['created_at'].toString())
+          : null,
+      updatedAt: map['updated_at'] != null
+          ? DateTime.tryParse(map['updated_at'].toString())
+          : null,
+    );
+  }
+}
+
