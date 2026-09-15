@@ -41,6 +41,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
   bool _isLoadingHistory = false;
   List<Map<String, dynamic>> _callHistory = [];
   bool _isLoadingCallHistory = false;
+  List<Map<String, dynamic>> _customerBranches = [];
 
   @override
   void initState() {
@@ -57,6 +58,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     _callAttempts = int.tryParse(_reminder['call_attempts']?.toString() ?? '') ?? 0;
 
     _loadUserNames();
+    _fetchCustomerBranches();
     _fetchCustomerSalesHistory();
     _fetchCustomerCallHistory();
   }
@@ -125,6 +127,26 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
       return prefix;
     }
     return raw;
+  }
+
+  Future<void> _fetchCustomerBranches() async {
+    final client = await DmeConfig.getClient();
+    final customerId = _reminder['customer_id'];
+    if (client == null || customerId == null) return;
+
+    try {
+      final res = await client
+          .from('dme_customer_branches')
+          .select('branch_id, category_id, customer_type_id, created_at')
+          .eq('customer_id', customerId);
+      if (mounted) {
+        setState(() {
+          _customerBranches = List<Map<String, dynamic>>.from(res as List);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching customer branches: $e');
+    }
   }
 
   Future<void> _fetchCustomerSalesHistory() async {
@@ -549,6 +571,54 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     final bool isCompleted = (status == 'completed');
     final bool isCalledWithoutRemarks = (status == 'called' || _callMade) && !isCompleted;
 
+    // Resolve Customer Type and Category:
+    // 1. Try from reminder's branch in _customerBranches
+    // 2. Or first record in _customerBranches
+    // 3. Or from most recent sales record
+    // 4. Or direct reminder attributes if available
+    int? resolvedTypeId;
+    int? resolvedCatId;
+
+    final currentBranchId = _reminder['last_purchase_branch'] != null
+        ? int.tryParse(_reminder['last_purchase_branch'].toString())
+        : (_reminder['branch_id'] != null ? int.tryParse(_reminder['branch_id'].toString()) : null);
+
+    if (_customerBranches.isNotEmpty) {
+      final match = _customerBranches.firstWhere(
+        (b) => currentBranchId != null && int.tryParse(b['branch_id']?.toString() ?? '') == currentBranchId,
+        orElse: () => _customerBranches.first,
+      );
+      resolvedTypeId = int.tryParse(match['customer_type_id']?.toString() ?? '');
+      resolvedCatId = int.tryParse(match['category_id']?.toString() ?? '');
+    }
+
+    if (resolvedTypeId == null && _salesHistory.isNotEmpty) {
+      final saleMatch = _salesHistory.firstWhere(
+        (s) => s['customer_type_id'] != null,
+        orElse: () => _salesHistory.first,
+      );
+      resolvedTypeId = int.tryParse(saleMatch['customer_type_id']?.toString() ?? '');
+    }
+
+    if (resolvedCatId == null && _salesHistory.isNotEmpty) {
+      final saleMatch = _salesHistory.firstWhere(
+        (s) => s['category_id'] != null,
+        orElse: () => _salesHistory.first,
+      );
+      resolvedCatId = int.tryParse(saleMatch['category_id']?.toString() ?? '');
+    }
+
+    resolvedTypeId ??= int.tryParse(_reminder['customer_type_id']?.toString() ?? '');
+    resolvedCatId ??= int.tryParse(_reminder['category_id']?.toString() ?? '');
+
+    // Check if customer is marked PREMIUM across any branch or sales
+    final bool hasPremiumBranch = _customerBranches.any((b) => int.tryParse(b['customer_type_id']?.toString() ?? '') == 1);
+    final bool hasPremiumSale = _salesHistory.any((s) => int.tryParse(s['customer_type_id']?.toString() ?? '') == 1);
+    final bool isPremiumCustomer = resolvedTypeId == 1 || hasPremiumBranch || hasPremiumSale;
+
+    final String customerTypeName = isPremiumCustomer ? 'PREMIUM' : DmeConstants.getCustomerTypeName(resolvedTypeId);
+    final String categoryName = DmeConstants.getCategoryName(resolvedCatId);
+
     return PopScope(
       canPop: !isCalledWithoutRemarks,
       onPopInvokedWithResult: (didPop, result) {
@@ -725,6 +795,76 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                         ],
                       ),
                     ],
+                    // Customer Type & Category
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.category_outlined, size: 18, color: Colors.grey),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Type: ',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey[700],
+                                    ),
+                                  ),
+                                  Text(
+                                    customerTypeName,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: isPremiumCustomer
+                                          ? const Color(0xFFD97706) // Premium vibrant amber/gold color
+                                          : (isDark ? Colors.white : Colors.black87),
+                                    ),
+                                  ),
+                                  if (isPremiumCustomer) ...[
+                                    const SizedBox(width: 4),
+                                    const Icon(
+                                      Icons.workspace_premium,
+                                      size: 16,
+                                      color: Color(0xFFD97706),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              Text('•', style: TextStyle(fontSize: 12, color: Colors.grey[400])),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Category: ',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey[700],
+                                    ),
+                                  ),
+                                  Text(
+                                    categoryName,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: isDark ? Colors.white70 : Colors.grey[800],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 12),
                     Wrap(
                       alignment: WrapAlignment.spaceBetween,
