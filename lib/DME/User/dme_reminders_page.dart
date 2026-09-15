@@ -265,13 +265,13 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
     // Filter customers who were called today but haven't picked up yet
     final notPickedUpReminders = _todayReminders.where((r) {
       final status = (r['status'] ?? '').toString().toLowerCase();
-      final attempts = int.tryParse(r['call_attempts']?.toString() ?? '') ?? 0;
+      final attempts = int.tryParse((r['today_call_attempts'] ?? r['call_attempts'])?.toString() ?? '') ?? 0;
       final duration = int.tryParse(r['call_duration']?.toString() ?? '') ?? 0;
       return status != 'completed' && duration <= 10 && attempts >= 1;
     }).toList();
 
     final multipleAttemptsReminders = notPickedUpReminders.where((r) {
-      final attempts = int.tryParse(r['call_attempts']?.toString() ?? '') ?? 0;
+      final attempts = int.tryParse((r['today_call_attempts'] ?? r['call_attempts'])?.toString() ?? '') ?? 0;
       return attempts >= 2;
     }).toList();
 
@@ -653,6 +653,7 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
           final callDuration = item['call_duration'] as int?;
           final calledBy = item['called_by']?.toString();
           final attempts = int.tryParse(item['call_attempts']?.toString() ?? '') ?? 0;
+          final todayAtt = int.tryParse((item['today_call_attempts'] ?? item['call_attempts'])?.toString() ?? '') ?? 0;
           final isPhonePending = item['is_phone_change_pending'] == true;
           final bool isCalledWithoutRemarks =
               !isPhonePending &&
@@ -811,27 +812,27 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
                                 const SizedBox(width: 4),
                               ],
                               if (callDuration == null || callDuration == 0) ...[
-                                if (attempts >= 2) ...[
+                                if (todayAtt >= 2) ...[
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
-                                      color: Colors.orange.shade800,
+                                      color: Colors.red.shade800,
                                       borderRadius: BorderRadius.circular(4),
                                     ),
-                                    child: Row(
+                                    child: const Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        const Icon(Icons.phone_missed_rounded, size: 10, color: Colors.white),
-                                        const SizedBox(width: 2),
+                                        Icon(Icons.block_rounded, size: 10, color: Colors.white),
+                                        SizedBox(width: 2),
                                         Text(
-                                          "$attempts ATTEMPTS",
-                                          style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                                          "2/2 CALLS TODAY",
+                                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
                                         ),
                                       ],
                                     ),
                                   ),
                                   const SizedBox(width: 4),
-                                ] else if (attempts == 1) ...[
+                                ] else if (todayAtt == 1) ...[
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
@@ -839,8 +840,22 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: const Text(
-                                      "1 ATTEMPT",
+                                      "1/2 CALL TODAY",
                                       style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                ],
+                                if (attempts > todayAtt && attempts > 0) ...[
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade700,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      "$attempts TOTAL",
+                                      style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
                                     ),
                                   ),
                                   const SizedBox(width: 4),

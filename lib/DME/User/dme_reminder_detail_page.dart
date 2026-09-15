@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -36,6 +37,9 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
   int? _callDuration;
   DateTime? _calledTimestamp;
   int _callAttempts = 0;
+  int _todayCallAttempts = 0;
+  DateTime? _lastCallAttemptTimestamp;
+  Timer? _cooldownTimer;
   bool _isCheckingCall = false;
 
   List<Map<String, dynamic>> _salesHistory = [];
@@ -58,6 +62,22 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     final isAlreadyCompleted = (status == 'completed');
     _callMade = isAlreadyCompleted || (_callDuration != null && _callDuration! > 10);
     _callAttempts = int.tryParse(_reminder['call_attempts']?.toString() ?? '') ?? 0;
+
+    // Daily call attempts & last attempt timestamp
+    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final lastCallDay = _reminder['last_call_day']?.toString();
+    if (lastCallDay != null && lastCallDay == todayStr) {
+      _todayCallAttempts = int.tryParse(_reminder['today_call_attempts']?.toString() ?? '') ?? 0;
+    } else {
+      _todayCallAttempts = 0;
+    }
+    final lTs = _reminder['last_call_attempt_timestamp']?.toString();
+    _lastCallAttemptTimestamp = lTs != null ? DateTime.tryParse(lTs) : null;
+
+    // Ticking timer so the 1-hour countdown updates every 10 seconds
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted) setState(() {});
+    });
 
     _loadUserNames();
     _fetchCustomerDetails();
@@ -147,6 +167,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
 
   @override
   void dispose() {
+    _cooldownTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _remarksController.dispose();
     super.dispose();
@@ -357,19 +378,34 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     }
   }
 
-  Future<void> _updateCallAttemptsInDb(int attempts) async {
+  Future<void> _updateCallAttemptsInDb({
+    required int totalAttempts,
+    required int todayAttempts,
+    required DateTime lastAttemptTimestamp,
+  }) async {
     try {
       final client = await DmeConfig.getClient();
       final reminderId = _reminder['id'];
+      final todayStr = DateFormat('yyyy-MM-dd').format(lastAttemptTimestamp);
       if (client != null && reminderId != null) {
         try {
           await client.from('dme_reminders').update({
-            'call_attempts': attempts,
+            'call_attempts': totalAttempts,
+            'today_call_attempts': todayAttempts,
+            'last_call_attempt_timestamp': lastAttemptTimestamp.toIso8601String(),
+            'last_call_day': todayStr,
             'updated_at': DateTime.now().toIso8601String(),
           }).eq('id', reminderId);
           widget.onUpdated?.call();
         } catch (_) {
-          // Column might not exist yet, fallback gracefully
+          // Fallback if newer columns are not migrated yet
+          try {
+            await client.from('dme_reminders').update({
+              'call_attempts': totalAttempts,
+              'updated_at': DateTime.now().toIso8601String(),
+            }).eq('id', reminderId);
+            widget.onUpdated?.call();
+          } catch (_) {}
         }
       }
     } catch (e) {
@@ -441,12 +477,39 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
 
         // Count attempts from device call log
         final actualAttempts = await DmeCallScannerService.getTodayOutgoingAttemptCount(contact);
-        _callAttempts = actualAttempts > 0 ? actualAttempts : (_callAttempts + 1);
+        final int newTodayAttempts = actualAttempts > 0 ? actualAttempts : (_todayCallAttempts + 1);
+        _todayCallAttempts = newTodayAttempts;
+        _callAttempts = _callAttempts + 1;
+        _lastCallAttemptTimestamp = calledTime;
+
         _reminder['call_attempts'] = _callAttempts;
-        _updateCallAttemptsInDb(_callAttempts);
+        _reminder['today_call_attempts'] = _todayCallAttempts;
+        _reminder['last_call_attempt_timestamp'] = calledTime.toIso8601String();
+        _reminder['last_call_day'] = DateFormat('yyyy-MM-dd').format(calledTime);
+
+        _updateCallAttemptsInDb(
+          totalAttempts: _callAttempts,
+          todayAttempts: _todayCallAttempts,
+          lastAttemptTimestamp: calledTime,
+        );
 
         // Attended call strictly requires duration > 10 seconds to allow remarks
         final bool isAttended = duration > 10;
+
+        // Log this attempt into `dme_call_logs` table
+        final userEmail = FirebaseAuth.instance.currentUser?.email;
+        final userUid = FirebaseAuth.instance.currentUser?.uid;
+        DmeCallScannerService.logCallAttempt(
+          reminderId: _reminder['id'],
+          customerId: _reminder['customer_id'],
+          callerEmail: userEmail,
+          callerUid: userUid,
+          ringDuration: duration,
+          callType: 'outgoing',
+          isAnswered: isAttended,
+          attemptTimestamp: calledTime,
+        );
+
         if (mounted) {
           setState(() {
             _callDuration = duration;
@@ -462,7 +525,6 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
 
           // If call attended (>10s), update Supabase with status 'called' and caller email
           if (isAttended) {
-            final userEmail = FirebaseAuth.instance.currentUser?.email;
             final client = await DmeConfig.getClient();
             final remId = _reminder['id'];
             if (client != null && remId != null) {
@@ -470,6 +532,9 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                 'call_duration': duration,
                 'called_timestamp': calledTime.toIso8601String(),
                 'call_attempts': _callAttempts,
+                'today_call_attempts': _todayCallAttempts,
+                'last_call_attempt_timestamp': calledTime.toIso8601String(),
+                'last_call_day': DateFormat('yyyy-MM-dd').format(calledTime),
                 'status': 'called',
                 'updated_at': now.toIso8601String(),
               };
@@ -500,8 +565,8 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
               SnackBar(
                 content: Text(
                   duration == 0
-                      ? 'Customer did not pick up (0s). Call attempt #$_callAttempts recorded. Remarks require a call over 10s.'
-                      : 'Call was under 10s (${duration}s). Call attempt #$_callAttempts recorded. Remarks require a call over 10s.',
+                      ? 'Customer did not pick up (0s). Attempt $_todayCallAttempts/2 recorded for today.'
+                      : 'Call was under 10s (${duration}s). Attempt $_todayCallAttempts/2 recorded for today.',
                 ),
                 backgroundColor: Colors.orange[900],
                 duration: const Duration(seconds: 4),
@@ -985,14 +1050,16 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                             color: _callMade ? Colors.green : Colors.orange[800],
                           ),
                           const SizedBox(width: 6),
-                          Text(
-                            _callMade
-                                ? 'Calls attempted today: $_callAttempts (Connected)'
-                                : 'Calls attempted today: $_callAttempts (Unanswered)',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: _callMade ? Colors.green[800] : Colors.orange[900],
+                          Expanded(
+                            child: Text(
+                              _callMade
+                                  ? 'Connected today ($_todayCallAttempts/2 today, $_callAttempts total)'
+                                  : 'Attempted today: $_todayCallAttempts/2 ($_callAttempts total attempted across days)',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: _callMade ? Colors.green[800] : Colors.orange[900],
+                              ),
                             ),
                           ),
                         ],
@@ -1230,76 +1297,158 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
             ],
 
             // 3. Call and WhatsApp Action Buttons (hidden if called or completed)
-            if (_callAttempts > 0)
-              Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: _callMade ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _callMade ? Colors.green.withValues(alpha: 0.4) : Colors.orange.withValues(alpha: 0.4),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      _callMade ? Icons.check_circle_outline_rounded : Icons.phone_missed_rounded,
-                      size: 20,
-                      color: _callMade ? Colors.green[800] : Colors.orange[900],
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _callMade
-                            ? 'Call connected (${_callDuration ?? 0}s) on attempt #$_callAttempts today'
-                            : '$_callAttempts call attempt${_callAttempts > 1 ? 's' : ''} made today — customer hasn\'t picked up yet',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: _callMade ? Colors.green[900] : Colors.orange[900],
+            if (!_callMade && status != 'called' && status != 'completed') ...[
+              Builder(
+                builder: (context) {
+                  final now = DateTime.now();
+                  final bool hasReachedDailyLimit = _todayCallAttempts >= 2;
+
+                  // 1-hour gap logic between attempts
+                  int remainingCooldownSeconds = 0;
+                  if (_todayCallAttempts > 0 && _lastCallAttemptTimestamp != null) {
+                    final elapsed = now.difference(_lastCallAttemptTimestamp!);
+                    if (elapsed.inSeconds < 3600) {
+                      remainingCooldownSeconds = 3600 - elapsed.inSeconds;
+                    }
+                  }
+
+                  final bool isCooldownActive = remainingCooldownSeconds > 0;
+                  final bool canMakeCall = !hasReachedDailyLimit && !isCooldownActive;
+
+                  // Format cooldown message
+                  final int minutesLeft = (remainingCooldownSeconds / 60).ceil();
+
+                  // WhatsApp unlock logic:
+                  // 1. If preference is 'whatsapp', enabled immediately
+                  // 2. Otherwise enabled only after 3 total attempts across days
+                  final pref = (widget.reminder['customer_preference'] ?? _reminder['customer_preference'] ?? 'Call')
+                      .toString()
+                      .trim()
+                      .toLowerCase();
+                  final bool isWhatsAppPreference = pref == 'whatsapp';
+                  final bool isWhatsAppUnlocked = isWhatsAppPreference || _callAttempts >= 3;
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Status Notice Card for Attempts / Cooldown
+                      if (_callAttempts > 0)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: hasReachedDailyLimit
+                                ? Colors.red.withValues(alpha: 0.1)
+                                : isCooldownActive
+                                    ? Colors.amber.withValues(alpha: 0.15)
+                                    : Colors.orange.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: hasReachedDailyLimit
+                                  ? Colors.red.withValues(alpha: 0.4)
+                                  : isCooldownActive
+                                      ? Colors.amber.withValues(alpha: 0.5)
+                                      : Colors.orange.withValues(alpha: 0.4),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                hasReachedDailyLimit
+                                    ? Icons.block_rounded
+                                    : isCooldownActive
+                                        ? Icons.hourglass_top_rounded
+                                        : Icons.phone_missed_rounded,
+                                size: 20,
+                                color: hasReachedDailyLimit
+                                    ? Colors.red[800]
+                                    : isCooldownActive
+                                        ? Colors.amber[900]
+                                        : Colors.orange[900],
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  hasReachedDailyLimit
+                                      ? 'Daily limit reached (2 calls today). If customer does not answer, this will be marked OVERDUE tomorrow for another 2 attempts.'
+                                      : isCooldownActive
+                                          ? '1-hour gap required between calls. Next attempt available in ~$minutesLeft minute${minutesLeft == 1 ? '' : 's'}.'
+                                          : 'Attempt #$_todayCallAttempts made today ($_callAttempts total lifetime attempts). Customer hasn\'t answered yet.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: hasReachedDailyLimit
+                                        ? Colors.red[900]
+                                        : isCooldownActive
+                                            ? Colors.amber[900]
+                                            : Colors.orange[900],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      // Call Customer Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: canMakeCall ? _makePhoneCall : null,
+                          icon: const Icon(Icons.call, size: 22),
+                          label: Text(
+                            hasReachedDailyLimit
+                                ? 'Daily Call Limit Reached (2/2 Calls Today)'
+                                : isCooldownActive
+                                    ? 'Call Again in $minutesLeft min (1-Hr Gap)'
+                                    : _todayCallAttempts > 0
+                                        ? 'Call Customer Again (Attempt 2/2 Today)'
+                                        : 'Call Customer (Attempt 1/2 Today)',
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: canMakeCall ? const Color(0xFF8CC63F) : Colors.grey[400],
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor: Colors.grey[300],
+                            disabledForegroundColor: Colors.grey[600],
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            elevation: canMakeCall ? 2 : 0,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
+                      const SizedBox(height: 10),
 
-            if (!_callMade && status != 'called' && status != 'completed') ...[
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _makePhoneCall,
-                  icon: const Icon(Icons.call, size: 22),
-                  label: Text(_callAttempts > 0 ? 'Call Customer Again ($customerPhone)' : 'Call $customerPhone'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF8CC63F),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    elevation: 2,
-                  ),
-                ),
+                      // WhatsApp Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: isWhatsAppUnlocked ? _sendWhatsAppMessage : null,
+                          icon: Icon(
+                            isWhatsAppUnlocked ? Icons.chat_rounded : Icons.lock_outline_rounded,
+                            size: 22,
+                          ),
+                          label: Text(
+                            isWhatsAppUnlocked
+                                ? (isWhatsAppPreference
+                                    ? 'Send WhatsApp Message (Customer Preference)'
+                                    : 'Send WhatsApp Message & Upload Proof')
+                                : 'WhatsApp unlocks after 3 call attempts ($_callAttempts/3 made)',
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isWhatsAppUnlocked ? const Color(0xFF25D366) : Colors.grey[300],
+                            foregroundColor: isWhatsAppUnlocked ? Colors.white : Colors.grey[600],
+                            disabledBackgroundColor: isDark ? Colors.grey[800] : Colors.grey[200],
+                            disabledForegroundColor: isDark ? Colors.grey[500] : Colors.grey[600],
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            elevation: isWhatsAppUnlocked ? 2 : 0,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                  );
+                },
               ),
-              const SizedBox(height: 10),
-
-              // Send WhatsApp Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _sendWhatsAppMessage,
-                  icon: const Icon(Icons.chat_rounded, size: 22),
-                  label: const Text('Send WhatsApp Message & Upload Proof'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF25D366),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    elevation: 2,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
             ],
 
             // 4. Call Remarks Section (Only accessible when _callMade is true)

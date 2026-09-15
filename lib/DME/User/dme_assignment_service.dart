@@ -792,7 +792,7 @@ class DmeAssignmentService {
           var query = client
               .from('dme_reminders')
               .select(
-                  'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, called_by, assigned_to, assigned_date, is_overdue_leftover, call_attempts, dme_customers(id, name, phone, address, salesman, preference)')
+                  'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, called_by, assigned_to, assigned_date, is_overdue_leftover, call_attempts, today_call_attempts, last_call_attempt_timestamp, last_call_day, dme_customers(id, name, phone, address, salesman, preference)')
               .eq('assigned_to', currentUserId)
               .eq('assigned_date', todayStr)
               .inFilter('status', ['pending', 'called']);
@@ -806,7 +806,7 @@ class DmeAssignmentService {
             var fallbackQuery = client
                 .from('dme_reminders')
                 .select(
-                    'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, called_by, assigned_to, assigned_date, is_overdue_leftover, dme_customers(id, name, phone, address, salesman)')
+                    'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, called_by, assigned_to, assigned_date, is_overdue_leftover, call_attempts, dme_customers(id, name, phone, address, salesman, preference)')
                 .eq('assigned_to', currentUserId)
                 .eq('assigned_date', todayStr)
                 .inFilter('status', ['pending', 'called']);
@@ -816,18 +816,33 @@ class DmeAssignmentService {
             }
             batch = await fallbackQuery.range(offset, offset + pageSize - 1);
           } catch (_) {
-            var fallbackQuery2 = client
-                .from('dme_reminders')
-                .select(
-                    'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, assigned_to, assigned_date, is_overdue_leftover, dme_customers(id, name, phone, address, salesman)')
-                .eq('assigned_to', currentUserId)
-                .eq('assigned_date', todayStr)
-                .inFilter('status', ['pending', 'called']);
+            try {
+              var fallbackQuery2 = client
+                  .from('dme_reminders')
+                  .select(
+                      'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, called_by, assigned_to, assigned_date, is_overdue_leftover, dme_customers(id, name, phone, address, salesman)')
+                  .eq('assigned_to', currentUserId)
+                  .eq('assigned_date', todayStr)
+                  .inFilter('status', ['pending', 'called']);
 
-            if (filterBranchId != null) {
-              fallbackQuery2 = fallbackQuery2.eq('last_purchase_branch', filterBranchId);
+              if (filterBranchId != null) {
+                fallbackQuery2 = fallbackQuery2.eq('last_purchase_branch', filterBranchId);
+              }
+              batch = await fallbackQuery2.range(offset, offset + pageSize - 1);
+            } catch (_) {
+              var fallbackQuery3 = client
+                  .from('dme_reminders')
+                  .select(
+                      'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, assigned_to, assigned_date, is_overdue_leftover, dme_customers(id, name, phone, address, salesman)')
+                  .eq('assigned_to', currentUserId)
+                  .eq('assigned_date', todayStr)
+                  .inFilter('status', ['pending', 'called']);
+
+              if (filterBranchId != null) {
+                fallbackQuery3 = fallbackQuery3.eq('last_purchase_branch', filterBranchId);
+              }
+              batch = await fallbackQuery3.range(offset, offset + pageSize - 1);
             }
-            batch = await fallbackQuery2.range(offset, offset + pageSize - 1);
           }
         }
         final list = batch as List;
@@ -880,6 +895,17 @@ class DmeAssignmentService {
           rem['is_overdue_leftover'] == 'true' ||
           rem['is_overdue_leftover'] == 1;
       rem['call_attempts'] = int.tryParse(rem['call_attempts']?.toString() ?? '') ?? 0;
+      
+      // Calculate today_call_attempts: if last_call_day is today, use today_call_attempts, else reset to 0
+      final todayStr = formatDate(DateTime.now());
+      final lastCallDay = rem['last_call_day']?.toString();
+      if (lastCallDay != null && lastCallDay == todayStr) {
+        rem['today_call_attempts'] = int.tryParse(rem['today_call_attempts']?.toString() ?? '') ?? 0;
+      } else {
+        // If from previous day or null, today attempts are 0
+        rem['today_call_attempts'] = 0;
+      }
+      rem['last_call_attempt_timestamp'] = rem['last_call_attempt_timestamp'];
 
       list.add(rem);
     }

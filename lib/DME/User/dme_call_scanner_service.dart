@@ -32,6 +32,39 @@ class DmeCallScannerService {
     return false;
   }
 
+  /// Logs an individual call attempt to `dme_call_logs` table in Supabase.
+  static Future<void> logCallAttempt({
+    required dynamic reminderId,
+    required dynamic customerId,
+    String? callerEmail,
+    String? callerUid,
+    required int ringDuration,
+    String callType = 'outgoing',
+    required bool isAnswered,
+    DateTime? attemptTimestamp,
+  }) async {
+    try {
+      final client = await DmeConfig.getClient();
+      if (client == null) return;
+      final now = attemptTimestamp ?? DateTime.now();
+      final statDate = DateFormat('yyyy-MM-dd').format(now);
+
+      await client.from('dme_call_logs').insert({
+        if (reminderId != null) 'reminder_id': reminderId,
+        if (customerId != null) 'customer_id': customerId,
+        'caller_uid': callerUid,
+        'caller_email': callerEmail,
+        'attempt_timestamp': now.toIso8601String(),
+        'ring_duration': ringDuration,
+        'call_type': callType,
+        'is_answered': isAnswered,
+        'call_day': statDate,
+      });
+    } catch (e) {
+      debugPrint('Note: dme_call_logs insert skipped/failed: $e');
+    }
+  }
+
   /// Returns total number of outgoing call attempts to this contact made today.
   static Future<int> getTodayOutgoingAttemptCount(String contactPhone) async {
     try {

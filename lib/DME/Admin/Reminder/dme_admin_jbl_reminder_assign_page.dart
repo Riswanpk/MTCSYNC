@@ -157,16 +157,29 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
   }
 
   /// Strictly executes Auto Division ONLY for JBL branch
+  Map<String, int> _calculateJblUserEstimatedReminders() {
+    final Map<String, int> result = {for (var u in _jblUsers) (u['uid'] as String): 0};
+    final presentUsers = _jblUsers.where((u) => _userPresence[u['uid'] as String] ?? true).toList();
+
+    if (_jblPendingCount > 0 && presentUsers.isNotEmpty) {
+      final base = _jblPendingCount ~/ presentUsers.length;
+      final remainder = _jblPendingCount % presentUsers.length;
+
+      for (int i = 0; i < presentUsers.length; i++) {
+        final uid = presentUsers[i]['uid'] as String;
+        result[uid] = base + (i < remainder ? 1 : 0);
+      }
+    }
+    return result;
+  }
+
   Future<void> _executeJblAutoDivision() async {
-    final presentUsers = _jblUsers
-        .where((u) => _userPresence[u['uid']] ?? true)
-        .map((u) => u['uid'] as String)
-        .toList();
+    final presentUsers = _jblUsers.where((u) => _userPresence[u['uid'] as String] ?? true).toList();
 
     if (presentUsers.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('All JBL users are marked absent. Please toggle at least one user present.'),
+          content: Text('All JBL users are marked absent. Toggle at least 1 user present.'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -183,6 +196,8 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
       return;
     }
 
+    final estimatedPerUser = _calculateJblUserEstimatedReminders();
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -196,35 +211,102 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
             ),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.purple.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.purple.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'TEST MODE: Scoped Strictly to JBL Branch (ID: 6)',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.purple),
+                ),
               ),
-              child: const Text(
-                'TEST MODE: Scoped Strictly to JBL Branch (ID: 6)',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.purple),
+              const SizedBox(height: 12),
+              Text(
+                'Date: ${DateFormat('EEEE, dd MMMM yyyy').format(_today)}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Date: ${DateFormat('EEEE, dd MMMM yyyy').format(_today)}',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const Divider(height: 16),
-            Text(
-              '• JBL Reminders to Divide: $_jblPendingCount\n'
-              '• Present JBL Users: ${presentUsers.length}\n'
-              '• Absent Users: ${_jblUsers.length - presentUsers.length}\n\n'
-              'Only JBL branch reminders will be partitioned and assigned. ALL other branches remain untouched.',
-              style: const TextStyle(fontSize: 13, height: 1.4),
-            ),
-          ],
+              const Divider(height: 16),
+              Text(
+                '• JBL Reminders to Divide: $_jblPendingCount\n'
+                '• Present JBL Users: ${presentUsers.length}\n'
+                '• Absent Users: ${_jblUsers.length - presentUsers.length}',
+                style: const TextStyle(fontSize: 13, height: 1.4),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Reminders Each User Will Receive:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.purple),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                constraints: const BoxConstraints(maxHeight: 180),
+                decoration: BoxDecoration(
+                  color: Colors.purple.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.purple.withValues(alpha: 0.2)),
+                ),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(8),
+                  child: Column(
+                    children: _jblUsers.map((u) {
+                      final uid = u['uid'] as String;
+                      final name = u['username'] as String;
+                      final isPresent = _userPresence[uid] ?? true;
+                      final count = estimatedPerUser[uid] ?? 0;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isPresent ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                              size: 16,
+                              color: isPresent ? Colors.purple : Colors.red,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                name,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  decoration: isPresent ? null : TextDecoration.lineThrough,
+                                  color: isPresent ? Colors.black87 : Colors.grey[600],
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: isPresent
+                                    ? Colors.purple.withValues(alpha: 0.12)
+                                    : Colors.grey.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                isPresent ? '$count reminders' : '0 (Absent)',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: isPresent ? Colors.purple : Colors.grey[600],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -305,9 +387,10 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
       } catch (_) {}
 
       // 3. Partition reminders fairly among present JBL users
+      final presentUserUids = presentUsers.map((u) => u['uid'] as String).toList();
       final currentDay = DateTime(_today.year, _today.month, _today.day);
-      final Map<String, List<int>> userLeftovers = {for (var u in presentUsers) u: []};
-      final Map<String, List<int>> userTodays = {for (var u in presentUsers) u: []};
+      final Map<String, List<int>> userLeftovers = {for (var u in presentUserUids) u: []};
+      final Map<String, List<int>> userTodays = {for (var u in presentUserUids) u: []};
       final List<int> leftoverIds = [];
       final List<int> todayIds = [];
 
@@ -330,19 +413,19 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
 
       // Distribute leftovers evenly
       for (int i = 0; i < leftoverIds.length; i++) {
-        final targetUser = presentUsers[i % presentUsers.length];
+        final targetUser = presentUserUids[i % presentUserUids.length];
         userLeftovers[targetUser]!.add(leftoverIds[i]);
       }
 
       // Distribute today's reminders evenly
       for (int i = 0; i < todayIds.length; i++) {
-        final targetUser = presentUsers[i % presentUsers.length];
+        final targetUser = presentUserUids[i % presentUserUids.length];
         userTodays[targetUser]!.add(todayIds[i]);
       }
 
       // Batch update reminders for JBL
       const int batchSize = 200;
-      for (var user in presentUsers) {
+      for (var user in presentUserUids) {
         final lList = userLeftovers[user] ?? [];
         for (int i = 0; i < lList.length; i += batchSize) {
           final chunk = lList.sublist(i, min(i + batchSize, lList.length));
@@ -368,7 +451,7 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
 
       // Record in audit table
       final userMap = {for (var u in _jblUsers) (u['uid'] as String): u};
-      for (var user in presentUsers) {
+      for (var user in presentUserUids) {
         final uEmail = (userMap[user]?['email'] as String?) ?? user;
         final count = (userLeftovers[user]?.length ?? 0) + (userTodays[user]?.length ?? 0);
         try {
@@ -385,8 +468,8 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
         await client.from('dme_reminder_assignments').upsert({
           'assignment_date': dateStr,
           'branch_id': _jblBranchId,
-          'assigned_user_ids': presentUsers,
-          'assigned_user_names': presentUsers.map((u) => (userMap[u]?['username'] as String?) ?? u).toList(),
+          'assigned_user_ids': presentUserUids,
+          'assigned_user_names': presentUserUids.map((uid) => (userMap[uid]?['username'] as String?) ?? uid).toList(),
           'total_reminders': allPending.length,
           'assigned_by': adminEmail,
           'updated_at': nowIso,
@@ -710,45 +793,92 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
                                 style: TextStyle(fontStyle: FontStyle.italic),
                               ),
                             )
-                          else
-                            ListView.separated(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: _jblUsers.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1),
-                              itemBuilder: (context, index) {
-                                final user = _jblUsers[index];
-                                final uid = user['uid'] as String;
-                                final name = user['username'] as String;
-                                final email = user['email'] as String;
-                                final isPresent = _userPresence[uid] ?? true;
+                          else ...[
+                            Builder(
+                              builder: (_) {
+                                final estimatedPerUser = _calculateJblUserEstimatedReminders();
+                                return ListView.separated(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemCount: _jblUsers.length,
+                                  separatorBuilder: (_, __) => const Divider(height: 1),
+                                  itemBuilder: (context, index) {
+                                    final user = _jblUsers[index];
+                                    final uid = user['uid'] as String;
+                                    final name = user['username'] as String;
+                                    final email = user['email'] as String;
+                                    final isPresent = _userPresence[uid] ?? true;
+                                    final estCount = estimatedPerUser[uid] ?? 0;
 
-                                return SwitchListTile(
-                                  value: isPresent,
-                                  onChanged: (val) => _toggleUserAttendance(uid, val),
-                                  activeColor: Colors.green,
-                                  secondary: CircleAvatar(
-                                    backgroundColor: isPresent ? Colors.purple : Colors.grey[400],
-                                    foregroundColor: Colors.white,
-                                    radius: 18,
-                                    child: Text(
-                                      name.isNotEmpty ? name[0].toUpperCase() : 'U',
-                                      style: const TextStyle(fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                  title: Text(
-                                    name,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                      decoration: isPresent ? null : TextDecoration.lineThrough,
-                                      color: isPresent ? null : Colors.grey[600],
-                                    ),
-                                  ),
-                                  subtitle: Text(email, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                                    return SwitchListTile(
+                                      value: isPresent,
+                                      onChanged: (val) => _toggleUserAttendance(uid, val),
+                                      activeColor: Colors.green,
+                                      secondary: CircleAvatar(
+                                        backgroundColor: isPresent ? Colors.purple : Colors.grey[400],
+                                        foregroundColor: Colors.white,
+                                        radius: 18,
+                                        child: Text(
+                                          name.isNotEmpty ? name[0].toUpperCase() : 'U',
+                                          style: const TextStyle(fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                      title: Wrap(
+                                        crossAxisAlignment: WrapCrossAlignment.center,
+                                        spacing: 6,
+                                        runSpacing: 2,
+                                        children: [
+                                          Text(
+                                            name,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                              decoration: isPresent ? null : TextDecoration.lineThrough,
+                                              color: isPresent ? null : Colors.grey[600],
+                                            ),
+                                          ),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                            decoration: BoxDecoration(
+                                              color: isPresent
+                                                  ? Colors.green.withValues(alpha: 0.15)
+                                                  : Colors.red.withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              isPresent ? 'PRESENT' : 'ABSENT',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                                color: isPresent ? Colors.green[800] : Colors.red[800],
+                                              ),
+                                            ),
+                                          ),
+                                          if (isPresent)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                              decoration: BoxDecoration(
+                                                color: Colors.purple.withValues(alpha: 0.12),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                '~ $estCount reminders',
+                                                style: const TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.purple,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      subtitle: Text(email, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                                    );
+                                  },
                                 );
                               },
                             ),
+                          ],
                         ],
                       ),
                     ),
