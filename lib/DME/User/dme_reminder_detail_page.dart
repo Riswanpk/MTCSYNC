@@ -42,6 +42,8 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
   Timer? _cooldownTimer;
   bool _isCheckingCall = false;
 
+  bool _hasShortAttendedCall = false;
+
   List<Map<String, dynamic>> _salesHistory = [];
   bool _isLoadingHistory = false;
   List<Map<String, dynamic>> _callHistory = [];
@@ -62,6 +64,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     final isAlreadyCompleted = (status == 'completed');
     _callMade = isAlreadyCompleted || (_callDuration != null && _callDuration! > 10);
     _callAttempts = int.tryParse(_reminder['call_attempts']?.toString() ?? '') ?? 0;
+    _hasShortAttendedCall = (_callDuration != null && _callDuration! > 0 && _callDuration! <= 10);
 
     // Daily call attempts & last attempt timestamp
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -84,6 +87,28 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     _fetchCustomerBranches();
     _fetchCustomerSalesHistory();
     _fetchCustomerCallHistory();
+    _checkIfShortAttendedCallExists();
+  }
+
+  Future<void> _checkIfShortAttendedCallExists() async {
+    try {
+      final client = await DmeConfig.getClient();
+      final remId = _reminder['id'];
+      if (client != null && remId != null) {
+        final res = await client
+            .from('dme_call_logs')
+            .select('id')
+            .eq('reminder_id', remId)
+            .gt('ring_duration', 0)
+            .lte('ring_duration', 10)
+            .limit(1);
+        if ((res as List).isNotEmpty && mounted) {
+          setState(() {
+            _hasShortAttendedCall = true;
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   final Map<String, String> _userNames = {};
@@ -159,6 +184,17 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
             ),
           );
           _fetchCustomerDetails();
+          widget.onUpdated?.call();
+        }
+      } else if (requestType == 'call_completion') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Call completion request submitted to Admin for approval!'),
+              backgroundColor: Colors.purple,
+              duration: Duration(seconds: 4),
+            ),
+          );
           widget.onUpdated?.call();
         }
       }
@@ -456,6 +492,10 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     setState(() => _isCheckingCall = true);
 
     try {
+      // On older Android (Oppo/Vivo Android 10), the dialer app writes to CallLog asynchronously.
+      // A small 1.2s delay gives the system time to flush the entry before we query.
+      await Future.delayed(const Duration(milliseconds: 1200));
+
       final contact = _reminder['customer_phone']?.toString() ?? '';
       final entry = await DmeCallScannerService.fetchLatestCallForContact(
         contact,
@@ -495,6 +535,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
 
         // Attended call strictly requires duration > 10 seconds to allow remarks
         final bool isAttended = duration > 10;
+        final bool isShortAttended = duration > 0 && duration <= 10;
 
         // Log this attempt into `dme_call_logs` table
         final userEmail = FirebaseAuth.instance.currentUser?.email;
@@ -506,7 +547,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
           callerUid: userUid,
           ringDuration: duration,
           callType: 'outgoing',
-          isAnswered: isAttended,
+          isAnswered: duration > 0,
           attemptTimestamp: calledTime,
         );
 
@@ -517,42 +558,47 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
             _callMade = isAttended;
             _reminder['call_duration'] = duration;
             _reminder['called_timestamp'] = calledTime.toIso8601String();
+            if (isShortAttended) {
+              _hasShortAttendedCall = true;
+            }
             if (isAttended) {
               _reminder['status'] = 'called';
             }
             _isCheckingCall = false;
           });
 
-          // If call attended (>10s), update Supabase with status 'called' and caller email
-          if (isAttended) {
-            final client = await DmeConfig.getClient();
-            final remId = _reminder['id'];
-            if (client != null && remId != null) {
-              final payload = <String, dynamic>{
-                'call_duration': duration,
-                'called_timestamp': calledTime.toIso8601String(),
-                'call_attempts': _callAttempts,
-                'today_call_attempts': _todayCallAttempts,
-                'last_call_attempt_timestamp': calledTime.toIso8601String(),
-                'last_call_day': DateFormat('yyyy-MM-dd').format(calledTime),
-                'status': 'called',
-                'updated_at': now.toIso8601String(),
-              };
+          // If call attended (>0s), update Supabase with duration and status (if >10s)
+          final client = await DmeConfig.getClient();
+          final remId = _reminder['id'];
+          if (client != null && remId != null) {
+            final payload = <String, dynamic>{
+              'call_duration': duration,
+              'called_timestamp': calledTime.toIso8601String(),
+              'call_attempts': _callAttempts,
+              'today_call_attempts': _todayCallAttempts,
+              'last_call_attempt_timestamp': calledTime.toIso8601String(),
+              'last_call_day': DateFormat('yyyy-MM-dd').format(calledTime),
+              'updated_at': now.toIso8601String(),
+            };
+            if (isAttended) {
+              payload['status'] = 'called';
               if (userEmail != null && userEmail.isNotEmpty) {
                 payload['called_by'] = userEmail;
               }
-              try {
+            }
+            try {
+              await client.from('dme_reminders').update(payload).eq('id', remId);
+              widget.onUpdated?.call();
+            } catch (err) {
+              if (err.toString().contains('called_by')) {
+                payload.remove('called_by');
                 await client.from('dme_reminders').update(payload).eq('id', remId);
                 widget.onUpdated?.call();
-              } catch (err) {
-                if (err.toString().contains('called_by')) {
-                  payload.remove('called_by');
-                  await client.from('dme_reminders').update(payload).eq('id', remId);
-                  widget.onUpdated?.call();
-                }
               }
             }
+          }
 
+          if (isAttended) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Call attended ($duration sec)! Please add remarks below.'),
@@ -560,13 +606,21 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                 duration: const Duration(seconds: 3),
               ),
             );
+          } else if (isShortAttended) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Call was under 10s (${duration}s). Customer attended briefly — WhatsApp messaging is now enabled!',
+                ),
+                backgroundColor: const Color(0xFF25D366),
+                duration: const Duration(seconds: 4),
+              ),
+            );
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  duration == 0
-                      ? 'Customer did not pick up (0s). Attempt $_todayCallAttempts/2 recorded for today.'
-                      : 'Call was under 10s (${duration}s). Attempt $_todayCallAttempts/2 recorded for today.',
+                  'Customer did not pick up (0s). Attempt $_todayCallAttempts/2 recorded for today.',
                 ),
                 backgroundColor: Colors.orange[900],
                 duration: const Duration(seconds: 4),
@@ -1320,19 +1374,21 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
 
                   // WhatsApp unlock logic:
                   // 1. If preference is 'whatsapp', enabled immediately
-                  // 2. Otherwise enabled only after 3 total attempts across days
+                  // 2. If a call attempt had customer attend the call but didn't last > 10s, enabled immediately
+                  // 3. Otherwise enabled only after 3 total attempts across days
                   final pref = (widget.reminder['customer_preference'] ?? _reminder['customer_preference'] ?? 'Call')
                       .toString()
                       .trim()
                       .toLowerCase();
                   final bool isWhatsAppPreference = pref == 'whatsapp';
-                  final bool isWhatsAppUnlocked = isWhatsAppPreference || _callAttempts >= 3;
+                  final bool hasShortCall = _hasShortAttendedCall || (_callDuration != null && _callDuration! > 0 && _callDuration! <= 10);
+                  final bool isWhatsAppUnlocked = isWhatsAppPreference || hasShortCall || _callAttempts >= 3;
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Status Notice Card for Attempts / Cooldown
-                      if (_callAttempts > 0)
+                      // Status Notice Card for Attempts / Cooldown (hidden if customer preference is whatsapp)
+                      if (!isWhatsAppPreference && _callAttempts > 0)
                         Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -1389,33 +1445,35 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                           ),
                         ),
 
-                      // Call Customer Button
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: canMakeCall ? _makePhoneCall : null,
-                          icon: const Icon(Icons.call, size: 22),
-                          label: Text(
-                            hasReachedDailyLimit
-                                ? 'Daily Call Limit Reached (2/2 Calls Today)'
-                                : isCooldownActive
-                                    ? 'Call Again in $minutesLeft min (1-Hr Gap)'
-                                    : _todayCallAttempts > 0
-                                        ? 'Call Customer Again (Attempt 2/2 Today)'
-                                        : 'Call Customer (Attempt 1/2 Today)',
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: canMakeCall ? const Color(0xFF8CC63F) : Colors.grey[400],
-                            foregroundColor: Colors.white,
-                            disabledBackgroundColor: Colors.grey[300],
-                            disabledForegroundColor: Colors.grey[600],
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            elevation: canMakeCall ? 2 : 0,
+                      // Call Customer Button (hidden if preference is whatsapp)
+                      if (!isWhatsAppPreference) ...[
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: canMakeCall ? _makePhoneCall : null,
+                            icon: const Icon(Icons.call, size: 22),
+                            label: Text(
+                              hasReachedDailyLimit
+                                  ? 'Daily Call Limit Reached (2/2 Calls Today)'
+                                  : isCooldownActive
+                                      ? 'Call Again in $minutesLeft min (1-Hr Gap)'
+                                      : _todayCallAttempts > 0
+                                          ? 'Call Customer Again (Attempt 2/2 Today)'
+                                          : 'Call Customer (Attempt 1/2 Today)',
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: canMakeCall ? const Color(0xFF8CC63F) : Colors.grey[400],
+                              foregroundColor: Colors.white,
+                              disabledBackgroundColor: Colors.grey[300],
+                              disabledForegroundColor: Colors.grey[600],
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              elevation: canMakeCall ? 2 : 0,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 10),
+                        const SizedBox(height: 10),
+                      ],
 
                       // WhatsApp Button
                       SizedBox(
@@ -1430,7 +1488,9 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                             isWhatsAppUnlocked
                                 ? (isWhatsAppPreference
                                     ? 'Send WhatsApp Message (Customer Preference)'
-                                    : 'Send WhatsApp Message & Upload Proof')
+                                    : hasShortCall
+                                        ? 'Send WhatsApp Message (Call under 10s)'
+                                        : 'Send WhatsApp Message & Upload Proof')
                                 : 'WhatsApp unlocks after 3 call attempts ($_callAttempts/3 made)',
                           ),
                           style: ElevatedButton.styleFrom(

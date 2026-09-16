@@ -169,6 +169,8 @@ Future<void> _setupFirebaseMessaging() async {
         channelKey = 'customer_approval_channel';
       } else if (type == 'complaint_resolved' || type == 'dme_complaint_resolved') {
         channelKey = 'dme_complaints_resolved_channel';
+      } else if (type == 'complaint_review_pending' || type == 'complaint_action_taken' || type == 'dme_complaint_review_pending') {
+        channelKey = 'dme_complaints_review_channel';
       } else if (type == 'dme_complaint' || type == 'complaint_assigned' || type == 'complaint_raised') {
         channelKey = 'dme_complaints_channel';
       } else if (type == 'todo' || type == 'todo_reminder') {
@@ -307,6 +309,18 @@ Future<void> _initializeNotifications() async {
       defaultColor: const Color(0xFF28A745),
       ledColor: Colors.green,
       soundSource: 'resource://raw/complaint_resolved',
+      importance: NotificationImportance.Max,
+      channelShowBadge: true,
+      criticalAlerts: true,
+      playSound: true,
+    ),
+    NotificationChannel(
+      channelKey: 'dme_complaints_review_channel',
+      channelName: 'DME Complaints Review Pending',
+      channelDescription: 'Channel for DME complaints waiting for verification review',
+      defaultColor: const Color(0xFF005BAC),
+      ledColor: Colors.blue,
+      soundSource: 'resource://raw/complaint_review_pending',
       importance: NotificationImportance.Max,
       channelShowBadge: true,
       criticalAlerts: true,

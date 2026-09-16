@@ -177,12 +177,13 @@ class DmeComplaintsService {
       debugPrint('Warning: Failed to insert timeline update: $e');
     }
 
-    // 3. Send notification back to DME user
+    // 3. Send notification back to DME user using complaint_review_pending sound
     unawaited(sendComplaintNotification(
       recipientUid: createdByUid,
       title: 'Complaint Update Submitted',
       body: '$actionByName took action on complaint for "$customerName". Please verify resolution.',
       complaintId: complaintId,
+      notifType: 'complaint_review_pending',
     ));
   }
 

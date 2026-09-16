@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../dme_constants.dart';
 import '../../dme_config.dart';
@@ -193,7 +192,7 @@ class _DmeAdminReminderDetailPageState extends State<DmeAdminReminderDetailPage>
     try {
       final snap = await FirebaseFirestore.instance
           .collection('users')
-          .where('role', whereIn: ['dme_user', 'dme_admin'])
+          .where('role', isEqualTo: 'dme_user')
           .get();
 
       List<Map<String, dynamic>> users = [];
@@ -234,6 +233,17 @@ class _DmeAdminReminderDetailPageState extends State<DmeAdminReminderDetailPage>
     String status = (_reminder['status'] ?? 'pending').toString();
     DateTime reminderDate = DateTime.tryParse(_reminder['reminder_date']?.toString() ?? '') ?? DateTime.now();
     String? assignedTo = _reminder['assigned_to']?.toString();
+    String? calledBy = _reminder['called_by']?.toString();
+    // If called_by isn't among DME users or is null, check if assignedTo matches any DME user
+    if (calledBy == null || !_dmeUsers.any((u) => (u['email'] ?? '').toString().toLowerCase() == calledBy!.toLowerCase())) {
+      final matchedAssigned = _dmeUsers.firstWhere((u) => u['uid'] == assignedTo, orElse: () => {});
+      if (matchedAssigned.isNotEmpty && matchedAssigned['email'] != null) {
+        calledBy = matchedAssigned['email'];
+      } else if (_dmeUsers.isNotEmpty) {
+        calledBy = _dmeUsers.first['email'];
+      }
+    }
+
     int? duration = int.tryParse(_reminder['call_duration']?.toString() ?? '');
     final durationController = TextEditingController(text: duration != null ? duration.toString() : '');
 
@@ -411,8 +421,37 @@ class _DmeAdminReminderDetailPageState extends State<DmeAdminReminderDetailPage>
                     ),
                     const SizedBox(height: 14),
 
-                    // 4. Call Duration (if completed)
+                    // 4. Call Details (if completed)
                     if (status == 'completed') ...[
+                      const Text('Called By (DME User)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String?>(
+                            isExpanded: true,
+                            value: _dmeUsers.any((u) => (u['email'] ?? '').toString().toLowerCase() == (calledBy ?? '').toLowerCase())
+                                ? _dmeUsers.firstWhere((u) => (u['email'] ?? '').toString().toLowerCase() == (calledBy ?? '').toLowerCase())['email']
+                                : (_dmeUsers.isNotEmpty ? _dmeUsers.first['email'] : null),
+                            hint: const Text('Select DME User'),
+                            items: _dmeUsers.map(
+                              (u) => DropdownMenuItem<String?>(
+                                value: u['email'],
+                                child: Text('${u['username']} (${u['email']})', style: const TextStyle(fontSize: 13)),
+                              ),
+                            ).toList(),
+                            onChanged: (val) {
+                              setModalState(() => calledBy = val);
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
                       const Text('Call Duration (seconds)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                       const SizedBox(height: 8),
                       TextField(
@@ -469,6 +508,7 @@ class _DmeAdminReminderDetailPageState extends State<DmeAdminReminderDetailPage>
                                       newRemarks: remarksController.text.trim(),
                                       newReminderDate: reminderDate,
                                       newAssignedTo: assignedTo,
+                                      calledByUser: status == 'completed' ? calledBy : null,
                                       callDuration: int.tryParse(durationController.text.trim()),
                                     );
                                     setModalState(() => _isSavingEdit = false);
@@ -508,6 +548,7 @@ class _DmeAdminReminderDetailPageState extends State<DmeAdminReminderDetailPage>
     required String newRemarks,
     required DateTime newReminderDate,
     required String? newAssignedTo,
+    String? calledByUser,
     int? callDuration,
   }) async {
     final client = await DmeConfig.getClient();
@@ -517,7 +558,6 @@ class _DmeAdminReminderDetailPageState extends State<DmeAdminReminderDetailPage>
 
     try {
       final formattedDate = DateFormat('yyyy-MM-dd').format(newReminderDate);
-      final userEmail = FirebaseAuth.instance.currentUser?.email;
 
       final Map<String, dynamic> updatePayload = {
         'status': newStatus == 'rescheduled' ? 'pending' : newStatus,
@@ -533,8 +573,8 @@ class _DmeAdminReminderDetailPageState extends State<DmeAdminReminderDetailPage>
 
       if (newStatus == 'completed') {
         updatePayload['called_timestamp'] = DateTime.now().toIso8601String();
-        if (userEmail != null && userEmail.isNotEmpty) {
-          updatePayload['called_by'] = userEmail;
+        if (calledByUser != null && calledByUser.isNotEmpty) {
+          updatePayload['called_by'] = calledByUser;
         }
       } else if (newStatus == 'rescheduled') {
         updatePayload['assigned_date'] = null;

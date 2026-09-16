@@ -89,7 +89,7 @@ class _DmeAdminRemindersPageState extends State<DmeAdminRemindersPage> {
     try {
       final snap = await FirebaseFirestore.instance
           .collection('users')
-          .where('role', whereIn: ['dme_user', 'dme_admin'])
+          .where('role', isEqualTo: 'dme_user')
           .get();
 
       List<Map<String, dynamic>> users = [];
@@ -949,31 +949,26 @@ class _DmeAdminRemindersPageState extends State<DmeAdminRemindersPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Top Row: Name, Status Badge
+              // First Row: ONLY Customer Name (uninterrupted full width)
+              Text(
+                item['customer_name'] ?? 'Unknown Customer',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              const SizedBox(height: 6),
+
+              // Second Row: Phone number & Status Badge
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item['customer_name'] ?? 'Unknown Customer',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                        ),
-                        const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            Icon(Icons.phone, size: 13, color: Colors.grey[700]),
-                            const SizedBox(width: 4),
-                            Text(
-                              item['customer_phone'] ?? '',
-                              style: TextStyle(fontSize: 13, color: Colors.grey[800], fontWeight: FontWeight.w500),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                  Row(
+                    children: [
+                      Icon(Icons.phone, size: 13, color: Colors.grey[700]),
+                      const SizedBox(width: 4),
+                      Text(
+                        item['customer_phone'] ?? '',
+                        style: TextStyle(fontSize: 13, color: Colors.grey[800], fontWeight: FontWeight.w500),
+                      ),
+                    ],
                   ),
 
                   // Status Badge
@@ -1000,24 +995,11 @@ class _DmeAdminRemindersPageState extends State<DmeAdminRemindersPage> {
               ),
               const SizedBox(height: 8),
 
-              // Metadata info: Branch, Salesman, Scheduled Date
+              // Metadata info: Scheduled Date, Salesman (Branch removed outside)
               Wrap(
                 spacing: 8,
                 runSpacing: 4,
                 children: [
-                  // Branch Pill
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: _primaryBlue.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      item['branch_name'] ?? '',
-                      style: const TextStyle(fontSize: 11, color: _primaryBlue, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-
                   // Scheduled Date Pill
                   if (reminderDateStr != null && reminderDateStr.isNotEmpty) ...[
                     Container(

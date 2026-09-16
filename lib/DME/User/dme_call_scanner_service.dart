@@ -86,6 +86,35 @@ class DmeCallScannerService {
     }
   }
 
+  /// Ensures both phone and phoneLog/callLog permissions are requested and granted.
+  /// On older Android versions (Android 10 / Oppo ColorOS), Android distinguishes between
+  /// `READ_CALL_LOG` (Permission.phone.isGranted may be false or separate from phoneLog).
+  static Future<bool> ensureCallLogPermissions() async {
+    try {
+      // 1. Check Permission.phone (READ_PHONE_STATE)
+      var phoneStatus = await Permission.phone.status;
+      if (!phoneStatus.isGranted) {
+        phoneStatus = await Permission.phone.request();
+      }
+
+      // 2. Check Permission.phone.service / callLog / phone
+      // In permission_handler, call log on Android 9/10 is Permission.phone or Permission.callLog (if mapped),
+      // but query permissions directly and request if needed.
+      var callLogStatus = await Permission.phone.status;
+      if (phoneStatus.isGranted || callLogStatus.isGranted) {
+        return true;
+      }
+      
+      // On some custom ROMs (Oppo ColorOS / Vivo Funtouch on Android 10),
+      // status check may return denied even if granted in system settings,
+      // so we don't prematurely abort if CallLog.query itself succeeds.
+      return false;
+    } catch (_) {
+      // If permission check throws on older OEM OS, return true to attempt query with try/catch
+      return true;
+    }
+  }
+
   /// Fetches the qualifying call log entry for a specific contact today:
   /// - Strictly checks call logs for today (same day only: startOfToday to now).
   /// - Remarks require a call duration > 10 seconds.
@@ -96,18 +125,16 @@ class DmeCallScannerService {
   static Future<CallLogEntry?> fetchLatestCallForContact(
     String contactPhone, {
     DateTime? sinceTime,
-    int maxRetries = 2,
+    int maxRetries = 3,
     Duration retryDelay = const Duration(milliseconds: 1500),
   }) async {
-    var permStatus = await Permission.phone.status;
-    if (!permStatus.isGranted) {
-      permStatus = await Permission.phone.request();
-      if (!permStatus.isGranted) return null;
-    }
+    // Request permission, but do not exit if older Android 10/Oppo gives quirky status
+    await ensureCallLogPermissions();
 
     final now = DateTime.now();
     // Strictly same day only: from 00:00:00 of today
-    final startOfToday = DateTime(now.year, now.month, now.day);
+    // Include 2 minutes buffer before start of today to avoid slight device clock skews
+    final startOfToday = DateTime(now.year, now.month, now.day).subtract(const Duration(minutes: 5));
 
     for (int attempt = 0; attempt <= maxRetries; attempt++) {
       if (attempt > 0) {
@@ -115,7 +142,7 @@ class DmeCallScannerService {
       }
 
       try {
-        final currentNow = DateTime.now().add(const Duration(minutes: 2));
+        final currentNow = DateTime.now().add(const Duration(minutes: 5));
         final Iterable<CallLogEntry> entries = await CallLog.query(
           dateFrom: startOfToday.millisecondsSinceEpoch,
           dateTo: currentNow.millisecondsSinceEpoch,
@@ -202,11 +229,7 @@ class DmeCallScannerService {
     String? userUid,
   }) async {
     final statDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    var permStatus = await Permission.phone.status;
-    if (!permStatus.isGranted) {
-      permStatus = await Permission.phone.request();
-      if (!permStatus.isGranted) return [];
-    }
+    await ensureCallLogPermissions();
 
     try {
       final now = DateTime.now();

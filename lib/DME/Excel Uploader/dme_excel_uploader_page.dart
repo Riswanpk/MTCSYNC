@@ -109,7 +109,7 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
           if (uploadedAtStr != null) {
             final parsedDt = DateTime.tryParse(uploadedAtStr);
             if (parsedDt != null) {
-              formattedDate = DateFormat('dd MMM yyyy, hh:mm a').format(parsedDt.toLocal());
+              formattedDate = DateFormat('dd MMM yyyy, hh:mm a').format(parsedDt);
             }
           }
           final uploader = existingUpload['uploaded_by'] ?? 'another user';
@@ -564,7 +564,7 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
         if (uploadedAtStr != null) {
           final parsedDt = DateTime.tryParse(uploadedAtStr);
           if (parsedDt != null) {
-            formattedDate = DateFormat('dd MMM yyyy, hh:mm a').format(parsedDt.toLocal());
+            formattedDate = DateFormat('dd MMM yyyy, hh:mm a').format(parsedDt);
           }
         }
         final uploader = existingUpload['uploaded_by'] ?? 'another user';

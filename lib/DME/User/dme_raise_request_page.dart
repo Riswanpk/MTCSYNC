@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../dme_config.dart';
 import '../dme_constants.dart';
@@ -18,7 +20,7 @@ class DmeRaiseRequestPage extends StatefulWidget {
 class _DmeRaiseRequestPageState extends State<DmeRaiseRequestPage> {
   final _formKey = GlobalKey<FormState>();
 
-  // 'phone' or 'preference'
+  // 'phone', 'preference', or 'completion'
   String _selectedRequestType = 'phone';
 
   // Phone number form controllers
@@ -28,6 +30,11 @@ class _DmeRaiseRequestPageState extends State<DmeRaiseRequestPage> {
   // Preference form controllers
   String _selectedPreference = 'Whatsapp';
   late TextEditingController _preferenceReasonController;
+
+  // Call completion form controllers
+  late TextEditingController _callDurationController;
+  late TextEditingController _completionRemarksController;
+  late TextEditingController _completionReasonController;
 
   bool _isSubmitting = false;
 
@@ -41,6 +48,10 @@ class _DmeRaiseRequestPageState extends State<DmeRaiseRequestPage> {
     // Default to the alternate preference option
     _selectedPreference = currentPref.toLowerCase() == 'whatsapp' ? 'Call' : 'Whatsapp';
     _preferenceReasonController = TextEditingController();
+
+    _callDurationController = TextEditingController();
+    _completionRemarksController = TextEditingController();
+    _completionReasonController = TextEditingController();
   }
 
   @override
@@ -48,6 +59,9 @@ class _DmeRaiseRequestPageState extends State<DmeRaiseRequestPage> {
     _newPhoneController.dispose();
     _phoneReasonController.dispose();
     _preferenceReasonController.dispose();
+    _callDurationController.dispose();
+    _completionRemarksController.dispose();
+    _completionReasonController.dispose();
     super.dispose();
   }
 
@@ -87,11 +101,25 @@ class _DmeRaiseRequestPageState extends State<DmeRaiseRequestPage> {
         currentValue = currentPhone;
         newValue = _newPhoneController.text.trim();
         reason = _phoneReasonController.text.trim();
-      } else {
+      } else if (_selectedRequestType == 'preference') {
         requestType = 'preference_change';
         currentValue = currentPreference;
         newValue = _selectedPreference;
         reason = _preferenceReasonController.text.trim();
+      } else {
+        requestType = 'call_completion';
+        currentValue = (widget.reminder['status'] ?? 'pending').toString();
+        final duration = int.tryParse(_callDurationController.text.trim()) ?? 0;
+        final remarks = _completionRemarksController.text.trim();
+        final note = _completionReasonController.text.trim();
+        newValue = jsonEncode({
+          'duration': duration,
+          'remarks': remarks,
+          'reason': note,
+          'user_uid': user?.uid ?? '',
+          'user_email': userEmail,
+        });
+        reason = 'Call Duration: ${duration}s | Remarks: $remarks${note.isNotEmpty ? " | Note: $note" : ""}';
       }
 
       final payload = {
@@ -254,6 +282,17 @@ class _DmeRaiseRequestPageState extends State<DmeRaiseRequestPage> {
                 accentColor: const Color(0xFF005BAC),
               ),
 
+              const SizedBox(height: 10),
+
+              // Option 3: Mark Call Completed
+              _buildTypeCard(
+                type: 'completion',
+                title: 'Mark Call as Completed',
+                subtitle: 'Request admin approval to mark this reminder call as completed with duration and remarks.',
+                icon: Icons.check_circle_outline_rounded,
+                accentColor: Colors.purple.shade700,
+              ),
+
               const SizedBox(height: 24),
 
               // Dynamic Input Fields
@@ -294,7 +333,7 @@ class _DmeRaiseRequestPageState extends State<DmeRaiseRequestPage> {
                   ),
                   validator: (val) {
                     if (val == null || val.trim().isEmpty) {
-                      return 'Please enter the correct phone number';
+                      return 'Please enter the new phone number';
                     }
                     final clean = val.replaceAll(RegExp(r'[\s\-\(\)]'), '');
                     if (clean.length < 6) {
@@ -325,7 +364,7 @@ class _DmeRaiseRequestPageState extends State<DmeRaiseRequestPage> {
                     return null;
                   },
                 ),
-              ] else ...[
+              ] else if (_selectedRequestType == 'preference') ...[
                 // Preference Selection
                 const Text(
                   'Select New Preference *',
@@ -371,6 +410,86 @@ class _DmeRaiseRequestPageState extends State<DmeRaiseRequestPage> {
                     }
                     return null;
                   },
+                ),
+              ] else ...[
+                // Notice banner
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.purple.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.info_outline_rounded, color: Colors.purple.shade700, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Enter call duration and remarks. Upon Admin approval, this reminder will be marked as Completed with the current timestamp and attributed to you.',
+                          style: TextStyle(fontSize: 12.5, height: 1.35, color: Colors.purple.shade900),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Call Duration field
+                TextFormField(
+                  controller: _callDurationController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: InputDecoration(
+                    labelText: 'Call Duration (in seconds) *',
+                    hintText: 'e.g. 45',
+                    prefixIcon: const Icon(Icons.timer_outlined),
+                    suffixText: 'sec',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  validator: (val) {
+                    if (val == null || val.trim().isEmpty) {
+                      return 'Please enter the call duration in seconds';
+                    }
+                    final dur = int.tryParse(val.trim());
+                    if (dur == null || dur <= 0) {
+                      return 'Call duration must be greater than 0 seconds';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Remarks field
+                TextFormField(
+                  controller: _completionRemarksController,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    labelText: 'Call Remarks *',
+                    hintText: 'Enter discussion points, customer feedback, next purchase plan...',
+                    prefixIcon: const Icon(Icons.rate_review_outlined),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  validator: (val) {
+                    if (val == null || val.trim().isEmpty) {
+                      return 'Please enter the call remarks';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Reason / Note field
+                TextFormField(
+                  controller: _completionReasonController,
+                  maxLines: 2,
+                  decoration: InputDecoration(
+                    labelText: 'Reason for Approval Request (Optional)',
+                    hintText: 'e.g. Called from alternate device / landline, or call log not detected',
+                    prefixIcon: const Icon(Icons.notes_rounded),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
                 ),
               ],
 

@@ -426,7 +426,11 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
     final isDmeRole = _currentUserRole == 'dme_user' || _currentUserRole == 'dme_admin';
     final isCreator = _currentUserUid != null && _currentUserUid == c.createdByUid;
     final isManager = _currentUserRole == 'manager';
-    final canEscalate = isManager && !isAssignedToMe && c.status != 'resolved' && (c.branch == _currentUserBranch);
+    final isResolved = c.status == 'resolved';
+    final isUnderReview = c.status == 'action_taken';
+    final canEscalate = isManager && !isAssignedToMe && !isResolved && !isUnderReview && (c.branch == _currentUserBranch);
+    // Submit action is ONLY for the user to whom the complaint is assigned (Sales / escalated Manager), never DME users
+    final canSubmitAction = !widget.readOnly && isAssignedToMe && !isDmeRole && !isResolved && !isUnderReview;
 
     return Scaffold(
       appBar: AppBar(
@@ -478,7 +482,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
                         ),
                         Text(
                           'Updated ${_formatDateTime(c.updatedAt)}',
-                          style: TextStyle(fontSize: 11, color: isDark ? Colors.white60 : Colors.black54),
+                          style: TextStyle(fontSize: 11, color: isDark ? Colors.white60 : Colors.black45),
                         ),
                       ],
                     ),
@@ -490,11 +494,11 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
               const SizedBox(height: 8),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.amber.withValues(alpha: 0.15),
+                  color: Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.amber),
+                  border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
                 ),
                 child: Row(
                   children: [
@@ -571,16 +575,18 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
                     ),
                     const SizedBox(height: 14),
 
-                    // Call Customer Button (No call detection here)
+                    // Call Customer Button (Disabled if resolved)
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        onPressed: _callCustomer,
+                        onPressed: isResolved ? null : _callCustomer,
                         icon: const Icon(Icons.call, size: 20),
-                        label: Text('Call ${c.customerPhone}'),
+                        label: Text(isResolved ? 'Complaint Resolved' : 'Call ${c.customerPhone}'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF8CC63F),
                           foregroundColor: Colors.white,
+                          disabledBackgroundColor: isDark ? Colors.white12 : Colors.black12,
+                          disabledForegroundColor: isDark ? Colors.white38 : Colors.black38,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
@@ -650,13 +656,21 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Raised by: ${c.createdByName ?? 'DME'}',
-                          style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        Flexible(
+                          child: Text(
+                            'Raised by: ${c.createdByName ?? 'DME'}',
+                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                        Text(
-                          'Assigned: ${c.assignedToName ?? 'User'} (${c.assignedToRole ?? 'sales'})',
-                          style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            'Assigned: ${c.assignedToName ?? 'User'} (${c.assignedToRole ?? 'sales'})',
+                            style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.end,
+                          ),
                         ),
                       ],
                     ),
@@ -703,8 +717,8 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
               const SizedBox(height: 16),
             ],
 
-            // Action Submission Form (For Assigned User / Manager when not resolved)
-            if (!widget.readOnly && c.status != 'resolved') ...[
+            // Action Submission Form (Only shown to the currently assigned user when not resolved and not under review)
+            if (canSubmitAction) ...[
               Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -772,10 +786,46 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
                 ),
               ),
               const SizedBox(height: 16),
+            ] else if (!widget.readOnly && isUnderReview && isAssignedToMe && !isDmeRole) ...[
+              // Banner informing assigned user that their action is under DME review
+              Card(
+                elevation: 1,
+                color: Colors.blue.withValues(alpha: 0.1),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: BorderSide(color: Colors.blue.withValues(alpha: 0.4)),
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.all(14.0),
+                  child: Row(
+                    children: [
+                      Icon(Icons.hourglass_top_rounded, color: Color(0xFF005BAC), size: 22),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Action Submitted - Under Review',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF005BAC)),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Your response has been submitted to the DME team. Further actions are disabled until review is complete.',
+                              style: TextStyle(fontSize: 12, color: Colors.black87),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
             ],
 
-            // DME User Verification Area (Mark Resolved or Not Resolved)
-            if (!widget.readOnly && (isDmeRole || isCreator) && c.status != 'resolved') ...[
+            // DME User Verification Area (Only shown when assigned user/manager has submitted action, i.e. status is 'action_taken')
+            if (!widget.readOnly && (isDmeRole || isCreator) && c.status == 'action_taken') ...[
               Card(
                 elevation: 2,
                 color: isDark ? const Color(0xFF15263F) : const Color(0xFFF0F7FF),

@@ -32,7 +32,7 @@ class DmeAssignmentService {
       // 1. Fetch from Firestore users collection
       final snap = await FirebaseFirestore.instance
           .collection('users')
-          .where('role', whereIn: ['dme_user', 'dme_admin'])
+          .where('role', isEqualTo: 'dme_user')
           .get();
 
       final branchSet = branches.toSet();

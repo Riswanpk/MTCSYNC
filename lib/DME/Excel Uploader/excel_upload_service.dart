@@ -15,7 +15,7 @@ class ExcelUploadService {
     try {
       final res = await client
           .from('dme_excel_uploads')
-          .select('id, file_name, file_hash, uploaded_by, uploaded_at, sales_count, rows_count')
+          .select('id, file_name, file_hash, uploaded_by, uploaded_at, sales_count, rows_count, branch')
           .eq('file_hash', fileHash)
           .maybeSingle();
       if (res != null) {
@@ -36,17 +36,22 @@ class ExcelUploadService {
     required String uploadedBy,
     required int salesCount,
     required int rowsCount,
+    String? branch,
   }) async {
     try {
-      debugPrint('Recording upload into dme_excel_uploads: $fileName (hash: $fileHash)');
-      await client.from('dme_excel_uploads').insert({
+      debugPrint('Recording upload into dme_excel_uploads: $fileName (hash: $fileHash, branch: $branch)');
+      final data = <String, dynamic>{
         'file_name': fileName,
         'file_hash': fileHash,
         'uploaded_by': uploadedBy,
         'uploaded_at': DateTime.now().toIso8601String(),
         'sales_count': salesCount,
         'rows_count': rowsCount,
-      });
+      };
+      if (branch != null && branch.trim().isNotEmpty) {
+        data['branch'] = branch.trim();
+      }
+      await client.from('dme_excel_uploads').insert(data);
       debugPrint('✓ Recorded upload $fileName in dme_excel_uploads successfully');
     } catch (e) {
       debugPrint('Error recording file upload hash in dme_excel_uploads: $e');
@@ -602,6 +607,9 @@ class ExcelUploadService {
               'last_purchase_date': newObj['last_purchase_date'],
               'last_purchase_branch': newObj['last_purchase_branch'],
               'status': 'pending',
+              'is_overdue_leftover': false,
+              'assigned_to': null,
+              'assigned_date': null,
               'updated_at': DateTime.now().toIso8601String(),
             });
           }
@@ -731,6 +739,24 @@ class ExcelUploadService {
     // If fileName and fileHash are provided, record to dme_excel_uploads to disallow duplicate uploads
     if (fileName != null && fileHash != null) {
       try {
+        // Determine branch name as text (e.g., 'BGR', 'CBE', etc.)
+        String? branchNameText;
+        for (final sale in groupedSales) {
+          if (sale.branchName.trim().isNotEmpty) {
+            branchNameText = sale.branchName.trim();
+            break;
+          }
+        }
+        if (branchNameText == null || branchNameText.isEmpty) {
+          final upperFileName = fileName.toUpperCase();
+          for (final b in DmeConstants.branches) {
+            if (upperFileName.contains(b.name.toUpperCase())) {
+              branchNameText = b.name;
+              break;
+            }
+          }
+        }
+
         await recordUpload(
           client: client,
           fileName: fileName,
@@ -738,8 +764,9 @@ class ExcelUploadService {
           uploadedBy: uploadedBy,
           salesCount: insertedSalesList.length,
           rowsCount: rowsCount ?? 0,
+          branch: branchNameText,
         );
-        onLog('✓ Recorded file hash in upload history');
+        onLog('✓ Recorded file hash & branch ($branchNameText) in upload history');
       } catch (recordErr) {
         onLog('⚠ Could not record file upload hash: $recordErr');
       }

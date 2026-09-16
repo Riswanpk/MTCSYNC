@@ -737,144 +737,139 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  item['customer_name'] ?? 'Customer',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 15,
-                                    color: isPhonePending
-                                        ? (isDark ? Colors.white60 : Colors.grey[700])
-                                        : null,
-                                  ),
-                                ),
-                              ),
-                              if (isPhonePending) ...[
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade600,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.lock_clock_rounded, size: 11, color: Colors.white),
-                                      SizedBox(width: 2),
-                                      Text(
-                                        "PHONE CHANGE PENDING",
-                                        style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                              ] else if (isCalledWithoutRemarks) ...[
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.amber.shade800,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.edit_note_rounded, size: 11, color: Colors.white),
-                                      SizedBox(width: 2),
-                                      Text(
-                                        "REMARKS NEEDED",
-                                        style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                              ] else if (isLeftover) ...[
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.deepOrange,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.priority_high_rounded, size: 11, color: Colors.white),
-                                      Text(
-                                        "OVERDUE",
-                                        style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                              ],
-                              if (callDuration == null || callDuration == 0) ...[
-                                if (todayAtt >= 2) ...[
+                          // First Row: ONLY Customer Name (uninterrupted full width)
+                          Text(
+                            item['customer_name'] ?? 'Customer',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: isPhonePending
+                                  ? (isDark ? Colors.white60 : Colors.grey[700])
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+
+                          // Badges row if any
+                          if (isPhonePending ||
+                              isCalledWithoutRemarks ||
+                              isLeftover ||
+                              ((callDuration == null || callDuration == 0) && (todayAtt > 0 || (attempts > todayAtt && attempts > 0)))) ...[
+                            Wrap(
+                              spacing: 4,
+                              runSpacing: 4,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                if (isPhonePending) ...[
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
-                                      color: Colors.red.shade800,
+                                      color: Colors.grey.shade600,
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: const Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(Icons.block_rounded, size: 10, color: Colors.white),
+                                        Icon(Icons.lock_clock_rounded, size: 11, color: Colors.white),
                                         SizedBox(width: 2),
                                         Text(
-                                          "2/2 CALLS TODAY",
+                                          "PHONE CHANGE PENDING",
                                           style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
                                         ),
                                       ],
                                     ),
                                   ),
-                                  const SizedBox(width: 4),
-                                ] else if (todayAtt == 1) ...[
+                                ] else if (isCalledWithoutRemarks) ...[
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
                                       color: Colors.amber.shade800,
                                       borderRadius: BorderRadius.circular(4),
                                     ),
-                                    child: const Text(
-                                      "1/2 CALL TODAY",
-                                      style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.edit_note_rounded, size: 11, color: Colors.white),
+                                        SizedBox(width: 2),
+                                        Text(
+                                          "REMARKS NEEDED",
+                                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  const SizedBox(width: 4),
-                                ],
-                                if (attempts > todayAtt && attempts > 0) ...[
+                                ] else if (isLeftover) ...[
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
-                                      color: Colors.grey.shade700,
+                                      color: Colors.deepOrange,
                                       borderRadius: BorderRadius.circular(4),
                                     ),
-                                    child: Text(
-                                      "$attempts TOTAL",
-                                      style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.priority_high_rounded, size: 11, color: Colors.white),
+                                        Text(
+                                          "OVERDUE",
+                                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  const SizedBox(width: 4),
+                                ],
+                                if (callDuration == null || callDuration == 0) ...[
+                                  if (todayAtt >= 2) ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.shade800,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.block_rounded, size: 10, color: Colors.white),
+                                          SizedBox(width: 2),
+                                          Text(
+                                            "2/2 CALLS TODAY",
+                                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ] else if (todayAtt == 1) ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.amber.shade800,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text(
+                                        "1/2 CALL TODAY",
+                                        style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                                      ),
+                                    ),
+                                  ],
+                                  if (attempts > todayAtt && attempts > 0) ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade700,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        "$attempts TOTAL",
+                                        style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ],
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF005BAC).withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  item['branch_name'] ?? 'Branch',
-                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF005BAC)),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
+                            ),
+                            const SizedBox(height: 4),
+                          ],
+
+                          // Mobile Number
                           Text(
                             'Mobile: $phone',
                             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),

@@ -65,7 +65,7 @@ class SettingsPage extends StatelessWidget {
               decoration: const InputDecoration(
                 labelText: 'Minimum Build Number (versionCode)',
                 border: OutlineInputBorder(),
-                hintText: 'e.g. 189',
+                hintText: 'e.g. 192',
               ),
             ),
           ],
@@ -216,9 +216,11 @@ class SettingsPage extends StatelessWidget {
                                   const SizedBox(height: 16),
                                   ElevatedButton.icon(
                                     onPressed: () =>
-                                        DmeCustomerTypeFixer.showFixDialog(context),
+                                        DmeCustomerTypeFixer.showFixDialog(
+                                            context),
                                     icon: const Icon(Icons.sync_alt_rounded),
-                                    label: const Text('Reconcile DME Customer Types (Temporary)'),
+                                    label: const Text(
+                                        'Reconcile DME Customer Types (Temporary)'),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.indigo,
                                       foregroundColor: Colors.white,
@@ -226,10 +228,11 @@ class SettingsPage extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 16),
                                   ElevatedButton.icon(
-                                    onPressed: () =>
-                                        DmeCustomerTypeFixer.showCbeWhatsappDialog(context),
+                                    onPressed: () => DmeCustomerTypeFixer
+                                        .showCbeWhatsappDialog(context),
                                     icon: const Icon(Icons.chat_rounded),
-                                    label: const Text('Set CBE Customers to WhatsApp (Temporary)'),
+                                    label: const Text(
+                                        'Set CBE Customers to WhatsApp (Temporary)'),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: const Color(0xFF25D366),
                                       foregroundColor: Colors.white,

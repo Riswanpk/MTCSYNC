@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../dme_config.dart';
 import '../../dme_constants.dart';
+import '../../User/dme_user_stats_service.dart';
 
 class DmeAdminApprovalsPage extends StatefulWidget {
   const DmeAdminApprovalsPage({super.key});
@@ -103,14 +105,38 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
     final customerName = request['customer_name'] ?? 'Customer';
     final requestType = request['request_type'] ?? '';
     final isPhoneChange = requestType == 'phone_number_change';
+    final isCallCompletion = requestType == 'call_completion';
     final newValue = (request['new_value'] ?? '').toString().trim();
     final customerId = int.tryParse(request['customer_id']?.toString() ?? '');
+    final reminderId = int.tryParse(request['reminder_id']?.toString() ?? '');
 
     if (customerId == null || newValue.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Invalid request data.'), backgroundColor: Colors.red),
       );
       return;
+    }
+
+    int callDuration = 0;
+    String completionRemarks = '';
+    String requestingUserUid = '';
+    String requestingUserEmail = (request['requested_by'] ?? '').toString();
+
+    if (isCallCompletion) {
+      if (newValue.startsWith('{')) {
+        try {
+          final data = jsonDecode(newValue);
+          callDuration = int.tryParse(data['duration']?.toString() ?? '') ?? 0;
+          completionRemarks = data['remarks']?.toString() ?? '';
+          requestingUserUid = data['user_uid']?.toString() ?? '';
+          if (requestingUserEmail.isEmpty) {
+            requestingUserEmail = data['user_email']?.toString() ?? '';
+          }
+        } catch (_) {}
+      } else {
+        callDuration = int.tryParse(newValue) ?? 0;
+        completionRemarks = request['reason']?.toString() ?? '';
+      }
     }
 
     final bool? confirm = await showDialog<bool>(
@@ -121,7 +147,10 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
           children: [
             const Icon(Icons.check_circle_rounded, color: Colors.green),
             const SizedBox(width: 8),
-            const Text('Approve Request', style: TextStyle(fontSize: 18)),
+            Text(
+              isCallCompletion ? 'Approve Call Completion' : 'Approve Request',
+              style: const TextStyle(fontSize: 18),
+            ),
           ],
         ),
         content: Column(
@@ -133,28 +162,70 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
               style: const TextStyle(fontSize: 14),
             ),
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.green.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+            if (isCallCompletion) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.purple.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Action: Mark Call Status as Completed',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.purple),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Call Duration: $callDuration sec',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[800], fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Called By: $requestingUserEmail',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[800]),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Call Timestamp: ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())} (Current Time)',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[800]),
+                    ),
+                    if (completionRemarks.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Remarks: $completionRemarks',
+                        style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey[800]),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isPhoneChange ? 'New Phone Number:' : 'New Preference:',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    newValue,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.green),
-                  ),
-                ],
+            ] else ...[
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isPhoneChange ? 'New Phone Number:' : 'New Preference:',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      newValue,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.green),
+                    ),
+                  ],
+                ),
               ),
-            ),
+            ],
           ],
         ),
         actions: [
@@ -182,18 +253,44 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
 
       final adminUser = FirebaseAuth.instance.currentUser;
       final adminEmail = adminUser?.email ?? adminUser?.displayName ?? 'admin';
-      final now = DateTime.now().toIso8601String();
+      final now = DateTime.now();
+      final nowIso = now.toIso8601String();
 
-      // 1. Update customer record
-      if (isPhoneChange) {
+      // 1. Process changes
+      if (isCallCompletion) {
+        if (reminderId != null) {
+          final payload = <String, dynamic>{
+            'status': 'completed',
+            'call_duration': callDuration,
+            'called_timestamp': nowIso,
+            'called_by': requestingUserEmail,
+            'remarks': completionRemarks,
+            'updated_at': nowIso,
+          };
+          await client.from('dme_reminders').update(payload).eq('id', reminderId);
+        }
+
+        // Increment daily call count for the requesting user
+        try {
+          final statDate = DateFormat('yyyy-MM-dd').format(now);
+          final uid = requestingUserUid.isNotEmpty ? requestingUserUid : requestingUserEmail;
+          await DmeUserStatsService.incrementCallCount(
+            userUid: uid,
+            userEmail: requestingUserEmail,
+            statDate: statDate,
+          );
+        } catch (statErr) {
+          debugPrint('Notice updating user daily stats: $statErr');
+        }
+      } else if (isPhoneChange) {
         await client.from(DmeConstants.tableCustomers).update({
           'phone': newValue,
-          'updated_at': now,
+          'updated_at': nowIso,
         }).eq('id', customerId);
       } else {
         await client.from(DmeConstants.tableCustomers).update({
           'preference': newValue,
-          'updated_at': now,
+          'updated_at': nowIso,
         }).eq('id', customerId);
       }
 
@@ -201,16 +298,18 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
       await client.from(DmeConstants.tableChangeRequests).update({
         'status': 'approved',
         'reviewed_by': adminEmail,
-        'updated_at': now,
+        'updated_at': nowIso,
       }).eq('id', request['id']);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              isPhoneChange
-                  ? 'Phone number updated to $newValue! Reminder unlocked.'
-                  : 'Preference updated to $newValue successfully!',
+              isCallCompletion
+                  ? 'Call status approved & marked as completed with $callDuration sec!'
+                  : (isPhoneChange
+                      ? 'Phone number updated to $newValue! Reminder unlocked.'
+                      : 'Preference updated to $newValue successfully!'),
             ),
             backgroundColor: Colors.green,
           ),
@@ -473,6 +572,16 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
                           if (val) setState(() => _selectedTypeFilter = 'preference_change');
                         },
                       ),
+                      const SizedBox(width: 8),
+                      ChoiceChip(
+                        avatar: const Icon(Icons.check_circle_outline_rounded, size: 16),
+                        label: const Text('Call Completions'),
+                        selected: _selectedTypeFilter == 'call_completion',
+                        selectedColor: Colors.purple.withValues(alpha: 0.25),
+                        onSelected: (val) {
+                          if (val) setState(() => _selectedTypeFilter = 'call_completion');
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -545,6 +654,7 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
         itemBuilder: (context, index) {
           final req = list[index];
           final type = (req['request_type'] ?? '').toString();
+          final isCallCompletion = type == 'call_completion';
           final isPhone = type == 'phone_number_change';
           final status = (req['status'] ?? 'pending').toString().toLowerCase();
           final customerName = req['customer_name'] ?? 'Unnamed Customer';
@@ -555,6 +665,22 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
           final createdAtStr = _formatDateTime(req['created_at']);
           final reviewedBy = req['reviewed_by'] ?? '';
           final adminNotes = req['admin_notes'] ?? '';
+
+          int completionDuration = 0;
+          String completionRemarks = '';
+          String completionNote = '';
+          if (isCallCompletion) {
+            if (newVal.startsWith('{')) {
+              try {
+                final d = jsonDecode(newVal);
+                completionDuration = int.tryParse(d['duration']?.toString() ?? '') ?? 0;
+                completionRemarks = d['remarks']?.toString() ?? '';
+                completionNote = d['reason']?.toString() ?? '';
+              } catch (_) {}
+            } else {
+              completionDuration = int.tryParse(newVal) ?? 0;
+            }
+          }
 
           return Card(
             elevation: 2,
@@ -571,24 +697,34 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: isPhone ? Colors.orange.withValues(alpha: 0.15) : const Color(0xFF005BAC).withValues(alpha: 0.15),
+                          color: isCallCompletion
+                              ? Colors.purple.withValues(alpha: 0.15)
+                              : (isPhone ? Colors.orange.withValues(alpha: 0.15) : const Color(0xFF005BAC).withValues(alpha: 0.15)),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              isPhone ? Icons.phone_iphone_rounded : Icons.swap_horiz_rounded,
+                              isCallCompletion
+                                  ? Icons.check_circle_outline_rounded
+                                  : (isPhone ? Icons.phone_iphone_rounded : Icons.swap_horiz_rounded),
                               size: 13,
-                              color: isPhone ? Colors.orange.shade900 : const Color(0xFF005BAC),
+                              color: isCallCompletion
+                                  ? Colors.purple.shade900
+                                  : (isPhone ? Colors.orange.shade900 : const Color(0xFF005BAC)),
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              isPhone ? 'PHONE CHANGE' : 'PREFERENCE CHANGE',
+                              isCallCompletion
+                                  ? 'CALL COMPLETION'
+                                  : (isPhone ? 'PHONE CHANGE' : 'PREFERENCE CHANGE'),
                               style: TextStyle(
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.bold,
-                                color: isPhone ? Colors.orange.shade900 : const Color(0xFF005BAC),
+                                color: isCallCompletion
+                                    ? Colors.purple.shade900
+                                    : (isPhone ? Colors.orange.shade900 : const Color(0xFF005BAC)),
                               ),
                             ),
                           ],
@@ -654,52 +790,116 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Text(
-                              isPhone ? 'Current Phone: ' : 'Current Preference: ',
-                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                            ),
-                            Text(
-                              currentVal,
-                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Text(
-                              isPhone ? 'New Phone: ' : 'New Preference: ',
-                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                            ),
-                            Text(
-                              newVal,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: isPhone ? Colors.green.shade700 : const Color(0xFF005BAC),
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (reason.isNotEmpty) ...[
-                          const SizedBox(height: 6),
+                        if (isCallCompletion) ...[
                           Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Reason: ',
+                                'Requested Action: ',
                                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                               ),
-                              Expanded(
-                                child: Text(
-                                  reason,
-                                  style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                              const Text(
+                                'Mark Call as Completed',
+                                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Colors.purple),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Text(
+                                'Call Duration: ',
+                                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                              ),
+                              Text(
+                                '${completionDuration > 0 ? '$completionDuration sec' : newVal}',
+                                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Colors.purple),
+                              ),
+                            ],
+                          ),
+                          if (completionRemarks.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Remarks: ',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    completionRemarks,
+                                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          if (completionNote.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'User Note: ',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    completionNote,
+                                    style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ] else ...[
+                          Row(
+                            children: [
+                              Text(
+                                isPhone ? 'Current Phone: ' : 'Current Preference: ',
+                                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                              ),
+                              Text(
+                                currentVal,
+                                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Text(
+                                isPhone ? 'New Phone: ' : 'New Preference: ',
+                                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                              ),
+                              Text(
+                                newVal,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: isPhone ? Colors.green.shade700 : const Color(0xFF005BAC),
                                 ),
                               ),
                             ],
                           ),
+                          if (reason.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Reason: ',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    reason,
+                                    style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ],
                     ),
