@@ -261,9 +261,9 @@ class _DmeAdminRemindersPageState extends State<DmeAdminRemindersPage> {
 
           // Date filter
           if (_dateFilterOption == 'today') {
-            query = query.or('and(reminder_date.eq.$todayStr),and(assigned_date.eq.$todayStr)');
+            query = query.eq('assigned_date', todayStr);
           } else if (_dateFilterOption == 'overdue') {
-            query = query.lt('reminder_date', todayStr).eq('status', 'pending');
+            query = query.lt('reminder_date', todayStr).neq('status', 'completed').not('assigned_to', 'is', null);
           } else if (_dateFilterOption == 'custom' && _customDateRange != null) {
             final sStr = DateFormat('yyyy-MM-dd').format(_customDateRange!.start);
             final eStr = DateFormat('yyyy-MM-dd').format(_customDateRange!.end);
@@ -335,13 +335,27 @@ class _DmeAdminRemindersPageState extends State<DmeAdminRemindersPage> {
   int get _calledCount => _reminders
       .where((r) => (r['status'] ?? '').toString().toLowerCase() == 'completed' && r['is_whatsapp'] != true)
       .length;
+  bool _isOverdue(Map<String, dynamic> r, String todayStr) {
+    final status = (r['status'] ?? '').toString().toLowerCase();
+    if (status == 'completed') return false;
+
+    // Check if flagged as overdue leftover
+    if (r['is_overdue_leftover'] == true) return true;
+
+    final assignedTo = r['assigned_to']?.toString();
+    if (assignedTo == null || assignedTo.isEmpty) return false;
+
+    final rDateRaw = r['reminder_date']?.toString();
+    if (rDateRaw == null || rDateRaw.isEmpty) return false;
+
+    // Extract YYYY-MM-DD in case reminder_date is a timestamp
+    final rDateStr = rDateRaw.contains('T') ? rDateRaw.split('T').first : (rDateRaw.contains(' ') ? rDateRaw.split(' ').first : rDateRaw);
+    return rDateStr.compareTo(todayStr) < 0;
+  }
+
   int get _overdueCount {
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    return _reminders.where((r) {
-      final status = (r['status'] ?? '').toString().toLowerCase();
-      final rDate = r['reminder_date']?.toString();
-      return status == 'pending' && rDate != null && rDate.compareTo(todayStr) < 0;
-    }).length;
+    return _reminders.where((r) => _isOverdue(r, todayStr)).length;
   }
 
   List<Map<String, dynamic>> _getFilteredList() {
@@ -352,11 +366,7 @@ class _DmeAdminRemindersPageState extends State<DmeAdminRemindersPage> {
       list = list.where((r) => (r['status'] ?? '').toString().toLowerCase() == 'pending').toList();
     } else if (_activeQuickFilter == 'overdue') {
       final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      list = list.where((r) {
-        final status = (r['status'] ?? '').toString().toLowerCase();
-        final rDate = r['reminder_date']?.toString();
-        return status == 'pending' && rDate != null && rDate.compareTo(todayStr) < 0;
-      }).toList();
+      list = list.where((r) => _isOverdue(r, todayStr)).toList();
     } else if (_activeQuickFilter == 'called') {
       list = list
           .where((r) => (r['status'] ?? '').toString().toLowerCase() == 'completed' && r['is_whatsapp'] != true)

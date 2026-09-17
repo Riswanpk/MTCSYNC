@@ -503,7 +503,9 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
       );
 
       final wasInitiated = _callInitiatedTime != null;
-      _callInitiatedTime = null; // Clear so it only checks once per call initiation
+      if (entry != null) {
+        _callInitiatedTime = null; // Clear now that we matched the call
+      }
 
       final now = DateTime.now();
       int duration = 0;

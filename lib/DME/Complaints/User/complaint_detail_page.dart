@@ -360,6 +360,57 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
     }
   }
 
+  /// Delete complaint (available for DME creator / Admin)
+  Future<void> _deleteComplaint() async {
+    if (_complaint == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Complaint'),
+        content: Text('Are you sure you want to delete complaint #${_complaint!.id} for "${_complaint!.customerName}"?\n\nThis action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isSubmitting = true);
+    try {
+      await DmeComplaintsService.instance.deleteComplaint(_complaint!.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Complaint #${_complaint!.id} deleted successfully.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      debugPrint('Error deleting complaint: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete complaint: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
   String _formatDateTime(DateTime? dt) {
     if (dt == null) return '';
     return DateFormat('dd MMM yyyy, hh:mm a').format(dt);
@@ -432,6 +483,8 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
     // Submit action is ONLY for the user to whom the complaint is assigned (Sales / escalated Manager), never DME users
     final canSubmitAction = !widget.readOnly && isAssignedToMe && !isDmeRole && !isResolved && !isUnderReview;
 
+    final canDelete = !widget.readOnly && (isDmeRole || isCreator);
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Complaint #${c.id}'),
@@ -443,6 +496,12 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
             tooltip: 'Refresh',
             onPressed: _loadComplaintData,
           ),
+          if (canDelete)
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded, color: Colors.white),
+              tooltip: 'Delete Complaint',
+              onPressed: _isSubmitting ? null : _deleteComplaint,
+            ),
         ],
       ),
       body: SingleChildScrollView(

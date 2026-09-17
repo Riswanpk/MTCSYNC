@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../models/dme_complaint_model.dart';
 import '../services/dme_complaints_service.dart';
@@ -36,7 +37,10 @@ class _DmeComplaintsListPageState extends State<DmeComplaintsListPage> with Sing
   Future<void> _loadComplaints() async {
     setState(() => _isLoading = true);
     try {
-      final complaints = await DmeComplaintsService.instance.fetchDmeComplaints();
+      final currentUid = FirebaseAuth.instance.currentUser?.uid;
+      final complaints = await DmeComplaintsService.instance.fetchDmeComplaints(
+        createdByUid: currentUid,
+      );
       if (mounted) {
         setState(() {
           _allComplaints = complaints;
@@ -46,6 +50,55 @@ class _DmeComplaintsListPageState extends State<DmeComplaintsListPage> with Sing
     } catch (e) {
       debugPrint('Error loading DME complaints: $e');
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _deleteComplaint(DmeComplaint c) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Complaint'),
+        content: Text('Are you sure you want to delete complaint #${c.id} for "${c.customerName}"?\n\nThis action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await DmeComplaintsService.instance.deleteComplaint(c.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Complaint #${c.id} deleted successfully.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        _loadComplaints();
+      }
+    } catch (e) {
+      debugPrint('Error deleting complaint: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete complaint: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -232,21 +285,34 @@ class _DmeComplaintsListPageState extends State<DmeComplaintsListPage> with Sing
                                         ),
                                       ],
                                     ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: statusColor.withValues(alpha: 0.12),
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(color: statusColor.withValues(alpha: 0.5)),
-                                      ),
-                                      child: Text(
-                                        statusLabel,
-                                        style: TextStyle(
-                                          color: statusColor,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: statusColor.withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(color: statusColor.withValues(alpha: 0.5)),
+                                          ),
+                                          child: Text(
+                                            statusLabel,
+                                            style: TextStyle(
+                                              color: statusColor,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
                                         ),
-                                      ),
+                                        const SizedBox(width: 4),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete_outline_rounded, size: 20, color: Colors.redAccent),
+                                          tooltip: 'Delete Complaint',
+                                          visualDensity: VisualDensity.compact,
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          onPressed: () => _deleteComplaint(c),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),

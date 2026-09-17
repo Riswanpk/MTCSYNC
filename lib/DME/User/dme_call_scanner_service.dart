@@ -136,13 +136,27 @@ class DmeCallScannerService {
       }
 
       try {
-        final currentNow = DateTime.now().add(const Duration(minutes: 15));
-        final Iterable<CallLogEntry> entries = await CallLog.query(
-          dateFrom: startOfToday.millisecondsSinceEpoch,
-          dateTo: currentNow.millisecondsSinceEpoch,
-        );
+        final currentNow = DateTime.now().add(const Duration(minutes: 30));
+        Iterable<CallLogEntry> entries = [];
+        try {
+          entries = await CallLog.query(
+            dateFrom: startOfToday.millisecondsSinceEpoch,
+            dateTo: currentNow.millisecondsSinceEpoch,
+          );
+        } catch (queryErr) {
+          debugPrint('[DmeCallScanner] date-filtered query failed ($queryErr). Falling back to unfiltered query.');
+        }
 
-        debugPrint('[DmeCallScanner] Query returned ${entries.length} raw entries for contact: $contactPhone');
+        // Fallback for older Android 10 OEM devices (Oppo/Vivo/Xiaomi) where date filtering fails in SQLite provider
+        if (entries.isEmpty) {
+          try {
+            entries = await CallLog.query();
+          } catch (e) {
+            debugPrint('[DmeCallScanner] Fallback unfiltered query failed: $e');
+          }
+        }
+
+        debugPrint('[DmeCallScanner] Query returned ${entries.length} raw entries. Checking contact: $contactPhone');
 
         final matching = entries.where((entry) {
           final logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
@@ -204,15 +218,15 @@ class DmeCallScannerService {
         // If no attended call > 10s was found, but the user attempted an outgoing call:
         if (hasOutgoingAttemptToday) {
           if (sinceTime != null) {
-            // Generous window: allow 2 minutes prior to sinceTime to absorb dialer/system clock discrepancies
-            final sinceMs = sinceTime.subtract(const Duration(minutes: 2)).millisecondsSinceEpoch;
+            // Generous window: allow 5 minutes prior to sinceTime to absorb dialer/system clock discrepancies
+            final sinceMs = sinceTime.subtract(const Duration(minutes: 5)).millisecondsSinceEpoch;
             final recentOutgoing = outgoingList.where((e) => (e.timestamp ?? 0) >= sinceMs).toList();
             if (recentOutgoing.isNotEmpty) {
               return recentOutgoing.last;
             }
-          } else {
-            return outgoingList.last;
           }
+          // Fallback: If time window missed due to device clock skew, return the latest outgoing call found
+          return outgoingList.last;
         }
       } catch (e) {
         debugPrint('[DmeCallScanner] Error querying call log attempt $attempt: $e');

@@ -417,12 +417,15 @@ class DmeComplaintsService {
   }
 
   /// Fetch complaints for DME User view
-  Future<List<DmeComplaint>> fetchDmeComplaints({String? statusFilter}) async {
+  Future<List<DmeComplaint>> fetchDmeComplaints({String? statusFilter, String? createdByUid}) async {
     final client = await DmeConfig.getClient();
     if (client == null) return [];
 
     try {
       var query = client.from('dme_complaints').select('*');
+      if (createdByUid != null && createdByUid.isNotEmpty) {
+        query = query.eq('created_by_uid', createdByUid);
+      }
       if (statusFilter != null && statusFilter.isNotEmpty && statusFilter != 'all') {
         query = query.eq('status', statusFilter);
       }
@@ -479,6 +482,22 @@ class DmeComplaintsService {
       debugPrint('Error fetching admin complaints: $e');
       return [];
     }
+  }
+
+  /// Delete a complaint and its timeline updates
+  Future<void> deleteComplaint(int complaintId) async {
+    final client = await DmeConfig.getClient();
+    if (client == null) throw Exception('Supabase is not configured.');
+
+    // 1. Delete timeline updates for this complaint
+    try {
+      await client.from('dme_complaint_updates').delete().eq('complaint_id', complaintId);
+    } catch (e) {
+      debugPrint('Warning: Failed to delete complaint updates: $e');
+    }
+
+    // 2. Delete complaint record
+    await client.from('dme_complaints').delete().eq('id', complaintId);
   }
 
   /// Fetch customer sales history with products detail from Supabase
