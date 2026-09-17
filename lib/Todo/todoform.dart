@@ -53,15 +53,21 @@ Future<void> _createDailyReportIfNeeded({
   required String userId,
   required String documentId,
   required String type,
+  String? email,
 }) async {
+  final data = <String, dynamic>{
+    'timestamp': FieldValue.serverTimestamp(),
+    'userId': userId,
+    'documentId': documentId,
+    'type': type,
+  };
+  if (email != null && email.isNotEmpty) {
+    data['email'] = email;
+  }
+
   // 1. Direct collection.add ensures a fresh record with server timestamp always exists
   try {
-    await FirebaseFirestore.instance.collection('daily_report').add({
-      'timestamp': FieldValue.serverTimestamp(),
-      'userId': userId,
-      'documentId': documentId,
-      'type': type,
-    });
+    await FirebaseFirestore.instance.collection('daily_report').add(data);
     debugPrint('Successfully added daily_report document for user $userId (type: $type)');
   } catch (e) {
     debugPrint('Error directly adding daily_report document: $e');
@@ -74,12 +80,10 @@ Future<void> _createDailyReportIfNeeded({
     final windowKey = "${start.year}${start.month.toString().padLeft(2, '0')}${start.day.toString().padLeft(2, '0')}";
     final docId = "${userId}_${type}_$windowKey";
 
-    await FirebaseFirestore.instance.collection('daily_report').doc(docId).set({
-      'timestamp': FieldValue.serverTimestamp(),
-      'userId': userId,
-      'documentId': documentId,
-      'type': type,
-    }, SetOptions(merge: true));
+    await FirebaseFirestore.instance.collection('daily_report').doc(docId).set(
+      data,
+      SetOptions(merge: true),
+    );
   } catch (e) {
     debugPrint('Error setting deterministic daily_report doc: $e');
   }
@@ -225,6 +229,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
           userId: createdBy,
           documentId: widget.docId!,
           type: 'todo',
+          email: email,
         );
 
         await _clearDraft();
@@ -284,6 +289,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
         userId: createdBy,
         documentId: todoRef.id,
         type: 'todo',
+        email: email,
       );
 
       // Schedule local notification for the exact reminder time

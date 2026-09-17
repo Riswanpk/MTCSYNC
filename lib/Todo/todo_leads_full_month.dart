@@ -113,12 +113,27 @@ class _TodoLeadsFullMonthPageState extends State<TodoLeadsFullMonthPage> {
     final todosByUser = <String, List<Map<String, dynamic>>>{};
     for (final doc in todosSnap.docs) {
       final data = doc.data();
-      final email = data['email'];
-      if (email == null) continue;
-      final userId = emailToUserId[email];
+      final createdBy = data['created_by'] as String?;
+      final email = data['email'] as String?;
+      String? userId = (createdBy != null && userMap.containsKey(createdBy)) ? createdBy : null;
+      if (userId == null && email != null) {
+        userId = emailToUserId[email];
+      }
       if (userId == null) continue;
       todosByUser[userId] ??= [];
       todosByUser[userId]!.add(data);
+    }
+
+    // Ensure any user with actual todos in this interval has todo: true
+    for (final entry in todosByUser.entries) {
+      if (entry.value.isNotEmpty) {
+        final userId = entry.key;
+        final branch = userMap[userId]?['branch'] ?? 'Unknown';
+        if (branchUserStatus.containsKey(branch) &&
+            branchUserStatus[branch]!.containsKey(userId)) {
+          branchUserStatus[branch]![userId]!['todo'] = true;
+        }
+      }
     }
 
     // Generate Excel using Syncfusion
