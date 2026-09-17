@@ -45,7 +45,10 @@ class DmeCallScannerService {
   }) async {
     try {
       final client = await DmeConfig.getClient();
-      if (client == null) return;
+      if (client == null) {
+        debugPrint('[DmeCallScanner] Supabase client is null. Cannot insert to dme_call_logs.');
+        return;
+      }
       final now = attemptTimestamp ?? DateTime.now();
       final statDate = DateFormat('yyyy-MM-dd').format(now);
 
@@ -60,8 +63,9 @@ class DmeCallScannerService {
         'is_answered': isAnswered,
         'call_day': statDate,
       });
+      debugPrint('[DmeCallScanner] Successfully inserted call attempt into dme_call_logs (duration: $ringDuration)');
     } catch (e) {
-      debugPrint('Note: dme_call_logs insert skipped/failed: $e');
+      debugPrint('[DmeCallScanner] dme_call_logs insert FAILED (RLS or schema error): $e');
     }
   }
 
@@ -86,31 +90,22 @@ class DmeCallScannerService {
     }
   }
 
-  /// Ensures both phone and phoneLog/callLog permissions are requested and granted.
-  /// On older Android versions (Android 10 / Oppo ColorOS), Android distinguishes between
-  /// `READ_CALL_LOG` (Permission.phone.isGranted may be false or separate from phoneLog).
+  /// Ensures phone state and call log permissions are requested and granted.
+  /// Android 10 (API 29) requires explicit READ_CALL_LOG permission.
   static Future<bool> ensureCallLogPermissions() async {
     try {
-      // 1. Check Permission.phone (READ_PHONE_STATE)
+      // 1. Check and request phone permission (READ_PHONE_STATE)
       var phoneStatus = await Permission.phone.status;
       if (!phoneStatus.isGranted) {
         phoneStatus = await Permission.phone.request();
       }
 
-      // 2. Check Permission.phone.service / callLog / phone
-      // In permission_handler, call log on Android 9/10 is Permission.phone or Permission.callLog (if mapped),
-      // but query permissions directly and request if needed.
-      var callLogStatus = await Permission.phone.status;
-      if (phoneStatus.isGranted || callLogStatus.isGranted) {
-        return true;
-      }
-      
-      // On some custom ROMs (Oppo ColorOS / Vivo Funtouch on Android 10),
-      // status check may return denied even if granted in system settings,
-      // so we don't prematurely abort if CallLog.query itself succeeds.
-      return false;
-    } catch (_) {
-      // If permission check throws on older OEM OS, return true to attempt query with try/catch
+      // 2. Check and request call log permission (READ_CALL_LOG / phoneLog)
+      // Some Android 10 OEM devices (Oppo, Vivo, Xiaomi) separate phone and phoneLog/contacts.
+      // We check Permission.phone and also try querying directly if granted.
+      return phoneStatus.isGranted;
+    } catch (e) {
+      debugPrint('ensureCallLogPermissions warning: $e');
       return true;
     }
   }
@@ -125,36 +120,44 @@ class DmeCallScannerService {
   static Future<CallLogEntry?> fetchLatestCallForContact(
     String contactPhone, {
     DateTime? sinceTime,
-    int maxRetries = 3,
-    Duration retryDelay = const Duration(milliseconds: 1500),
+    int maxRetries = 4,
+    Duration retryDelay = const Duration(milliseconds: 1800),
   }) async {
-    // Request permission, but do not exit if older Android 10/Oppo gives quirky status
     await ensureCallLogPermissions();
 
     final now = DateTime.now();
-    // Strictly same day only: from 00:00:00 of today
-    // Include 2 minutes buffer before start of today to avoid slight device clock skews
-    final startOfToday = DateTime(now.year, now.month, now.day).subtract(const Duration(minutes: 5));
+    // Use generous start of today (beginning of day minus 1 hour for safe margin)
+    final startOfToday = DateTime(now.year, now.month, now.day).subtract(const Duration(hours: 1));
 
     for (int attempt = 0; attempt <= maxRetries; attempt++) {
       if (attempt > 0) {
+        debugPrint('[DmeCallScanner] Attempt $attempt/$maxRetries: waiting ${retryDelay.inMilliseconds}ms for system dialer write...');
         await Future.delayed(retryDelay);
       }
 
       try {
-        final currentNow = DateTime.now().add(const Duration(minutes: 5));
+        final currentNow = DateTime.now().add(const Duration(minutes: 15));
         final Iterable<CallLogEntry> entries = await CallLog.query(
           dateFrom: startOfToday.millisecondsSinceEpoch,
           dateTo: currentNow.millisecondsSinceEpoch,
         );
 
+        debugPrint('[DmeCallScanner] Query returned ${entries.length} raw entries for contact: $contactPhone');
+
         final matching = entries.where((entry) {
           final logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
           if (logNumber.isEmpty) return false;
-          return numberMatches(logNumber, contactPhone);
+          final isMatch = numberMatches(logNumber, contactPhone);
+          if (isMatch) {
+            debugPrint('[DmeCallScanner] Matched log entry: num=$logNumber, duration=${entry.duration}, type=${entry.callType}, ts=${entry.timestamp}');
+          }
+          return isMatch;
         }).toList();
 
-        if (matching.isEmpty) continue;
+        if (matching.isEmpty) {
+          debugPrint('[DmeCallScanner] No matching call log found for $contactPhone on attempt $attempt.');
+          continue;
+        }
 
         // Separate outgoing and incoming calls today
         final outgoingList = matching
@@ -201,8 +204,8 @@ class DmeCallScannerService {
         // If no attended call > 10s was found, but the user attempted an outgoing call:
         if (hasOutgoingAttemptToday) {
           if (sinceTime != null) {
-            // Check if there is an outgoing call around/after sinceTime
-            final sinceMs = sinceTime.subtract(const Duration(seconds: 15)).millisecondsSinceEpoch;
+            // Generous window: allow 2 minutes prior to sinceTime to absorb dialer/system clock discrepancies
+            final sinceMs = sinceTime.subtract(const Duration(minutes: 2)).millisecondsSinceEpoch;
             final recentOutgoing = outgoingList.where((e) => (e.timestamp ?? 0) >= sinceMs).toList();
             if (recentOutgoing.isNotEmpty) {
               return recentOutgoing.last;
@@ -212,7 +215,7 @@ class DmeCallScannerService {
           }
         }
       } catch (e) {
-        debugPrint('Error querying call log attempt $attempt: $e');
+        debugPrint('[DmeCallScanner] Error querying call log attempt $attempt: $e');
       }
     }
     return null;

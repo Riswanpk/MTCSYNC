@@ -635,11 +635,18 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
             SnackBar(
               content: Text(
                 wasInitiated
-                    ? 'No call was detected in your call log. Call attempt was not recorded.'
-                    : 'No outgoing call log found for this customer.',
+                    ? 'Call not detected yet in Android call log. Tap "Recheck Call Log" if dialer finished writing.'
+                    : 'No outgoing call log found for this customer today.',
               ),
-              backgroundColor: Colors.orange,
-              duration: const Duration(seconds: 3),
+              backgroundColor: Colors.orange[800],
+              duration: const Duration(seconds: 5),
+              action: SnackBarAction(
+                label: 'Recheck',
+                textColor: Colors.white,
+                onPressed: () {
+                  _checkCallLogAfterCall();
+                },
+              ),
             ),
           );
         }
@@ -1496,7 +1503,32 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                             ),
                           ),
                         ),
-                        const SizedBox(height: 10),
+                        if (_isCheckingCall)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: const [
+                                SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                                SizedBox(width: 10),
+                                Text('Checking Android call log...', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                              ],
+                            ),
+                          )
+                        else
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: _checkCallLogAfterCall,
+                              icon: const Icon(Icons.sync_rounded, size: 16),
+                              label: const Text('Check Call Log', style: TextStyle(fontSize: 12)),
+                              style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                foregroundColor: const Color(0xFF005BAC),
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 6),
                       ],
 
                       // WhatsApp Button

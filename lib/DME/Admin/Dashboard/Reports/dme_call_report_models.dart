@@ -44,26 +44,18 @@ class DmeCustomerCallItem {
     this.calledTimestamp,
   });
 
-  /// The authoritative DateTime when this call or action was performed.
+  /// The authoritative DateTime when this call or action was performed (already in IST).
   DateTime get actionDate => calledTimestamp ?? completedAt;
 
-  DateTime get completedAtIst {
-    final d = actionDate;
-    final utc = d.isUtc ? d : d.toUtc();
-    return utc.add(const Duration(hours: 5, minutes: 30));
-  }
+  DateTime get completedAtIst => actionDate;
 
-  int get dayKey => (reminderDate ?? completedAtIst).day;
-  String get formattedDate => DateFormat('dd-MM-yyyy').format(reminderDate ?? completedAtIst);
-  String get formattedTime => '${DateFormat('hh:mm a').format(completedAtIst)} IST';
+  int get dayKey => (reminderDate ?? actionDate).day;
+  String get formattedDate => DateFormat('dd-MM-yyyy').format(reminderDate ?? actionDate);
+  String get formattedTime => '${DateFormat('hh:mm a').format(actionDate)} IST';
 
   String get formattedCallTime {
-    if (calledTimestamp != null) {
-      final utc = calledTimestamp!.isUtc ? calledTimestamp! : calledTimestamp!.toUtc();
-      final ist = utc.add(const Duration(hours: 5, minutes: 30));
-      return '${DateFormat('hh:mm a').format(ist)} IST';
-    }
-    return formattedTime;
+    final dt = calledTimestamp ?? actionDate;
+    return '${DateFormat('hh:mm a').format(dt)} IST';
   }
 
   String? get formattedCallDuration {
