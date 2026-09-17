@@ -462,20 +462,127 @@ class DmeAssignmentService {
       } catch (_) {}
     }
 
+    final Map<String, Map<String, int>> userAssignedBreakdown = {};
+    for (final u in globalUserTotalCount.keys) {
+      final total = globalUserTotalCount[u] ?? 0;
+      final leftover = globalUserLeftoverCount[u] ?? 0;
+      userAssignedBreakdown[u] = {
+        'total': total,
+        'leftover': leftover,
+        'new': total - leftover,
+      };
+    }
+
+    // Record today's leftover overdue count in dme_user_daily_stats so call report OD displays properly
+    try {
+      for (final uid in globalUserLeftoverCount.keys) {
+        final leftover = globalUserLeftoverCount[uid] ?? 0;
+        await DmeUserStatsService.setOverdueCount(
+          userUid: uid,
+          userEmail: userUidToEmail?[uid] ?? uid,
+          statDate: dateStr,
+          overdueCount: leftover,
+        );
+      }
+    } catch (e) {
+      debugPrint('Error updating today overdue stats: $e');
+    }
+
     return {
       'total_assigned': totalAssigned,
       'branch_counts': branchAssignedCounts,
+      'user_counts': userAssignedBreakdown,
     };
+  }
+
+  /// Records a snapshot of an assignment run into Firestore collection `dme_assignment_history`.
+  /// This ensures previous assignments (including the first assignment) can be audited even if re-assignment occurs.
+  static Future<void> recordAssignmentHistory({
+    required String dateStr,
+    required int totalAssigned,
+    required Map<String, dynamic> userCounts,
+    required Map<int, int> branchCounts,
+    required List<Map<String, dynamic>> dmeUsers,
+    required Map<String, bool> userPresence,
+    required String adminEmail,
+  }) async {
+    try {
+      final historyRef = FirebaseFirestore.instance.collection('dme_assignment_history');
+
+      // Check how many runs already exist for today
+      final existingSnap = await historyRef
+          .where('assigned_date', isEqualTo: dateStr)
+          .get();
+
+      final runNumber = existingSnap.docs.length + 1;
+
+      // Build per-user breakdown list
+      final List<Map<String, dynamic>> userBreakdowns = [];
+      for (var u in dmeUsers) {
+        final uid = u['uid'] as String;
+        final name = (u['username'] ?? u['name'] ?? 'User').toString();
+        final email = (u['email'] ?? '').toString();
+        final isPresent = userPresence[uid] ?? true;
+        final branches = (u['assigned_branches'] as List?)
+                ?.map((e) => int.tryParse(e.toString()) ?? 0)
+                .where((e) => e > 0)
+                .toList() ??
+            <int>[];
+
+        final stats = userCounts[uid] ?? userCounts[email];
+        final total = (stats?['total'] as num?)?.toInt() ?? 0;
+        final newCount = (stats?['new'] as num?)?.toInt() ?? 0;
+        final leftover = (stats?['leftover'] as num?)?.toInt() ?? 0;
+
+        userBreakdowns.add({
+          'uid': uid,
+          'name': name,
+          'email': email,
+          'is_present': isPresent,
+          'total': total,
+          'new': newCount,
+          'leftover': leftover,
+          'assigned_branches': branches,
+        });
+      }
+
+      final branchCountsMap = <String, int>{
+        for (var e in branchCounts.entries) e.key.toString(): e.value,
+      };
+
+      await historyRef.add({
+        'assigned_date': dateStr,
+        'assigned_at': FieldValue.serverTimestamp(),
+        'assigned_by': adminEmail,
+        'run_number': runNumber,
+        'status': 'active',
+        'total_assigned': totalAssigned,
+        'user_breakdowns': userBreakdowns,
+        'branch_counts': branchCountsMap,
+      });
+    } catch (e) {
+      debugPrint('Error recording assignment history: $e');
+    }
+  }
+
+  /// Streams assignment history snapshots for [dateStr] from Firestore
+  static Stream<QuerySnapshot<Map<String, dynamic>>> streamTodayAssignmentHistory(String dateStr) {
+    return FirebaseFirestore.instance
+        .collection('dme_assignment_history')
+        .where('assigned_date', isEqualTo: dateStr)
+        .snapshots();
   }
 
   /// Undo reminder assignments for the given date (defaults to today):
   /// 1. Finds all pending reminders that were assigned for dateStr or overdue with pending assigned.
   /// 2. Resets their assigned_to = null, assigned_date = null, is_overdue_leftover = false.
   /// 3. Deletes audit records from reminder_assignment and dme_reminder_assignments for dateStr.
+  /// 4. Marks the latest active run in dme_assignment_history as undone while keeping historical details intact.
   /// Returns the number of reminders unassigned.
   static Future<int> undoTodayAssignments({
     required String dateStr,
     List<int>? branchIds,
+    String? adminEmail,
   }) async {
     final client = await DmeConfig.getClient();
     if (client == null) throw Exception('Supabase client not initialized');
@@ -558,29 +665,35 @@ class DmeAssignmentService {
 
     // 3. Delete records from reminder_assignment audit table
     try {
-      var query = client.from('reminder_assignment').delete().eq('assigned_date', dateStr);
-      if (branchIds != null && branchIds.isNotEmpty) {
-        query = query.inFilter('branch_id', branchIds.map((b) => b.toString()).toList());
-      }
-      await query;
-    } catch (_) {
-      try {
-        var queryLegacy = client.from('reminder_assignment').delete().eq('assignment_date', dateStr);
-        if (branchIds != null && branchIds.isNotEmpty) {
-          queryLegacy = queryLegacy.inFilter('branch_id', branchIds);
-        }
-        await queryLegacy;
-      } catch (_) {}
-    }
+      await client.from('reminder_assignment').delete().eq('assigned_date', dateStr);
+    } catch (_) {}
+    try {
+      await client.from('reminder_assignment').delete().eq('assignment_date', dateStr);
+    } catch (_) {}
 
     // 4. Delete records from dme_reminder_assignments legacy table
     try {
-      var queryLegacy = client.from('dme_reminder_assignments').delete().eq('assignment_date', dateStr);
-      if (branchIds != null && branchIds.isNotEmpty) {
-        queryLegacy = queryLegacy.inFilter('branch_id', branchIds);
-      }
-      await queryLegacy;
+      await client.from('dme_reminder_assignments').delete().eq('assignment_date', dateStr);
     } catch (_) {}
+
+    // 5. Mark latest active run in Firestore assignment history as 'undone' so history is retained
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('dme_assignment_history')
+          .where('assigned_date', isEqualTo: dateStr)
+          .where('status', isEqualTo: 'active')
+          .get();
+
+      for (var doc in snap.docs) {
+        await doc.reference.update({
+          'status': 'undone',
+          'undone_at': FieldValue.serverTimestamp(),
+          if (adminEmail != null && adminEmail.isNotEmpty) 'undone_by': adminEmail,
+        });
+      }
+    } catch (e) {
+      debugPrint('Error updating history status on undo: $e');
+    }
 
     return candidateIds.length;
   }

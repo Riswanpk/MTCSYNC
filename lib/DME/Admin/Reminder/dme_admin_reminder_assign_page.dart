@@ -17,9 +17,12 @@ class DmeAdminReminderAssignPage extends StatefulWidget {
   State<DmeAdminReminderAssignPage> createState() => _DmeAdminReminderAssignPageState();
 }
 
-class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage> {
+class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
+    with SingleTickerProviderStateMixin {
   bool _isLoading = true;
   bool _isExecuting = false;
+
+  late TabController _tabController;
 
   final DateTime _today = DateTime.now();
   String get _todayStr => DmeAssignmentService.formatDate(_today);
@@ -29,9 +32,11 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
 
   // BranchId -> count of candidate reminders (status = pending, reminder_date <= today)
   Map<int, int> _candidateCounts = {};
+  Map<int, int> _candidateTodayCounts = {};
+  Map<int, int> _candidateLeftoverCounts = {};
 
-  // BranchId -> existing assignment info from reminder_assignment table
-  Map<int, Map<String, dynamic>> _assignmentStatus = {};
+  // UserUid / email -> assigned breakdown for today: {'total': x, 'new': y, 'leftover': z}
+  Map<String, Map<String, int>> _assignedUserBreakdown = {};
 
   // Global user attendance: uid -> true (present) / false (absent / on leave)
   final Map<String, bool> _userPresence = {};
@@ -39,7 +44,14 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _loadAll();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadAll() async {
@@ -47,9 +59,40 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
     await Future.wait([
       _loadUsersAndBranches(),
       _loadCandidateCounts(),
-      _loadAssignmentStatus(),
+      _loadAssignedBreakdown(),
     ]);
+    await _checkAndSyncTodayHistory();
     if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _checkAndSyncTodayHistory() async {
+    if (_assignedUserBreakdown.isEmpty) return;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('dme_assignment_history')
+          .where('assigned_date', isEqualTo: _todayStr)
+          .limit(1)
+          .get();
+
+      if (snap.docs.isEmpty && _dmeUsers.isNotEmpty) {
+        final totalAssigned = _assignedUserBreakdown.values
+            .fold(0, (acc, m) => acc + (m['total'] ?? 0));
+        if (totalAssigned > 0) {
+          final adminEmail = FirebaseAuth.instance.currentUser?.email ?? 'admin';
+          await DmeAssignmentService.recordAssignmentHistory(
+            dateStr: _todayStr,
+            totalAssigned: totalAssigned,
+            userCounts: _assignedUserBreakdown,
+            branchCounts: _candidateCounts,
+            dmeUsers: _dmeUsers,
+            userPresence: _userPresence,
+            adminEmail: adminEmail,
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error syncing today history: $e');
+    }
   }
 
   Future<void> _loadUsersAndBranches() async {
@@ -117,25 +160,53 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
 
     final dateStr = _todayStr;
     final Map<int, int> totalMap = {};
+    final Map<int, int> todayMap = {};
+    final Map<int, int> leftoverMap = {};
 
     try {
       int offset = 0;
       const int pageSize = 1000;
       bool hasMore = true;
+      final currentDay = DateTime.tryParse(dateStr) ?? DateTime.now();
+      final startOfToday = DateTime(currentDay.year, currentDay.month, currentDay.day);
 
       while (hasMore) {
         final batch = await client
             .from('dme_reminders')
-            .select('id, last_purchase_branch')
-            .eq('status', 'pending')
+            .select('id, last_purchase_branch, reminder_date, status, remarks, call_duration')
+            .inFilter('status', ['pending', 'called'])
             .lte('reminder_date', '${dateStr}T23:59:59')
             .range(offset, offset + pageSize - 1);
 
         final list = batch as List;
         for (var r in list) {
           final bId = int.tryParse(r['last_purchase_branch']?.toString() ?? '');
-          if (bId != null) {
-            totalMap[bId] = (totalMap[bId] ?? 0) + 1;
+          if (bId == null) continue;
+
+          final status = (r['status'] ?? '').toString().toLowerCase();
+          final remarks = (r['remarks'] ?? '').toString().trim();
+          final duration = int.tryParse(r['call_duration']?.toString() ?? '') ?? 0;
+          final bool isCalledWithoutRemarks = (status == 'called' || duration > 10) && remarks.isEmpty;
+
+          // If called with remarks, it is completed/in progress and not a candidate
+          if (status == 'called' && !isCalledWithoutRemarks) continue;
+
+          totalMap[bId] = (totalMap[bId] ?? 0) + 1;
+
+          final rDateStr = r['reminder_date']?.toString();
+          final rDate = rDateStr != null ? DateTime.tryParse(rDateStr) : null;
+          bool isLeftover = false;
+          if (rDate != null) {
+            final rDay = DateTime(rDate.year, rDate.month, rDate.day);
+            if (rDay.isBefore(startOfToday)) {
+              isLeftover = true;
+            }
+          }
+
+          if (isLeftover) {
+            leftoverMap[bId] = (leftoverMap[bId] ?? 0) + 1;
+          } else {
+            todayMap[bId] = (todayMap[bId] ?? 0) + 1;
           }
         }
 
@@ -149,6 +220,8 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
       if (mounted) {
         setState(() {
           _candidateCounts = totalMap;
+          _candidateTodayCounts = todayMap;
+          _candidateLeftoverCounts = leftoverMap;
         });
       }
     } catch (e) {
@@ -156,12 +229,39 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
     }
   }
 
-  Future<void> _loadAssignmentStatus() async {
-    final status = await DmeAssignmentService.getBranchAssignmentStatus(dateStr: _todayStr);
-    if (mounted) {
-      setState(() => _assignmentStatus = status);
+  Future<void> _loadAssignedBreakdown() async {
+    final client = await DmeConfig.getClient();
+    if (client == null) return;
+
+    try {
+      final res = await client
+          .from('dme_reminders')
+          .select('assigned_to, is_overdue_leftover')
+          .eq('assigned_date', _todayStr)
+          .inFilter('status', ['pending', 'called']);
+
+      final Map<String, Map<String, int>> map = {};
+      for (var r in (res as List)) {
+        final uid = r['assigned_to']?.toString();
+        if (uid == null || uid.isEmpty) continue;
+        final isLeftover = r['is_overdue_leftover'] == true;
+        final entry = map.putIfAbsent(uid, () => {'total': 0, 'new': 0, 'leftover': 0});
+        entry['total'] = (entry['total'] ?? 0) + 1;
+        if (isLeftover) {
+          entry['leftover'] = (entry['leftover'] ?? 0) + 1;
+        } else {
+          entry['new'] = (entry['new'] ?? 0) + 1;
+        }
+      }
+
+      if (mounted) {
+        setState(() => _assignedUserBreakdown = map);
+      }
+    } catch (e) {
+      debugPrint('Error loading assigned breakdown: $e');
     }
   }
+
 
   void _toggleUserAttendance(String uid, bool isPresent) {
     setState(() {
@@ -169,12 +269,15 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
     });
   }
 
-  Map<String, int> _calculateUserEstimatedReminders() {
-    final Map<String, int> result = {for (var u in _dmeUsers) (u['uid'] as String): 0};
+  Map<String, Map<String, int>> _calculateUserEstimatedBreakdown() {
+    final Map<String, int> leftoverCounts = {for (var u in _dmeUsers) (u['uid'] as String): 0};
+    final Map<String, int> todayCounts = {for (var u in _dmeUsers) (u['uid'] as String): 0};
+    final Map<String, int> totalCounts = {for (var u in _dmeUsers) (u['uid'] as String): 0};
 
     for (var bId in _activeBranches) {
-      final count = _candidateCounts[bId] ?? 0;
-      if (count <= 0) continue;
+      final lCount = _candidateLeftoverCounts[bId] ?? 0;
+      final tCount = _candidateTodayCounts[bId] ?? 0;
+      if (lCount == 0 && tCount == 0) continue;
 
       final presentUsersForBranch = _dmeUsers.where((u) {
         final uid = u['uid'] as String;
@@ -185,16 +288,39 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
 
       if (presentUsersForBranch.isEmpty) continue;
 
-      final base = count ~/ presentUsersForBranch.length;
-      final remainder = count % presentUsersForBranch.length;
+      // 1. Distribute leftovers fairly with global tracking across branches
+      for (int i = 0; i < lCount; i++) {
+        final sorted = List<String>.from(presentUsersForBranch)..sort((a, b) {
+          final lDiff = (leftoverCounts[a] ?? 0).compareTo(leftoverCounts[b] ?? 0);
+          if (lDiff != 0) return lDiff;
+          return (totalCounts[a] ?? 0).compareTo(totalCounts[b] ?? 0);
+        });
+        final target = sorted.first;
+        leftoverCounts[target] = (leftoverCounts[target] ?? 0) + 1;
+        totalCounts[target] = (totalCounts[target] ?? 0) + 1;
+      }
 
-      for (int i = 0; i < presentUsersForBranch.length; i++) {
-        final uid = presentUsersForBranch[i];
-        final addition = base + (i < remainder ? 1 : 0);
-        result[uid] = (result[uid] ?? 0) + addition;
+      // 2. Distribute today's new reminders fairly with global tracking across branches
+      for (int i = 0; i < tCount; i++) {
+        final sorted = List<String>.from(presentUsersForBranch)..sort((a, b) {
+          final tDiff = (totalCounts[a] ?? 0).compareTo(totalCounts[b] ?? 0);
+          if (tDiff != 0) return tDiff;
+          return (todayCounts[a] ?? 0).compareTo(todayCounts[b] ?? 0);
+        });
+        final target = sorted.first;
+        todayCounts[target] = (todayCounts[target] ?? 0) + 1;
+        totalCounts[target] = (totalCounts[target] ?? 0) + 1;
       }
     }
-    return result;
+
+    return {
+      for (var u in _dmeUsers)
+        (u['uid'] as String): {
+          'total': totalCounts[u['uid']] ?? 0,
+          'new': todayCounts[u['uid']] ?? 0,
+          'leftover': leftoverCounts[u['uid']] ?? 0,
+        }
+    };
   }
 
   Future<void> _executeAutoDivision() async {
@@ -230,7 +356,7 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
 
     final absentCount = _userPresence.values.where((v) => !v).length;
     final presentCount = _userPresence.values.where((v) => v).length;
-    final estimatedPerUser = _calculateUserEstimatedReminders();
+    final estimatedBreakdown = _calculateUserEstimatedBreakdown();
 
     // Confirmation dialog
     final confirmed = await showDialog<bool>(
@@ -282,7 +408,10 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
                       final uid = u['uid'] as String;
                       final name = u['username'] as String;
                       final isPresent = _userPresence[uid] ?? true;
-                      final count = estimatedPerUser[uid] ?? 0;
+                      final stats = estimatedBreakdown[uid] ?? {'total': 0, 'new': 0, 'leftover': 0};
+                      final count = stats['total'] ?? 0;
+                      final newCount = stats['new'] ?? 0;
+                      final leftoverCount = stats['leftover'] ?? 0;
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
                         child: Row(
@@ -313,7 +442,7 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                isPresent ? '$count reminders' : '0 (Absent)',
+                                isPresent ? '$count ($newCount New • $leftoverCount Leftover)' : '0 (Absent)',
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
@@ -370,6 +499,17 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
         adminEmail: adminEmail,
       );
 
+      // Record snapshot into assignment history for today
+      await DmeAssignmentService.recordAssignmentHistory(
+        dateStr: _todayStr,
+        totalAssigned: (result['total_assigned'] as num?)?.toInt() ?? 0,
+        userCounts: (result['user_counts'] as Map<String, dynamic>?) ?? {},
+        branchCounts: _candidateCounts,
+        dmeUsers: _dmeUsers,
+        userPresence: _userPresence,
+        adminEmail: adminEmail,
+      );
+
       await _loadAll();
 
       setState(() => _isExecuting = false);
@@ -404,7 +544,74 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.grey[700], fontSize: 13),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 14),
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                  ),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(10),
+                    child: Column(
+                      children: _dmeUsers.where((u) => (_userPresence[u['uid']] ?? true)).map((u) {
+                        final uid = u['uid'] as String;
+                        final name = u['username'] as String;
+                        final userCounts = (result['user_counts'] as Map<String, dynamic>?)?[uid] as Map<String, dynamic>?;
+                        final total = userCounts?['total'] ?? _assignedUserBreakdown[uid]?['total'] ?? 0;
+                        final n = userCounts?['new'] ?? _assignedUserBreakdown[uid]?['new'] ?? 0;
+                        final l = userCounts?['leftover'] ?? _assignedUserBreakdown[uid]?['leftover'] ?? 0;
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: _primaryBlue.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  '$total total',
+                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _primaryBlue),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  '$n New',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blue[800]),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.deepOrange.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  '$l Leftover',
+                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.deepOrange),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -488,10 +695,16 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
     setState(() => _isExecuting = true);
 
     try {
+      final adminEmail = FirebaseAuth.instance.currentUser?.email ?? 'admin';
       final unassignedCount = await DmeAssignmentService.undoTodayAssignments(
         dateStr: _todayStr,
         branchIds: _activeBranches,
+        adminEmail: adminEmail,
       );
+
+      setState(() {
+        _assignedUserBreakdown = {};
+      });
 
       await _loadAll();
 
@@ -523,7 +736,9 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
     final presentCount = _userPresence.values.where((v) => v).length;
     final absentCount = _userPresence.values.where((v) => !v).length;
     final totalPending = _candidateCounts.values.fold(0, (a, b) => a + b);
-    final isAlreadyAssignedToday = _assignmentStatus.isNotEmpty;
+    final totalAssignedPendingToday =
+        _assignedUserBreakdown.values.fold(0, (acc, m) => acc + (m['total'] ?? 0));
+    final isAlreadyAssignedToday = totalAssignedPendingToday > 0;
 
     return Scaffold(
       appBar: AppBar(
@@ -537,14 +752,43 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
             onPressed: _isLoading ? null : _loadAll,
           ),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.white,
+          indicatorWeight: 3,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          tabs: const [
+            Tab(
+              icon: Icon(Icons.assignment_ind_rounded, size: 20),
+              text: 'Assign & Attendance',
+            ),
+            Tab(
+              icon: Icon(Icons.history_rounded, size: 20),
+              text: "Today's History",
+            ),
+          ],
+        ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+          : TabBarView(
+              controller: _tabController,
+              children: [
+                _buildAssignTab(presentCount, absentCount, totalPending, isAlreadyAssignedToday),
+                _buildHistoryTab(),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildAssignTab(int presentCount, int absentCount, int totalPending, bool isAlreadyAssignedToday) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
                   // 1. Today's Date Banner Card (Without Date Change button, overflow proof)
                   Card(
                     elevation: 2,
@@ -665,7 +909,7 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
                           else ...[
                             Builder(
                               builder: (_) {
-                                final estimatedPerUser = _calculateUserEstimatedReminders();
+                                final estimatedBreakdown = _calculateUserEstimatedBreakdown();
                                 return ListView.separated(
                                   shrinkWrap: true,
                                   physics: const NeverScrollableScrollPhysics(),
@@ -677,7 +921,12 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
                                     final name = user['username'] as String;
                                     final email = user['email'] as String;
                                     final isPresent = _userPresence[uid] ?? true;
-                                    final estCount = estimatedPerUser[uid] ?? 0;
+
+                                    final assignedStats = _assignedUserBreakdown[uid] ?? _assignedUserBreakdown[email];
+                                    final bool hasAssigned = isAlreadyAssignedToday &&
+                                        assignedStats != null &&
+                                        (assignedStats['total'] ?? 0) > 0;
+                                    final estStats = estimatedBreakdown[uid] ?? {'total': 0, 'new': 0, 'leftover': 0};
 
                                     final branches = List<int>.from(user['assigned_branches'] ?? []);
                                     final branchNames = branches.map((b) => DmeConstants.getBranchName(b)).join(', ');
@@ -695,22 +944,21 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
                                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                                         ),
                                       ),
-                                      title: Wrap(
-                                        crossAxisAlignment: WrapCrossAlignment.center,
-                                        spacing: 6,
-                                        runSpacing: 2,
+                                      title: Row(
                                         children: [
-                                          Text(
-                                            name,
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 14,
-                                              decoration: isPresent ? null : TextDecoration.lineThrough,
-                                              color: isPresent ? null : Colors.grey[600],
+                                          Expanded(
+                                            child: Text(
+                                              name,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                                decoration: isPresent ? null : TextDecoration.lineThrough,
+                                                color: isPresent ? null : Colors.grey[600],
+                                              ),
                                             ),
                                           ),
                                           Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                             decoration: BoxDecoration(
                                               color: isPresent
                                                   ? Colors.green.withValues(alpha: 0.15)
@@ -726,29 +974,117 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
                                               ),
                                             ),
                                           ),
-                                          if (isPresent)
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                                              decoration: BoxDecoration(
-                                                color: _primaryBlue.withValues(alpha: 0.12),
-                                                borderRadius: BorderRadius.circular(4),
-                                              ),
-                                              child: Text(
-                                                '~ $estCount reminders',
-                                                style: const TextStyle(
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: _primaryBlue,
-                                                ),
-                                              ),
-                                            ),
                                         ],
                                       ),
-                                      subtitle: Text(
-                                        branchNames.isNotEmpty ? 'Branches: $branchNames' : email,
-                                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                                      subtitle: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const SizedBox(height: 4),
+                                          // Reminder breakdown row (shown below user after assigning or in preview)
+                                          if (hasAssigned) ...[
+                                            Wrap(
+                                              spacing: 6,
+                                              runSpacing: 4,
+                                              crossAxisAlignment: WrapCrossAlignment.center,
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.green.withValues(alpha: 0.15),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                    border: Border.all(color: Colors.green.withValues(alpha: 0.4)),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      const Icon(Icons.check_circle_rounded, size: 11, color: Colors.green),
+                                                      const SizedBox(width: 3),
+                                                      Text(
+                                                        '${assignedStats['total']} Assigned',
+                                                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: _primaryBlue.withValues(alpha: 0.1),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: Text(
+                                                    '${assignedStats['new']} New',
+                                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _primaryBlue),
+                                                  ),
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.deepOrange.withValues(alpha: 0.12),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: Text(
+                                                    '${assignedStats['leftover']} Leftover',
+                                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.deepOrange),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ] else if (isPresent) ...[
+                                            Wrap(
+                                              spacing: 6,
+                                              runSpacing: 4,
+                                              crossAxisAlignment: WrapCrossAlignment.center,
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: _primaryBlue.withValues(alpha: 0.12),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: Text(
+                                                    '~ ${estStats['total']} reminders',
+                                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _primaryBlue),
+                                                  ),
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.blue.withValues(alpha: 0.08),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: Text(
+                                                    '${estStats['new']} New',
+                                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.blue[800]),
+                                                  ),
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.deepOrange.withValues(alpha: 0.08),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: Text(
+                                                    '${estStats['leftover']} Leftover',
+                                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.deepOrange),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ] else ...[
+                                            const Text(
+                                              '0 reminders (Marked absent)',
+                                              style: TextStyle(fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic),
+                                            ),
+                                          ],
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            branchNames.isNotEmpty ? 'Branches: $branchNames' : email,
+                                            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
                                       ),
                                     );
                                   },
@@ -825,7 +1161,464 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
                   ),
                 ],
               ),
+    );
+  }
+
+  Widget _buildHistoryTab() {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: DmeAssignmentService.streamTodayAssignmentHistory(_todayStr),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Text(
+                'Error loading assignment history: ${snapshot.error}',
+                style: const TextStyle(color: Colors.red),
+                textAlign: TextAlign.center,
+              ),
             ),
+          );
+        }
+
+        final docs = snapshot.data?.docs ?? [];
+        if (docs.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: _primaryBlue.withValues(alpha: 0.08),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.history_rounded, size: 56, color: Colors.grey[500]),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'No Assignment History For Today',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'When you run the reminder assignment for today, each run (the first assignment and any redo runs) is permanently recorded here so you can review original details at any time.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600], height: 1.4),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    onPressed: () => _tabController.animateTo(0),
+                    icon: const Icon(Icons.assignment_ind_rounded, size: 18),
+                    label: const Text('Go to Assign Tab'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _primaryBlue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        // Sort runs chronologically: Run 1 first, then Run 2, etc.
+        final runs = docs.map((d) => d.data()).toList();
+        runs.sort((a, b) {
+          final runA = (a['run_number'] as num?)?.toInt() ?? 1;
+          final runB = (b['run_number'] as num?)?.toInt() ?? 1;
+          return runA.compareTo(runB);
+        });
+
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // Header summary banner
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: _primaryBlue.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _primaryBlue.withValues(alpha: 0.2)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded, size: 18, color: _primaryBlue),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Showing ${runs.length} assignment run(s) recorded for today ($_todayStr). First assignment details are preserved even if re-assigned.',
+                      style: const TextStyle(fontSize: 12, color: _primaryBlue, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // List of run cards
+            ...runs.map((run) => _buildRunHistoryCard(run)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildRunHistoryCard(Map<String, dynamic> run) {
+    final runNumber = (run['run_number'] as num?)?.toInt() ?? 1;
+    final isFirst = runNumber == 1;
+    final status = (run['status'] ?? 'active').toString();
+    final isActive = status == 'active';
+    final totalAssigned = (run['total_assigned'] as num?)?.toInt() ?? 0;
+    final assignedBy = (run['assigned_by'] ?? 'admin').toString();
+
+    // Timestamp formatting
+    String assignedTimeStr = 'Earlier Today';
+    final assignedAt = run['assigned_at'];
+    if (assignedAt is Timestamp) {
+      final dt = assignedAt.toDate();
+      assignedTimeStr = DateFormat('hh:mm a').format(dt);
+    }
+
+    String? undoneTimeStr;
+    final undoneAt = run['undone_at'];
+    if (undoneAt is Timestamp) {
+      undoneTimeStr = DateFormat('hh:mm a').format(undoneAt.toDate());
+    }
+    final undoneBy = run['undone_by']?.toString();
+
+    final userBreakdowns = (run['user_breakdowns'] as List?)
+            ?.map((e) => Map<String, dynamic>.from(e as Map))
+            .toList() ??
+        [];
+
+    final presentCount = userBreakdowns.where((u) => u['is_present'] == true).length;
+    final absentCount = userBreakdowns.where((u) => u['is_present'] == false).length;
+
+    final branchCounts = (run['branch_counts'] as Map?)
+            ?.map((k, v) => MapEntry(k.toString(), (v as num?)?.toInt() ?? 0)) ??
+        <String, int>{};
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: isActive ? 3 : 1.5,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color: isActive
+              ? Colors.green.withValues(alpha: 0.45)
+              : Colors.grey.withValues(alpha: 0.3),
+          width: isActive ? 1.5 : 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Row: Run Header & Status Badge
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: isFirst
+                        ? _primaryBlue.withValues(alpha: 0.12)
+                        : Colors.purple.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isFirst ? Icons.looks_one_rounded : Icons.history_toggle_off_rounded,
+                        size: 16,
+                        color: isFirst ? _primaryBlue : Colors.purple,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        isFirst ? 'Run 1 • First Assignment' : 'Run $runNumber • Re-assignment',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: isFirst ? _primaryBlue : Colors.purple,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isActive
+                        ? Colors.green.withValues(alpha: 0.15)
+                        : Colors.deepOrange.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: isActive
+                          ? Colors.green.withValues(alpha: 0.4)
+                          : Colors.deepOrange.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isActive ? Icons.check_circle_rounded : Icons.undo_rounded,
+                        size: 13,
+                        color: isActive ? Colors.green[700] : Colors.deepOrange,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isActive ? 'Active (Current)' : 'Undone / Redone',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: isActive ? Colors.green[800] : Colors.deepOrange,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            // Time and Admin info
+            Wrap(
+              spacing: 12,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.schedule_rounded, size: 14, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Assigned: $assignedTimeStr',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                    ),
+                  ],
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.person_outline_rounded, size: 14, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Text(
+                      'By: $assignedBy',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            if (!isActive && undoneTimeStr != null) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const Icon(Icons.undo_rounded, size: 13, color: Colors.deepOrange),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Undone at $undoneTimeStr ${undoneBy != null ? "by $undoneBy" : ""}',
+                    style: const TextStyle(fontSize: 11, color: Colors.deepOrange, fontStyle: FontStyle.italic),
+                  ),
+                ],
+              ),
+            ],
+
+            const SizedBox(height: 12),
+
+            // Summary Metrics Box
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'TOTAL ASSIGNED',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '$totalAssigned Reminders',
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _primaryBlue),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(width: 1, height: 28, color: Colors.grey.withValues(alpha: 0.3)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'ATTENDANCE',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '$presentCount Present • $absentCount Absent',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: absentCount > 0 ? Colors.orange[800] : Colors.green[800],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Branch Breakdown Chips
+            if (branchCounts.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: branchCounts.entries.map((e) {
+                  final bId = int.tryParse(e.key) ?? 0;
+                  final bName = DmeConstants.getBranchName(bId);
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '$bName: ${e.value}',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+
+            const SizedBox(height: 14),
+            const Text(
+              'User Breakdown in this run:',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
+            ),
+            const SizedBox(height: 6),
+
+            // User Breakdown List
+            ...userBreakdowns.map((u) {
+              final isPresent = u['is_present'] == true;
+              final name = (u['name'] ?? 'User').toString();
+              final total = (u['total'] as num?)?.toInt() ?? 0;
+              final newCount = (u['new'] as num?)?.toInt() ?? 0;
+              final leftover = (u['leftover'] as num?)?.toInt() ?? 0;
+              final branches = (u['assigned_branches'] as List?)
+                      ?.map((b) => int.tryParse(b.toString()) ?? 0)
+                      .where((b) => b > 0)
+                      .toList() ??
+                  <int>[];
+
+              return Container(
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isPresent
+                      ? Colors.white
+                      : Colors.red.withValues(alpha: 0.04),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isPresent
+                        ? Colors.grey.withValues(alpha: 0.2)
+                        : Colors.red.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      isPresent ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                      size: 16,
+                      color: isPresent ? Colors.green : Colors.red,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              decoration: isPresent ? null : TextDecoration.lineThrough,
+                              color: isPresent ? Colors.black87 : Colors.grey[600],
+                            ),
+                          ),
+                          if (branches.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              branches.map((b) => DmeConstants.getBranchName(b)).join(', '),
+                              style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (isPresent)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _primaryBlue.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '$total ($newCount New • $leftover Leftover)',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: _primaryBlue,
+                          ),
+                        ),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Absent (0)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
     );
   }
 }

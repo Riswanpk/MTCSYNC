@@ -163,8 +163,7 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
             .from('dme_reminders')
             .select('id, customer_id, reminder_date, last_purchase_branch, status, remarks, called_by, assigned_to, call_duration, called_timestamp, updated_at, dme_customers(id, name, phone, address, salesman)')
             .inFilter('status', ['completed', 'called'])
-            .gte('reminder_date', startStr)
-            .lte('reminder_date', '${endStr}T23:59:59');
+            .or('and(reminder_date.gte.$startStr,reminder_date.lte.${endStr}T23:59:59),and(called_timestamp.gte.${startStr}T00:00:00,called_timestamp.lte.${endStr}T23:59:59)');
 
         if (_selectedBranchId != null) {
           remindersQuery = remindersQuery.eq('last_purchase_branch', _selectedBranchId!);
@@ -181,8 +180,7 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
               .from('dme_reminders')
               .select('id, customer_id, reminder_date, last_purchase_branch, status, remarks, updated_at, dme_customers(id, name, phone, address, salesman)')
               .inFilter('status', ['completed', 'called'])
-              .gte('reminder_date', startStr)
-              .lte('reminder_date', '${endStr}T23:59:59');
+              .or('and(reminder_date.gte.$startStr,reminder_date.lte.${endStr}T23:59:59),and(updated_at.gte.${startStr}T00:00:00,updated_at.lte.${endStr}T23:59:59)');
           if (_selectedBranchId != null) {
             fallbackQuery = fallbackQuery.eq('last_purchase_branch', _selectedBranchId!);
           } else if (_allowedBranches.isNotEmpty) {
@@ -327,9 +325,15 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
         final branches = u['assigned_branches'] as List<int>;
 
         final List<DmeCustomerCallItem> matchedItems = allCallItems.where((item) {
-          if (item.calledBy != null && item.calledBy == email) return true;
-          if (item.uploadedBy != null && item.uploadedBy == email) return true;
-          if (item.assignedTo != null && (item.assignedTo == uid || item.assignedTo == email)) return true;
+          if (item.calledBy != null && item.calledBy!.isNotEmpty) {
+            return item.calledBy == email;
+          }
+          if (item.uploadedBy != null && item.uploadedBy!.isNotEmpty) {
+            return item.uploadedBy == email;
+          }
+          if (item.assignedTo != null && (item.assignedTo == uid || item.assignedTo == email)) {
+            return true;
+          }
           return false;
         }).toList();
 

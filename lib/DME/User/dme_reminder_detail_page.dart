@@ -852,9 +852,11 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
           IconButton(
             icon: const Icon(Icons.sync_rounded),
             tooltip: 'Check Call Logs / Reload',
-            onPressed: () {
-              _checkCallLogAfterCall();
-            },
+            onPressed: isCompleted
+                ? null
+                : () {
+                    _checkCallLogAfterCall();
+                  },
           ),
           Padding(
             padding: const EdgeInsets.only(right: 8.0),
@@ -879,6 +881,28 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (isCompleted)
+              Container(
+                margin: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green.withValues(alpha: 0.4)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle_rounded, color: Colors.green, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'This reminder is completed. Actions are locked. You can still raise a Complaint or Request using the top bar buttons.',
+                        style: TextStyle(fontSize: 12, color: Colors.green[900], fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             // 1. Customer Information Card
             Card(
               elevation: 2,
@@ -1587,14 +1611,16 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                     ],
                     TextField(
                       controller: _remarksController,
-                      enabled: _callMade,
+                      enabled: _callMade && !isCompleted,
                       maxLines: 3,
                       decoration: InputDecoration(
-                        hintText: _callMade
-                            ? 'Enter discussion summary, customer feedback, etc...'
-                            : 'Remarks disabled (call must exceed 10s)...',
+                        hintText: isCompleted
+                            ? 'Reminder is completed. Remarks are locked.'
+                            : (_callMade
+                                ? 'Enter discussion summary, customer feedback, etc...'
+                                : 'Remarks disabled (call must exceed 10s)...'),
                         filled: true,
-                        fillColor: !_callMade
+                        fillColor: (!_callMade || isCompleted)
                             ? (isDark ? Colors.grey[850] : Colors.grey[200])
                             : (isDark ? Colors.grey[900] : Colors.grey[100]),
                         border: OutlineInputBorder(
@@ -1607,7 +1633,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: (_isSaving || !_callMade) ? null : _saveAndMarkCompleted,
+                        onPressed: (_isSaving || !_callMade || isCompleted) ? null : _saveAndMarkCompleted,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF005BAC),
                           disabledBackgroundColor: Colors.grey[400],
@@ -1621,7 +1647,10 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                                 width: 20,
                                 child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                               )
-                            : const Text('Save Remarks & Mark Completed', style: TextStyle(fontWeight: FontWeight.bold)),
+                            : Text(
+                                isCompleted ? 'Reminder Completed' : 'Save Remarks & Mark Completed',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
                       ),
                     ),
                   ],

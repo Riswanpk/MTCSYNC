@@ -877,18 +877,23 @@ class _DmeAdminReminderDetailPageState extends State<DmeAdminReminderDetailPage>
           children: [
             // Card Title & Status Badge
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Icon(Icons.notifications_active_rounded, color: statusColor, size: 20),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Current Reminder Details',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                    ),
-                  ],
+                Expanded(
+                  child: Row(
+                    children: [
+                      Icon(Icons.notifications_active_rounded, color: statusColor, size: 20),
+                      const SizedBox(width: 8),
+                      const Flexible(
+                        child: Text(
+                          'Current Reminder Details',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(

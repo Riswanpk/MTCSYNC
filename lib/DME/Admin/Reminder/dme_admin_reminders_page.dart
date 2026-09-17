@@ -193,6 +193,7 @@ class _DmeAdminRemindersPageState extends State<DmeAdminRemindersPage> {
                   .from('dme_reminders')
                   .select(
                       'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, called_by, assigned_to, assigned_date, is_overdue_leftover, dme_customers(id, name, phone, address, salesman)')
+                  .eq('status', 'completed')
                   .ilike('called_by', email)
                   .gte('updated_at', '${todayStr}T00:00:00')
                   .lte('updated_at', '${todayStr}T23:59:59');
@@ -207,7 +208,10 @@ class _DmeAdminRemindersPageState extends State<DmeAdminRemindersPage> {
           }
           for (var item in calledBatch) {
             final id = item['id'] as int;
-            mapById[id] = Map<String, dynamic>.from(item);
+            // Only add reminders that are actually completed
+            if ((item['status'] ?? '').toString().toLowerCase() == 'completed') {
+              mapById[id] = Map<String, dynamic>.from(item);
+            }
           }
 
           for (var item in mapById.values) {
