@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../dme_excel_uploader.dart';
-import 'dme_reminders_page.dart';
+import 'Reminders/dme_reminders_page.dart';
 import '../Admin/Customer Directory/dme_admin_customers_page.dart';
 import '../Complaints/Dme/dme_complaints_list_page.dart';
 import '../../Homepage/home_widgets.dart';

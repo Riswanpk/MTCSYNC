@@ -4,14 +4,14 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../dme_constants.dart';
-import '../dme_config.dart';
+import '../../dme_constants.dart';
+import '../../dme_config.dart';
 import 'dme_whatsapp_proof_page.dart';
 // ignore: unused_import
-import 'dme_assignment_service.dart';
+import '../dme_assignment_service.dart';
 import 'dme_call_scanner_service.dart';
-import '../Complaints/Dme/dme_register_complaint_page.dart';
-import 'dme_raise_request_page.dart';
+import '../../Complaints/Dme/dme_register_complaint_page.dart';
+import '../Requests/dme_raise_request_page.dart';
 
 class DmeReminderDetailPage extends StatefulWidget {
   final Map<String, dynamic> reminder;
@@ -195,6 +195,19 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
               duration: Duration(seconds: 4),
             ),
           );
+          widget.onUpdated?.call();
+        }
+      } else if (requestType == 'edit_customer_details') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Customer details update request submitted to Admin for approval!'),
+              backgroundColor: Color(0xFF007A87),
+              duration: Duration(seconds: 4),
+            ),
+          );
+          _fetchCustomerDetails();
+          _fetchCustomerBranches();
           widget.onUpdated?.call();
         }
       }

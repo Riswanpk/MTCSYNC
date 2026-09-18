@@ -3,9 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
-import '../dme_constants.dart';
-import '../dme_config.dart';
-import 'dme_assignment_service.dart';
+import '../../dme_constants.dart';
+import '../../dme_config.dart';
+import '../dme_assignment_service.dart';
 import 'dme_reminder_detail_page.dart';
 
 class DmeRemarksPendingPage extends StatefulWidget {

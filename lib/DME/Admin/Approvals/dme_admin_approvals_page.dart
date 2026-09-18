@@ -106,11 +106,12 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
     final requestType = request['request_type'] ?? '';
     final isPhoneChange = requestType == 'phone_number_change';
     final isCallCompletion = requestType == 'call_completion';
+    final isEditCustomerDetails = requestType == 'edit_customer_details';
     final newValue = (request['new_value'] ?? '').toString().trim();
     final customerId = int.tryParse(request['customer_id']?.toString() ?? '');
     final reminderId = int.tryParse(request['reminder_id']?.toString() ?? '');
 
-    if (customerId == null || newValue.isEmpty) {
+    if (customerId == null || (!isPhoneChange && newValue.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Invalid request data.'), backgroundColor: Colors.red),
       );
@@ -121,6 +122,8 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
     String completionRemarks = '';
     String requestingUserUid = '';
     String requestingUserEmail = (request['requested_by'] ?? '').toString();
+    DateTime? submissionDateTime;
+    String? calledTimestampIso;
 
     if (isCallCompletion) {
       if (newValue.startsWith('{')) {
@@ -132,120 +135,299 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
           if (requestingUserEmail.isEmpty) {
             requestingUserEmail = data['user_email']?.toString() ?? '';
           }
+          calledTimestampIso = data['called_timestamp']?.toString();
         } catch (_) {}
       } else {
         callDuration = int.tryParse(newValue) ?? 0;
         completionRemarks = request['reason']?.toString() ?? '';
       }
+
+      // Take request submission time from request['created_at'] if not already in JSON
+      calledTimestampIso ??= request['created_at']?.toString();
+      if (calledTimestampIso != null && calledTimestampIso.isNotEmpty) {
+        submissionDateTime = DateTime.tryParse(calledTimestampIso);
+      }
+      submissionDateTime ??= DateTime.now();
+      calledTimestampIso = submissionDateTime.toIso8601String();
     }
 
-    final bool? confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: Row(
-          children: [
-            const Icon(Icons.check_circle_rounded, color: Colors.green),
-            const SizedBox(width: 8),
-            Text(
-              isCallCompletion ? 'Approve Call Completion' : 'Approve Request',
-              style: const TextStyle(fontSize: 18),
+    String? phoneToUpdate;
+    Map<String, dynamic> newDetails = {};
+    Map<String, dynamic> oldDetails = {};
+
+    if (isPhoneChange) {
+      // Prompt Admin to enter the new phone number
+      final phoneController = TextEditingController(
+        text: newValue.isNotEmpty && newValue != 'N/A' ? newValue : '',
+      );
+      final phoneFormKey = GlobalKey<FormState>();
+
+      final bool? proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: const Row(
+            children: [
+              Icon(Icons.phone_iphone_rounded, color: Colors.green),
+              SizedBox(width: 8),
+              Text('Enter & Approve Phone', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Form(
+            key: phoneFormKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Customer: $customerName', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                const SizedBox(height: 4),
+                Text('Current Phone: ${(request['customer_phone'] ?? 'N/A')}', style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+                if ((request['reason'] ?? '').toString().isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange.withValues(alpha: 0.2)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Reason for request:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.orange.shade900)),
+                        const SizedBox(height: 2),
+                        Text(request['reason'].toString(), style: const TextStyle(fontSize: 12.5)),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: phoneController,
+                  keyboardType: TextInputType.phone,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: 'New Verified Phone Number *',
+                    hintText: 'e.g. 9876543210 or +971501234567',
+                    prefixIcon: const Icon(Icons.phone_rounded),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  validator: (val) {
+                    if (val == null || val.trim().isEmpty) return 'Please enter the new phone number';
+                    final clean = val.replaceAll(RegExp(r'[\s\-\(\)]'), '');
+                    if (clean.length < 6) return 'Enter at least 6 digits';
+                    final currClean = (request['customer_phone'] ?? '').toString().replaceAll(RegExp(r'[\s\-\(\)]'), '');
+                    if (clean == currClean) return 'New number cannot match the current number';
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                if (phoneFormKey.currentState!.validate()) {
+                  Navigator.pop(ctx, true);
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+              child: const Text('Approve & Save Phone'),
             ),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Are you sure you want to approve this request for $customerName?',
-              style: const TextStyle(fontSize: 14),
-            ),
-            const SizedBox(height: 12),
-            if (isCallCompletion) ...[
+      );
+
+      if (proceed != true) return;
+      phoneToUpdate = phoneController.text.trim();
+    } else if (isEditCustomerDetails) {
+      try {
+        newDetails = jsonDecode(newValue);
+      } catch (_) {}
+      try {
+        oldDetails = jsonDecode((request['current_value'] ?? '').toString());
+      } catch (_) {}
+
+      final newCustName = newDetails['name']?.toString().trim();
+      final newCatName = newDetails['category_name']?.toString();
+      final newTypeName = newDetails['customer_type_name']?.toString();
+      final changedFields = (newDetails['changed_fields'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+
+      final bool? confirmEdit = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: const Row(
+            children: [
+              Icon(Icons.manage_accounts_rounded, color: Color(0xFF007A87)),
+              SizedBox(width: 8),
+              Text('Approve Customer Edit', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Approve customer detail updates for $customerName?', style: const TextStyle(fontSize: 14)),
+              const SizedBox(height: 12),
               Container(
+                width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.purple.withValues(alpha: 0.1),
+                  color: const Color(0xFF007A87).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
+                  border: Border.all(color: const Color(0xFF007A87).withValues(alpha: 0.3)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Action: Mark Call Status as Completed',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.purple),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Call Duration: $callDuration sec',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[800], fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'Called By: $requestingUserEmail',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[800]),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'Call Timestamp: ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())} (Current Time)',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[800]),
-                    ),
-                    if (completionRemarks.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Remarks: $completionRemarks',
-                        style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey[800]),
-                      ),
+                    if (changedFields.contains('name') && newCustName != null) ...[
+                      Text('Name:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey[700])),
+                      Text('${oldDetails['name'] ?? 'N/A'}  ➔  $newCustName', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF007A87))),
+                      const SizedBox(height: 6),
+                    ],
+                    if (changedFields.contains('customer_type') && newTypeName != null) ...[
+                      Text('Customer Type:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey[700])),
+                      Text('${oldDetails['customer_type_name'] ?? 'N/A'}  ➔  $newTypeName', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF007A87))),
+                      const SizedBox(height: 6),
+                    ],
+                    if (changedFields.contains('category') && newCatName != null) ...[
+                      Text('Category:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey[700])),
+                      Text('${oldDetails['category_name'] ?? 'N/A'}  ➔  $newCatName', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF007A87))),
                     ],
                   ],
                 ),
               ),
-            ] else ...[
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      isPhoneChange ? 'New Phone Number:' : 'New Preference:',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      newValue,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.green),
-                    ),
-                  ],
-                ),
-              ),
+              if ((request['reason'] ?? '').toString().isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text('Reason: ${request['reason']}', style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
+              ],
             ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF007A87), foregroundColor: Colors.white),
+              child: const Text('Confirm & Apply'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Confirm Approve'),
-          ),
-        ],
-      ),
-    );
+      );
 
-    if (confirm != true) return;
+      if (confirmEdit != true) return;
+    } else {
+      // Call completion or Preference change dialog
+      final bool? confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.green),
+              const SizedBox(width: 8),
+              Text(
+                isCallCompletion ? 'Approve Call Completion' : 'Approve Request',
+                style: const TextStyle(fontSize: 18),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Are you sure you want to approve this request for $customerName?',
+                style: const TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 12),
+              if (isCallCompletion) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.purple.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Action: Mark Call Status as Completed',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.purple),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Call Duration: $callDuration sec',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[800], fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Called By: $requestingUserEmail',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[800]),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Call Timestamp: ${DateFormat('dd MMM yyyy, hh:mm a').format(submissionDateTime ?? DateTime.now())} (Request Submission Time)',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[800], fontWeight: FontWeight.w600),
+                      ),
+                      if (completionRemarks.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'Remarks: $completionRemarks',
+                          style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey[800]),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ] else ...[
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'New Preference:',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        newValue,
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.green),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Confirm Approve'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm != true) return;
+    }
 
     try {
       final client = await DmeConfig.getClient();
@@ -262,7 +444,7 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
           final payload = <String, dynamic>{
             'status': 'completed',
             'call_duration': callDuration,
-            'called_timestamp': nowIso,
+            'called_timestamp': calledTimestampIso,
             'called_by': requestingUserEmail,
             'remarks': completionRemarks,
             'updated_at': nowIso,
@@ -270,9 +452,9 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
           await client.from('dme_reminders').update(payload).eq('id', reminderId);
         }
 
-        // Increment daily call count for the requesting user
+        // Increment daily call count for the requesting user on the day the call was requested/made
         try {
-          final statDate = DateFormat('yyyy-MM-dd').format(now);
+          final statDate = DateFormat('yyyy-MM-dd').format(submissionDateTime ?? now);
           final uid = requestingUserUid.isNotEmpty ? requestingUserUid : requestingUserEmail;
           await DmeUserStatsService.incrementCallCount(
             userUid: uid,
@@ -282,11 +464,70 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
         } catch (statErr) {
           debugPrint('Notice updating user daily stats: $statErr');
         }
+
+        // Record the completed call in dme_call_logs table with the request submission timestamp
+        try {
+          await client.from('dme_call_logs').insert({
+            if (reminderId != null) 'reminder_id': reminderId,
+            'customer_id': customerId,
+            'caller_uid': requestingUserUid.isNotEmpty ? requestingUserUid : requestingUserEmail,
+            'caller_email': requestingUserEmail,
+            'attempt_timestamp': calledTimestampIso,
+            'ring_duration': callDuration,
+            'call_type': 'outgoing',
+            'is_answered': true,
+            'call_day': DateFormat('yyyy-MM-dd').format(submissionDateTime ?? now),
+          });
+        } catch (callLogErr) {
+          debugPrint('Notice logging call attempt to dme_call_logs: $callLogErr');
+        }
       } else if (isPhoneChange) {
         await client.from(DmeConstants.tableCustomers).update({
-          'phone': newValue,
+          'phone': phoneToUpdate,
           'updated_at': nowIso,
         }).eq('id', customerId);
+      } else if (isEditCustomerDetails) {
+        final newCustName = newDetails['name']?.toString().trim();
+        final newCatId = int.tryParse(newDetails['category_id']?.toString() ?? '');
+        final newTypeId = int.tryParse(newDetails['customer_type_id']?.toString() ?? '');
+        final changedFields = (newDetails['changed_fields'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+
+        // 1. Update customer name if changed
+        if (changedFields.contains('name') && newCustName != null && newCustName.isNotEmpty) {
+          await client.from(DmeConstants.tableCustomers).update({
+            'name': newCustName,
+            'updated_at': nowIso,
+          }).eq('id', customerId);
+        }
+
+        // 2. Update customer branches (customer_type_id, category_id)
+        final branchUpdates = <String, dynamic>{};
+        if (changedFields.contains('customer_type') && newTypeId != null) {
+          branchUpdates['customer_type_id'] = newTypeId;
+        }
+        if (changedFields.contains('category') && newCatId != null) {
+          branchUpdates['category_id'] = newCatId;
+        }
+
+        if (branchUpdates.isNotEmpty) {
+          final existing = await client
+              .from(DmeConstants.tableCustomerBranches)
+              .select('id')
+              .eq('customer_id', customerId);
+
+          if ((existing as List).isNotEmpty) {
+            await client
+                .from(DmeConstants.tableCustomerBranches)
+                .update(branchUpdates)
+                .eq('customer_id', customerId);
+          } else {
+            await client.from(DmeConstants.tableCustomerBranches).insert({
+              'customer_id': customerId,
+              'branch_id': 1,
+              ...branchUpdates,
+            });
+          }
+        }
       } else {
         await client.from(DmeConstants.tableCustomers).update({
           'preference': newValue,
@@ -295,11 +536,15 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
       }
 
       // 2. Update change request record
-      await client.from(DmeConstants.tableChangeRequests).update({
+      final reqUpdates = <String, dynamic>{
         'status': 'approved',
         'reviewed_by': adminEmail,
         'updated_at': nowIso,
-      }).eq('id', request['id']);
+      };
+      if (isPhoneChange && phoneToUpdate != null) {
+        reqUpdates['new_value'] = phoneToUpdate;
+      }
+      await client.from(DmeConstants.tableChangeRequests).update(reqUpdates).eq('id', request['id']);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -308,8 +553,10 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
               isCallCompletion
                   ? 'Call status approved & marked as completed with $callDuration sec!'
                   : (isPhoneChange
-                      ? 'Phone number updated to $newValue! Reminder unlocked.'
-                      : 'Preference updated to $newValue successfully!'),
+                      ? 'Phone number updated to $phoneToUpdate! Reminder unlocked.'
+                      : (isEditCustomerDetails
+                          ? 'Customer details updated successfully!'
+                          : 'Preference updated to $newValue successfully!')),
             ),
             backgroundColor: Colors.green,
           ),
@@ -574,6 +821,16 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
                       ),
                       const SizedBox(width: 8),
                       ChoiceChip(
+                        avatar: const Icon(Icons.manage_accounts_rounded, size: 16),
+                        label: const Text('Customer Details'),
+                        selected: _selectedTypeFilter == 'edit_customer_details',
+                        selectedColor: const Color(0xFF007A87).withValues(alpha: 0.25),
+                        onSelected: (val) {
+                          if (val) setState(() => _selectedTypeFilter = 'edit_customer_details');
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      ChoiceChip(
                         avatar: const Icon(Icons.check_circle_outline_rounded, size: 16),
                         label: const Text('Call Completions'),
                         selected: _selectedTypeFilter == 'call_completion',
@@ -656,6 +913,7 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
           final type = (req['request_type'] ?? '').toString();
           final isCallCompletion = type == 'call_completion';
           final isPhone = type == 'phone_number_change';
+          final isEditDetails = type == 'edit_customer_details';
           final status = (req['status'] ?? 'pending').toString().toLowerCase();
           final customerName = req['customer_name'] ?? 'Unnamed Customer';
           final currentVal = req['current_value'] ?? 'N/A';
@@ -669,6 +927,7 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
           int completionDuration = 0;
           String completionRemarks = '';
           String completionNote = '';
+          String? completionCalledTs;
           if (isCallCompletion) {
             if (newVal.startsWith('{')) {
               try {
@@ -676,10 +935,23 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
                 completionDuration = int.tryParse(d['duration']?.toString() ?? '') ?? 0;
                 completionRemarks = d['remarks']?.toString() ?? '';
                 completionNote = d['reason']?.toString() ?? '';
+                completionCalledTs = d['called_timestamp']?.toString();
               } catch (_) {}
             } else {
               completionDuration = int.tryParse(newVal) ?? 0;
             }
+            completionCalledTs ??= req['created_at']?.toString();
+          }
+
+          Map<String, dynamic> oldDetails = {};
+          Map<String, dynamic> newDetails = {};
+          if (isEditDetails) {
+            try {
+              oldDetails = jsonDecode(currentVal.toString());
+            } catch (_) {}
+            try {
+              newDetails = jsonDecode(newVal.toString());
+            } catch (_) {}
           }
 
           return Card(
@@ -699,7 +971,11 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
                         decoration: BoxDecoration(
                           color: isCallCompletion
                               ? Colors.purple.withValues(alpha: 0.15)
-                              : (isPhone ? Colors.orange.withValues(alpha: 0.15) : const Color(0xFF005BAC).withValues(alpha: 0.15)),
+                              : (isPhone
+                                  ? Colors.orange.withValues(alpha: 0.15)
+                                  : (isEditDetails
+                                      ? const Color(0xFF007A87).withValues(alpha: 0.15)
+                                      : const Color(0xFF005BAC).withValues(alpha: 0.15))),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Row(
@@ -708,23 +984,39 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
                             Icon(
                               isCallCompletion
                                   ? Icons.check_circle_outline_rounded
-                                  : (isPhone ? Icons.phone_iphone_rounded : Icons.swap_horiz_rounded),
+                                  : (isPhone
+                                      ? Icons.phone_iphone_rounded
+                                      : (isEditDetails
+                                          ? Icons.manage_accounts_rounded
+                                          : Icons.swap_horiz_rounded)),
                               size: 13,
                               color: isCallCompletion
                                   ? Colors.purple.shade900
-                                  : (isPhone ? Colors.orange.shade900 : const Color(0xFF005BAC)),
+                                  : (isPhone
+                                      ? Colors.orange.shade900
+                                      : (isEditDetails
+                                          ? const Color(0xFF005B66)
+                                          : const Color(0xFF005BAC))),
                             ),
                             const SizedBox(width: 4),
                             Text(
                               isCallCompletion
                                   ? 'CALL COMPLETION'
-                                  : (isPhone ? 'PHONE CHANGE' : 'PREFERENCE CHANGE'),
+                                  : (isPhone
+                                      ? 'PHONE CHANGE'
+                                      : (isEditDetails
+                                          ? 'CUSTOMER DETAILS'
+                                          : 'PREFERENCE CHANGE')),
                               style: TextStyle(
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.bold,
                                 color: isCallCompletion
                                     ? Colors.purple.shade900
-                                    : (isPhone ? Colors.orange.shade900 : const Color(0xFF005BAC)),
+                                    : (isPhone
+                                        ? Colors.orange.shade900
+                                        : (isEditDetails
+                                            ? const Color(0xFF005B66)
+                                            : const Color(0xFF005BAC))),
                               ),
                             ),
                           ],
@@ -816,6 +1108,26 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
                               ),
                             ],
                           ),
+                          if (completionCalledTs != null) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Text(
+                                  'Called Time: ',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                ),
+                                Text(
+                                  _formatDateTime(completionCalledTs),
+                                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '(Submission Time)',
+                                  style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.grey[600]),
+                                ),
+                              ],
+                            ),
+                          ],
                           if (completionRemarks.isNotEmpty) ...[
                             const SizedBox(height: 4),
                             Row(
@@ -852,6 +1164,67 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
                               ],
                             ),
                           ],
+                        ] else if (isEditDetails) ...[
+                          // Customer Details Changes
+                          if (newDetails['name'] != null && newDetails['name'] != oldDetails['name']) ...[
+                            Row(
+                              children: [
+                                Text('Name: ', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                                Text('${oldDetails['name'] ?? 'N/A'}  ➔  ', style: const TextStyle(fontSize: 12.5)),
+                                Text(
+                                  '${newDetails['name']}',
+                                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF007A87)),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                          ],
+                          if (newDetails['customer_type_name'] != null &&
+                              newDetails['customer_type_name'] != oldDetails['customer_type_name']) ...[
+                            Row(
+                              children: [
+                                Text('Customer Type: ', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                                Text('${oldDetails['customer_type_name'] ?? 'N/A'}  ➔  ', style: const TextStyle(fontSize: 12.5)),
+                                Text(
+                                  '${newDetails['customer_type_name']}',
+                                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF007A87)),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                          ],
+                          if (newDetails['category_name'] != null &&
+                              newDetails['category_name'] != oldDetails['category_name']) ...[
+                            Row(
+                              children: [
+                                Text('Category: ', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                                Text('${oldDetails['category_name'] ?? 'N/A'}  ➔  ', style: const TextStyle(fontSize: 12.5)),
+                                Text(
+                                  '${newDetails['category_name']}',
+                                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF007A87)),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                          ],
+                          if (reason.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Reason: ',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    reason,
+                                    style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ] else ...[
                           Row(
                             children: [
@@ -872,14 +1245,27 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
                                 isPhone ? 'New Phone: ' : 'New Preference: ',
                                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                               ),
-                              Text(
-                                newVal,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: isPhone ? Colors.green.shade700 : const Color(0xFF005BAC),
+                              if (isPhone && (newVal.isEmpty || newVal == 'N/A' || newVal == 'Pending Admin Entry'))
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text(
+                                    'Admin will enter new number upon approval',
+                                    style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.orange),
+                                  ),
+                                )
+                              else
+                                Text(
+                                  newVal,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: isPhone ? Colors.green.shade700 : const Color(0xFF005BAC),
+                                  ),
                                 ),
-                              ),
                             ],
                           ),
                           if (reason.isNotEmpty) ...[
