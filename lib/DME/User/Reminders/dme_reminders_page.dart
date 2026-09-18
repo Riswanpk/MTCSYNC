@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../dme_constants.dart';
 import '../../dme_config.dart';
 import 'dme_reminder_detail_page.dart';
+import 'dme_call_scanner_service.dart';
 import '../dme_assignment_service.dart';
 import 'dme_remarks_pending_page.dart';
 
@@ -149,6 +150,18 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
         currentUserId: user.uid,
         filterBranchId: _selectedBranchId,
       );
+
+      // Automatically scan today's call logs against assigned reminders
+      try {
+        final email = user.email ?? '';
+        await DmeCallScannerService.scanTodayCallLog(
+          assignedToday,
+          userEmail: email,
+          userUid: user.uid,
+        );
+      } catch (scanErr) {
+        debugPrint('Notice scanning DME call log on reminders list: $scanErr');
+      }
 
       // 2. Fetch completed reminders for today
       final completed = await DmeAssignmentService.fetchUserCompletedToday(

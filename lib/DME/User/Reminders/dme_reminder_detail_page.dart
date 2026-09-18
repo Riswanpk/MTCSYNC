@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -46,6 +47,8 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
 
   List<Map<String, dynamic>> _salesHistory = [];
   bool _isLoadingHistory = false;
+  List<Map<String, dynamic>> _reminderCallLogs = [];
+  bool _isLoadingReminderLogs = false;
   List<Map<String, dynamic>> _callHistory = [];
   bool _isLoadingCallHistory = false;
   List<Map<String, dynamic>> _customerBranches = [];
@@ -87,7 +90,31 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     _fetchCustomerBranches();
     _fetchCustomerSalesHistory();
     _fetchCustomerCallHistory();
+    _fetchReminderCallLogs();
     _checkIfShortAttendedCallExists();
+  }
+
+  Future<void> _fetchReminderCallLogs() async {
+    final client = await DmeConfig.getClient();
+    final remId = _reminder['id'];
+    if (client == null || remId == null) return;
+    setState(() => _isLoadingReminderLogs = true);
+    try {
+      final res = await client
+          .from('dme_call_logs')
+          .select('*')
+          .eq('reminder_id', remId)
+          .order('attempt_timestamp', ascending: false);
+      if (mounted) {
+        setState(() {
+          _reminderCallLogs = List<Map<String, dynamic>>.from(res);
+          _isLoadingReminderLogs = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching reminder call logs: $e');
+      if (mounted) setState(() => _isLoadingReminderLogs = false);
+    }
   }
 
   Future<void> _checkIfShortAttendedCallExists() async {
@@ -239,6 +266,20 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     final parsed = DateTime.tryParse(str);
     if (parsed != null) {
       return DateFormat('dd-MM-yyyy').format(parsed);
+    }
+    return str;
+  }
+
+  String _formatDateTime(dynamic date) {
+    if (date == null) return 'N/A';
+    if (date is DateTime) {
+      return DateFormat('dd-MM-yyyy hh:mm a').format(date);
+    }
+    final str = date.toString().trim();
+    if (str.isEmpty) return 'N/A';
+    final parsed = DateTime.tryParse(str);
+    if (parsed != null) {
+      return DateFormat('dd-MM-yyyy hh:mm a').format(parsed);
     }
     return str;
   }
@@ -505,42 +546,58 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     setState(() => _isCheckingCall = true);
 
     try {
-      // On older Android (Oppo/Vivo Android 10), the dialer app writes to CallLog asynchronously.
-      // A small 1.2s delay gives the system time to flush the entry before we query.
+      // Small delay allows the Android dialer system service to flush call log
       await Future.delayed(const Duration(milliseconds: 1200));
 
       final contact = _reminder['customer_phone']?.toString() ?? '';
-      final entry = await DmeCallScannerService.fetchLatestCallForContact(
-        contact,
-        sinceTime: _callInitiatedTime,
+      final userEmail = FirebaseAuth.instance.currentUser?.email;
+      final userUid = FirebaseAuth.instance.currentUser?.uid;
+
+      final syncResult = await DmeCallScannerService.syncCallLogsForReminder(
+        reminderId: _reminder['id'],
+        customerId: _reminder['customer_id'],
+        contactPhone: contact,
+        callerEmail: userEmail,
+        callerUid: userUid,
       );
 
       final wasInitiated = _callInitiatedTime != null;
-      if (entry != null) {
-        _callInitiatedTime = null; // Clear now that we matched the call
+      if (syncResult.latestEntry != null || syncResult.totalTodayAttempts > 0) {
+        _callInitiatedTime = null; // Clear now that we matched
       }
 
       final now = DateTime.now();
-      int duration = 0;
-      DateTime calledTime = now;
+      final todayStr = DateFormat('yyyy-MM-dd').format(now);
+      final lastCallDay = _reminder['last_call_day']?.toString();
 
-      if (entry != null) {
-        duration = entry.duration ?? 0;
-        if (entry.timestamp != null && entry.timestamp! > 0) {
+      final bool hasCallsToday = syncResult.totalTodayAttempts > 0 || syncResult.recordedLogs.isNotEmpty;
+
+      if (hasCallsToday) {
+        // Calculate previous days' attempts vs today's attempts accurately
+        final int previousDaysAttempts = (lastCallDay == todayStr)
+            ? (_callAttempts - _todayCallAttempts).clamp(0, 9999)
+            : _callAttempts;
+
+        final int newTodayAttempts = syncResult.totalTodayAttempts;
+        final bool isNewAttempt = syncResult.newAttemptsLogged > 0;
+
+        _todayCallAttempts = math.max(_todayCallAttempts, newTodayAttempts);
+        _callAttempts = previousDaysAttempts + _todayCallAttempts;
+
+        final entry = syncResult.qualifyingEntry ?? syncResult.latestEntry;
+        int duration = entry?.duration ?? _callDuration ?? 0;
+        DateTime calledTime = now;
+        if (entry?.timestamp != null && entry!.timestamp! > 0) {
           calledTime = DateTime.fromMillisecondsSinceEpoch(entry.timestamp!);
+        } else if (_lastCallAttemptTimestamp != null) {
+          calledTime = _lastCallAttemptTimestamp!;
         }
 
-        // Count attempts from device call log
-        final actualAttempts = await DmeCallScannerService.getTodayOutgoingAttemptCount(contact);
-        final int newTodayAttempts = actualAttempts > 0 ? actualAttempts : (_todayCallAttempts + 1);
-        _todayCallAttempts = newTodayAttempts;
-        _callAttempts = _callAttempts + 1;
         _lastCallAttemptTimestamp = calledTime;
-
         _reminder['call_attempts'] = _callAttempts;
         _reminder['today_call_attempts'] = _todayCallAttempts;
         _reminder['last_call_attempt_timestamp'] = calledTime.toIso8601String();
-        _reminder['last_call_day'] = DateFormat('yyyy-MM-dd').format(calledTime);
+        _reminder['last_call_day'] = todayStr;
 
         _updateCallAttemptsInDb(
           totalAttempts: _callAttempts,
@@ -548,26 +605,12 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
           lastAttemptTimestamp: calledTime,
         );
 
-        // Attended call strictly requires duration > 10 seconds to allow remarks
-        final bool isAttended = duration > 10;
-        final bool isShortAttended = duration > 0 && duration <= 10;
-
-        // Log this attempt into `dme_call_logs` table
-        final userEmail = FirebaseAuth.instance.currentUser?.email;
-        final userUid = FirebaseAuth.instance.currentUser?.uid;
-        DmeCallScannerService.logCallAttempt(
-          reminderId: _reminder['id'],
-          customerId: _reminder['customer_id'],
-          callerEmail: userEmail,
-          callerUid: userUid,
-          ringDuration: duration,
-          callType: 'outgoing',
-          isAnswered: duration > 0,
-          attemptTimestamp: calledTime,
-        );
+        final bool isAttended = syncResult.hasAttendedCall || duration > 10;
+        final bool isShortAttended = syncResult.hasShortCall || (duration > 0 && duration <= 10);
 
         if (mounted) {
           setState(() {
+            _reminderCallLogs = syncResult.recordedLogs;
             _callDuration = duration;
             _calledTimestamp = calledTime;
             _callMade = isAttended;
@@ -582,25 +625,29 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
             _isCheckingCall = false;
           });
 
-          // If call attended (>0s), update Supabase with duration and status (if >10s)
+          // Update Supabase with attempt count, duration, and status
           final client = await DmeConfig.getClient();
           final remId = _reminder['id'];
           if (client != null && remId != null) {
             final payload = <String, dynamic>{
-              'call_duration': duration,
-              'called_timestamp': calledTime.toIso8601String(),
               'call_attempts': _callAttempts,
               'today_call_attempts': _todayCallAttempts,
               'last_call_attempt_timestamp': calledTime.toIso8601String(),
-              'last_call_day': DateFormat('yyyy-MM-dd').format(calledTime),
+              'last_call_day': todayStr,
               'updated_at': now.toIso8601String(),
             };
             if (isAttended) {
+              payload['call_duration'] = duration;
+              payload['called_timestamp'] = calledTime.toIso8601String();
               payload['status'] = 'called';
               if (userEmail != null && userEmail.isNotEmpty) {
                 payload['called_by'] = userEmail;
               }
+            } else if (duration > 0) {
+              payload['call_duration'] = duration;
+              payload['called_timestamp'] = calledTime.toIso8601String();
             }
+
             try {
               await client.from('dme_reminders').update(payload).eq('id', remId);
               widget.onUpdated?.call();
@@ -613,34 +660,56 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
             }
           }
 
-          if (isAttended) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Call attended ($duration sec)! Please add remarks below.'),
-                backgroundColor: Colors.green,
-                duration: const Duration(seconds: 3),
-              ),
-            );
-          } else if (isShortAttended) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Call was under 10s (${duration}s). Customer attended briefly — WhatsApp messaging is now enabled!',
+          // SnackBar feedback
+          if (isNewAttempt) {
+            if (isAttended) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Call attended ($duration sec)! Please add remarks below.'),
+                  backgroundColor: Colors.green,
+                  duration: const Duration(seconds: 3),
                 ),
-                backgroundColor: const Color(0xFF25D366),
-                duration: const Duration(seconds: 4),
-              ),
-            );
+              );
+            } else if (isShortAttended) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Call was under 10s (${duration}s). Customer attended briefly — WhatsApp messaging is now enabled!',
+                  ),
+                  backgroundColor: const Color(0xFF25D366),
+                  duration: const Duration(seconds: 4),
+                ),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Customer did not pick up (0s). Attempt $_todayCallAttempts/2 recorded for today.',
+                  ),
+                  backgroundColor: Colors.orange[900],
+                  duration: const Duration(seconds: 4),
+                ),
+              );
+            }
           } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Customer did not pick up (0s). Attempt $_todayCallAttempts/2 recorded for today.',
+            // Already synced, no new attempt made
+            if (isAttended) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Call log up to date. Call attended ($duration sec) — remarks enabled.'),
+                  backgroundColor: Colors.green,
+                  duration: const Duration(seconds: 3),
                 ),
-                backgroundColor: Colors.orange[900],
-                duration: const Duration(seconds: 4),
-              ),
-            );
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Call log is already up to date ($_todayCallAttempts/2 attempt(s) recorded for today).'),
+                  backgroundColor: const Color(0xFF005BAC),
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            }
           }
         }
       } else {
@@ -650,7 +719,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
             SnackBar(
               content: Text(
                 wasInitiated
-                    ? 'Call not detected yet in Android call log. Tap "Recheck Call Log" if dialer finished writing.'
+                    ? 'Call not detected yet in Android call log. Tap "Check Call Log" if dialer finished writing.'
                     : 'No outgoing call log found for this customer today.',
               ),
               backgroundColor: Colors.orange[800],
@@ -1285,6 +1354,141 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
               ),
             ),
             const SizedBox(height: 16),
+
+            // 2.3 Current Reminder's Call Logs & Attempts
+            if (_isLoadingReminderLogs)
+              const Center(child: Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator()))
+            else if (_reminderCallLogs.isNotEmpty) ...[
+              Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.phone_in_talk_rounded, size: 20, color: Color(0xFF005BAC)),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Call Attempts & Logs (${_reminderCallLogs.length})',
+                                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF005BAC).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '$_todayCallAttempts/2 today',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF005BAC)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _reminderCallLogs.length,
+                        separatorBuilder: (_, __) => const Divider(height: 14),
+                        itemBuilder: (context, idx) {
+                          final log = _reminderCallLogs[idx];
+                          final ts = log['attempt_timestamp']?.toString();
+                          final dur = int.tryParse(log['ring_duration']?.toString() ?? '') ?? 0;
+                          final type = (log['call_type'] ?? 'outgoing').toString();
+                          final caller = _getUserDisplayName(log['caller_email'] ?? log['caller_uid']);
+                          final isAnswered = dur > 0;
+                          final isLong = dur > 10;
+
+                          return Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(7),
+                                decoration: BoxDecoration(
+                                  color: isLong
+                                      ? Colors.green.withValues(alpha: 0.12)
+                                      : isAnswered
+                                          ? Colors.teal.withValues(alpha: 0.12)
+                                          : Colors.orange.withValues(alpha: 0.12),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  type == 'incoming'
+                                      ? Icons.call_received_rounded
+                                      : isAnswered
+                                          ? Icons.call_made_rounded
+                                          : Icons.call_missed_rounded,
+                                  size: 16,
+                                  color: isLong
+                                      ? Colors.green[800]
+                                      : isAnswered
+                                          ? Colors.teal[800]
+                                          : Colors.orange[900],
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          _formatDateTime(ts),
+                                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: isLong
+                                                ? Colors.green.withValues(alpha: 0.15)
+                                                : isAnswered
+                                                    ? Colors.teal.withValues(alpha: 0.15)
+                                                    : Colors.orange.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            dur > 0 ? '${dur}s Connected' : '0s Unanswered',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: isLong
+                                                  ? Colors.green[800]
+                                                  : isAnswered
+                                                      ? Colors.teal[800]
+                                                      : Colors.orange[900],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${type.toUpperCase()} • Attempt #${_reminderCallLogs.length - idx}${caller.isNotEmpty ? " • by $caller" : ""}',
+                                      style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
 
             // 2.5 Previous Call History (if any)
             if (_isLoadingCallHistory)

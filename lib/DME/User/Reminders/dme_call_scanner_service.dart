@@ -1,9 +1,31 @@
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:call_log/call_log.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:intl/intl.dart';
 import '../../dme_config.dart';
 import 'package:mtcsync/DME/User/dme_user_stats_service.dart';
+
+/// Result object for syncing call logs for a specific reminder
+class DmeCallSyncResult {
+  final int newAttemptsLogged;
+  final int totalTodayAttempts;
+  final CallLogEntry? qualifyingEntry;
+  final CallLogEntry? latestEntry;
+  final bool hasAttendedCall;
+  final bool hasShortCall;
+  final List<Map<String, dynamic>> recordedLogs;
+
+  DmeCallSyncResult({
+    required this.newAttemptsLogged,
+    required this.totalTodayAttempts,
+    this.qualifyingEntry,
+    this.latestEntry,
+    required this.hasAttendedCall,
+    required this.hasShortCall,
+    required this.recordedLogs,
+  });
+}
 
 class DmeCallScannerService {
   /// Robust phone number matching:
@@ -32,7 +54,7 @@ class DmeCallScannerService {
     return false;
   }
 
-  /// Logs an individual call attempt to `dme_call_logs` table in Supabase.
+  /// Logs an individual call attempt to `dme_call_logs` table in Supabase with deduplication.
   static Future<void> logCallAttempt({
     required dynamic reminderId,
     required dynamic customerId,
@@ -52,6 +74,27 @@ class DmeCallScannerService {
       final now = attemptTimestamp ?? DateTime.now();
       final statDate = DateFormat('yyyy-MM-dd').format(now);
 
+      // Deduplication check: prevent inserting duplicate row if already recorded within ±5s
+      if (reminderId != null) {
+        try {
+          final existing = await client
+              .from('dme_call_logs')
+              .select('id, attempt_timestamp')
+              .eq('reminder_id', reminderId);
+          final bool alreadyExists = (existing as List).any((row) {
+            final rowTs = row['attempt_timestamp']?.toString();
+            if (rowTs == null) return false;
+            final rowDt = DateTime.tryParse(rowTs);
+            if (rowDt == null) return false;
+            return (rowDt.millisecondsSinceEpoch - now.millisecondsSinceEpoch).abs() <= 5000;
+          });
+          if (alreadyExists) {
+            debugPrint('[DmeCallScanner] Duplicate call attempt prevented for reminder $reminderId at $now');
+            return;
+          }
+        } catch (_) {}
+      }
+
       await client.from('dme_call_logs').insert({
         if (reminderId != null) 'reminder_id': reminderId,
         if (customerId != null) 'customer_id': customerId,
@@ -69,40 +112,13 @@ class DmeCallScannerService {
     }
   }
 
-  /// Returns total number of outgoing call attempts to this contact made today.
-  static Future<int> getTodayOutgoingAttemptCount(String contactPhone) async {
-    try {
-      final now = DateTime.now();
-      final startOfToday = DateTime(now.year, now.month, now.day);
-      final Iterable<CallLogEntry> entries = await CallLog.query(
-        dateFrom: startOfToday.millisecondsSinceEpoch,
-        dateTo: now.add(const Duration(minutes: 2)).millisecondsSinceEpoch,
-      );
-      final matching = entries.where((entry) {
-        if (entry.callType != CallType.outgoing) return false;
-        final logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
-        if (logNumber.isEmpty) return false;
-        return numberMatches(logNumber, contactPhone);
-      });
-      return matching.length;
-    } catch (_) {
-      return 0;
-    }
-  }
-
   /// Ensures phone state and call log permissions are requested and granted.
-  /// Android 10 (API 29) requires explicit READ_CALL_LOG permission.
   static Future<bool> ensureCallLogPermissions() async {
     try {
-      // 1. Check and request phone permission (READ_PHONE_STATE)
       var phoneStatus = await Permission.phone.status;
       if (!phoneStatus.isGranted) {
         phoneStatus = await Permission.phone.request();
       }
-
-      // 2. Check and request call log permission (READ_CALL_LOG / phoneLog)
-      // Some Android 10 OEM devices (Oppo, Vivo, Xiaomi) separate phone and phoneLog/contacts.
-      // We check Permission.phone and also try querying directly if granted.
       return phoneStatus.isGranted;
     } catch (e) {
       debugPrint('ensureCallLogPermissions warning: $e');
@@ -110,44 +126,37 @@ class DmeCallScannerService {
     }
   }
 
-  /// Fetches the qualifying call log entry for a specific contact today:
-  /// - Strictly checks call logs for today (same day only: startOfToday to now).
-  /// - Remarks require a call duration > 10 seconds.
-  /// - If the customer calls back with duration > 10s, it only qualifies if the user
-  ///   attempted to call the customer first that same day.
-  /// - If no call > 10s exists, returns the latest outgoing attempt today (duration <= 10s)
-  ///   so an attempt can be tracked without allowing remarks.
-  static Future<CallLogEntry?> fetchLatestCallForContact(
+  /// Fetches all call log entries for a contact today:
+  /// - Queries the full duration of today (from 00:00:00 - 1h up to now + 30m).
+  /// - Includes fallback for Android 10 OEM devices.
+  /// - Returns entries in chronological order.
+  static Future<List<CallLogEntry>> fetchTodayCallsForContact(
     String contactPhone, {
-    DateTime? sinceTime,
-    int maxRetries = 4,
-    Duration retryDelay = const Duration(milliseconds: 1800),
+    int maxRetries = 2,
+    Duration retryDelay = const Duration(milliseconds: 1200),
   }) async {
     await ensureCallLogPermissions();
 
     final now = DateTime.now();
-    // Use generous start of today (beginning of day minus 1 hour for safe margin)
     final startOfToday = DateTime(now.year, now.month, now.day).subtract(const Duration(hours: 1));
+    final endOfToday = now.add(const Duration(minutes: 30));
 
     for (int attempt = 0; attempt <= maxRetries; attempt++) {
       if (attempt > 0) {
-        debugPrint('[DmeCallScanner] Attempt $attempt/$maxRetries: waiting ${retryDelay.inMilliseconds}ms for system dialer write...');
         await Future.delayed(retryDelay);
       }
 
       try {
-        final currentNow = DateTime.now().add(const Duration(minutes: 30));
         Iterable<CallLogEntry> entries = [];
         try {
           entries = await CallLog.query(
             dateFrom: startOfToday.millisecondsSinceEpoch,
-            dateTo: currentNow.millisecondsSinceEpoch,
+            dateTo: endOfToday.millisecondsSinceEpoch,
           );
         } catch (queryErr) {
           debugPrint('[DmeCallScanner] date-filtered query failed ($queryErr). Falling back to unfiltered query.');
         }
 
-        // Fallback for older Android 10 OEM devices (Oppo/Vivo/Xiaomi) where date filtering fails in SQLite provider
         if (entries.isEmpty) {
           try {
             entries = await CallLog.query();
@@ -156,90 +165,256 @@ class DmeCallScannerService {
           }
         }
 
-        debugPrint('[DmeCallScanner] Query returned ${entries.length} raw entries. Checking contact: $contactPhone');
-
         final matching = entries.where((entry) {
           final logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
           if (logNumber.isEmpty) return false;
-          final isMatch = numberMatches(logNumber, contactPhone);
-          if (isMatch) {
-            debugPrint('[DmeCallScanner] Matched log entry: num=$logNumber, duration=${entry.duration}, type=${entry.callType}, ts=${entry.timestamp}');
-          }
-          return isMatch;
+          return numberMatches(logNumber, contactPhone);
         }).toList();
 
-        if (matching.isEmpty) {
-          debugPrint('[DmeCallScanner] No matching call log found for $contactPhone on attempt $attempt.');
-          continue;
-        }
+        if (matching.isEmpty) continue;
 
-        // Separate outgoing and incoming calls today
-        final outgoingList = matching
-            .where((e) => e.callType == CallType.outgoing)
-            .toList()
-          ..sort((a, b) => (a.timestamp ?? 0).compareTo(b.timestamp ?? 0)); // chronological
+        // Filter to entries strictly from today
+        final todayMatching = matching.where((entry) {
+          final ts = entry.timestamp;
+          if (ts == null || ts <= 0) return false;
+          return ts >= startOfToday.millisecondsSinceEpoch && ts <= endOfToday.millisecondsSinceEpoch;
+        }).toList();
 
-        final incomingList = matching
-            .where((e) => e.callType == CallType.incoming)
-            .toList()
-          ..sort((a, b) => (a.timestamp ?? 0).compareTo(b.timestamp ?? 0));
+        if (todayMatching.isEmpty) continue;
 
-        final bool hasOutgoingAttemptToday = outgoingList.isNotEmpty;
-        final int firstOutgoingTime = hasOutgoingAttemptToday
-            ? (outgoingList.first.timestamp ?? 0)
-            : -1;
+        // Sort chronologically (oldest to newest)
+        todayMatching.sort((a, b) => (a.timestamp ?? 0).compareTo(b.timestamp ?? 0));
 
-        // Qualifying attended calls must have duration > 10:
-        // 1. Outgoing call with duration > 10
-        // 2. Incoming callback with duration > 10 ONLY IF user attempted to call first today
-        final List<CallLogEntry> qualifyingAttended = [];
+        // Keep outgoing calls and qualifying callbacks (customer called back after user attempted call)
+        final outgoingList = todayMatching.where((e) => e.callType == CallType.outgoing).toList();
+        final firstOutgoingTime = outgoingList.isNotEmpty ? (outgoingList.first.timestamp ?? 0) : -1;
 
-        for (var out in outgoingList) {
-          if ((out.duration ?? 0) > 10) {
-            qualifyingAttended.add(out);
+        final relevant = todayMatching.where((entry) {
+          if (entry.callType == CallType.outgoing) return true;
+          if (entry.callType == CallType.incoming && firstOutgoingTime > 0) {
+            return (entry.timestamp ?? 0) >= firstOutgoingTime;
           }
-        }
+          return false;
+        }).toList();
 
-        if (hasOutgoingAttemptToday) {
-          for (var inc in incomingList) {
-            if ((inc.duration ?? 0) > 10 && (inc.timestamp ?? 0) >= firstOutgoingTime) {
-              qualifyingAttended.add(inc);
-            }
-          }
-        }
-
-        qualifyingAttended.sort((a, b) => (b.timestamp ?? 0).compareTo(a.timestamp ?? 0));
-
-        // If an attended call (> 10s) was found, return it immediately
-        if (qualifyingAttended.isNotEmpty) {
-          return qualifyingAttended.first;
-        }
-
-        // If no attended call > 10s was found, but the user attempted an outgoing call:
-        if (hasOutgoingAttemptToday) {
-          if (sinceTime != null) {
-            // Generous window: allow 5 minutes prior to sinceTime to absorb dialer/system clock discrepancies
-            final sinceMs = sinceTime.subtract(const Duration(minutes: 5)).millisecondsSinceEpoch;
-            final recentOutgoing = outgoingList.where((e) => (e.timestamp ?? 0) >= sinceMs).toList();
-            if (recentOutgoing.isNotEmpty) {
-              return recentOutgoing.last;
-            }
-          }
-          // Fallback: If time window missed due to device clock skew, return the latest outgoing call found
-          return outgoingList.last;
+        if (relevant.isNotEmpty) {
+          return relevant;
         }
       } catch (e) {
-        debugPrint('[DmeCallScanner] Error querying call log attempt $attempt: $e');
+        debugPrint('[DmeCallScanner] Error fetching calls for contact ($attempt): $e');
       }
     }
-    return null;
+    return [];
+  }
+
+  /// Synchronizes device call logs with `dme_call_logs` table for a specific reminder:
+  /// - Fetches all calls today from device call log.
+  /// - Checks existing rows in `dme_call_logs` for `reminder_id`.
+  /// - Inserts ONLY new, unrecorded call attempts with timestamp and duration.
+  /// - Never duplicates attempts or database rows.
+  static Future<DmeCallSyncResult> syncCallLogsForReminder({
+    required dynamic reminderId,
+    required dynamic customerId,
+    required String contactPhone,
+    String? callerEmail,
+    String? callerUid,
+    int maxRetries = 2,
+  }) async {
+    final client = await DmeConfig.getClient();
+    final deviceCalls = await fetchTodayCallsForContact(
+      contactPhone,
+      maxRetries: maxRetries,
+    );
+
+    // Fetch existing records from dme_call_logs for this reminder
+    List<Map<String, dynamic>> existingLogs = [];
+    if (client != null && reminderId != null) {
+      try {
+        final res = await client
+            .from('dme_call_logs')
+            .select('*')
+            .eq('reminder_id', reminderId)
+            .order('attempt_timestamp', ascending: true);
+        existingLogs = List<Map<String, dynamic>>.from(res);
+      } catch (e) {
+        debugPrint('[DmeCallScanner] Error fetching existing call logs: $e');
+      }
+    }
+
+    int newAttemptsCount = 0;
+    final now = DateTime.now();
+    final todayStr = DateFormat('yyyy-MM-dd').format(now);
+
+    for (var entry in deviceCalls) {
+      final ts = entry.timestamp;
+      if (ts == null || ts <= 0) continue;
+      final callDt = DateTime.fromMillisecondsSinceEpoch(ts);
+      final duration = entry.duration ?? 0;
+      final callType = entry.callType == CallType.incoming ? 'incoming' : 'outgoing';
+
+      // Check if this entry is already recorded in existingLogs
+      final bool alreadyRecorded = existingLogs.any((log) {
+        final logTs = log['attempt_timestamp']?.toString();
+        if (logTs == null) return false;
+        final logDt = DateTime.tryParse(logTs);
+        if (logDt == null) return false;
+        // Timestamp within ±5000ms considered the exact same call
+        return (logDt.millisecondsSinceEpoch - callDt.millisecondsSinceEpoch).abs() <= 5000;
+      });
+
+      if (!alreadyRecorded && client != null) {
+        try {
+          final inserted = await client.from('dme_call_logs').insert({
+            if (reminderId != null) 'reminder_id': reminderId,
+            if (customerId != null) 'customer_id': customerId,
+            'caller_uid': callerUid,
+            'caller_email': callerEmail,
+            'attempt_timestamp': callDt.toIso8601String(),
+            'ring_duration': duration,
+            'call_type': callType,
+            'is_answered': duration > 0,
+            'call_day': DateFormat('yyyy-MM-dd').format(callDt),
+          }).select();
+
+          if ((inserted as List).isNotEmpty) {
+            existingLogs.add(Map<String, dynamic>.from(inserted.first));
+          } else {
+            existingLogs.add({
+              'reminder_id': reminderId,
+              'customer_id': customerId,
+              'caller_uid': callerUid,
+              'caller_email': callerEmail,
+              'attempt_timestamp': callDt.toIso8601String(),
+              'ring_duration': duration,
+              'call_type': callType,
+              'is_answered': duration > 0,
+              'call_day': DateFormat('yyyy-MM-dd').format(callDt),
+            });
+          }
+          newAttemptsCount++;
+          debugPrint('[DmeCallScanner] Synced NEW call log: duration=$duration, time=$callDt');
+        } catch (insertErr) {
+          debugPrint('[DmeCallScanner] Error inserting call log: $insertErr');
+        }
+      }
+    }
+
+    // Determine today's distinct attempts:
+    // Count distinct outgoing calls made today from deviceCalls, or from today's dme_call_logs
+    final todayDeviceOutgoing = deviceCalls.where((e) => e.callType == CallType.outgoing).length;
+    final todayLogs = existingLogs.where((l) {
+      final day = l['call_day']?.toString();
+      if (day == todayStr) return true;
+      final ts = l['attempt_timestamp']?.toString();
+      if (ts != null) {
+        final dt = DateTime.tryParse(ts);
+        if (dt != null && DateFormat('yyyy-MM-dd').format(dt) == todayStr) {
+          return true;
+        }
+      }
+      return false;
+    }).length;
+
+    final totalTodayAttempts = math.max(todayDeviceOutgoing, todayLogs);
+
+    // Check attended (>10s) and short-attended (<=10s && >0s)
+    bool hasAttended = false;
+    bool hasShort = false;
+    CallLogEntry? qualifyingAttended;
+    CallLogEntry? latestOutgoing;
+
+    for (var entry in deviceCalls) {
+      final dur = entry.duration ?? 0;
+      if (dur > 10) {
+        hasAttended = true;
+        qualifyingAttended = entry;
+      } else if (dur > 0 && dur <= 10) {
+        hasShort = true;
+      }
+      if (entry.callType == CallType.outgoing) {
+        latestOutgoing = entry;
+      }
+    }
+
+    // Also check existingLogs in case call was logged earlier or on another device
+    for (var log in existingLogs) {
+      final dur = int.tryParse(log['ring_duration']?.toString() ?? '') ?? 0;
+      if (dur > 10) {
+        hasAttended = true;
+      } else if (dur > 0 && dur <= 10) {
+        hasShort = true;
+      }
+    }
+
+    final qualifyingEntry = qualifyingAttended ?? latestOutgoing ?? (deviceCalls.isNotEmpty ? deviceCalls.last : null);
+    final latestEntry = deviceCalls.isNotEmpty ? deviceCalls.last : null;
+
+    // Sort existingLogs descending by attempt_timestamp for display
+    existingLogs.sort((a, b) {
+      final aTs = a['attempt_timestamp']?.toString() ?? '';
+      final bTs = b['attempt_timestamp']?.toString() ?? '';
+      return bTs.compareTo(aTs);
+    });
+
+    return DmeCallSyncResult(
+      newAttemptsLogged: newAttemptsCount,
+      totalTodayAttempts: totalTodayAttempts,
+      qualifyingEntry: qualifyingEntry,
+      latestEntry: latestEntry,
+      hasAttendedCall: hasAttended,
+      hasShortCall: hasShort,
+      recordedLogs: existingLogs,
+    );
+  }
+
+  /// Returns total number of outgoing call attempts to this contact made today.
+  static Future<int> getTodayOutgoingAttemptCount(String contactPhone) async {
+    try {
+      final calls = await fetchTodayCallsForContact(contactPhone, maxRetries: 1);
+      return calls.where((e) => e.callType == CallType.outgoing).length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Fetches the qualifying call log entry for a specific contact today.
+  static Future<CallLogEntry?> fetchLatestCallForContact(
+    String contactPhone, {
+    DateTime? sinceTime,
+    int maxRetries = 4,
+    Duration retryDelay = const Duration(milliseconds: 1800),
+  }) async {
+    final calls = await fetchTodayCallsForContact(
+      contactPhone,
+      maxRetries: maxRetries,
+      retryDelay: retryDelay,
+    );
+    if (calls.isEmpty) return null;
+
+    // Find qualifying attended calls (> 10s)
+    final attended = calls.where((e) => (e.duration ?? 0) > 10).toList();
+    if (attended.isNotEmpty) {
+      return attended.last;
+    }
+
+    // Outgoing attempts
+    final outgoing = calls.where((e) => e.callType == CallType.outgoing).toList();
+    if (outgoing.isNotEmpty) {
+      if (sinceTime != null) {
+        final sinceMs = sinceTime.subtract(const Duration(minutes: 5)).millisecondsSinceEpoch;
+        final recent = outgoing.where((e) => (e.timestamp ?? 0) >= sinceMs).toList();
+        if (recent.isNotEmpty) return recent.last;
+      }
+      return outgoing.last;
+    }
+
+    return calls.last;
   }
 
   /// Scans today's call logs (same day only) against the provided reminders:
   /// - Strictly same day (00:00:00 to now).
-  /// - Outgoing calls are checked.
-  /// - Incoming callbacks with duration > 10s only count if an outgoing attempt was made first today.
-  /// - Only calls with duration > 10 seconds are marked as status = 'called'.
+  /// - Syncs detected calls into `dme_call_logs` deduplicated.
+  /// - Updates reminder status, duration, called_by, and attempt counts.
   static Future<List<Map<String, dynamic>>> scanTodayCallLog(
     List<Map<String, dynamic>> reminders, {
     required String userEmail,
@@ -250,12 +425,20 @@ class DmeCallScannerService {
 
     try {
       final now = DateTime.now();
-      // Strictly same day only
       final startOfDay = DateTime(now.year, now.month, now.day);
-      final Iterable<CallLogEntry> entries = await CallLog.query(
-        dateFrom: startOfDay.millisecondsSinceEpoch,
-        dateTo: now.millisecondsSinceEpoch,
-      );
+      Iterable<CallLogEntry> entries = [];
+      try {
+        entries = await CallLog.query(
+          dateFrom: startOfDay.millisecondsSinceEpoch,
+          dateTo: now.millisecondsSinceEpoch,
+        );
+      } catch (_) {}
+
+      if (entries.isEmpty) {
+        try {
+          entries = await CallLog.query();
+        } catch (_) {}
+      }
 
       final client = await DmeConfig.getClient();
       final List<Map<String, dynamic>> detected = [];
@@ -279,16 +462,50 @@ class DmeCallScannerService {
 
         if (matching.isEmpty) continue;
 
-        final outgoingList = matching.where((e) => e.callType == CallType.outgoing).toList()
+        // Filter to entries strictly from today
+        final todayMatching = matching.where((entry) {
+          final ts = entry.timestamp;
+          if (ts == null || ts <= 0) return false;
+          return ts >= startOfDay.millisecondsSinceEpoch;
+        }).toList();
+
+        if (todayMatching.isEmpty) continue;
+
+        final outgoingList = todayMatching.where((e) => e.callType == CallType.outgoing).toList()
           ..sort((a, b) => (a.timestamp ?? 0).compareTo(b.timestamp ?? 0));
-        final incomingList = matching.where((e) => e.callType == CallType.incoming).toList()
+        final incomingList = todayMatching.where((e) => e.callType == CallType.incoming).toList()
           ..sort((a, b) => (a.timestamp ?? 0).compareTo(b.timestamp ?? 0));
 
         // User must have attempted to call first that same day
         if (outgoingList.isEmpty) continue;
 
         final firstOutgoingTime = outgoingList.first.timestamp ?? 0;
-        final totalAttempts = outgoingList.length;
+        final totalTodayAttempts = outgoingList.length;
+
+        // Sync every today's call to dme_call_logs deduplicated
+        final remId = reminder['id'];
+        final custId = reminder['customer_id'];
+        if (client != null && remId != null) {
+          for (var callEntry in todayMatching) {
+            final cTs = callEntry.timestamp;
+            if (cTs == null || cTs <= 0) continue;
+            final callDt = DateTime.fromMillisecondsSinceEpoch(cTs);
+            final cDur = callEntry.duration ?? 0;
+            final isIncoming = callEntry.callType == CallType.incoming;
+            if (isIncoming && cTs < firstOutgoingTime) continue;
+
+            await logCallAttempt(
+              reminderId: remId,
+              customerId: custId,
+              callerEmail: userEmail,
+              callerUid: userUid,
+              ringDuration: cDur,
+              callType: isIncoming ? 'incoming' : 'outgoing',
+              isAnswered: cDur > 0,
+              attemptTimestamp: callDt,
+            );
+          }
+        }
 
         // Find qualifying attended calls (> 10s)
         final List<CallLogEntry> qualifyingAttended = [];
@@ -314,21 +531,35 @@ class DmeCallScannerService {
           reminder['called_timestamp'] = calledTime.toIso8601String();
           reminder['called_by'] = userEmail;
           reminder['status'] = 'called';
-          reminder['call_attempts'] = totalAttempts;
+          reminder['today_call_attempts'] = totalTodayAttempts;
+          reminder['call_attempts'] = totalTodayAttempts;
+          reminder['last_call_attempt_timestamp'] = calledTime.toIso8601String();
+          reminder['last_call_day'] = statDate;
 
-          if (client != null) {
-            final remId = reminder['id'];
-            if (remId != null) {
-              final payload = <String, dynamic>{
-                'call_duration': duration,
-                'called_timestamp': calledTime.toIso8601String(),
-                'called_by': userEmail,
-                'status': 'called',
-                'call_attempts': totalAttempts,
-                'updated_at': now.toIso8601String(),
-              };
+          if (client != null && remId != null) {
+            final payload = <String, dynamic>{
+              'call_duration': duration,
+              'called_timestamp': calledTime.toIso8601String(),
+              'called_by': userEmail,
+              'status': 'called',
+              'call_attempts': totalTodayAttempts,
+              'today_call_attempts': totalTodayAttempts,
+              'last_call_attempt_timestamp': calledTime.toIso8601String(),
+              'last_call_day': statDate,
+              'updated_at': now.toIso8601String(),
+            };
 
-              try {
+            try {
+              await client.from('dme_reminders').update(payload).eq('id', remId);
+              final uid = userUid ?? userEmail;
+              await DmeUserStatsService.incrementCallCount(
+                userUid: uid,
+                userEmail: userEmail,
+                statDate: statDate,
+              );
+            } catch (err) {
+              if (err.toString().contains('called_by')) {
+                payload.remove('called_by');
                 await client.from('dme_reminders').update(payload).eq('id', remId);
                 final uid = userUid ?? userEmail;
                 await DmeUserStatsService.incrementCallCount(
@@ -336,34 +567,28 @@ class DmeCallScannerService {
                   userEmail: userEmail,
                   statDate: statDate,
                 );
-              } catch (err) {
-                if (err.toString().contains('called_by')) {
-                  payload.remove('called_by');
-                  await client.from('dme_reminders').update(payload).eq('id', remId);
-                  final uid = userUid ?? userEmail;
-                  await DmeUserStatsService.incrementCallCount(
-                    userUid: uid,
-                    userEmail: userEmail,
-                    statDate: statDate,
-                  );
-                }
               }
             }
           }
           detected.add(reminder);
-        } else if (totalAttempts > 0) {
+        } else if (totalTodayAttempts > 0) {
           // Update attempt count in DB even if <= 10s, but do NOT mark as 'called'
-          reminder['call_attempts'] = totalAttempts;
-          if (client != null) {
-            final remId = reminder['id'];
-            if (remId != null) {
-              try {
-                await client.from('dme_reminders').update({
-                  'call_attempts': totalAttempts,
-                  'updated_at': now.toIso8601String(),
-                }).eq('id', remId);
-              } catch (_) {}
-            }
+          reminder['today_call_attempts'] = totalTodayAttempts;
+          final lastCallTime = outgoingList.last.timestamp != null
+              ? DateTime.fromMillisecondsSinceEpoch(outgoingList.last.timestamp!)
+              : now;
+          reminder['last_call_attempt_timestamp'] = lastCallTime.toIso8601String();
+          reminder['last_call_day'] = statDate;
+
+          if (client != null && remId != null) {
+            try {
+              await client.from('dme_reminders').update({
+                'today_call_attempts': totalTodayAttempts,
+                'last_call_attempt_timestamp': lastCallTime.toIso8601String(),
+                'last_call_day': statDate,
+                'updated_at': now.toIso8601String(),
+              }).eq('id', remId);
+            } catch (_) {}
           }
         }
       }
