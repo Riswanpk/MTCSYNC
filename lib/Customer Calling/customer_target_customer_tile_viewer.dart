@@ -208,8 +208,9 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
     };
 
     customer.forEach((key, value) {
-      if (ignoredKeys.contains(key) || ignoredKeys.contains(key.toLowerCase()))
+      if (ignoredKeys.contains(key) || ignoredKeys.contains(key.toLowerCase())) {
         return;
+      }
       fields.add(MapEntry(key, value));
     });
 

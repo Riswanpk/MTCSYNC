@@ -9,6 +9,7 @@ import '../../User/dme_assignment_service.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);
 const Color _primaryGreen = Color(0xFF8CC63F);
+const int _jblBranchId = 6; // JBL branch assigned separately in JBL testing page
 
 class DmeAdminReminderAssignPage extends StatefulWidget {
   const DmeAdminReminderAssignPage({super.key});
@@ -124,6 +125,7 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
         }
 
         branchSet.addAll(branches);
+        branchSet.remove(_jblBranchId);
 
         users.add({
           'uid': uid,
@@ -148,7 +150,7 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
           _dmeUsers = users;
           _activeBranches = sortedBranches.isNotEmpty
               ? sortedBranches
-              : (DmeConstants.branches.map((b) => b.id).toList()..sort());
+              : (DmeConstants.branches.map((b) => b.id).where((b) => b != _jblBranchId).toList()..sort());
         });
       }
     } catch (e) {
@@ -185,7 +187,7 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
         final list = batch as List;
         for (var r in list) {
           final bId = int.tryParse(r['last_purchase_branch']?.toString() ?? '');
-          if (bId == null) continue;
+          if (bId == null || bId == _jblBranchId) continue;
 
           final status = (r['status'] ?? '').toString().toLowerCase();
           final remarks = (r['remarks'] ?? '').toString().trim();
@@ -265,12 +267,14 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
     try {
       final res = await client
           .from('dme_reminders')
-          .select('assigned_to, is_overdue_leftover, call_attempts, called_by, call_duration, status')
+          .select('assigned_to, last_purchase_branch, is_overdue_leftover, call_attempts, called_by, call_duration, status')
           .eq('assigned_date', _todayStr)
           .inFilter('status', ['pending', 'called']);
 
       final Map<String, Map<String, int>> map = {};
       for (var r in (res as List)) {
+        final bId = int.tryParse(r['last_purchase_branch']?.toString() ?? '');
+        if (bId == _jblBranchId) continue;
         final uid = r['assigned_to']?.toString();
         if (uid == null || uid.isEmpty) continue;
         final isLeftover = r['is_overdue_leftover'] == true;
@@ -1190,183 +1194,217 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
                                         (assignedStats['total'] ?? 0) > 0;
                                     final estStats = estimatedBreakdown[uid] ?? {'total': 0, 'new': 0, 'overdue': 0, 'attempted': 0};
 
-                                    final branches = List<int>.from(user['assigned_branches'] ?? []);
+                                    final branches = List<int>.from(user['assigned_branches'] ?? []).where((b) => b != _jblBranchId).toList();
                                     final branchNames = branches.map((b) => DmeConstants.getBranchName(b)).join(', ');
 
-                                    return SwitchListTile(
-                                      value: isPresent,
-                                      onChanged: (val) => _toggleUserAttendance(uid, val),
-                                      activeColor: Colors.green,
-                                      secondary: CircleAvatar(
-                                        backgroundColor: isPresent ? _primaryBlue : Colors.grey[400],
-                                        foregroundColor: Colors.white,
-                                        radius: 18,
-                                        child: Text(
-                                          name.isNotEmpty ? name[0].toUpperCase() : 'U',
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                        ),
-                                      ),
-                                      title: Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              name,
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 14,
-                                                decoration: isPresent ? null : TextDecoration.lineThrough,
-                                                color: isPresent ? null : Colors.grey[600],
-                                              ),
-                                            ),
-                                          ),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: isPresent
-                                                  ? Colors.green.withValues(alpha: 0.15)
-                                                  : Colors.red.withValues(alpha: 0.15),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              isPresent ? 'PRESENT' : 'ABSENT',
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.bold,
-                                                color: isPresent ? Colors.green[800] : Colors.red[800],
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      subtitle: Column(
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                      child: Row(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          const SizedBox(height: 4),
-                                          // Reminder breakdown row (shown below user after assigning or in preview)
-                                          if (hasAssigned) ...[
-                                            Wrap(
-                                              spacing: 6,
-                                              runSpacing: 4,
-                                              crossAxisAlignment: WrapCrossAlignment.center,
+                                          // User Avatar
+                                          CircleAvatar(
+                                            backgroundColor: isPresent ? _primaryBlue : Colors.grey[400],
+                                            foregroundColor: Colors.white,
+                                            radius: 18,
+                                            child: Text(
+                                              name.isNotEmpty ? name[0].toUpperCase() : 'U',
+                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+
+                                          // User Details & Chips
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.green.withValues(alpha: 0.15),
-                                                    borderRadius: BorderRadius.circular(6),
-                                                    border: Border.all(color: Colors.green.withValues(alpha: 0.4)),
-                                                  ),
-                                                  child: Row(
-                                                    mainAxisSize: MainAxisSize.min,
+                                                // Name & Present/Absent Tag
+                                                Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child: Text(
+                                                        name,
+                                                        style: TextStyle(
+                                                          fontWeight: FontWeight.bold,
+                                                          fontSize: 14,
+                                                          decoration: isPresent ? null : TextDecoration.lineThrough,
+                                                          color: isPresent ? Colors.black87 : Colors.grey[600],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: isPresent
+                                                            ? Colors.green.withValues(alpha: 0.15)
+                                                            : Colors.red.withValues(alpha: 0.15),
+                                                        borderRadius: BorderRadius.circular(4),
+                                                      ),
+                                                      child: Text(
+                                                        isPresent ? 'PRESENT' : 'ABSENT',
+                                                        style: TextStyle(
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.bold,
+                                                          color: isPresent ? Colors.green[800] : Colors.red[800],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 6),
+
+                                                // Breakdown Chips
+                                                if (hasAssigned) ...[
+                                                  Wrap(
+                                                    spacing: 6,
+                                                    runSpacing: 5,
+                                                    crossAxisAlignment: WrapCrossAlignment.center,
                                                     children: [
-                                                      const Icon(Icons.check_circle_rounded, size: 11, color: Colors.green),
-                                                      const SizedBox(width: 3),
-                                                      Text(
-                                                        '${assignedStats['total']} Assigned',
-                                                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green),
+                                                      // Total Assigned
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.green.shade50,
+                                                          borderRadius: BorderRadius.circular(6),
+                                                          border: Border.all(color: Colors.green.shade400, width: 1),
+                                                        ),
+                                                        child: Row(
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            Icon(Icons.check_circle_rounded, size: 12, color: Colors.green.shade800),
+                                                            const SizedBox(width: 4),
+                                                            Text(
+                                                              '${assignedStats['total']} Assigned',
+                                                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green.shade900),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      // New
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.blue.shade50,
+                                                          borderRadius: BorderRadius.circular(6),
+                                                          border: Border.all(color: Colors.blue.shade300, width: 1),
+                                                        ),
+                                                        child: Text(
+                                                          '${assignedStats['new'] ?? 0} New',
+                                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue.shade900),
+                                                        ),
+                                                      ),
+                                                      // Attempted
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.purple.shade50,
+                                                          borderRadius: BorderRadius.circular(6),
+                                                          border: Border.all(color: Colors.purple.shade300, width: 1),
+                                                        ),
+                                                        child: Text(
+                                                          '${assignedStats['attempted'] ?? 0} Att.',
+                                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.purple.shade900),
+                                                        ),
+                                                      ),
+                                                      // Overdue
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.deepOrange.shade50,
+                                                          borderRadius: BorderRadius.circular(6),
+                                                          border: Border.all(color: Colors.deepOrange.shade300, width: 1),
+                                                        ),
+                                                        child: Text(
+                                                          '${assignedStats['overdue'] ?? assignedStats['leftover'] ?? 0} OD',
+                                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.deepOrange.shade900),
+                                                        ),
                                                       ),
                                                     ],
                                                   ),
-                                                ),
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                  decoration: BoxDecoration(
-                                                    color: _primaryBlue.withValues(alpha: 0.1),
-                                                    borderRadius: BorderRadius.circular(6),
+                                                ] else if (isPresent) ...[
+                                                  Wrap(
+                                                    spacing: 6,
+                                                    runSpacing: 5,
+                                                    crossAxisAlignment: WrapCrossAlignment.center,
+                                                    children: [
+                                                      // Projected Total
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.blue.shade50,
+                                                          borderRadius: BorderRadius.circular(6),
+                                                          border: Border.all(color: _primaryBlue.withValues(alpha: 0.5), width: 1),
+                                                        ),
+                                                        child: Text(
+                                                          '~ ${estStats['total']} reminders',
+                                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _primaryBlue),
+                                                        ),
+                                                      ),
+                                                      // New
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.blue.shade50,
+                                                          borderRadius: BorderRadius.circular(6),
+                                                          border: Border.all(color: Colors.blue.shade200, width: 1),
+                                                        ),
+                                                        child: Text(
+                                                          '${estStats['new'] ?? 0} New',
+                                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue.shade900),
+                                                        ),
+                                                      ),
+                                                      // Attempted
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.purple.shade50,
+                                                          borderRadius: BorderRadius.circular(6),
+                                                          border: Border.all(color: Colors.purple.shade200, width: 1),
+                                                        ),
+                                                        child: Text(
+                                                          '${estStats['attempted'] ?? 0} Att.',
+                                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.purple.shade900),
+                                                        ),
+                                                      ),
+                                                      // Overdue
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.deepOrange.shade50,
+                                                          borderRadius: BorderRadius.circular(6),
+                                                          border: Border.all(color: Colors.deepOrange.shade200, width: 1),
+                                                        ),
+                                                        child: Text(
+                                                          '${estStats['overdue'] ?? estStats['leftover'] ?? 0} OD',
+                                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.deepOrange.shade900),
+                                                        ),
+                                                      ),
+                                                    ],
                                                   ),
-                                                  child: Text(
-                                                    '${assignedStats['new'] ?? 0} New',
-                                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _primaryBlue),
+                                                ] else ...[
+                                                  const Text(
+                                                    '0 reminders (Marked absent)',
+                                                    style: TextStyle(fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic),
                                                   ),
-                                                ),
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.purple.withValues(alpha: 0.12),
-                                                    borderRadius: BorderRadius.circular(6),
-                                                  ),
-                                                  child: Text(
-                                                    '${assignedStats['attempted'] ?? 0} Att.',
-                                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.purple.shade700),
-                                                  ),
-                                                ),
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.deepOrange.withValues(alpha: 0.12),
-                                                    borderRadius: BorderRadius.circular(6),
-                                                  ),
-                                                  child: Text(
-                                                    '${assignedStats['overdue'] ?? assignedStats['leftover'] ?? 0} OD',
-                                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.deepOrange),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ] else if (isPresent) ...[
-                                            Wrap(
-                                              spacing: 6,
-                                              runSpacing: 4,
-                                              crossAxisAlignment: WrapCrossAlignment.center,
-                                              children: [
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                  decoration: BoxDecoration(
-                                                    color: _primaryBlue.withValues(alpha: 0.12),
-                                                    borderRadius: BorderRadius.circular(6),
-                                                  ),
-                                                  child: Text(
-                                                    '~ ${estStats['total']} reminders',
-                                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _primaryBlue),
-                                                  ),
-                                                ),
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.blue.withValues(alpha: 0.08),
-                                                    borderRadius: BorderRadius.circular(6),
-                                                  ),
-                                                  child: Text(
-                                                    '${estStats['new'] ?? 0} New',
-                                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.blue[800]),
-                                                  ),
-                                                ),
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.purple.withValues(alpha: 0.08),
-                                                    borderRadius: BorderRadius.circular(6),
-                                                  ),
-                                                  child: Text(
-                                                    '${estStats['attempted'] ?? 0} Att.',
-                                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.purple.shade700),
-                                                  ),
-                                                ),
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.deepOrange.withValues(alpha: 0.08),
-                                                    borderRadius: BorderRadius.circular(6),
-                                                  ),
-                                                  child: Text(
-                                                    '${estStats['overdue'] ?? estStats['leftover'] ?? 0} OD',
-                                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.deepOrange),
-                                                  ),
+                                                ],
+                                                const SizedBox(height: 5),
+                                                Text(
+                                                  branchNames.isNotEmpty ? 'Branches: $branchNames' : email,
+                                                  style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
                                                 ),
                                               ],
                                             ),
-                                          ] else ...[
-                                            const Text(
-                                              '0 reminders (Marked absent)',
-                                              style: TextStyle(fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic),
-                                            ),
-                                          ],
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            branchNames.isNotEmpty ? 'Branches: $branchNames' : email,
-                                            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(width: 8),
+
+                                          // Attendance Switch
+                                          Switch(
+                                            value: isPresent,
+                                            onChanged: (val) => _toggleUserAttendance(uid, val),
+                                            activeColor: Colors.green,
                                           ),
                                         ],
                                       ),

@@ -201,11 +201,14 @@ class DmeAssignmentService {
 
     // Before resetting, calculate how many pending reminders each user left overdue from previous days
     // and record it in dme_user_daily_stats so it shows in the call report.
+    // Scoped strictly to the target branches being assigned.
+    final targetBranchIds = branchToActiveUserUids.keys.toList();
     try {
       final overdueRows = await client
           .from('dme_reminders')
           .select('assigned_to, assigned_date')
           .inFilter('status', ['pending', 'called'])
+          .inFilter('last_purchase_branch', targetBranchIds)
           .not('assigned_to', 'is', null)
           .lt('assigned_date', dateStr);
 
@@ -254,7 +257,7 @@ class DmeAssignmentService {
       debugPrint('DmeAssignmentService: overdue stats recording error: $e');
     }
 
-    // Reset uncalled pending reminders assigned on previous days so they are cleanly re-divided today.
+    // Reset uncalled pending reminders assigned on previous days for these target branches so they are cleanly re-divided today.
     // Do NOT reset reminders where a call has already been attempted (call_attempts > 0 or called_by is set).
     try {
       await client.from('dme_reminders').update({
@@ -263,6 +266,7 @@ class DmeAssignmentService {
         'is_overdue_leftover': false,
         'updated_at': nowIso,
       }).eq('status', 'pending')
+        .inFilter('last_purchase_branch', targetBranchIds)
         .isFilter('called_by', null)
         .or('call_attempts.is.null,call_attempts.eq.0')
         .lt('assigned_date', dateStr);
@@ -273,7 +277,11 @@ class DmeAssignmentService {
           'assigned_date': null,
           'is_overdue_leftover': false,
           'updated_at': nowIso,
-        }).eq('status', 'pending').isFilter('called_by', null).eq('call_attempts', 0).lt('assigned_date', dateStr);
+        }).eq('status', 'pending')
+          .inFilter('last_purchase_branch', targetBranchIds)
+          .isFilter('called_by', null)
+          .eq('call_attempts', 0)
+          .lt('assigned_date', dateStr);
       } catch (_) {}
     }
 
@@ -709,15 +717,27 @@ class DmeAssignmentService {
 
     // 3. Delete records from reminder_assignment audit table
     try {
-      await client.from('reminder_assignment').delete().eq('assigned_date', dateStr);
+      var query = client.from('reminder_assignment').delete().eq('assigned_date', dateStr);
+      if (branchIds != null && branchIds.isNotEmpty) {
+        query = query.inFilter('branch_id', branchIds.map((b) => b.toString()).toList());
+      }
+      await query;
     } catch (_) {}
     try {
-      await client.from('reminder_assignment').delete().eq('assignment_date', dateStr);
+      var queryLegacy = client.from('reminder_assignment').delete().eq('assignment_date', dateStr);
+      if (branchIds != null && branchIds.isNotEmpty) {
+        queryLegacy = queryLegacy.inFilter('branch_id', branchIds.map((b) => b.toString()).toList());
+      }
+      await queryLegacy;
     } catch (_) {}
 
     // 4. Delete records from dme_reminder_assignments legacy table
     try {
-      await client.from('dme_reminder_assignments').delete().eq('assignment_date', dateStr);
+      var queryDme = client.from('dme_reminder_assignments').delete().eq('assignment_date', dateStr);
+      if (branchIds != null && branchIds.isNotEmpty) {
+        queryDme = queryDme.inFilter('branch_id', branchIds);
+      }
+      await queryDme;
     } catch (_) {}
 
     // 5. Mark latest active run in Firestore assignment history as 'undone' so history is retained
