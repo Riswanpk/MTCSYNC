@@ -5,6 +5,7 @@ import '../Customer Calling/customer_list_target_service.dart';
 
 /// Represents a customer entry associated with a specific user in a month
 class DuplicateCustomerEntry {
+  final String id; // Unique ID to distinguish entries (even for same user)
   final String userDocId;
   final String userEmail;
   final String username;
@@ -16,8 +17,10 @@ class DuplicateCustomerEntry {
   final String contact2;
   final bool callMade;
   final String remarks;
+  final int remarksCount;
 
   DuplicateCustomerEntry({
+    required this.id,
     required this.userDocId,
     required this.userEmail,
     required this.username,
@@ -29,6 +32,7 @@ class DuplicateCustomerEntry {
     required this.contact2,
     required this.callMade,
     required this.remarks,
+    this.remarksCount = 0,
   });
 }
 
@@ -36,12 +40,12 @@ class DuplicateCustomerEntry {
 class DuplicateGroup {
   final String phone;
   final List<DuplicateCustomerEntry> entries;
-  String? selectedUserDocId;
+  String? selectedEntryId; // ID of the specific entry to retain
 
   DuplicateGroup({
     required this.phone,
     required this.entries,
-    this.selectedUserDocId,
+    this.selectedEntryId,
   });
 }
 
@@ -103,15 +107,18 @@ class _CustomerCallingDuplicatesPageState
     try {
       final monthYear = _selectedMonthYear!;
 
-      // 1. Fetch all users from cache for name & branch resolution
+      // 1. Fetch all active users from users collection
       final allUsers =
           await UserCacheService.instance.getAllUsers(forceRefresh: false);
       final Map<String, Map<String, String>> userInfoMap = {};
+      final Set<String> activeUserEmails = {};
+
       for (final u in allUsers) {
         final email = (u['email'] as String? ?? '').toLowerCase().trim();
         final username = (u['username'] as String? ?? '').trim();
         final branch = (u['branch'] as String? ?? '').trim();
         if (email.isNotEmpty) {
+          activeUserEmails.add(email);
           userInfoMap[email] = {
             'username': username.isNotEmpty ? username : email,
             'branch': branch.isNotEmpty ? branch : 'Unknown',
@@ -133,14 +140,18 @@ class _CustomerCallingDuplicatesPageState
         final data = doc.data();
         final userDocId = doc.id;
         final email = (data['user'] ?? doc.id).toString().toLowerCase().trim();
-        final fallbackBranch = (data['branch'] ?? 'Unknown').toString().trim();
 
+        // Filter out users who are not active (must exist in the users collection)
+        if (!activeUserEmails.contains(email)) continue;
+
+        final fallbackBranch = (data['branch'] ?? 'Unknown').toString().trim();
         final username = userInfoMap[email]?['username'] ?? email;
         final branch = userInfoMap[email]?['branch'] ?? fallbackBranch;
 
         final rawList = data['customers'] as List<dynamic>? ?? [];
 
-        for (final item in rawList) {
+        for (int i = 0; i < rawList.length; i++) {
+          final item = rawList[i];
           if (item is! Map) continue;
           final customerMap = Map<String, dynamic>.from(item);
           final c1 = (customerMap['contact1'] ?? customerMap['contact'] ?? '')
@@ -152,6 +163,7 @@ class _CustomerCallingDuplicatesPageState
           final norm2 = _normalizePhone(c2);
 
           final entry = DuplicateCustomerEntry(
+            id: '${userDocId}_${i}_${customerMap['name'] ?? ''}',
             userDocId: userDocId,
             userEmail: email,
             username: username,
@@ -178,14 +190,112 @@ class _CustomerCallingDuplicatesPageState
       final List<DuplicateGroup> duplicates = [];
       phoneMap.forEach((phone, entries) {
         if (entries.length > 1) {
-          // Preselect the first user by default
           duplicates.add(DuplicateGroup(
             phone: phone,
             entries: entries,
-            selectedUserDocId: entries.first.userDocId,
           ));
         }
       });
+
+      // Fetch remarks count for each user & phone number across past months
+      // Check current month and up to 5 preceding months
+      if (duplicates.isNotEmpty) {
+        final List<String> monthsToScan = _monthYears.take(6).toList();
+        // Map of userEmail -> Map of normalizedPhone -> count of remarks across months
+        final Map<String, Map<String, int>> userPhoneRemarksCount = {};
+
+        // 1) Initialize with current month remarks
+        for (final doc in snapshot.docs) {
+          final data = doc.data();
+          final email = (data['user'] ?? doc.id).toString().toLowerCase().trim();
+          if (!activeUserEmails.contains(email)) continue;
+          final rawList = data['customers'] as List<dynamic>? ?? [];
+          final userMap = userPhoneRemarksCount.putIfAbsent(email, () => {});
+
+          for (final item in rawList) {
+            if (item is! Map) continue;
+            final rem = (item['remarks'] ?? '').toString().trim();
+            if (rem.isEmpty) continue;
+            final p1 = _normalizePhone(item['contact1'] ?? item['contact']);
+            final p2 = _normalizePhone(item['contact2']);
+            if (p1.length == 10) userMap[p1] = (userMap[p1] ?? 0) + 1;
+            if (p2.length == 10 && p2 != p1) userMap[p2] = (userMap[p2] ?? 0) + 1;
+          }
+        }
+
+        // 2) Scan other months in monthsToScan
+        final otherMonths = monthsToScan.where((m) => m != monthYear).toList();
+        if (otherMonths.isNotEmpty) {
+          try {
+            final monthSnapshots = await Future.wait(
+              otherMonths.map(
+                (m) => FirebaseFirestore.instance
+                    .collection('customer_target')
+                    .doc(m)
+                    .collection('users')
+                    .get(),
+              ),
+            );
+
+            for (final monthSnap in monthSnapshots) {
+              for (final doc in monthSnap.docs) {
+                final data = doc.data();
+                final email = (data['user'] ?? doc.id).toString().toLowerCase().trim();
+                if (!activeUserEmails.contains(email)) continue;
+                final rawList = data['customers'] as List<dynamic>? ?? [];
+                final userMap = userPhoneRemarksCount.putIfAbsent(email, () => {});
+
+                for (final item in rawList) {
+                  if (item is! Map) continue;
+                  final rem = (item['remarks'] ?? '').toString().trim();
+                  if (rem.isEmpty) continue;
+                  final p1 = _normalizePhone(item['contact1'] ?? item['contact']);
+                  final p2 = _normalizePhone(item['contact2']);
+                  if (p1.length == 10) userMap[p1] = (userMap[p1] ?? 0) + 1;
+                  if (p2.length == 10 && p2 != p1) userMap[p2] = (userMap[p2] ?? 0) + 1;
+                }
+              }
+            }
+          } catch (_) {
+            // If historical months fail to load, proceed with current month remarks count
+          }
+        }
+
+        // Update each DuplicateCustomerEntry with its computed remarksCount
+        for (final group in duplicates) {
+          final updatedEntries = <DuplicateCustomerEntry>[];
+          for (final entry in group.entries) {
+            final count = userPhoneRemarksCount[entry.userEmail]?[group.phone] ??
+                (entry.remarks.isNotEmpty ? 1 : 0);
+            updatedEntries.add(DuplicateCustomerEntry(
+              id: entry.id,
+              userDocId: entry.userDocId,
+              userEmail: entry.userEmail,
+              username: entry.username,
+              branch: entry.branch,
+              rawCustomer: entry.rawCustomer,
+              name: entry.name,
+              address: entry.address,
+              contact1: entry.contact1,
+              contact2: entry.contact2,
+              callMade: entry.callMade,
+              remarks: entry.remarks,
+              remarksCount: count,
+            ));
+          }
+          group.entries.clear();
+          group.entries.addAll(updatedEntries);
+
+          // Preselect the option with the highest remarksCount (fallback to first)
+          DuplicateCustomerEntry bestEntry = group.entries.first;
+          for (final e in group.entries) {
+            if (e.remarksCount > bestEntry.remarksCount) {
+              bestEntry = e;
+            }
+          }
+          group.selectedEntryId = bestEntry.id;
+        }
+      }
 
       // Sort by phone number
       duplicates.sort((a, b) => a.phone.compareTo(b.phone));
@@ -207,13 +317,13 @@ class _CustomerCallingDuplicatesPageState
   }
 
   /// Resolves a duplicate phone group by keeping the customer on the selected user's list
-  /// and removing the matching customer entry from all other users' lists.
+  /// and removing all other duplicate customer entries for this phone.
   Future<void> _resolveDuplicate(DuplicateGroup group) async {
-    final selectedDocId = group.selectedUserDocId;
-    if (selectedDocId == null) {
+    final selectedEntryId = group.selectedEntryId;
+    if (selectedEntryId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select a user to keep this customer.'),
+          content: Text('Please select an entry to keep.'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -221,17 +331,19 @@ class _CustomerCallingDuplicatesPageState
     }
 
     final selectedEntry = group.entries.firstWhere(
-      (e) => e.userDocId == selectedDocId,
+      (e) => e.id == selectedEntryId,
       orElse: () => group.entries.first,
     );
+
+    final selectedDocId = selectedEntry.userDocId;
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Confirm Duplicate Resolution'),
         content: Text(
-          'Keep this customer for "${selectedEntry.username}" (${selectedEntry.branch}) '
-          'and remove duplicate records with phone ${group.phone} from all other users?',
+          'Keep customer "${selectedEntry.name}" for "${selectedEntry.username}" (${selectedEntry.branch}) '
+          'and remove duplicate records with phone ${group.phone} from all other places?',
         ),
         actions: [
           TextButton(
@@ -259,29 +371,18 @@ class _CustomerCallingDuplicatesPageState
     try {
       final monthYear = _selectedMonthYear!;
 
-      // Identify entries that need removal
-      final entriesToRemove =
-          group.entries.where((e) => e.userDocId != selectedDocId).toList();
+      // 1. Remove duplicate customer records from all OTHER users
+      final otherDocIds = group.entries
+          .map((e) => e.userDocId)
+          .where((docId) => docId != selectedDocId)
+          .toSet();
 
-      // Also check if the selected user itself has multiple duplicate entries for this phone
-      final selectedUserSameEntries =
-          group.entries.where((e) => e.userDocId == selectedDocId).toList();
-      final bool deduplicateWithinSelectedUser =
-          selectedUserSameEntries.length > 1;
-
-      // Group entries to remove by userDocId
-      final Map<String, List<DuplicateCustomerEntry>> toRemoveByUser = {};
-      for (final entry in entriesToRemove) {
-        toRemoveByUser.putIfAbsent(entry.userDocId, () => []).add(entry);
-      }
-
-      // Execute removal in Firestore for each affected user
-      for (final userDocId in toRemoveByUser.keys) {
+      for (final otherUserDocId in otherDocIds) {
         final docRef = FirebaseFirestore.instance
             .collection('customer_target')
             .doc(monthYear)
             .collection('users')
-            .doc(userDocId);
+            .doc(otherUserDocId);
 
         await FirebaseFirestore.instance.runTransaction((transaction) async {
           final snapshot = await transaction.get(docRef);
@@ -304,42 +405,50 @@ class _CustomerCallingDuplicatesPageState
         });
       }
 
-      // If selected user had multiple entries with the same phone, keep only the first one
-      if (deduplicateWithinSelectedUser) {
-        final selectedDocRef = FirebaseFirestore.instance
-            .collection('customer_target')
-            .doc(monthYear)
-            .collection('users')
-            .doc(selectedDocId);
+      // 2. In the selected user's document, retain the chosen entry and remove any other duplicates for this phone
+      final selectedDocRef = FirebaseFirestore.instance
+          .collection('customer_target')
+          .doc(monthYear)
+          .collection('users')
+          .doc(selectedDocId);
 
-        await FirebaseFirestore.instance.runTransaction((transaction) async {
-          final snapshot = await transaction.get(selectedDocRef);
-          if (snapshot.exists && snapshot.data() != null) {
-            final List<dynamic> customers =
-                List<dynamic>.from(snapshot.data()!['customers'] ?? []);
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final snapshot = await transaction.get(selectedDocRef);
+        if (snapshot.exists && snapshot.data() != null) {
+          final List<dynamic> customers =
+              List<dynamic>.from(snapshot.data()!['customers'] ?? []);
 
-            bool keptOne = false;
-            customers.removeWhere((c) {
-              if (c is! Map) return false;
-              final c1 = _normalizePhone(c['contact1'] ?? c['contact']);
-              final c2 = _normalizePhone(c['contact2']);
-              if (c1 == group.phone || c2 == group.phone) {
-                if (!keptOne) {
-                  keptOne = true;
-                  return false; // keep the first one
-                }
-                return true; // remove redundant within same user
+          final selectedName = selectedEntry.name.trim();
+          bool keptChosen = false;
+
+          customers.removeWhere((c) {
+            if (c is! Map) return false;
+            final c1 = _normalizePhone(c['contact1'] ?? c['contact']);
+            final c2 = _normalizePhone(c['contact2']);
+
+            if (c1 == group.phone || c2 == group.phone) {
+              final cName = (c['name'] ?? '').toString().trim();
+              // Retain the specific chosen customer record
+              if (!keptChosen && cName == selectedName) {
+                keptChosen = true;
+                return false; // Keep
               }
-              return false;
-            });
+              // If none matched exact name yet (e.g. slight discrepancy), keep first occurrence
+              if (!keptChosen) {
+                keptChosen = true;
+                return false; // Keep
+              }
+              return true; // Remove duplicate entry within same user
+            }
+            return false;
+          });
 
-            transaction.update(selectedDocRef, {
-              'customers': customers,
-              'updated': FieldValue.serverTimestamp(),
-            });
-          }
-        });
-      }
+          transaction.update(selectedDocRef, {
+            'customers': customers,
+            'updated': FieldValue.serverTimestamp(),
+          });
+        }
+      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -676,7 +785,7 @@ class _CustomerCallingDuplicatesPageState
                 // List of users/entries
                 ...group.entries.asMap().entries.map((item) {
                   final entry = item.value;
-                  final isSelected = group.selectedUserDocId == entry.userDocId;
+                  final isSelected = group.selectedEntryId == entry.id;
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 8),
@@ -693,44 +802,99 @@ class _CustomerCallingDuplicatesPageState
                       ),
                     ),
                     child: RadioListTile<String>(
-                      value: entry.userDocId,
-                      groupValue: group.selectedUserDocId,
+                      value: entry.id,
+                      groupValue: group.selectedEntryId,
                       activeColor: const Color(0xFF005BAC),
                       onChanged: isResolving
                           ? null
                           : (val) {
                               setState(() {
-                                group.selectedUserDocId = val;
+                                group.selectedEntryId = val;
                               });
                             },
-                      title: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              entry.username,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
+                      title: Builder(
+                        builder: (context) {
+                          // Find max remarks in this group
+                          final maxRemarks = group.entries
+                              .map((e) => e.remarksCount)
+                              .fold<int>(0, (prev, elem) => elem > prev ? elem : prev);
+                          final isHighest =
+                              entry.remarksCount > 0 && entry.remarksCount == maxRemarks;
+
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  entry.username,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF8CC63F).withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              entry.branch,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF2E7D32),
+                              // Remarks Count badge (showing only number)
+                              Container(
+                                margin: const EdgeInsets.only(right: 6),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 7, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: isHighest
+                                      ? Colors.amber.shade700
+                                      : (entry.remarksCount > 0
+                                          ? const Color(0xFF005BAC).withOpacity(0.12)
+                                          : Colors.grey.shade200),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: isHighest
+                                      ? Border.all(color: Colors.amber.shade900, width: 1)
+                                      : null,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.comment_rounded,
+                                      size: 11,
+                                      color: isHighest
+                                          ? Colors.white
+                                          : (entry.remarksCount > 0
+                                              ? const Color(0xFF005BAC)
+                                              : Colors.grey.shade600),
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      '${entry.remarksCount}',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: isHighest
+                                          ? Colors.white
+                                          : (entry.remarksCount > 0
+                                              ? const Color(0xFF005BAC)
+                                              : Colors.grey.shade700),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ),
-                        ],
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF8CC63F).withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  entry.branch,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF2E7D32),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                       subtitle: Padding(
                         padding: const EdgeInsets.only(top: 4),

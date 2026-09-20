@@ -83,11 +83,13 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
       // Retrieve user cache for meaningful user names in error messages
       final allCachedUsers = await UserCacheService.instance.getAllUsers();
       final Map<String, Map<String, String>> userMap = {};
+      final Set<String> activeUserEmails = {};
       for (final u in allCachedUsers) {
         final email = (u['email'] as String? ?? '').toLowerCase().trim();
         final username = (u['username'] as String? ?? '').trim();
         final b = (u['branch'] as String? ?? '').trim();
         if (email.isNotEmpty) {
+          activeUserEmails.add(email);
           userMap[email] = {
             'username': username.isNotEmpty ? username : email,
             'branch': b.isNotEmpty ? b : 'Unknown',
@@ -98,6 +100,10 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
       for (final doc in allUsersSnap.docs) {
         final data = doc.data();
         final docEmail = (data['user'] ?? doc.id).toString().toLowerCase().trim();
+
+        // Skip users not present in the active users collection
+        if (!activeUserEmails.contains(docEmail)) continue;
+
         final docBranch = (data['branch'] ?? userMap[docEmail]?['branch'] ?? 'Unknown').toString().trim();
         final docUsername = userMap[docEmail]?['username'] ?? docEmail;
         final docCustomers = data['customers'] as List<dynamic>? ?? [];
