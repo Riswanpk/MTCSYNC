@@ -101,6 +101,37 @@ class ExcelParsingService {
     return val.toString();
   }
 
+  /// Checks if a party name should be ignored (e.g. YUSUF MALABAR TRADING LLP)
+  static bool isIgnoredParty(String? party) {
+    if (party == null) return false;
+    final clean = party.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
+    if (clean.isEmpty) return false;
+    return clean == 'YUSUF MALABAR TRADING LLP' ||
+        clean == 'YUSUF MALABAR TRADING LLP.' ||
+        clean == 'YUSUF MALABAR TRADING' ||
+        clean.startsWith('YUSUF MALABAR TRADING');
+  }
+
+  /// Extracts a 10-digit mobile number from text (e.g. from address columns if mobile column is blank)
+  static String extractMobileFromText(dynamic val) {
+    if (val == null) return '';
+    final str = val.toString().trim();
+    if (str.isEmpty) return '';
+
+    // Check if entire clean number is 10 digits
+    final clean = cleanPhoneNumber(str);
+    if (clean.length == 10 && RegExp(r'^[6-9]\d{9}$').hasMatch(clean)) {
+      return clean;
+    }
+
+    // Try regex for Indian mobile pattern starting with 6-9
+    final match = RegExp(r'(?:(?:\+?91|0)?\s*)?([6-9]\d{9})\b').firstMatch(str);
+    if (match != null) {
+      return match.group(1) ?? '';
+    }
+    return '';
+  }
+
   /// Parses Excel file bytes into raw rows and grouped sales
   static Map<String, dynamic> parseExcelBytes(Uint8List bytes) {
     final excel = Excel.decodeBytes(bytes);
@@ -126,6 +157,7 @@ class ExcelParsingService {
       String lastCatName = '';
       int? lastCatId;
       String lastSalesman = '';
+      bool isCurrentSaleIgnored = false;
 
       for (int r = 2; r < rows.length; r++) {
         final row = rows[r];
@@ -152,7 +184,113 @@ class ExcelParsingService {
           continue;
         }
 
-        // If a new party or branch or voucher is present, update last seen header data
+        final mergedAddr = mergeAddress(address1, address2, address3);
+
+        // Determine phone number specifically from this row (Col 7 or address fallback)
+        String rowPhone = cleanPhoneNumber(rawMobile);
+        if (rowPhone.isEmpty || rowPhone.length != 10) {
+          final p3 = extractMobileFromText(address3);
+          if (p3.isNotEmpty) rowPhone = p3;
+        }
+        if (rowPhone.isEmpty || rowPhone.length != 10) {
+          final p2 = extractMobileFromText(address2);
+          if (p2.isNotEmpty) rowPhone = p2;
+        }
+        if (rowPhone.isEmpty || rowPhone.length != 10) {
+          final p1 = extractMobileFromText(address1);
+          if (p1.isNotEmpty) rowPhone = p1;
+        }
+        // If still not 10 digits, fallback to whatever digits rawMobile had (for length validation reporting)
+        if (rowPhone.isEmpty && rawMobile != null && rawMobile.toString().trim().isNotEmpty) {
+          rowPhone = cleanPhoneNumber(rawMobile);
+        }
+
+        // Determine if this row belongs to the same ongoing sale or is a new sale
+        bool isContinuation = false;
+        if (lastParty.isNotEmpty || lastVoucher.isNotEmpty) {
+          final bool voucherMatches = rawVoucher.isEmpty || (lastVoucher.isNotEmpty && rawVoucher == lastVoucher);
+          final bool partyMatches = rawParty.isEmpty || (lastParty.isNotEmpty && rawParty.toLowerCase() == lastParty.toLowerCase());
+          final bool branchMatches = rawBranch.isEmpty || (lastBranchName.isNotEmpty && rawBranch == lastBranchName);
+          final bool phoneMatches = rowPhone.isEmpty || lastPhone.isEmpty || (rowPhone == lastPhone);
+
+          if (voucherMatches && partyMatches && branchMatches && phoneMatches) {
+            if ((rawVoucher.isNotEmpty && rawVoucher == lastVoucher) ||
+                (rawVoucher.isEmpty && rawParty.isEmpty && rowPhone.isEmpty) ||
+                (rawParty.isNotEmpty && rawParty.toLowerCase() == lastParty.toLowerCase())) {
+              isContinuation = true;
+            }
+          }
+        }
+
+        if (isContinuation) {
+          // If the ongoing sale is for an ignored party (e.g. YUSUF MALABAR TRADING LLP), skip it!
+          if (isCurrentSaleIgnored) {
+            continue;
+          }
+
+          if (rowPhone.isNotEmpty && lastPhone.isEmpty) {
+            lastPhone = rowPhone;
+          }
+
+          final branchName = lastBranchName.isNotEmpty ? lastBranchName : rawBranch;
+          final branchId = lastBranchId ?? DmeConstants.getBranchIdByName(branchName);
+          final date = lastDate ?? (rawDate != null ? parseExcelDate(rawDate) : DateTime.now());
+          final phone = lastPhone;
+          final party = lastParty;
+          final voucherNo = lastVoucher;
+          final address = lastAddress.isNotEmpty ? lastAddress : mergedAddr;
+          final typeName = lastTypeName.isNotEmpty ? lastTypeName : rawType;
+          final typeId = lastTypeId ?? (typeName.isNotEmpty ? DmeConstants.getCustomerTypeIdByName(typeName) : null);
+          final categoryName = lastCatName.isNotEmpty ? lastCatName : rawCat;
+          final categoryId = lastCatId ?? (categoryName.isNotEmpty ? DmeConstants.getCategoryIdByName(categoryName) : null);
+          final salesman = lastSalesman.isNotEmpty ? lastSalesman : rawSalesman;
+
+          parsed.add(ParsedExcelRow(
+            branchName: branchName,
+            branchId: branchId,
+            date: date,
+            voucherNo: voucherNo,
+            party: party,
+            address: address,
+            phone: phone,
+            typeName: typeName,
+            typeId: typeId,
+            categoryName: categoryName,
+            categoryId: categoryId,
+            salesman: salesman,
+            itemName: itemName,
+            qty: qty,
+            rawRowIndex: r + 1,
+          ));
+          continue;
+        }
+
+        // --- NEW SALE BOUNDARY ---
+
+        // Check if this party should be ignored completely (e.g. YUSUF MALABAR TRADING LLP)
+        if (isIgnoredParty(rawParty)) {
+          isCurrentSaleIgnored = true;
+          lastVoucher = rawVoucher;
+          lastParty = rawParty;
+          lastPhone = '';
+          lastAddress = '';
+          lastSalesman = '';
+          lastTypeName = '';
+          lastTypeId = null;
+          lastCatName = '';
+          lastCatId = null;
+          if (rawBranch.isNotEmpty) {
+            lastBranchName = rawBranch;
+            lastBranchId = DmeConstants.getBranchIdByName(rawBranch);
+          }
+          if (rawDate != null && rawDate.toString().trim().isNotEmpty) {
+            lastDate = parseExcelDate(rawDate);
+          }
+          continue; // Skip ignored party!
+        }
+
+        isCurrentSaleIgnored = false;
+
         if (rawBranch.isNotEmpty) {
           lastBranchName = rawBranch;
           lastBranchId = DmeConstants.getBranchIdByName(rawBranch);
@@ -160,40 +298,35 @@ class ExcelParsingService {
         if (rawDate != null && rawDate.toString().trim().isNotEmpty) {
           lastDate = parseExcelDate(rawDate);
         }
-        if (rawVoucher.isNotEmpty) lastVoucher = rawVoucher;
-        if (rawParty.isNotEmpty) lastParty = rawParty;
-        if (rawMobile != null && rawMobile.toString().trim().isNotEmpty) {
-          lastPhone = cleanPhoneNumber(rawMobile);
-        }
-        final mergedAddr = mergeAddress(address1, address2, address3);
-        if (mergedAddr.isNotEmpty) lastAddress = mergedAddr;
 
-        if (rawType.isNotEmpty) {
-          lastTypeName = rawType;
-          lastTypeId = DmeConstants.getCustomerTypeIdByName(rawType);
-        }
-        if (rawCat.isNotEmpty) {
-          lastCatName = rawCat;
-          lastCatId = DmeConstants.getCategoryIdByName(rawCat);
-        }
-        if (rawSalesman.isNotEmpty) lastSalesman = rawSalesman;
+        lastVoucher = rawVoucher;
+        lastParty = rawParty;
+
+        // CRITICAL: Phone number belongs ONLY to this new customer row!
+        // It NEVER takes the previous customer's phone number!
+        lastPhone = rowPhone;
+
+        lastAddress = mergedAddr;
+        lastTypeName = rawType;
+        lastTypeId = rawType.isNotEmpty ? DmeConstants.getCustomerTypeIdByName(rawType) : null;
+        lastCatName = rawCat;
+        lastCatId = rawCat.isNotEmpty ? DmeConstants.getCategoryIdByName(rawCat) : null;
+        lastSalesman = rawSalesman;
 
         final branchName = rawBranch.isNotEmpty ? rawBranch : lastBranchName;
         final branchId = DmeConstants.getBranchIdByName(branchName) ?? lastBranchId;
         final date = (rawDate != null && rawDate.toString().trim().isNotEmpty)
             ? parseExcelDate(rawDate)
             : (lastDate ?? DateTime.now());
-        final phone = (rawMobile != null && rawMobile.toString().trim().isNotEmpty)
-            ? cleanPhoneNumber(rawMobile)
-            : lastPhone;
-        final party = rawParty.isNotEmpty ? rawParty : lastParty;
-        final voucherNo = rawVoucher.isNotEmpty ? rawVoucher : lastVoucher;
-        final address = mergedAddr.isNotEmpty ? mergedAddr : lastAddress;
-        final typeName = rawType.isNotEmpty ? rawType : lastTypeName;
-        final typeId = DmeConstants.getCustomerTypeIdByName(typeName) ?? lastTypeId;
-        final categoryName = rawCat.isNotEmpty ? rawCat : lastCatName;
-        final categoryId = DmeConstants.getCategoryIdByName(categoryName) ?? lastCatId;
-        final salesman = rawSalesman.isNotEmpty ? rawSalesman : lastSalesman;
+        final phone = rowPhone;
+        final party = rawParty;
+        final voucherNo = rawVoucher;
+        final address = mergedAddr;
+        final typeName = rawType;
+        final typeId = lastTypeId;
+        final categoryName = rawCat;
+        final categoryId = lastCatId;
+        final salesman = rawSalesman;
 
         parsed.add(ParsedExcelRow(
           branchName: branchName,
@@ -220,13 +353,16 @@ class ExcelParsingService {
     GroupedSale? currentSale;
 
     for (var row in parsed) {
+      if (isIgnoredParty(row.party)) continue;
+
       if (currentSale != null &&
           currentSale.phone == row.phone &&
           currentSale.party.toLowerCase() == row.party.toLowerCase() &&
           currentSale.branchName == row.branchName &&
           currentSale.date.year == row.date.year &&
           currentSale.date.month == row.date.month &&
-          currentSale.date.day == row.date.day) {
+          currentSale.date.day == row.date.day &&
+          (currentSale.voucherNo.isEmpty || row.voucherNo.isEmpty || currentSale.voucherNo == row.voucherNo)) {
         if (row.itemName.isNotEmpty) {
           currentSale.products.add({
             'item_name': row.itemName,

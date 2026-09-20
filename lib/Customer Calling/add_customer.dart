@@ -46,19 +46,90 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
       if (docSnap.exists && docSnap.data()?['customers'] != null) {
         customers = List.from(docSnap.data()!['customers']);
       }
-      // Enforce unique name (case-insensitive, trimmed)
+      final newContact1 = _normalizePhone(_contactCtrl.text);
+      final newContact2 = _normalizePhone(_contact2Ctrl.text);
+
+      if (newContact2.isNotEmpty && newContact1 == newContact2) {
+        if (mounted) {
+          setState(() {
+            _error = 'Contact Number 1 and Contact Number 2 cannot be identical.';
+            _loading = false;
+          });
+        }
+        return;
+      }
+
+      // 1. Enforce unique name (case-insensitive, trimmed) within user's own list
       String newName = _nameCtrl.text.trim().toLowerCase();
       bool nameExists = customers.any(
           (c) => (c['name'] ?? '').toString().trim().toLowerCase() == newName);
       if (nameExists) {
         if (mounted) {
           setState(() {
-            _error = 'A customer with this name already exists.';
+            _error = 'A customer with this name already exists in your list.';
             _loading = false;
           });
         }
         return;
       }
+
+      // 2. Enforce unique phone number across own list AND across all branches/users for the month
+      final allUsersSnap = await FirebaseFirestore.instance
+          .collection('customer_target')
+          .doc(monthYear)
+          .collection('users')
+          .get();
+
+      // Retrieve user cache for meaningful user names in error messages
+      final allCachedUsers = await UserCacheService.instance.getAllUsers();
+      final Map<String, Map<String, String>> userMap = {};
+      for (final u in allCachedUsers) {
+        final email = (u['email'] as String? ?? '').toLowerCase().trim();
+        final username = (u['username'] as String? ?? '').trim();
+        final b = (u['branch'] as String? ?? '').trim();
+        if (email.isNotEmpty) {
+          userMap[email] = {
+            'username': username.isNotEmpty ? username : email,
+            'branch': b.isNotEmpty ? b : 'Unknown',
+          };
+        }
+      }
+
+      for (final doc in allUsersSnap.docs) {
+        final data = doc.data();
+        final docEmail = (data['user'] ?? doc.id).toString().toLowerCase().trim();
+        final docBranch = (data['branch'] ?? userMap[docEmail]?['branch'] ?? 'Unknown').toString().trim();
+        final docUsername = userMap[docEmail]?['username'] ?? docEmail;
+        final docCustomers = data['customers'] as List<dynamic>? ?? [];
+
+        for (final c in docCustomers) {
+          if (c is! Map) continue;
+          final existingPhone1 = _normalizePhone(c['contact1'] ?? c['contact']);
+          final existingPhone2 = _normalizePhone(c['contact2']);
+
+          String? matchedPhone;
+          if (newContact1.isNotEmpty && (newContact1 == existingPhone1 || newContact1 == existingPhone2)) {
+            matchedPhone = newContact1;
+          } else if (newContact2.isNotEmpty && (newContact2 == existingPhone1 || newContact2 == existingPhone2)) {
+            matchedPhone = newContact2;
+          }
+
+          if (matchedPhone != null) {
+            final isSelf = docEmail == user.email!.toLowerCase();
+            final locationInfo = isSelf
+                ? 'in your own calling list'
+                : 'by $docUsername ($docBranch)';
+            if (mounted) {
+              setState(() {
+                _error = 'Phone number $matchedPhone is already assigned $locationInfo.';
+                _loading = false;
+              });
+            }
+            return;
+          }
+        }
+      }
+
       customers.add({
         'name': _nameCtrl.text.trim(),
         'address': _addressCtrl.text.trim(),
@@ -104,6 +175,16 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
       'Dec'
     ];
     return months[month - 1];
+  }
+
+  String _normalizePhone(String? phone) {
+    if (phone == null) return '';
+    final digits =
+        RegExp(r'\d').allMatches(phone).map((m) => m.group(0)).join();
+    if (digits.length >= 10) {
+      return digits.substring(digits.length - 10);
+    }
+    return digits;
   }
 
   void _showContactPicker(TextEditingController controller,

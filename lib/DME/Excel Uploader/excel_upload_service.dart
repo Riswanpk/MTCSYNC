@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'excel_uploader_models.dart';
+import 'excel_parsing_service.dart';
 import '../dme_constants.dart';
 
 class ExcelUploadService {
@@ -73,6 +74,9 @@ class ExcelUploadService {
     final currentUser = FirebaseAuth.instance.currentUser;
     final uploadedBy = currentUser?.email ?? currentUser?.uid ?? 'manual_upload';
 
+    // Strictly exclude any ignored party (e.g. YUSUF MALABAR TRADING LLP)
+    groupedSales = groupedSales.where((s) => !ExcelParsingService.isIgnoredParty(s.party)).toList();
+
     onLog('Starting fast batch upload for ${groupedSales.length} sale(s)...');
 
     // 1. Prepare unique customer records
@@ -93,8 +97,13 @@ class ExcelUploadService {
       activePhoneBySale['${sale.party}_${sale.phone}_${sale.date.millisecondsSinceEpoch}'] = activePhone;
 
       if (activePhone.isNotEmpty) {
+        final cleanParty = sale.party.trim();
+        if (cleanParty.isEmpty || cleanParty.toLowerCase() == 'unnamed customer' || cleanParty.toLowerCase() == 'unnamed party' || cleanParty.toLowerCase() == 'null') {
+          throw Exception('Upload blocked: Sale with phone $activePhone has a missing party name. Please message branch to update excel and reupload.');
+        }
+
         customersToUpsert[activePhone] = {
-          'name': sale.party.isNotEmpty ? sale.party : 'Unnamed Customer',
+          'name': cleanParty,
           'phone': activePhone,
           'address': sale.address.isNotEmpty ? sale.address : null,
           'salesman': sale.salesman.isNotEmpty ? sale.salesman : null,

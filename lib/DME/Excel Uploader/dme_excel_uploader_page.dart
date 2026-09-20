@@ -11,8 +11,6 @@ import '../dme_constants.dart';
 import 'excel_uploader_models.dart';
 import 'excel_parsing_service.dart';
 import 'excel_upload_service.dart';
-import 'missing_phone_dialog.dart';
-import 'missing_branch_dialog.dart';
 import 'customer_preview_section.dart';
 
 export 'excel_uploader_models.dart';
@@ -38,6 +36,7 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
   List<CustomerConflict> _conflicts = [];
   List<MissingPhoneCustomer> _missingPhones = [];
   List<MissingBranchSale> _missingBranches = [];
+  List<ExcelConflictItem> _excelConflicts = [];
   final List<String> _logs = [];
 
   String _customerFilter = 'all'; // 'all', 'new', 'existing', 'conflict'
@@ -186,6 +185,9 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
         _groupedSales.clear();
         _customerList.clear();
         _conflicts.clear();
+        _missingPhones.clear();
+        _missingBranches.clear();
+        _excelConflicts.clear();
         _logs.clear();
         _statusMessage = 'File selected: ${file.name}';
       });
@@ -235,61 +237,26 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
 
     try {
       final List<ParsedCustomerItem> customerItems = [];
-      final List<MissingPhoneCustomer> detectedMissingPhones = [];
-      final List<MissingBranchSale> detectedMissingBranches = [];
+      final List<ExcelConflictItem> detectedConflicts = [];
       final Map<String, dynamic> dbCache = {};
       final Set<String> premiumPhones = {};
 
-      // 1. First pass: Detect missing phones, missing branches, and Excel PREMIUM customer types
+      // 1. First pass: Collect unique valid phones and Excel PREMIUM customer types
       for (var sale in _groupedSales) {
-        // Missing Phone check
-        if (sale.phone.isEmpty) {
-          if (!detectedMissingPhones.any((m) => m.partyName.toLowerCase() == sale.party.toLowerCase() && m.branchName == sale.branchName)) {
-            detectedMissingPhones.add(MissingPhoneCustomer(
-              partyName: sale.party,
-              branchName: sale.branchName,
-              voucherNo: sale.voucherNo,
-              address: sale.address,
-              salesman: sale.salesman,
-              categoryName: sale.categoryName,
-              typeName: sale.typeName,
-              date: sale.date,
-            ));
-          }
-        }
+        if (ExcelParsingService.isIgnoredParty(sale.party)) continue;
 
-        // Missing Branch check
-        final hasInvalidBranch = sale.branchId == null ||
-            sale.branchName.trim().isEmpty ||
-            DmeConstants.getBranchIdByName(sale.branchName) == null;
-        if (hasInvalidBranch) {
-          if (!detectedMissingBranches.any((m) =>
-              (m.voucherNo.isNotEmpty && m.voucherNo == sale.voucherNo) ||
-              (m.partyName.toLowerCase() == sale.party.toLowerCase() &&
-               m.date.year == sale.date.year &&
-               m.date.month == sale.date.month &&
-               m.date.day == sale.date.day))) {
-            detectedMissingBranches.add(MissingBranchSale(
-              voucherNo: sale.voucherNo,
-              partyName: sale.party,
-              phone: sale.phone,
-              date: sale.date,
-              rawBranchName: sale.branchName,
-            ));
-          }
-        }
-
-        // Check if customer is marked PREMIUM in any row/branch in this Excel
+        final cleanPh = ExcelParsingService.cleanPhoneNumber(sale.phone);
         final isExcelPremium = sale.typeId == 1 || sale.typeName.trim().toUpperCase() == 'PREMIUM';
-        if (isExcelPremium && sale.phone.isNotEmpty) {
-          premiumPhones.add(sale.phone);
+        if (isExcelPremium && cleanPh.length == 10) {
+          premiumPhones.add(cleanPh);
         }
       }
 
-      // 2. Query Supabase for existing customers (chunked) to check DB PREMIUM status
+      // 2. Query Supabase for existing customers (chunked) to check DB PREMIUM status and customer names
       final uniquePhones = _groupedSales
-          .map((s) => s.phone)
-          .where((p) => p.isNotEmpty)
+          .where((s) => !ExcelParsingService.isIgnoredParty(s.party))
+          .map((s) => ExcelParsingService.cleanPhoneNumber(s.phone))
+          .where((p) => p.length == 10)
           .toSet()
           .toList();
 
@@ -384,14 +351,30 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
         }
       }
 
-      // 4. Build preview list of customers (taking Excel name automatically without asking user)
+      // 4. Comprehensive conflict detection & build preview customer list:
+      // Rule: "if a party name is missing and that customer is an existing one then dont just take the database name, show conflict and tell user to reupload with name"
       for (var sale in _groupedSales) {
+        if (ExcelParsingService.isIgnoredParty(sale.party)) continue;
+
+        final List<String> issues = [];
+
+        // Phone number check: missing, less than 10 digits, or more than 10 digits
+        final cleanPh = ExcelParsingService.cleanPhoneNumber(sale.phone);
+        if (cleanPh.isEmpty) {
+          issues.add('Missing phone number');
+        } else if (cleanPh.length < 10) {
+          issues.add('Phone has less than 10 digits (${cleanPh.length} digits: $cleanPh)');
+        } else if (cleanPh.length > 10) {
+          issues.add('Phone has more than 10 digits (${cleanPh.length} digits: $cleanPh)');
+        }
+
+        // Existing customer lookup
         bool isExisting = false;
         String? existingDbName;
         int? existingDbId;
 
-        if (sale.phone.isNotEmpty && dbCache.containsKey(sale.phone)) {
-          final res = dbCache[sale.phone];
+        if (cleanPh.isNotEmpty && dbCache.containsKey(cleanPh)) {
+          final res = dbCache[cleanPh];
           if (res != null) {
             isExisting = true;
             existingDbId = res['id'] as int?;
@@ -399,12 +382,66 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
           }
         }
 
+        // Party Name check
+        final isPartyMissing = sale.party.trim().isEmpty ||
+            sale.party.trim().toLowerCase() == 'unnamed party' ||
+            sale.party.trim().toLowerCase() == 'null';
+
+        if (isPartyMissing) {
+          if (isExisting && existingDbName != null && existingDbName.isNotEmpty) {
+            issues.add('Missing party name in Excel (Existing DB customer: "$existingDbName"). Please reupload with name.');
+          } else {
+            issues.add('Missing party name in Excel');
+          }
+        }
+
+        // Category check
+        if (sale.categoryName.trim().isEmpty || sale.categoryId == null || sale.categoryName.trim().toLowerCase() == 'null') {
+          issues.add('Missing category');
+        }
+
+        // Customer Type check
+        if (sale.typeName.trim().isEmpty || sale.typeId == null || sale.typeName.trim().toLowerCase() == 'null') {
+          issues.add('Missing customer type');
+        }
+
+        // Salesman check
+        if (sale.salesman.trim().isEmpty || sale.salesman.trim().toLowerCase() == 'null') {
+          issues.add('Missing salesman');
+        }
+
+        // Branch check
+        final isBranchValid = sale.branchName.trim().isNotEmpty &&
+            sale.branchId != null &&
+            DmeConstants.getBranchIdByName(sale.branchName) != null;
+        if (!isBranchValid) {
+          issues.add('Missing or invalid branch ("${sale.branchName}")');
+        }
+
+        if (issues.isNotEmpty) {
+          detectedConflicts.add(ExcelConflictItem(
+            partyName: sale.party.isNotEmpty
+                ? sale.party
+                : (isExisting && existingDbName != null && existingDbName.isNotEmpty
+                    ? '[Missing in Excel] (DB: $existingDbName)'
+                    : '[Missing Party Name]'),
+            voucherNo: sale.voucherNo,
+            branchName: sale.branchName.isNotEmpty ? sale.branchName : 'Unknown Branch',
+            phone: cleanPh,
+            issues: issues,
+          ));
+        }
+
         final isPremium = premiumPhones.contains(sale.phone);
         final effectiveTypeName = isPremium ? 'PREMIUM' : sale.typeName;
 
         customerItems.add(ParsedCustomerItem(
           phone: sale.phone.isNotEmpty ? sale.phone : 'Missing Phone',
-          partyName: sale.party.isNotEmpty ? sale.party : 'Unnamed Party',
+          partyName: sale.party.isNotEmpty
+              ? sale.party
+              : (isExisting && existingDbName != null && existingDbName.isNotEmpty
+                  ? '[Missing in Excel] (DB: $existingDbName)'
+                  : 'Unnamed Party'),
           address: sale.address,
           branchName: sale.branchName.isNotEmpty ? sale.branchName : 'Unknown Branch',
           salesman: sale.salesman,
@@ -421,25 +458,20 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
       setState(() {
         _customerList = customerItems;
         _conflicts = []; // Name differences are automatically taken from Excel without asking user
-        _missingPhones = detectedMissingPhones;
-        _missingBranches = detectedMissingBranches;
+        _excelConflicts = detectedConflicts;
+        _missingPhones = [];
+        _missingBranches = [];
         _isParsing = false;
-        if (_missingPhones.isNotEmpty) {
-          _statusMessage = 'Found ${_missingPhones.length} customer(s) with missing phone number. Please enter phone numbers before uploading.';
-        } else if (_missingBranches.isNotEmpty) {
-          _statusMessage = 'Found ${_missingBranches.length} transaction(s) with missing branch name. Please select branches before uploading.';
+        if (_excelConflicts.isNotEmpty) {
+          _statusMessage = 'Found ${_excelConflicts.length} conflict(s). Please message branch to update excel and reupload.';
         } else {
           _statusMessage = 'Found ${_groupedSales.length} sale(s): ${_customerList.where((c) => !c.isExisting).length} New, ${_customerList.where((c) => c.isExisting).length} Existing.';
         }
       });
 
-      // ONLY show clarification popups for:
-      // 1. Missing phone numbers
-      // 2. Missing branch names
-      if (_missingPhones.isNotEmpty && mounted) {
-        await _showMissingPhoneDialog();
-      } else if (_missingBranches.isNotEmpty && mounted) {
-        await _showMissingBranchDialog();
+      // Show conflict popup if any conflicts detected
+      if (_excelConflicts.isNotEmpty && mounted) {
+        await _showConflictsDialog();
       }
     } catch (e) {
       setState(() {
@@ -449,40 +481,189 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
     }
   }
 
-  /// Dialog requiring the user to enter a phone number for customers without one
-  Future<void> _showMissingPhoneDialog() async {
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => MissingPhoneDialog(
-        missingPhones: _missingPhones,
-        groupedSales: _groupedSales,
-        parsedRows: _parsedRows,
-        customerList: _customerList,
-        onCompleted: () {
-          setState(() {});
-          if (_missingBranches.isNotEmpty && mounted) {
-            _showMissingBranchDialog();
-          }
-        },
-      ),
-    );
-  }
+  /// Dialog displaying all detected conflicts with strict instruction to edit Excel and reupload
+  Future<void> _showConflictsDialog() async {
+    if (!mounted || _excelConflicts.isEmpty) return;
 
-  /// Dialog requiring the user to select a branch for sales with missing branch names
-  Future<void> _showMissingBranchDialog() async {
     await showDialog(
       context: context,
-      barrierDismissible: false,
-      builder: (ctx) => MissingBranchDialog(
-        missingBranches: _missingBranches,
-        groupedSales: _groupedSales,
-        parsedRows: _parsedRows,
-        customerList: _customerList,
-        onCompleted: () {
-          setState(() {});
-        },
-      ),
+      barrierDismissible: true,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+          contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 24),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Excel Conflicts Detected',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Please message branch to update excel and reupload',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Found ${_excelConflicts.length} conflict(s). Manual entry is disabled. All missing or invalid fields must be corrected in the Excel file by the branch before uploading.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[800]),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Conflicts List (${_excelConflicts.length}):',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                const SizedBox(height: 8),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: _excelConflicts.length,
+                    separatorBuilder: (_, __) => const Divider(height: 16),
+                    itemBuilder: (context, idx) {
+                      final c = _excelConflicts[idx];
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  c.partyName,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                              ),
+                              if (c.voucherNo.isNotEmpty) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    c.voucherNo,
+                                    style: const TextStyle(fontSize: 10, fontFamily: 'monospace'),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                              ],
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF005BAC).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  c.branchName,
+                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF005BAC)),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: c.issues.map((issue) {
+                              final isPhone = issue.toLowerCase().contains('phone');
+                              return Container(
+                                constraints: const BoxConstraints(maxWidth: 480),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: isPhone
+                                      ? Colors.red.withValues(alpha: 0.12)
+                                      : Colors.orange.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: isPhone ? Colors.red.shade300 : Colors.orange.shade300,
+                                    width: 0.8,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Icon(
+                                        Icons.close_rounded,
+                                        size: 12,
+                                        color: isPhone ? Colors.red[800] : Colors.orange[900],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Flexible(
+                                      child: Text(
+                                        issue,
+                                        softWrap: true,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: isPhone ? Colors.red[800] : Colors.orange[900],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade700,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -499,56 +680,10 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
       return;
     }
 
-    // STRICT CHECK 1: Ensure no customer has a missing phone number before uploading
-    final missingPhoneSales = _groupedSales.where((s) => s.phone.trim().isEmpty).toList();
-    if (missingPhoneSales.isNotEmpty || _missingPhones.isNotEmpty) {
-      if (_missingPhones.isEmpty) {
-        for (var s in missingPhoneSales) {
-          if (!_missingPhones.any((m) => m.partyName.toLowerCase() == s.party.toLowerCase() && m.branchName == s.branchName)) {
-            _missingPhones.add(MissingPhoneCustomer(
-              partyName: s.party,
-              branchName: s.branchName,
-              voucherNo: s.voucherNo,
-              address: s.address,
-              salesman: s.salesman,
-              categoryName: s.categoryName,
-              typeName: s.typeName,
-              date: s.date,
-            ));
-          }
-        }
-      }
-      _showSnackBar('Please fill in missing phone numbers before uploading.', isError: true);
-      await _showMissingPhoneDialog();
-      return;
-    }
-
-    // STRICT CHECK 2: Ensure no sale has a missing branch name before uploading
-    final missingBranchSales = _groupedSales.where((s) =>
-        s.branchId == null ||
-        s.branchName.trim().isEmpty ||
-        DmeConstants.getBranchIdByName(s.branchName) == null).toList();
-    if (missingBranchSales.isNotEmpty || _missingBranches.isNotEmpty) {
-      if (_missingBranches.isEmpty) {
-        for (var s in missingBranchSales) {
-          if (!_missingBranches.any((m) =>
-              (m.voucherNo.isNotEmpty && m.voucherNo == s.voucherNo) ||
-              (m.partyName.toLowerCase() == s.party.toLowerCase() &&
-               m.date.year == s.date.year &&
-               m.date.month == s.date.month &&
-               m.date.day == s.date.day))) {
-            _missingBranches.add(MissingBranchSale(
-              voucherNo: s.voucherNo,
-              partyName: s.party,
-              phone: s.phone,
-              date: s.date,
-              rawBranchName: s.branchName,
-            ));
-          }
-        }
-      }
-      _showSnackBar('Please select branch names before uploading.', isError: true);
-      await _showMissingBranchDialog();
+    // STRICT CHECK: Ensure zero conflicts exist before uploading
+    if (_excelConflicts.isNotEmpty) {
+      _showSnackBar('Please message branch to update excel and reupload', isError: true);
+      await _showConflictsDialog();
       return;
     }
 
@@ -766,14 +901,14 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
         actions: [
-          if (_missingBranches.isNotEmpty)
+          if (_excelConflicts.isNotEmpty)
             IconButton(
               icon: Badge(
-                label: Text('${_missingBranches.length}'),
-                child: const Icon(Icons.business_rounded),
+                label: Text('${_excelConflicts.length}'),
+                child: const Icon(Icons.warning_amber_rounded),
               ),
-              tooltip: 'Missing Branches',
-              onPressed: _showMissingBranchDialog,
+              tooltip: 'Excel Conflicts',
+              onPressed: _showConflictsDialog,
             ),
         ],
       ),
@@ -852,24 +987,75 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
                             Icons.how_to_reg,
                             color: Colors.blue,
                           ),
-                          if (_conflicts.isNotEmpty)
+                          if (_excelConflicts.isNotEmpty)
                             _buildStatItem(
                               'Conflicts',
-                              '${_conflicts.length}',
-                              Icons.warning_amber,
-                              color: Colors.orange,
+                              '${_excelConflicts.length}',
+                              Icons.error_outline_rounded,
+                              color: Colors.red,
                             ),
                         ],
                       ),
                       const SizedBox(height: 16),
+                      if (_excelConflicts.isNotEmpty) ...[
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.red.shade300, width: 1.2),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(Icons.error_outline_rounded, color: Colors.red, size: 22),
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Please message branch to update excel and reupload',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                        color: Colors.red,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Found ${_excelConflicts.length} conflict(s) across transactions (e.g. missing or invalid phone number, missing category, type, salesman, branch, or party name). Manual entry is disabled.',
+                                style: TextStyle(fontSize: 12, color: Colors.grey[800]),
+                              ),
+                              const SizedBox(height: 10),
+                              ElevatedButton.icon(
+                                onPressed: _showConflictsDialog,
+                                icon: const Icon(Icons.visibility_rounded, size: 16),
+                                label: Text('View ${_excelConflicts.length} Conflict(s)'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red.shade700,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
-                          onPressed: (_isUploading || _isParsing) ? null : _startUpload,
+                          onPressed: (_isUploading || _isParsing || _excelConflicts.isNotEmpty) ? null : _startUpload,
                           icon: const Icon(Icons.cloud_upload),
-                          label: Text('Upload ${_groupedSales.length} Sales to Supabase'),
+                          label: Text(_excelConflicts.isNotEmpty
+                              ? 'Upload Blocked (${_excelConflicts.length} Conflicts)'
+                              : 'Upload ${_groupedSales.length} Sales to Supabase'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF8CC63F),
+                            backgroundColor: _excelConflicts.isNotEmpty ? Colors.grey : const Color(0xFF8CC63F),
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

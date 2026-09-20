@@ -167,13 +167,15 @@ class DmeAssignmentService {
     final nowIso = DateTime.now().toIso8601String();
     final currentDay = DateTime.tryParse(dateStr) ?? DateTime.now();
 
-    // Track total calls and leftovers assigned across all branches for each user today to ensure fair distribution
-    final Map<String, int> globalUserLeftoverCount = {};
-    final Map<String, int> globalUserTotalCount = {};
+    // Track new, unattempted overdue, and attempted reminders across all branches for each user today
+    final Map<String, int> globalUserNewCount = {};
+    final Map<String, int> globalUserOverdueCount = {};
+    final Map<String, int> globalUserAttemptedCount = {};
     for (final users in branchToActiveUserUids.values) {
       for (final u in users) {
-        globalUserLeftoverCount.putIfAbsent(u, () => 0);
-        globalUserTotalCount.putIfAbsent(u, () => 0);
+        globalUserNewCount.putIfAbsent(u, () => 0);
+        globalUserOverdueCount.putIfAbsent(u, () => 0);
+        globalUserAttemptedCount.putIfAbsent(u, () => 0);
       }
     }
 
@@ -252,15 +254,28 @@ class DmeAssignmentService {
       debugPrint('DmeAssignmentService: overdue stats recording error: $e');
     }
 
-    // Reset uncalled pending reminders assigned on previous days so they are cleanly re-divided today
+    // Reset uncalled pending reminders assigned on previous days so they are cleanly re-divided today.
+    // Do NOT reset reminders where a call has already been attempted (call_attempts > 0 or called_by is set).
     try {
       await client.from('dme_reminders').update({
         'assigned_to': null,
         'assigned_date': null,
         'is_overdue_leftover': false,
         'updated_at': nowIso,
-      }).eq('status', 'pending').isFilter('called_by', null).lt('assigned_date', dateStr);
-    } catch (_) {}
+      }).eq('status', 'pending')
+        .isFilter('called_by', null)
+        .or('call_attempts.is.null,call_attempts.eq.0')
+        .lt('assigned_date', dateStr);
+    } catch (_) {
+      try {
+        await client.from('dme_reminders').update({
+          'assigned_to': null,
+          'assigned_date': null,
+          'is_overdue_leftover': false,
+          'updated_at': nowIso,
+        }).eq('status', 'pending').isFilter('called_by', null).eq('call_attempts', 0).lt('assigned_date', dateStr);
+      } catch (_) {}
+    }
 
     // Clean up previous assignment audit logs for today for these branches so absent users or old counts don't linger on re-assign
     try {
@@ -296,7 +311,7 @@ class DmeAssignmentService {
       while (hasMore) {
         final batch = await client
             .from('dme_reminders')
-            .select('id, reminder_date, status, remarks, call_duration, called_by, assigned_to')
+            .select('id, reminder_date, status, remarks, call_duration, called_by, assigned_to, call_attempts')
             .inFilter('status', ['pending', 'called'])
             .eq('last_purchase_branch', branchId)
             .lte('reminder_date', '${dateStr}T23:59:59')
@@ -315,10 +330,13 @@ class DmeAssignmentService {
         continue;
       }
 
-      final Map<String, List<int>> userLeftovers = {for (var u in activeUsers) u: []};
-      final Map<String, List<int>> userTodays = {for (var u in activeUsers) u: []};
-      final List<int> leftoverIds = [];
-      final List<int> todayIds = [];
+      final Map<String, List<int>> userOverdue = {for (var u in activeUsers) u: []};
+      final Map<String, List<int>> userNew = {for (var u in activeUsers) u: []};
+      final Map<String, List<int>> userAttempted = {for (var u in activeUsers) u: []};
+
+      final List<int> unattemptedOverdueIds = [];
+      final List<int> newIds = [];
+      final List<Map<String, dynamic>> attemptedItems = [];
 
       for (var item in allPending) {
         final id = int.tryParse(item['id']?.toString() ?? '');
@@ -327,31 +345,29 @@ class DmeAssignmentService {
         final status = (item['status'] ?? '').toString().toLowerCase();
         final remarks = (item['remarks'] ?? '').toString().trim();
         final duration = int.tryParse(item['call_duration']?.toString() ?? '') ?? 0;
-        final bool isCalledWithoutRemarks = (status == 'called' || duration > 10) && remarks.isEmpty;
+        final attempts = int.tryParse(item['call_attempts']?.toString() ?? '') ?? 0;
+        final calledEmail = item['called_by']?.toString().toLowerCase().trim();
+        final bool hasAttempt = attempts > 0 || (calledEmail != null && calledEmail.isNotEmpty) || status == 'called' || duration > 0;
 
-        // If reminder is in called status without remarks, assign it back to the same person who called it
-        if (isCalledWithoutRemarks) {
+        // Sticky assignment: When a user has already attempted a call on a reminder,
+        // assign that reminder to the same user next day and henceforth until remarks are submitted.
+        if (hasAttempt && remarks.isEmpty) {
           String? targetCaller;
           final prevAssigned = item['assigned_to']?.toString();
           if (prevAssigned != null && activeUsers.contains(prevAssigned)) {
             targetCaller = prevAssigned;
-          } else {
-            final calledEmail = item['called_by']?.toString().toLowerCase().trim();
-            if (calledEmail != null && calledEmail.isNotEmpty) {
-              for (var u in activeUsers) {
-                final uEmail = (userUidToEmail?[u] ?? '').toLowerCase().trim();
-                if (uEmail == calledEmail || u.toLowerCase() == calledEmail) {
-                  targetCaller = u;
-                  break;
-                }
+          } else if (calledEmail != null && calledEmail.isNotEmpty) {
+            for (var u in activeUsers) {
+              final uEmail = (userUidToEmail?[u] ?? '').toLowerCase().trim();
+              if (uEmail == calledEmail || u.toLowerCase() == calledEmail) {
+                targetCaller = u;
+                break;
               }
             }
           }
 
           if (targetCaller != null) {
-            userLeftovers[targetCaller]!.add(id);
-            globalUserLeftoverCount[targetCaller] = (globalUserLeftoverCount[targetCaller] ?? 0) + 1;
-            globalUserTotalCount[targetCaller] = (globalUserTotalCount[targetCaller] ?? 0) + 1;
+            attemptedItems.add({'id': id, 'targetCaller': targetCaller});
             continue;
           }
         }
@@ -359,55 +375,56 @@ class DmeAssignmentService {
         final rDateStr = item['reminder_date']?.toString();
         final rDate = rDateStr != null ? DateTime.tryParse(rDateStr) : null;
 
-        if (rDate != null) {
-          final rDay = DateTime(rDate.year, rDate.month, rDate.day);
-          if (rDay.isBefore(DateTime(currentDay.year, currentDay.month, currentDay.day))) {
-            leftoverIds.add(id);
-          } else {
-            todayIds.add(id);
-          }
+        if (rDate != null && DateTime(rDate.year, rDate.month, rDate.day).isBefore(DateTime(currentDay.year, currentDay.month, currentDay.day))) {
+          unattemptedOverdueIds.add(id);
         } else {
-          todayIds.add(id);
+          newIds.add(id);
         }
       }
 
-      // Shuffle both pools for randomness
+      // Shuffle pools for randomness
       final rnd = Random();
-      leftoverIds.shuffle(rnd);
-      todayIds.shuffle(rnd);
+      unattemptedOverdueIds.shuffle(rnd);
+      newIds.shuffle(rnd);
 
-      // Fairly distribute leftovers:
-      // Always pick the present user of this branch who currently has the fewest assigned leftovers (breaking ties with fewest total calls)
-      for (final id in leftoverIds) {
+      // 1. Fairly distribute unattempted overdue reminders among active users:
+      for (final id in unattemptedOverdueIds) {
         final sortedUsers = List<String>.from(activeUsers)..sort((a, b) {
-          final lDiff = (globalUserLeftoverCount[a] ?? 0).compareTo(globalUserLeftoverCount[b] ?? 0);
-          if (lDiff != 0) return lDiff;
-          return (globalUserTotalCount[a] ?? 0).compareTo(globalUserTotalCount[b] ?? 0);
+          final oDiff = (userOverdue[a]?.length ?? 0).compareTo(userOverdue[b]?.length ?? 0);
+          if (oDiff != 0) return oDiff;
+          return (globalUserOverdueCount[a] ?? 0).compareTo(globalUserOverdueCount[b] ?? 0);
         });
         final targetUser = sortedUsers.first;
-        userLeftovers[targetUser]!.add(id);
-        globalUserLeftoverCount[targetUser] = (globalUserLeftoverCount[targetUser] ?? 0) + 1;
-        globalUserTotalCount[targetUser] = (globalUserTotalCount[targetUser] ?? 0) + 1;
+        userOverdue[targetUser]!.add(id);
+        globalUserOverdueCount[targetUser] = (globalUserOverdueCount[targetUser] ?? 0) + 1;
       }
 
-      // Fairly distribute today's reminders:
-      // Always pick the present user of this branch who currently has the fewest total calls (breaking ties with fewest today calls)
-      for (final id in todayIds) {
+      // 2. Fairly distribute new reminders among active users:
+      for (final id in newIds) {
         final sortedUsers = List<String>.from(activeUsers)..sort((a, b) {
-          final tDiff = (globalUserTotalCount[a] ?? 0).compareTo(globalUserTotalCount[b] ?? 0);
-          if (tDiff != 0) return tDiff;
-          return (userTodays[a]?.length ?? 0).compareTo(userTodays[b]?.length ?? 0);
+          final nDiff = (userNew[a]?.length ?? 0).compareTo(userNew[b]?.length ?? 0);
+          if (nDiff != 0) return nDiff;
+          return (globalUserNewCount[a] ?? 0).compareTo(globalUserNewCount[b] ?? 0);
         });
         final targetUser = sortedUsers.first;
-        userTodays[targetUser]!.add(id);
-        globalUserTotalCount[targetUser] = (globalUserTotalCount[targetUser] ?? 0) + 1;
+        userNew[targetUser]!.add(id);
+        globalUserNewCount[targetUser] = (globalUserNewCount[targetUser] ?? 0) + 1;
+      }
+
+      // 3. Add attempted overdue reminders on top directly to their caller/assignee:
+      for (final item in attemptedItems) {
+        final targetCaller = item['targetCaller'] as String;
+        final id = item['id'] as int;
+        userAttempted[targetCaller]!.add(id);
+        globalUserAttemptedCount[targetCaller] = (globalUserAttemptedCount[targetCaller] ?? 0) + 1;
       }
 
       const int batchSize = 200;
       for (var user in activeUsers) {
-        final lList = userLeftovers[user] ?? [];
-        for (int i = 0; i < lList.length; i += batchSize) {
-          final chunk = lList.sublist(i, min(i + batchSize, lList.length));
+        // Unattempted overdue reminders
+        final oList = userOverdue[user] ?? [];
+        for (int i = 0; i < oList.length; i += batchSize) {
+          final chunk = oList.sublist(i, min(i + batchSize, oList.length));
           await client.from('dme_reminders').update({
             'assigned_to': user,
             'assigned_date': dateStr,
@@ -416,7 +433,20 @@ class DmeAssignmentService {
           }).inFilter('id', chunk);
         }
 
-        final tList = userTodays[user] ?? [];
+        // Attempted overdue reminders (sticky)
+        final aList = userAttempted[user] ?? [];
+        for (int i = 0; i < aList.length; i += batchSize) {
+          final chunk = aList.sublist(i, min(i + batchSize, aList.length));
+          await client.from('dme_reminders').update({
+            'assigned_to': user,
+            'assigned_date': dateStr,
+            'is_overdue_leftover': true,
+            'updated_at': nowIso,
+          }).inFilter('id', chunk);
+        }
+
+        // Today's new reminders
+        final tList = userNew[user] ?? [];
         for (int j = 0; j < tList.length; j += batchSize) {
           final chunk = tList.sublist(j, min(j + batchSize, tList.length));
           await client.from('dme_reminders').update({
@@ -428,14 +458,16 @@ class DmeAssignmentService {
         }
       }
 
-      final branchCount = leftoverIds.length + todayIds.length;
+      final branchCount = unattemptedOverdueIds.length + newIds.length + attemptedItems.length;
       branchAssignedCounts[branchId] = branchCount;
       totalAssigned += branchCount;
 
       // 2. Record in reminder_assignment audit table
       for (var user in activeUsers) {
         final uEmail = userUidToEmail?[user] ?? user;
-        final count = (userLeftovers[user]?.length ?? 0) + (userTodays[user]?.length ?? 0);
+        final count = (userOverdue[user]?.length ?? 0) +
+            (userNew[user]?.length ?? 0) +
+            (userAttempted[user]?.length ?? 0);
         try {
           await client.from('reminder_assignment').upsert({
             'assigned_date': dateStr,
@@ -463,20 +495,28 @@ class DmeAssignmentService {
     }
 
     final Map<String, Map<String, int>> userAssignedBreakdown = {};
-    for (final u in globalUserTotalCount.keys) {
-      final total = globalUserTotalCount[u] ?? 0;
-      final leftover = globalUserLeftoverCount[u] ?? 0;
+    final allActiveUids = <String>{};
+    for (final users in branchToActiveUserUids.values) {
+      allActiveUids.addAll(users);
+    }
+    for (final u in allActiveUids) {
+      final n = globalUserNewCount[u] ?? 0;
+      final o = globalUserOverdueCount[u] ?? 0;
+      final a = globalUserAttemptedCount[u] ?? 0;
+      final total = n + o + a;
       userAssignedBreakdown[u] = {
         'total': total,
-        'leftover': leftover,
-        'new': total - leftover,
+        'new': n,
+        'overdue': o,
+        'attempted': a,
+        'leftover': o + a, // backwards compatibility
       };
     }
 
     // Record today's leftover overdue count in dme_user_daily_stats so call report OD displays properly
     try {
-      for (final uid in globalUserLeftoverCount.keys) {
-        final leftover = globalUserLeftoverCount[uid] ?? 0;
+      for (final uid in allActiveUids) {
+        final leftover = (globalUserOverdueCount[uid] ?? 0) + (globalUserAttemptedCount[uid] ?? 0);
         await DmeUserStatsService.setOverdueCount(
           userUid: uid,
           userEmail: userUidToEmail?[uid] ?? uid,
@@ -532,7 +572,9 @@ class DmeAssignmentService {
         final stats = userCounts[uid] ?? userCounts[email];
         final total = (stats?['total'] as num?)?.toInt() ?? 0;
         final newCount = (stats?['new'] as num?)?.toInt() ?? 0;
-        final leftover = (stats?['leftover'] as num?)?.toInt() ?? 0;
+        final overdueCount = (stats?['overdue'] as num?)?.toInt() ?? 0;
+        final attemptedCount = (stats?['attempted'] as num?)?.toInt() ?? 0;
+        final leftover = (stats?['leftover'] as num?)?.toInt() ?? (overdueCount + attemptedCount);
 
         userBreakdowns.add({
           'uid': uid,
@@ -541,6 +583,8 @@ class DmeAssignmentService {
           'is_present': isPresent,
           'total': total,
           'new': newCount,
+          'overdue': overdueCount,
+          'attempted': attemptedCount,
           'leftover': leftover,
           'assigned_branches': branches,
         });
@@ -741,7 +785,7 @@ class DmeAssignmentService {
       while (hasMore) {
         final batch = await client
             .from('dme_reminders')
-            .select('id, reminder_date, status, remarks, call_duration, called_by, assigned_to')
+            .select('id, reminder_date, status, remarks, call_duration, called_by, assigned_to, call_attempts')
             .inFilter('status', ['pending', 'called'])
             .inFilter('last_purchase_branch', userBranches)
             .lte('reminder_date', '${todayStr}T23:59:59')
@@ -759,12 +803,12 @@ class DmeAssignmentService {
       if (allPending.isEmpty) return;
 
       final currentDay = DateTime(today.year, today.month, today.day);
-      final Map<String, List<int>> userLeftovers = {for (var u in eligibleUsers) u: []};
-      final Map<String, List<int>> userTodays = {for (var u in eligibleUsers) u: []};
-      final Map<String, int> userLeftoverCount = {for (var u in eligibleUsers) u: 0};
-      final Map<String, int> userTotalCount = {for (var u in eligibleUsers) u: 0};
-      final List<int> leftoverIds = [];
-      final List<int> todayIds = [];
+      final Map<String, List<int>> userOverdue = {for (var u in eligibleUsers) u: []};
+      final Map<String, List<int>> userNew = {for (var u in eligibleUsers) u: []};
+      final Map<String, List<int>> userAttempted = {for (var u in eligibleUsers) u: []};
+      final List<int> unattemptedOverdueIds = [];
+      final List<int> newIds = [];
+      final List<Map<String, dynamic>> attemptedItems = [];
 
       for (var item in allPending) {
         final id = int.tryParse(item['id']?.toString() ?? '');
@@ -773,19 +817,20 @@ class DmeAssignmentService {
         final status = (item['status'] ?? '').toString().toLowerCase();
         final remarks = (item['remarks'] ?? '').toString().trim();
         final duration = int.tryParse(item['call_duration']?.toString() ?? '') ?? 0;
-        final bool isCalledWithoutRemarks = (status == 'called' || duration > 10) && remarks.isEmpty;
+        final attempts = int.tryParse(item['call_attempts']?.toString() ?? '') ?? 0;
+        final calledEmail = item['called_by']?.toString().toLowerCase().trim();
+        final bool hasAttempt = attempts > 0 || (calledEmail != null && calledEmail.isNotEmpty) || status == 'called' || duration > 0;
 
-        // If reminder is in called status without remarks, assign it back to the same person who called it
-        if (isCalledWithoutRemarks) {
+        // Sticky assignment: When a user has already attempted a call on a reminder,
+        // assign that reminder to the same user next day and henceforth until remarks are submitted.
+        if (hasAttempt && remarks.isEmpty) {
           String? targetCaller;
           final prevAssigned = item['assigned_to']?.toString();
           if (prevAssigned != null && eligibleUsers.contains(prevAssigned)) {
             targetCaller = prevAssigned;
           }
           if (targetCaller != null) {
-            userLeftovers[targetCaller]!.add(id);
-            userLeftoverCount[targetCaller] = (userLeftoverCount[targetCaller] ?? 0) + 1;
-            userTotalCount[targetCaller] = (userTotalCount[targetCaller] ?? 0) + 1;
+            attemptedItems.add({'id': id, 'targetCaller': targetCaller});
             continue;
           }
         }
@@ -793,44 +838,35 @@ class DmeAssignmentService {
         final rDateStr = item['reminder_date']?.toString();
         final rDate = rDateStr != null ? DateTime.tryParse(rDateStr) : null;
 
-        if (rDate != null) {
-          final rDay = DateTime(rDate.year, rDate.month, rDate.day);
-          if (rDay.isBefore(currentDay)) {
-            leftoverIds.add(id);
-          } else {
-            todayIds.add(id);
-          }
+        if (rDate != null && DateTime(rDate.year, rDate.month, rDate.day).isBefore(currentDay)) {
+          unattemptedOverdueIds.add(id);
         } else {
-          todayIds.add(id);
+          newIds.add(id);
         }
       }
 
       // 4. Shuffle both pools randomly
       final rnd = Random();
-      leftoverIds.shuffle(rnd);
-      todayIds.shuffle(rnd);
+      unattemptedOverdueIds.shuffle(rnd);
+      newIds.shuffle(rnd);
 
-      for (final id in leftoverIds) {
-        final sortedUsers = List<String>.from(eligibleUsers)..sort((a, b) {
-          final lDiff = (userLeftoverCount[a] ?? 0).compareTo(userLeftoverCount[b] ?? 0);
-          if (lDiff != 0) return lDiff;
-          return (userTotalCount[a] ?? 0).compareTo(userTotalCount[b] ?? 0);
-        });
-        final targetUser = sortedUsers.first;
-        userLeftovers[targetUser]!.add(id);
-        userLeftoverCount[targetUser] = (userLeftoverCount[targetUser] ?? 0) + 1;
-        userTotalCount[targetUser] = (userTotalCount[targetUser] ?? 0) + 1;
+      // Fairly distribute unattempted overdue reminders equally
+      for (int i = 0; i < unattemptedOverdueIds.length; i++) {
+        final targetUser = eligibleUsers[i % eligibleUsers.length];
+        userOverdue[targetUser]!.add(unattemptedOverdueIds[i]);
       }
 
-      for (final id in todayIds) {
-        final sortedUsers = List<String>.from(eligibleUsers)..sort((a, b) {
-          final tDiff = (userTotalCount[a] ?? 0).compareTo(userTotalCount[b] ?? 0);
-          if (tDiff != 0) return tDiff;
-          return (userTodays[a]?.length ?? 0).compareTo(userTodays[b]?.length ?? 0);
-        });
-        final targetUser = sortedUsers.first;
-        userTodays[targetUser]!.add(id);
-        userTotalCount[targetUser] = (userTotalCount[targetUser] ?? 0) + 1;
+      // Fairly distribute today's new reminders equally
+      for (int i = 0; i < newIds.length; i++) {
+        final targetUser = eligibleUsers[i % eligibleUsers.length];
+        userNew[targetUser]!.add(newIds[i]);
+      }
+
+      // Add attempted overdue reminders on top to the attempting user
+      for (final item in attemptedItems) {
+        final targetCaller = item['targetCaller'] as String;
+        final id = item['id'] as int;
+        userAttempted[targetCaller]!.add(id);
       }
 
       // 6. Write assignments to Supabase in chunks
@@ -838,10 +874,10 @@ class DmeAssignmentService {
       final nowIso = DateTime.now().toIso8601String();
 
       for (var user in eligibleUsers) {
-        // Update leftovers for this user
-        final lList = userLeftovers[user] ?? [];
-        for (int i = 0; i < lList.length; i += batchSize) {
-          final chunk = lList.sublist(i, min(i + batchSize, lList.length));
+        // Update unattempted overdue reminders
+        final oList = userOverdue[user] ?? [];
+        for (int i = 0; i < oList.length; i += batchSize) {
+          final chunk = oList.sublist(i, min(i + batchSize, oList.length));
           await client.from('dme_reminders').update({
             'assigned_to': user,
             'assigned_date': todayStr,
@@ -850,8 +886,20 @@ class DmeAssignmentService {
           }).inFilter('id', chunk);
         }
 
-        // Update today's reminders for this user
-        final tList = userTodays[user] ?? [];
+        // Update attempted overdue reminders (sticky)
+        final aList = userAttempted[user] ?? [];
+        for (int i = 0; i < aList.length; i += batchSize) {
+          final chunk = aList.sublist(i, min(i + batchSize, aList.length));
+          await client.from('dme_reminders').update({
+            'assigned_to': user,
+            'assigned_date': todayStr,
+            'is_overdue_leftover': true,
+            'updated_at': nowIso,
+          }).inFilter('id', chunk);
+        }
+
+        // Update today's new reminders for this user
+        final tList = userNew[user] ?? [];
         for (int j = 0; j < tList.length; j += batchSize) {
           final chunk = tList.sublist(j, min(j + batchSize, tList.length));
           await client.from('dme_reminders').update({

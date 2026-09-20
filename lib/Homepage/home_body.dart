@@ -14,6 +14,7 @@ import '../Marketing/marketing.dart';
 import '../Marketing/viewer_marketing.dart';
 import '../Customer Calling/customer_list_target.dart';
 import '../Customer Calling/customer_admin_viewer.dart';
+import '../Customer Calling/customer_calling_duplicates.dart';
 import '../Navigation/loading_page.dart';
 import 'home_widgets.dart';
 import '../Sync Head/sync_head_leads_page.dart';
@@ -853,6 +854,22 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
         color: isDark ? const Color(0xFF23272A) : Colors.white,
         textColor: isDark ? Colors.white70 : const Color(0xFF607D8B),
         icon: Icons.sync_rounded,
+      ),
+      NeumorphicButton(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const LoadingOverlayPage(
+                child: CustomerCallingDuplicatesPage(),
+              ),
+            ),
+          );
+        },
+        text: 'Customer Duplicates',
+        color: primaryBlue,
+        textColor: Colors.white,
+        icon: Icons.copy_all_rounded,
       ),
     ];
     return _buildButtonGrid(buttons);

@@ -32,10 +32,12 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
 
   // BranchId -> count of candidate reminders (status = pending, reminder_date <= today)
   Map<int, int> _candidateCounts = {};
-  Map<int, int> _candidateTodayCounts = {};
-  Map<int, int> _candidateLeftoverCounts = {};
+  Map<int, int> _candidateNewCounts = {};
+  Map<int, int> _candidateOverdueCounts = {};
+  Map<int, int> _candidateAttemptedCounts = {};
+  Map<String, int> _candidateAttemptedUserCounts = {};
 
-  // UserUid / email -> assigned breakdown for today: {'total': x, 'new': y, 'leftover': z}
+  // UserUid / email -> assigned breakdown for today: {'total': x, 'new': y, 'overdue': z, 'attempted': a, 'leftover': z + a}
   Map<String, Map<String, int>> _assignedUserBreakdown = {};
 
   // Global user attendance: uid -> true (present) / false (absent / on leave)
@@ -160,8 +162,10 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
 
     final dateStr = _todayStr;
     final Map<int, int> totalMap = {};
-    final Map<int, int> todayMap = {};
-    final Map<int, int> leftoverMap = {};
+    final Map<int, int> newMap = {};
+    final Map<int, int> overdueMap = {};
+    final Map<int, int> attemptedMap = {};
+    final Map<String, int> userAttemptedMap = {};
 
     try {
       int offset = 0;
@@ -173,7 +177,7 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
       while (hasMore) {
         final batch = await client
             .from('dme_reminders')
-            .select('id, last_purchase_branch, reminder_date, status, remarks, call_duration')
+            .select('id, last_purchase_branch, reminder_date, status, remarks, call_duration, called_by, assigned_to, call_attempts')
             .inFilter('status', ['pending', 'called'])
             .lte('reminder_date', '${dateStr}T23:59:59')
             .range(offset, offset + pageSize - 1);
@@ -186,27 +190,50 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
           final status = (r['status'] ?? '').toString().toLowerCase();
           final remarks = (r['remarks'] ?? '').toString().trim();
           final duration = int.tryParse(r['call_duration']?.toString() ?? '') ?? 0;
-          final bool isCalledWithoutRemarks = (status == 'called' || duration > 10) && remarks.isEmpty;
+          final attempts = int.tryParse(r['call_attempts']?.toString() ?? '') ?? 0;
+          final calledEmail = r['called_by']?.toString().toLowerCase().trim();
+          final prevAssigned = r['assigned_to']?.toString();
+          final bool hasAttempt = attempts > 0 || (calledEmail != null && calledEmail.isNotEmpty) || status == 'called' || duration > 0;
 
-          // If called with remarks, it is completed/in progress and not a candidate
-          if (status == 'called' && !isCalledWithoutRemarks) continue;
+          // If called with remarks, it is completed and not a candidate
+          if (remarks.isNotEmpty) continue;
 
           totalMap[bId] = (totalMap[bId] ?? 0) + 1;
 
-          final rDateStr = r['reminder_date']?.toString();
-          final rDate = rDateStr != null ? DateTime.tryParse(rDateStr) : null;
-          bool isLeftover = false;
-          if (rDate != null) {
-            final rDay = DateTime(rDate.year, rDate.month, rDate.day);
-            if (rDay.isBefore(startOfToday)) {
-              isLeftover = true;
+          if (hasAttempt) {
+            attemptedMap[bId] = (attemptedMap[bId] ?? 0) + 1;
+            String? targetUid;
+            if (prevAssigned != null && prevAssigned.isNotEmpty) {
+              targetUid = prevAssigned;
+            } else if (calledEmail != null && calledEmail.isNotEmpty) {
+              for (var u in _dmeUsers) {
+                final uEmail = (u['email']?.toString() ?? '').toLowerCase().trim();
+                final uUid = u['uid']?.toString() ?? '';
+                if (uEmail == calledEmail || uUid.toLowerCase() == calledEmail) {
+                  targetUid = uUid;
+                  break;
+                }
+              }
             }
-          }
-
-          if (isLeftover) {
-            leftoverMap[bId] = (leftoverMap[bId] ?? 0) + 1;
+            if (targetUid != null) {
+              userAttemptedMap[targetUid] = (userAttemptedMap[targetUid] ?? 0) + 1;
+            }
           } else {
-            todayMap[bId] = (todayMap[bId] ?? 0) + 1;
+            final rDateStr = r['reminder_date']?.toString();
+            final rDate = rDateStr != null ? DateTime.tryParse(rDateStr) : null;
+            bool isOverdue = false;
+            if (rDate != null) {
+              final rDay = DateTime(rDate.year, rDate.month, rDate.day);
+              if (rDay.isBefore(startOfToday)) {
+                isOverdue = true;
+              }
+            }
+
+            if (isOverdue) {
+              overdueMap[bId] = (overdueMap[bId] ?? 0) + 1;
+            } else {
+              newMap[bId] = (newMap[bId] ?? 0) + 1;
+            }
           }
         }
 
@@ -220,8 +247,10 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
       if (mounted) {
         setState(() {
           _candidateCounts = totalMap;
-          _candidateTodayCounts = todayMap;
-          _candidateLeftoverCounts = leftoverMap;
+          _candidateNewCounts = newMap;
+          _candidateOverdueCounts = overdueMap;
+          _candidateAttemptedCounts = attemptedMap;
+          _candidateAttemptedUserCounts = userAttemptedMap;
         });
       }
     } catch (e) {
@@ -236,7 +265,7 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
     try {
       final res = await client
           .from('dme_reminders')
-          .select('assigned_to, is_overdue_leftover')
+          .select('assigned_to, is_overdue_leftover, call_attempts, called_by, call_duration, status')
           .eq('assigned_date', _todayStr)
           .inFilter('status', ['pending', 'called']);
 
@@ -245,9 +274,25 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
         final uid = r['assigned_to']?.toString();
         if (uid == null || uid.isEmpty) continue;
         final isLeftover = r['is_overdue_leftover'] == true;
-        final entry = map.putIfAbsent(uid, () => {'total': 0, 'new': 0, 'leftover': 0});
+        final attempts = int.tryParse(r['call_attempts']?.toString() ?? '') ?? 0;
+        final calledEmail = r['called_by']?.toString().toLowerCase().trim();
+        final duration = int.tryParse(r['call_duration']?.toString() ?? '') ?? 0;
+        final status = (r['status'] ?? '').toString().toLowerCase();
+        final bool hasAttempt = attempts > 0 || (calledEmail != null && calledEmail.isNotEmpty) || status == 'called' || duration > 0;
+
+        final entry = map.putIfAbsent(uid, () => {
+          'total': 0,
+          'new': 0,
+          'overdue': 0,
+          'attempted': 0,
+          'leftover': 0,
+        });
         entry['total'] = (entry['total'] ?? 0) + 1;
-        if (isLeftover) {
+        if (hasAttempt) {
+          entry['attempted'] = (entry['attempted'] ?? 0) + 1;
+          entry['leftover'] = (entry['leftover'] ?? 0) + 1;
+        } else if (isLeftover) {
+          entry['overdue'] = (entry['overdue'] ?? 0) + 1;
           entry['leftover'] = (entry['leftover'] ?? 0) + 1;
         } else {
           entry['new'] = (entry['new'] ?? 0) + 1;
@@ -262,7 +307,6 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
     }
   }
 
-
   void _toggleUserAttendance(String uid, bool isPresent) {
     setState(() {
       _userPresence[uid] = isPresent;
@@ -270,14 +314,16 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
   }
 
   Map<String, Map<String, int>> _calculateUserEstimatedBreakdown() {
-    final Map<String, int> leftoverCounts = {for (var u in _dmeUsers) (u['uid'] as String): 0};
-    final Map<String, int> todayCounts = {for (var u in _dmeUsers) (u['uid'] as String): 0};
-    final Map<String, int> totalCounts = {for (var u in _dmeUsers) (u['uid'] as String): 0};
+    final Map<String, int> overdueCounts = {for (var u in _dmeUsers) (u['uid'] as String): 0};
+    final Map<String, int> newCounts = {for (var u in _dmeUsers) (u['uid'] as String): 0};
+    final Map<String, int> attemptedCounts = {
+      for (var u in _dmeUsers) (u['uid'] as String): (_candidateAttemptedUserCounts[u['uid'] as String] ?? 0)
+    };
 
     for (var bId in _activeBranches) {
-      final lCount = _candidateLeftoverCounts[bId] ?? 0;
-      final tCount = _candidateTodayCounts[bId] ?? 0;
-      if (lCount == 0 && tCount == 0) continue;
+      final oCount = _candidateOverdueCounts[bId] ?? 0;
+      final nCount = _candidateNewCounts[bId] ?? 0;
+      if (oCount == 0 && nCount == 0) continue;
 
       final presentUsersForBranch = _dmeUsers.where((u) {
         final uid = u['uid'] as String;
@@ -288,37 +334,35 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
 
       if (presentUsersForBranch.isEmpty) continue;
 
-      // 1. Distribute leftovers fairly with global tracking across branches
-      for (int i = 0; i < lCount; i++) {
+      // 1. Distribute unattempted overdue reminders fairly among present users
+      for (int i = 0; i < oCount; i++) {
         final sorted = List<String>.from(presentUsersForBranch)..sort((a, b) {
-          final lDiff = (leftoverCounts[a] ?? 0).compareTo(leftoverCounts[b] ?? 0);
-          if (lDiff != 0) return lDiff;
-          return (totalCounts[a] ?? 0).compareTo(totalCounts[b] ?? 0);
+          return (overdueCounts[a] ?? 0).compareTo(overdueCounts[b] ?? 0);
         });
         final target = sorted.first;
-        leftoverCounts[target] = (leftoverCounts[target] ?? 0) + 1;
-        totalCounts[target] = (totalCounts[target] ?? 0) + 1;
+        overdueCounts[target] = (overdueCounts[target] ?? 0) + 1;
       }
 
-      // 2. Distribute today's new reminders fairly with global tracking across branches
-      for (int i = 0; i < tCount; i++) {
+      // 2. Distribute new reminders fairly among present users
+      for (int i = 0; i < nCount; i++) {
         final sorted = List<String>.from(presentUsersForBranch)..sort((a, b) {
-          final tDiff = (totalCounts[a] ?? 0).compareTo(totalCounts[b] ?? 0);
-          if (tDiff != 0) return tDiff;
-          return (todayCounts[a] ?? 0).compareTo(todayCounts[b] ?? 0);
+          return (newCounts[a] ?? 0).compareTo(newCounts[b] ?? 0);
         });
         final target = sorted.first;
-        todayCounts[target] = (todayCounts[target] ?? 0) + 1;
-        totalCounts[target] = (totalCounts[target] ?? 0) + 1;
+        newCounts[target] = (newCounts[target] ?? 0) + 1;
       }
     }
 
     return {
       for (var u in _dmeUsers)
         (u['uid'] as String): {
-          'total': totalCounts[u['uid']] ?? 0,
-          'new': todayCounts[u['uid']] ?? 0,
-          'leftover': leftoverCounts[u['uid']] ?? 0,
+          'total': (overdueCounts[u['uid']] ?? 0) +
+              (newCounts[u['uid']] ?? 0) +
+              (attemptedCounts[u['uid']] ?? 0),
+          'new': newCounts[u['uid']] ?? 0,
+          'overdue': overdueCounts[u['uid']] ?? 0,
+          'attempted': attemptedCounts[u['uid']] ?? 0,
+          'leftover': (overdueCounts[u['uid']] ?? 0) + (attemptedCounts[u['uid']] ?? 0),
         }
     };
   }
@@ -358,6 +402,10 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
     final presentCount = _userPresence.values.where((v) => v).length;
     final estimatedBreakdown = _calculateUserEstimatedBreakdown();
 
+    final totalNewToAssign = _candidateNewCounts.values.fold(0, (a, b) => a + b);
+    final totalAttemptedToAssign = _candidateAttemptedCounts.values.fold(0, (a, b) => a + b);
+    final totalOverdueToAssign = _candidateOverdueCounts.values.fold(0, (a, b) => a + b);
+
     // Confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
@@ -383,7 +431,10 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
               ),
               const Divider(height: 20),
               Text(
-                '• Total Reminders to Divide: $totalRemindersToAssign\n'
+                '• Total Reminders to Assign: $totalRemindersToAssign\n'
+                '• New (Equally Divided): $totalNewToAssign\n'
+                '• Overdue (Equally Divided): $totalOverdueToAssign\n'
+                '• Attempted (Sticky to Caller): $totalAttemptedToAssign\n'
                 '• Present Users: $presentCount\n'
                 '• Absent Users (Excluded): $absentCount',
                 style: const TextStyle(fontSize: 13, height: 1.4),
@@ -395,7 +446,7 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
               ),
               const SizedBox(height: 8),
               Container(
-                constraints: const BoxConstraints(maxHeight: 180),
+                constraints: const BoxConstraints(maxHeight: 200),
                 decoration: BoxDecoration(
                   color: Colors.grey.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
@@ -408,10 +459,11 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
                       final uid = u['uid'] as String;
                       final name = u['username'] as String;
                       final isPresent = _userPresence[uid] ?? true;
-                      final stats = estimatedBreakdown[uid] ?? {'total': 0, 'new': 0, 'leftover': 0};
+                      final stats = estimatedBreakdown[uid] ?? {'total': 0, 'new': 0, 'overdue': 0, 'attempted': 0};
                       final count = stats['total'] ?? 0;
                       final newCount = stats['new'] ?? 0;
-                      final leftoverCount = stats['leftover'] ?? 0;
+                      final overdueCount = stats['overdue'] ?? 0;
+                      final attemptedCount = stats['attempted'] ?? 0;
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
                         child: Row(
@@ -442,7 +494,9 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                isPresent ? '$count ($newCount New • $leftoverCount Leftover)' : '0 (Absent)',
+                                isPresent
+                                    ? '$count ($newCount New • $attemptedCount Att. • $overdueCount OD)'
+                                    : '0 (Absent)',
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
@@ -546,7 +600,7 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
                 ),
                 const SizedBox(height: 14),
                 Container(
-                  constraints: const BoxConstraints(maxHeight: 200),
+                  constraints: const BoxConstraints(maxHeight: 220),
                   decoration: BoxDecoration(
                     color: Colors.grey.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
@@ -561,7 +615,8 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
                         final userCounts = (result['user_counts'] as Map<String, dynamic>?)?[uid] as Map<String, dynamic>?;
                         final total = userCounts?['total'] ?? _assignedUserBreakdown[uid]?['total'] ?? 0;
                         final n = userCounts?['new'] ?? _assignedUserBreakdown[uid]?['new'] ?? 0;
-                        final l = userCounts?['leftover'] ?? _assignedUserBreakdown[uid]?['leftover'] ?? 0;
+                        final a = userCounts?['attempted'] ?? _assignedUserBreakdown[uid]?['attempted'] ?? 0;
+                        final o = userCounts?['overdue'] ?? _assignedUserBreakdown[uid]?['overdue'] ?? 0;
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 4),
                           child: Row(
@@ -596,11 +651,23 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
+                                  color: Colors.purple.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  '$a Att.',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.purple.shade700),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
                                   color: Colors.deepOrange.withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
-                                  '$l Leftover',
+                                  '$o OD',
                                   style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.deepOrange),
                                 ),
                               ),
@@ -736,6 +803,10 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
     final presentCount = _userPresence.values.where((v) => v).length;
     final absentCount = _userPresence.values.where((v) => !v).length;
     final totalPending = _candidateCounts.values.fold(0, (a, b) => a + b);
+    final totalNew = _candidateNewCounts.values.fold(0, (a, b) => a + b);
+    final totalAttempted = _candidateAttemptedCounts.values.fold(0, (a, b) => a + b);
+    final totalOverdue = _candidateOverdueCounts.values.fold(0, (a, b) => a + b);
+
     final totalAssignedPendingToday =
         _assignedUserBreakdown.values.fold(0, (acc, m) => acc + (m['total'] ?? 0));
     final isAlreadyAssignedToday = totalAssignedPendingToday > 0;
@@ -776,14 +847,196 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
           : TabBarView(
               controller: _tabController,
               children: [
-                _buildAssignTab(presentCount, absentCount, totalPending, isAlreadyAssignedToday),
+                _buildAssignTab(
+                  presentCount: presentCount,
+                  absentCount: absentCount,
+                  totalPending: totalPending,
+                  totalNew: totalNew,
+                  totalAttempted: totalAttempted,
+                  totalOverdue: totalOverdue,
+                  isAlreadyAssignedToday: isAlreadyAssignedToday,
+                ),
                 _buildHistoryTab(),
               ],
             ),
     );
   }
 
-  Widget _buildAssignTab(int presentCount, int absentCount, int totalPending, bool isAlreadyAssignedToday) {
+  Widget _buildThreeStatsCard({
+    required int totalNew,
+    required int totalAttempted,
+    required int totalOverdue,
+    required int totalPending,
+  }) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.pie_chart_rounded, size: 20, color: _primaryBlue),
+                    SizedBox(width: 8),
+                    Text(
+                      'Reminders Breakdown',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _primaryBlue.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '$totalPending Total',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _primaryBlue),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                // 1. New Stat
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      children: [
+                        const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.fiber_new_rounded, size: 16, color: Colors.blue),
+                            SizedBox(width: 4),
+                            Text(
+                              'New',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$totalNew',
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blue),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Equally divided',
+                          style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                // 2. Attempted Stat
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.purple.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.phone_forwarded_rounded, size: 14, color: Colors.purple.shade700),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Attempted',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.purple.shade700),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$totalAttempted',
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.purple.shade700),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Sticky to caller',
+                          style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                // 3. Overdue Stat
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.deepOrange.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.deepOrange.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      children: [
+                        const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.warning_amber_rounded, size: 15, color: Colors.deepOrange),
+                            SizedBox(width: 4),
+                            Text(
+                              'Overdue',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.deepOrange),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$totalOverdue',
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.deepOrange),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Equally divided',
+                          style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAssignTab({
+    required int presentCount,
+    required int absentCount,
+    required int totalPending,
+    required int totalNew,
+    required int totalAttempted,
+    required int totalOverdue,
+    required bool isAlreadyAssignedToday,
+  }) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -852,9 +1105,18 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
                       ),
                     ),
                   ),
+                  const SizedBox(height: 14),
+
+                  // 2. Three Stats Overview Card (New, Attempted, Overdue)
+                  _buildThreeStatsCard(
+                    totalNew: totalNew,
+                    totalAttempted: totalAttempted,
+                    totalOverdue: totalOverdue,
+                    totalPending: totalPending,
+                  ),
                   const SizedBox(height: 16),
 
-                  // 2. Daily User Attendance Card
+                  // 3. Daily User Attendance Card
                   Card(
                     elevation: 2,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -926,7 +1188,7 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
                                     final bool hasAssigned = isAlreadyAssignedToday &&
                                         assignedStats != null &&
                                         (assignedStats['total'] ?? 0) > 0;
-                                    final estStats = estimatedBreakdown[uid] ?? {'total': 0, 'new': 0, 'leftover': 0};
+                                    final estStats = estimatedBreakdown[uid] ?? {'total': 0, 'new': 0, 'overdue': 0, 'attempted': 0};
 
                                     final branches = List<int>.from(user['assigned_branches'] ?? []);
                                     final branchNames = branches.map((b) => DmeConstants.getBranchName(b)).join(', ');
@@ -1013,8 +1275,19 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
                                                     borderRadius: BorderRadius.circular(6),
                                                   ),
                                                   child: Text(
-                                                    '${assignedStats['new']} New',
+                                                    '${assignedStats['new'] ?? 0} New',
                                                     style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _primaryBlue),
+                                                  ),
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.purple.withValues(alpha: 0.12),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: Text(
+                                                    '${assignedStats['attempted'] ?? 0} Att.',
+                                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.purple.shade700),
                                                   ),
                                                 ),
                                                 Container(
@@ -1024,7 +1297,7 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
                                                     borderRadius: BorderRadius.circular(6),
                                                   ),
                                                   child: Text(
-                                                    '${assignedStats['leftover']} Leftover',
+                                                    '${assignedStats['overdue'] ?? assignedStats['leftover'] ?? 0} OD',
                                                     style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.deepOrange),
                                                   ),
                                                 ),
@@ -1054,8 +1327,19 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
                                                     borderRadius: BorderRadius.circular(6),
                                                   ),
                                                   child: Text(
-                                                    '${estStats['new']} New',
+                                                    '${estStats['new'] ?? 0} New',
                                                     style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.blue[800]),
+                                                  ),
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.purple.withValues(alpha: 0.08),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: Text(
+                                                    '${estStats['attempted'] ?? 0} Att.',
+                                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.purple.shade700),
                                                   ),
                                                 ),
                                                 Container(
@@ -1065,7 +1349,7 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
                                                     borderRadius: BorderRadius.circular(6),
                                                   ),
                                                   child: Text(
-                                                    '${estStats['leftover']} Leftover',
+                                                    '${estStats['overdue'] ?? estStats['leftover'] ?? 0} OD',
                                                     style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.deepOrange),
                                                   ),
                                                 ),
@@ -1581,20 +1865,32 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
                       ),
                     ),
                     if (isPresent)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: _primaryBlue.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '$total ($newCount New • $leftover Leftover)',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: _primaryBlue,
-                          ),
-                        ),
+                      Builder(
+                        builder: (_) {
+                          final overdueCount = (u['overdue'] as num?)?.toInt();
+                          final attemptedCount = (u['attempted'] as num?)?.toInt();
+                          final String statsText;
+                          if (overdueCount != null && attemptedCount != null) {
+                            statsText = '$total ($newCount New • $attemptedCount Att. • $overdueCount OD)';
+                          } else {
+                            statsText = '$total ($newCount New • $leftover Leftover)';
+                          }
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _primaryBlue.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              statsText,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: _primaryBlue,
+                              ),
+                            ),
+                          );
+                        },
                       )
                     else
                       Container(

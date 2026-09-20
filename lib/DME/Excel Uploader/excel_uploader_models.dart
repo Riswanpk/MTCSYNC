@@ -190,3 +190,23 @@ class MissingBranchSale {
   });
 }
 
+/// Represents an Excel row or customer conflict/validation error (e.g. invalid phone, missing salesman, branch, category, type, party)
+class ExcelConflictItem {
+  final String partyName;
+  final String voucherNo;
+  final String branchName;
+  final String phone;
+  final List<String> issues;
+  final int? rowIndex;
+
+  ExcelConflictItem({
+    required this.partyName,
+    required this.voucherNo,
+    required this.branchName,
+    required this.phone,
+    required this.issues,
+    this.rowIndex,
+  });
+}
+
+

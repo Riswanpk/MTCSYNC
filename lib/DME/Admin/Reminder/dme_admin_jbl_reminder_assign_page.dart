@@ -26,6 +26,10 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
 
   List<Map<String, dynamic>> _jblUsers = [];
   int _jblPendingCount = 0;
+  int _jblNewCount = 0;
+  int _jblAttemptedCount = 0;
+  int _jblOverdueCount = 0;
+  Map<String, int> _jblAttemptedUserCounts = {};
   Map<String, dynamic>? _jblAssignmentStatus;
 
   // Global user attendance for JBL users: uid -> true (present) / false (absent)
@@ -105,7 +109,12 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
     if (client == null) return;
 
     final dateStr = _todayStr;
+    final currentDay = DateTime(_today.year, _today.month, _today.day);
     int count = 0;
+    int newCount = 0;
+    int overdueCount = 0;
+    int attemptedCount = 0;
+    final Map<String, int> attemptedUserCounts = {};
 
     try {
       int offset = 0;
@@ -115,7 +124,7 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
       while (hasMore) {
         final batch = await client
             .from('dme_reminders')
-            .select('id')
+            .select('id, reminder_date, status, remarks, call_duration, called_by, assigned_to, call_attempts')
             .inFilter('status', ['pending', 'called'])
             .eq('last_purchase_branch', _jblBranchId)
             .lte('reminder_date', '${dateStr}T23:59:59')
@@ -123,6 +132,34 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
 
         final list = batch as List;
         count += list.length;
+
+        for (var item in list) {
+          final status = (item['status'] ?? '').toString().toLowerCase();
+          final remarks = (item['remarks'] ?? '').toString().trim();
+          final duration = int.tryParse(item['call_duration']?.toString() ?? '') ?? 0;
+          final attempts = int.tryParse(item['call_attempts']?.toString() ?? '') ?? 0;
+          final calledEmail = item['called_by']?.toString().toLowerCase().trim();
+          final bool hasAttempt = attempts > 0 || (calledEmail != null && calledEmail.isNotEmpty) || status == 'called' || duration > 0;
+
+          if (hasAttempt && remarks.isEmpty) {
+            attemptedCount++;
+            final prevAssigned = item['assigned_to']?.toString();
+            if (prevAssigned != null && prevAssigned.isNotEmpty) {
+              attemptedUserCounts[prevAssigned] = (attemptedUserCounts[prevAssigned] ?? 0) + 1;
+            }
+          } else {
+            final rDateStr = item['reminder_date']?.toString();
+            DateTime? rDate;
+            if (rDateStr != null) {
+              rDate = DateTime.tryParse(rDateStr);
+            }
+            if (rDate != null && DateTime(rDate.year, rDate.month, rDate.day).isBefore(currentDay)) {
+              overdueCount++;
+            } else {
+              newCount++;
+            }
+          }
+        }
 
         if (list.length < pageSize) {
           hasMore = false;
@@ -134,6 +171,10 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
       if (mounted) {
         setState(() {
           _jblPendingCount = count;
+          _jblNewCount = newCount;
+          _jblAttemptedCount = attemptedCount;
+          _jblOverdueCount = overdueCount;
+          _jblAttemptedUserCounts = attemptedUserCounts;
         });
       }
     } catch (e) {
@@ -156,20 +197,55 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
     });
   }
 
-  /// Strictly executes Auto Division ONLY for JBL branch
-  Map<String, int> _calculateJblUserEstimatedReminders() {
-    final Map<String, int> result = {for (var u in _jblUsers) (u['uid'] as String): 0};
+  /// Calculates per-user estimated breakdown (Total, New, Overdue, Attempted) for JBL branch
+  Map<String, Map<String, int>> _calculateJblUserEstimatedBreakdown() {
+    final Map<String, Map<String, int>> result = {
+      for (var u in _jblUsers)
+        (u['uid'] as String): {
+          'total': 0,
+          'new': 0,
+          'overdue': 0,
+          'attempted': 0,
+        }
+    };
     final presentUsers = _jblUsers.where((u) => _userPresence[u['uid'] as String] ?? true).toList();
+    if (presentUsers.isEmpty) return result;
 
-    if (_jblPendingCount > 0 && presentUsers.isNotEmpty) {
-      final base = _jblPendingCount ~/ presentUsers.length;
-      final remainder = _jblPendingCount % presentUsers.length;
+    final presentUids = presentUsers.map((u) => u['uid'] as String).toList();
 
+    // 1. Distribute unattempted overdue reminders equally
+    if (_jblOverdueCount > 0) {
+      final baseOverdue = _jblOverdueCount ~/ presentUsers.length;
+      final remOverdue = _jblOverdueCount % presentUsers.length;
       for (int i = 0; i < presentUsers.length; i++) {
-        final uid = presentUsers[i]['uid'] as String;
-        result[uid] = base + (i < remainder ? 1 : 0);
+        final uid = presentUids[i];
+        result[uid]!['overdue'] = baseOverdue + (i < remOverdue ? 1 : 0);
       }
     }
+
+    // 2. Distribute new reminders equally
+    if (_jblNewCount > 0) {
+      final baseNew = _jblNewCount ~/ presentUsers.length;
+      final remNew = _jblNewCount % presentUsers.length;
+      for (int i = 0; i < presentUsers.length; i++) {
+        final uid = presentUids[i];
+        result[uid]!['new'] = baseNew + (i < remNew ? 1 : 0);
+      }
+    }
+
+    // 3. Add attempted overdue reminders directly to original caller
+    _jblAttemptedUserCounts.forEach((uid, attCount) {
+      if (result.containsKey(uid) && (_userPresence[uid] ?? true)) {
+        result[uid]!['attempted'] = (result[uid]!['attempted'] ?? 0) + attCount;
+      }
+    });
+
+    // Calculate total
+    for (var uid in result.keys) {
+      final m = result[uid]!;
+      m['total'] = (m['new'] ?? 0) + (m['overdue'] ?? 0) + (m['attempted'] ?? 0);
+    }
+
     return result;
   }
 
@@ -196,7 +272,7 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
       return;
     }
 
-    final estimatedPerUser = _calculateJblUserEstimatedReminders();
+    final estimatedBreakdown = _calculateJblUserEstimatedBreakdown();
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -234,10 +310,50 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
               ),
               const Divider(height: 16),
               Text(
-                '• JBL Reminders to Divide: $_jblPendingCount\n'
+                '• Total JBL Reminders: $_jblPendingCount\n'
                 '• Present JBL Users: ${presentUsers.length}\n'
                 '• Absent Users: ${_jblUsers.length - presentUsers.length}',
                 style: const TextStyle(fontSize: 13, height: 1.4),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '$_jblNewCount New',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue[800]),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.purple.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '$_jblAttemptedCount Attempted',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.purple.shade700),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.deepOrange.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '$_jblOverdueCount Overdue',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.deepOrange),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 14),
               const Text(
@@ -259,7 +375,11 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
                       final uid = u['uid'] as String;
                       final name = u['username'] as String;
                       final isPresent = _userPresence[uid] ?? true;
-                      final count = estimatedPerUser[uid] ?? 0;
+                      final uStats = estimatedBreakdown[uid] ?? {'total': 0, 'new': 0, 'overdue': 0, 'attempted': 0};
+                      final total = uStats['total'] ?? 0;
+                      final n = uStats['new'] ?? 0;
+                      final a = uStats['attempted'] ?? 0;
+                      final o = uStats['overdue'] ?? 0;
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
                         child: Row(
@@ -290,7 +410,7 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                isPresent ? '$count reminders' : '0 (Absent)',
+                                isPresent ? '$total ($n New • $a Att. • $o OD)' : '0 (Absent)',
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
@@ -346,7 +466,7 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
       while (hasMore) {
         final batch = await client
             .from('dme_reminders')
-            .select('id, reminder_date, status, remarks, call_duration, called_by, assigned_to')
+            .select('id, reminder_date, status, remarks, call_duration, called_by, assigned_to, call_attempts')
             .inFilter('status', ['pending', 'called'])
             .eq('last_purchase_branch', _jblBranchId)
             .lte('reminder_date', '${dateStr}T23:59:59')
@@ -386,17 +506,40 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
             .eq('branch_id', _jblBranchId);
       } catch (_) {}
 
-      // 3. Partition reminders fairly among present JBL users
+      // 3. Partition reminders: unattempted overdue and new divided equally, attempted added to caller
       final presentUserUids = presentUsers.map((u) => u['uid'] as String).toList();
       final currentDay = DateTime(_today.year, _today.month, _today.day);
-      final Map<String, List<int>> userLeftovers = {for (var u in presentUserUids) u: []};
-      final Map<String, List<int>> userTodays = {for (var u in presentUserUids) u: []};
-      final List<int> leftoverIds = [];
-      final List<int> todayIds = [];
+      final Map<String, List<int>> userOverdue = {for (var u in presentUserUids) u: []};
+      final Map<String, List<int>> userNew = {for (var u in presentUserUids) u: []};
+      final Map<String, List<int>> userAttempted = {for (var u in presentUserUids) u: []};
+      final List<int> unattemptedOverdueIds = [];
+      final List<int> newIds = [];
+      final List<Map<String, dynamic>> attemptedItems = [];
 
       for (var item in allPending) {
         final id = int.tryParse(item['id']?.toString() ?? '');
         if (id == null) continue;
+
+        final status = (item['status'] ?? '').toString().toLowerCase();
+        final remarks = (item['remarks'] ?? '').toString().trim();
+        final duration = int.tryParse(item['call_duration']?.toString() ?? '') ?? 0;
+        final attempts = int.tryParse(item['call_attempts']?.toString() ?? '') ?? 0;
+        final calledEmail = item['called_by']?.toString().toLowerCase().trim();
+        final bool hasAttempt = attempts > 0 || (calledEmail != null && calledEmail.isNotEmpty) || status == 'called' || duration > 0;
+
+        // Sticky assignment: When a user has already attempted a call on a reminder,
+        // assign that reminder to the same user next day and henceforth until remarks are submitted.
+        if (hasAttempt && remarks.isEmpty) {
+          String? targetCaller;
+          final prevAssigned = item['assigned_to']?.toString();
+          if (prevAssigned != null && presentUserUids.contains(prevAssigned)) {
+            targetCaller = prevAssigned;
+          }
+          if (targetCaller != null) {
+            attemptedItems.add({'id': id, 'targetCaller': targetCaller});
+            continue;
+          }
+        }
 
         final rDateStr = item['reminder_date']?.toString();
         DateTime? rDate;
@@ -405,30 +548,42 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
         }
 
         if (rDate != null && DateTime(rDate.year, rDate.month, rDate.day).isBefore(currentDay)) {
-          leftoverIds.add(id);
+          unattemptedOverdueIds.add(id);
         } else {
-          todayIds.add(id);
+          newIds.add(id);
         }
       }
 
-      // Distribute leftovers evenly
-      for (int i = 0; i < leftoverIds.length; i++) {
+      // Shuffle pools randomly for fairness
+      final rnd = Random();
+      unattemptedOverdueIds.shuffle(rnd);
+      newIds.shuffle(rnd);
+
+      // Distribute unattempted overdue evenly
+      for (int i = 0; i < unattemptedOverdueIds.length; i++) {
         final targetUser = presentUserUids[i % presentUserUids.length];
-        userLeftovers[targetUser]!.add(leftoverIds[i]);
+        userOverdue[targetUser]!.add(unattemptedOverdueIds[i]);
       }
 
-      // Distribute today's reminders evenly
-      for (int i = 0; i < todayIds.length; i++) {
+      // Distribute today's new reminders evenly
+      for (int i = 0; i < newIds.length; i++) {
         final targetUser = presentUserUids[i % presentUserUids.length];
-        userTodays[targetUser]!.add(todayIds[i]);
+        userNew[targetUser]!.add(newIds[i]);
+      }
+
+      // Add attempted overdue reminders on top to original caller
+      for (final item in attemptedItems) {
+        final targetCaller = item['targetCaller'] as String;
+        final id = item['id'] as int;
+        userAttempted[targetCaller]!.add(id);
       }
 
       // Batch update reminders for JBL
       const int batchSize = 200;
       for (var user in presentUserUids) {
-        final lList = userLeftovers[user] ?? [];
-        for (int i = 0; i < lList.length; i += batchSize) {
-          final chunk = lList.sublist(i, min(i + batchSize, lList.length));
+        final oList = userOverdue[user] ?? [];
+        for (int i = 0; i < oList.length; i += batchSize) {
+          final chunk = oList.sublist(i, min(i + batchSize, oList.length));
           await client.from('dme_reminders').update({
             'assigned_to': user,
             'assigned_date': dateStr,
@@ -437,7 +592,18 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
           }).inFilter('id', chunk);
         }
 
-        final tList = userTodays[user] ?? [];
+        final aList = userAttempted[user] ?? [];
+        for (int i = 0; i < aList.length; i += batchSize) {
+          final chunk = aList.sublist(i, min(i + batchSize, aList.length));
+          await client.from('dme_reminders').update({
+            'assigned_to': user,
+            'assigned_date': dateStr,
+            'is_overdue_leftover': true,
+            'updated_at': nowIso,
+          }).inFilter('id', chunk);
+        }
+
+        final tList = userNew[user] ?? [];
         for (int j = 0; j < tList.length; j += batchSize) {
           final chunk = tList.sublist(j, min(j + batchSize, tList.length));
           await client.from('dme_reminders').update({
@@ -453,7 +619,7 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
       final userMap = {for (var u in _jblUsers) (u['uid'] as String): u};
       for (var user in presentUserUids) {
         final uEmail = (userMap[user]?['email'] as String?) ?? user;
-        final count = (userLeftovers[user]?.length ?? 0) + (userTodays[user]?.length ?? 0);
+        final count = (userOverdue[user]?.length ?? 0) + (userAttempted[user]?.length ?? 0) + (userNew[user]?.length ?? 0);
         try {
           await client.from('reminder_assignment').upsert({
             'assigned_date': dateStr,
@@ -593,6 +759,172 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
         );
       }
     }
+  }
+
+  Widget _buildThreeStatsCard({
+    required int totalNew,
+    required int totalAttempted,
+    required int totalOverdue,
+    required int totalPending,
+  }) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.pie_chart_rounded, size: 20, color: Colors.purple),
+                    SizedBox(width: 8),
+                    Text(
+                      'JBL Reminders Breakdown',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.purple.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '$totalPending Total',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.purple),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                // 1. New Stat
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      children: [
+                        const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.fiber_new_rounded, size: 16, color: Colors.blue),
+                            SizedBox(width: 4),
+                            Text(
+                              'New',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$totalNew',
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blue),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Equally divided',
+                          style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                // 2. Attempted Stat
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.purple.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.phone_forwarded_rounded, size: 14, color: Colors.purple.shade700),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Attempted',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.purple.shade700),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$totalAttempted',
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.purple.shade700),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Sticky to caller',
+                          style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                // 3. Overdue Stat
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.deepOrange.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.deepOrange.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      children: [
+                        const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.warning_amber_rounded, size: 15, color: Colors.deepOrange),
+                            SizedBox(width: 4),
+                            Text(
+                              'Overdue',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.deepOrange),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$totalOverdue',
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.deepOrange),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Equally divided',
+                          style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -744,6 +1076,15 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
                   ),
                   const SizedBox(height: 16),
 
+                  // 2b. Three Stats Overview Card (New, Attempted, Overdue)
+                  _buildThreeStatsCard(
+                    totalNew: _jblNewCount,
+                    totalAttempted: _jblAttemptedCount,
+                    totalOverdue: _jblOverdueCount,
+                    totalPending: _jblPendingCount,
+                  ),
+                  const SizedBox(height: 16),
+
                   // 3. User Attendance for JBL
                   Card(
                     elevation: 2,
@@ -796,7 +1137,7 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
                           else ...[
                             Builder(
                               builder: (_) {
-                                final estimatedPerUser = _calculateJblUserEstimatedReminders();
+                                final estimatedBreakdown = _calculateJblUserEstimatedBreakdown();
                                 return ListView.separated(
                                   shrinkWrap: true,
                                   physics: const NeverScrollableScrollPhysics(),
@@ -808,7 +1149,8 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
                                     final name = user['username'] as String;
                                     final email = user['email'] as String;
                                     final isPresent = _userPresence[uid] ?? true;
-                                    final estCount = estimatedPerUser[uid] ?? 0;
+                                    final estStats = estimatedBreakdown[uid] ?? {'total': 0, 'new': 0, 'overdue': 0, 'attempted': 0};
+                                    final estTotal = estStats['total'] ?? 0;
 
                                     return SwitchListTile(
                                       value: isPresent,
@@ -823,22 +1165,21 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
                                           style: const TextStyle(fontWeight: FontWeight.bold),
                                         ),
                                       ),
-                                      title: Wrap(
-                                        crossAxisAlignment: WrapCrossAlignment.center,
-                                        spacing: 6,
-                                        runSpacing: 2,
+                                      title: Row(
                                         children: [
-                                          Text(
-                                            name,
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 14,
-                                              decoration: isPresent ? null : TextDecoration.lineThrough,
-                                              color: isPresent ? null : Colors.grey[600],
+                                          Expanded(
+                                            child: Text(
+                                              name,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                                decoration: isPresent ? null : TextDecoration.lineThrough,
+                                                color: isPresent ? null : Colors.grey[600],
+                                              ),
                                             ),
                                           ),
                                           Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                             decoration: BoxDecoration(
                                               color: isPresent
                                                   ? Colors.green.withValues(alpha: 0.15)
@@ -854,25 +1195,74 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
                                               ),
                                             ),
                                           ),
-                                          if (isPresent)
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                                              decoration: BoxDecoration(
-                                                color: Colors.purple.withValues(alpha: 0.12),
-                                                borderRadius: BorderRadius.circular(4),
-                                              ),
-                                              child: Text(
-                                                '~ $estCount reminders',
-                                                style: const TextStyle(
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.purple,
-                                                ),
-                                              ),
-                                            ),
                                         ],
                                       ),
-                                      subtitle: Text(email, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                                      subtitle: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const SizedBox(height: 4),
+                                          if (isPresent) ...[
+                                            Wrap(
+                                              spacing: 6,
+                                              runSpacing: 4,
+                                              crossAxisAlignment: WrapCrossAlignment.center,
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.purple.withValues(alpha: 0.12),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: Text(
+                                                    '~ $estTotal reminders',
+                                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.purple),
+                                                  ),
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.blue.withValues(alpha: 0.08),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: Text(
+                                                    '${estStats['new'] ?? 0} New',
+                                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.blue[800]),
+                                                  ),
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.purple.withValues(alpha: 0.08),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: Text(
+                                                    '${estStats['attempted'] ?? 0} Att.',
+                                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.purple.shade700),
+                                                  ),
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.deepOrange.withValues(alpha: 0.08),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: Text(
+                                                    '${estStats['overdue'] ?? 0} OD',
+                                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.deepOrange),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ] else ...[
+                                            const Text(
+                                              '0 reminders (Marked absent)',
+                                              style: TextStyle(fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic),
+                                            ),
+                                          ],
+                                          const SizedBox(height: 2),
+                                          Text(email, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                                        ],
+                                      ),
                                     );
                                   },
                                 );

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -78,7 +77,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
       _todayCallAttempts = 0;
     }
     final lTs = _reminder['last_call_attempt_timestamp']?.toString();
-    _lastCallAttemptTimestamp = lTs != null ? DateTime.tryParse(lTs) : null;
+    _lastCallAttemptTimestamp = lTs != null ? DateTime.tryParse(lTs)?.toLocal() : null;
 
     // Ticking timer so the 1-hour countdown updates every 10 seconds
     _cooldownTimer = Timer.periodic(const Duration(seconds: 10), (_) {
@@ -91,6 +90,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     _fetchCustomerSalesHistory();
     _fetchCustomerCallHistory();
     _fetchReminderCallLogs();
+    _checkCallLogHistoryAndCooldown();
     _checkIfShortAttendedCallExists();
   }
 
@@ -106,14 +106,101 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
           .eq('reminder_id', remId)
           .order('attempt_timestamp', ascending: false);
       if (mounted) {
+        final list = List<Map<String, dynamic>>.from(res);
+        DateTime? latestTs;
+        for (final log in list) {
+          final tStr = log['attempt_timestamp']?.toString();
+          if (tStr != null) {
+            final dt = DateTime.tryParse(tStr)?.toLocal();
+            if (dt != null && (latestTs == null || dt.isAfter(latestTs))) {
+              latestTs = dt;
+            }
+          }
+        }
         setState(() {
-          _reminderCallLogs = List<Map<String, dynamic>>.from(res);
+          _reminderCallLogs = list;
           _isLoadingReminderLogs = false;
+          if (latestTs != null) {
+            if (_lastCallAttemptTimestamp == null || latestTs.isAfter(_lastCallAttemptTimestamp!)) {
+              _lastCallAttemptTimestamp = latestTs;
+            }
+          }
         });
       }
     } catch (e) {
       debugPrint('Error fetching reminder call logs: $e');
       if (mounted) setState(() => _isLoadingReminderLogs = false);
+    }
+  }
+
+  /// Checks call log history from both device and database, and verifies if 60 minutes have passed.
+  Future<void> _checkCallLogHistoryAndCooldown() async {
+    final contact = _reminder['customer_phone']?.toString().trim() ?? '';
+    if (contact.isEmpty) return;
+
+    try {
+      final userEmail = FirebaseAuth.instance.currentUser?.email;
+      final userUid = FirebaseAuth.instance.currentUser?.uid;
+
+      final syncResult = await DmeCallScannerService.syncCallLogsForReminder(
+        reminderId: _reminder['id'],
+        customerId: _reminder['customer_id'],
+        contactPhone: contact,
+        callerEmail: userEmail,
+        callerUid: userUid,
+      );
+
+      final now = DateTime.now();
+      DateTime? latestCallTime;
+
+      // 1. Check qualifying or latest entry from device call log
+      final entry = syncResult.qualifyingEntry ?? syncResult.latestEntry;
+      if (entry != null) {
+        final entryTs = DmeCallScannerService.normalizeTimestamp(entry.timestamp);
+        if (entryTs > 0) {
+          latestCallTime = DateTime.fromMillisecondsSinceEpoch(entryTs);
+        }
+      }
+
+      // 2. Check recorded logs from DB
+      for (final log in syncResult.recordedLogs) {
+        final tsStr = log['attempt_timestamp']?.toString();
+        if (tsStr == null) continue;
+        final dt = DateTime.tryParse(tsStr)?.toLocal();
+        if (dt != null && (latestCallTime == null || dt.isAfter(latestCallTime))) {
+          latestCallTime = dt;
+        }
+      }
+
+      // 3. Compare with current _lastCallAttemptTimestamp
+      if (_lastCallAttemptTimestamp != null) {
+        final lTs = _lastCallAttemptTimestamp!.toLocal();
+        if (latestCallTime == null || lTs.isAfter(latestCallTime)) {
+          latestCallTime = lTs;
+        }
+      }
+
+      if (latestCallTime != null && mounted) {
+        final elapsed = now.difference(latestCallTime);
+        final bool has60MinsPassed = elapsed.inSeconds >= 3600;
+
+        setState(() {
+          _lastCallAttemptTimestamp = latestCallTime;
+          _reminderCallLogs = syncResult.recordedLogs;
+          if (syncResult.totalTodayAttempts > 0) {
+            _todayCallAttempts = syncResult.totalTodayAttempts;
+          }
+          if (syncResult.hasAttendedCall || (entry?.duration ?? 0) > 10) {
+            _callMade = true;
+            _reminder['status'] = 'called';
+            _callDuration = entry?.duration;
+          }
+        });
+
+        debugPrint('[Cooldown] Checked call log history. Latest call: $latestCallTime, elapsed: ${elapsed.inMinutes}m, 60m passed: $has60MinsPassed');
+      }
+    } catch (e) {
+      debugPrint('[Cooldown] Error checking call log history: $e');
     }
   }
 
@@ -477,23 +564,26 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
       final client = await DmeConfig.getClient();
       final reminderId = _reminder['id'];
       final todayStr = DateFormat('yyyy-MM-dd').format(lastAttemptTimestamp);
+      final userEmail = FirebaseAuth.instance.currentUser?.email;
       if (client != null && reminderId != null) {
+        final updatePayload = <String, dynamic>{
+          'call_attempts': totalAttempts,
+          'today_call_attempts': todayAttempts,
+          'last_call_attempt_timestamp': lastAttemptTimestamp.toUtc().toIso8601String(),
+          'last_call_day': todayStr,
+          if (userEmail != null && userEmail.isNotEmpty) 'called_by': userEmail,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        };
         try {
-          await client.from('dme_reminders').update({
-            'call_attempts': totalAttempts,
-            'today_call_attempts': todayAttempts,
-            'last_call_attempt_timestamp': lastAttemptTimestamp.toIso8601String(),
-            'last_call_day': todayStr,
-            'updated_at': DateTime.now().toIso8601String(),
-          }).eq('id', reminderId);
+          await client.from('dme_reminders').update(updatePayload).eq('id', reminderId);
           widget.onUpdated?.call();
         } catch (_) {
           // Fallback if newer columns are not migrated yet
           try {
-            await client.from('dme_reminders').update({
-              'call_attempts': totalAttempts,
-              'updated_at': DateTime.now().toIso8601String(),
-            }).eq('id', reminderId);
+            updatePayload.remove('today_call_attempts');
+            updatePayload.remove('last_call_attempt_timestamp');
+            updatePayload.remove('last_call_day');
+            await client.from('dme_reminders').update(updatePayload).eq('id', reminderId);
             widget.onUpdated?.call();
           } catch (_) {}
         }
@@ -581,14 +671,15 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
         final int newTodayAttempts = syncResult.totalTodayAttempts;
         final bool isNewAttempt = syncResult.newAttemptsLogged > 0;
 
-        _todayCallAttempts = math.max(_todayCallAttempts, newTodayAttempts);
+        _todayCallAttempts = newTodayAttempts;
         _callAttempts = previousDaysAttempts + _todayCallAttempts;
 
         final entry = syncResult.qualifyingEntry ?? syncResult.latestEntry;
         int duration = entry?.duration ?? _callDuration ?? 0;
         DateTime calledTime = now;
-        if (entry?.timestamp != null && entry!.timestamp! > 0) {
-          calledTime = DateTime.fromMillisecondsSinceEpoch(entry.timestamp!);
+        final entryTs = DmeCallScannerService.normalizeTimestamp(entry?.timestamp);
+        if (entryTs > 0) {
+          calledTime = DateTime.fromMillisecondsSinceEpoch(entryTs);
         } else if (_lastCallAttemptTimestamp != null) {
           calledTime = _lastCallAttemptTimestamp!;
         }
@@ -598,6 +689,9 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
         _reminder['today_call_attempts'] = _todayCallAttempts;
         _reminder['last_call_attempt_timestamp'] = calledTime.toIso8601String();
         _reminder['last_call_day'] = todayStr;
+        if (userEmail != null && userEmail.isNotEmpty) {
+          _reminder['called_by'] = userEmail;
+        }
 
         _updateCallAttemptsInDb(
           totalAttempts: _callAttempts,
@@ -625,24 +719,22 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
             _isCheckingCall = false;
           });
 
-          // Update Supabase with attempt count, duration, and status
+          // Update Supabase with attempt count, duration, called_by, and status
           final client = await DmeConfig.getClient();
           final remId = _reminder['id'];
           if (client != null && remId != null) {
             final payload = <String, dynamic>{
               'call_attempts': _callAttempts,
               'today_call_attempts': _todayCallAttempts,
-              'last_call_attempt_timestamp': calledTime.toIso8601String(),
+              'last_call_attempt_timestamp': calledTime.toUtc().toIso8601String(),
               'last_call_day': todayStr,
-              'updated_at': now.toIso8601String(),
+              if (userEmail != null && userEmail.isNotEmpty) 'called_by': userEmail,
+              'updated_at': now.toUtc().toIso8601String(),
             };
             if (isAttended) {
               payload['call_duration'] = duration;
               payload['called_timestamp'] = calledTime.toIso8601String();
               payload['status'] = 'called';
-              if (userEmail != null && userEmail.isNotEmpty) {
-                payload['called_by'] = userEmail;
-              }
             } else if (duration > 0) {
               payload['call_duration'] = duration;
               payload['called_timestamp'] = calledTime.toIso8601String();
@@ -1294,57 +1386,236 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                           child: Center(child: Text('No previous sales found.', style: TextStyle(color: Colors.grey[600], fontSize: 13))),
                         )
                       else
-                        ListView.separated(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: _salesHistory.length,
-                          separatorBuilder: (_, __) => const Divider(height: 14),
-                          itemBuilder: (context, idx) {
-                            final s = _salesHistory[idx];
-                            final details = s['dme_sales_detail'] as List?;
-                            // Extract products from details
-                            dynamic rawProducts;
-                            if (details != null && details.isNotEmpty) {
-                              rawProducts = details[0]['products'];
-                            } else if (s['dme_sales_detail'] is Map) {
-                              rawProducts = (s['dme_sales_detail'] as Map)['products'];
+                        Builder(
+                          builder: (context) {
+                            // Identify the current reminder's purchase vs older/previous purchases.
+                            // The current reminder corresponds to last_purchase_date.
+                            final remDateStr = _reminder['last_purchase_date']?.toString().trim();
+                            final remDate = remDateStr != null && remDateStr.isNotEmpty
+                                ? DateTime.tryParse(remDateStr)?.toLocal()
+                                : null;
+                            final remDateFormatted = remDate != null ? DateFormat('yyyy-MM-dd').format(remDate) : remDateStr;
+
+                            int currentSaleIndex = -1;
+                            if (remDateFormatted != null && remDateFormatted.isNotEmpty) {
+                              currentSaleIndex = _salesHistory.indexWhere((s) {
+                                final sDateStr = s['date']?.toString().trim();
+                                if (sDateStr == null || sDateStr.isEmpty) return false;
+                                final sDate = DateTime.tryParse(sDateStr)?.toLocal();
+                                final sDateFormatted = sDate != null ? DateFormat('yyyy-MM-dd').format(sDate) : sDateStr;
+                                return sDateFormatted == remDateFormatted;
+                              });
                             }
 
-                            List<dynamic> productsList = [];
-                            if (rawProducts is List) {
-                              productsList = rawProducts;
-                            } else if (rawProducts is Map) {
-                              productsList = [rawProducts];
+                            // If not found by date, default to the first sale (most recent)
+                            if (currentSaleIndex == -1 && _salesHistory.isNotEmpty) {
+                              currentSaleIndex = 0;
                             }
 
-                            if (productsList.isEmpty) {
-                              return Text(
-                                'No item details recorded',
-                                style: TextStyle(fontSize: 12, color: Colors.grey[500], fontStyle: FontStyle.italic),
+                            final Map<String, dynamic>? currentSale = currentSaleIndex >= 0 ? _salesHistory[currentSaleIndex] : null;
+                            final List<Map<String, dynamic>> previousSales = [];
+                            for (int i = 0; i < _salesHistory.length; i++) {
+                              if (i != currentSaleIndex) {
+                                previousSales.add(_salesHistory[i]);
+                              }
+                            }
+
+                            Widget buildProductsWrap(Map<String, dynamic> s) {
+                              final details = s['dme_sales_detail'] as List?;
+                              dynamic rawProducts;
+                              if (details != null && details.isNotEmpty) {
+                                rawProducts = details[0]['products'];
+                              } else if (s['dme_sales_detail'] is Map) {
+                                rawProducts = (s['dme_sales_detail'] as Map)['products'];
+                              }
+
+                              List<dynamic> productsList = [];
+                              if (rawProducts is List) {
+                                productsList = rawProducts;
+                              } else if (rawProducts is Map) {
+                                productsList = [rawProducts];
+                              }
+
+                              if (productsList.isEmpty) {
+                                return Text(
+                                  'No item details recorded',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[500], fontStyle: FontStyle.italic),
+                                );
+                              }
+
+                              return Wrap(
+                                spacing: 6,
+                                runSpacing: 4,
+                                children: productsList.map((p) {
+                                  String itemName = '';
+                                  String qty = '';
+                                  if (p is Map) {
+                                    itemName = p['item_name']?.toString() ?? '';
+                                    qty = p['qty']?.toString() ?? '';
+                                  } else {
+                                    itemName = p.toString();
+                                  }
+                                  final label = qty.isNotEmpty ? '$itemName : $qty' : itemName;
+                                  return Chip(
+                                    label: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                                    visualDensity: VisualDensity.compact,
+                                    backgroundColor: isDark ? Colors.grey[800] : const Color(0xFF8CC63F).withValues(alpha: 0.15),
+                                    side: BorderSide(color: isDark ? Colors.grey[700]! : Colors.green.withValues(alpha: 0.2)),
+                                  );
+                                }).toList(),
                               );
                             }
 
-                            return Wrap(
-                              spacing: 6,
-                              runSpacing: 4,
-                              children: productsList.map((p) {
-                                String itemName = '';
-                                String qty = '';
-                                if (p is Map) {
-                                  itemName = p['item_name']?.toString() ?? '';
-                                  qty = p['qty']?.toString() ?? '';
-                                } else {
-                                  itemName = p.toString();
-                                }
-                                final label = qty.isNotEmpty ? '$itemName : $qty' : itemName;
-                                return Chip(
-                                  label: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                                  visualDensity: VisualDensity.compact,
-                                  backgroundColor: isDark ? Colors.grey[800] : const Color(0xFF8CC63F).withValues(alpha: 0.15),
-                                  side: BorderSide(color: isDark ? Colors.grey[700]! : Colors.green.withValues(alpha: 0.2)),
-                                );
-                              }).toList(),
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Current Reminder's Purchase
+                                if (currentSale != null) ...[
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF005BAC).withValues(alpha: 0.08),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.star_rounded, size: 14, color: Color(0xFF005BAC)),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Current Purchase (${_formatDate(currentSale['date'] ?? _reminder['last_purchase_date'])})',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF005BAC),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  buildProductsWrap(currentSale),
+                                ],
+
+                                // Previous Purchases (if customer has any older purchases)
+                                if (previousSales.isNotEmpty) ...[
+                                  const SizedBox(height: 16),
+                                  const Divider(height: 1),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.history_rounded, size: 16, color: Colors.grey),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Previous Purchases (${previousSales.length})',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: isDark ? Colors.grey[300] : Colors.grey[700],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  ListView.separated(
+                                    shrinkWrap: true,
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    itemCount: previousSales.length,
+                                    separatorBuilder: (_, __) => const Padding(
+                                      padding: EdgeInsets.symmetric(vertical: 8.0),
+                                      child: Divider(height: 1),
+                                    ),
+                                    itemBuilder: (context, idx) {
+                                      final s = previousSales[idx];
+                                      final saleDate = _formatDate(s['date']);
+                                      final catId = int.tryParse(s['category_id']?.toString() ?? '');
+                                      final typeId = int.tryParse(s['customer_type_id']?.toString() ?? '');
+                                      final catName = DmeConstants.getCategoryName(catId);
+                                      final typeName = DmeConstants.getCustomerTypeName(typeId);
+
+                                      return Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: isDark ? Colors.grey[900] : Colors.grey[50],
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(
+                                            color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
+                                          ),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            // Header with Date, Category, and Type
+                                            Wrap(
+                                              spacing: 8,
+                                              runSpacing: 4,
+                                              crossAxisAlignment: WrapCrossAlignment.center,
+                                              children: [
+                                                // Date
+                                                Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(Icons.calendar_today_rounded, size: 13, color: Colors.grey[600]),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      saleDate,
+                                                      style: const TextStyle(
+                                                        fontSize: 12,
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                Text('•', style: TextStyle(fontSize: 11, color: Colors.grey[400])),
+                                                // Category
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFF005BAC).withValues(alpha: 0.1),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                  child: Text(
+                                                    'Cat: $catName',
+                                                    style: const TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: Color(0xFF005BAC),
+                                                    ),
+                                                  ),
+                                                ),
+                                                // Type
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: (typeName == 'PREMIUM')
+                                                        ? Colors.amber.withValues(alpha: 0.15)
+                                                        : Colors.grey.withValues(alpha: 0.15),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                  child: Text(
+                                                    'Type: $typeName',
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: (typeName == 'PREMIUM')
+                                                          ? (isDark ? Colors.amber[300] : Colors.amber[900])
+                                                          : (isDark ? Colors.grey[300] : Colors.grey[700]),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 8),
+                                            // Items purchased on this date
+                                            buildProductsWrap(s),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ],
                             );
                           },
                         ),
@@ -1607,16 +1878,35 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                   final now = DateTime.now();
                   final bool hasReachedDailyLimit = _todayCallAttempts >= 2;
 
-                  // 1-hour gap logic between attempts
-                  int remainingCooldownSeconds = 0;
-                  if (_todayCallAttempts > 0 && _lastCallAttemptTimestamp != null) {
-                    final elapsed = now.difference(_lastCallAttemptTimestamp!);
-                    if (elapsed.inSeconds < 3600) {
-                      remainingCooldownSeconds = 3600 - elapsed.inSeconds;
+                  // 1-hour gap logic between attempts:
+                  // Check call log history for the latest call attempt timestamp
+                  DateTime? effectiveLastCall = _lastCallAttemptTimestamp?.toLocal();
+                  if (_reminderCallLogs.isNotEmpty) {
+                    for (final log in _reminderCallLogs) {
+                      final tsStr = log['attempt_timestamp']?.toString();
+                      if (tsStr == null) continue;
+                      final dt = DateTime.tryParse(tsStr)?.toLocal();
+                      if (dt != null && (effectiveLastCall == null || dt.isAfter(effectiveLastCall))) {
+                        effectiveLastCall = dt;
+                      }
                     }
                   }
 
-                  final bool isCooldownActive = remainingCooldownSeconds > 0;
+                  int remainingCooldownSeconds = 0;
+                  bool has60MinsPassed = true;
+
+                  if (_todayCallAttempts > 0 && effectiveLastCall != null) {
+                    final elapsed = now.difference(effectiveLastCall);
+                    if (elapsed.inSeconds < 3600) {
+                      remainingCooldownSeconds = 3600 - elapsed.inSeconds;
+                      has60MinsPassed = false;
+                    } else {
+                      has60MinsPassed = true;
+                      remainingCooldownSeconds = 0;
+                    }
+                  }
+
+                  final bool isCooldownActive = !has60MinsPassed && remainingCooldownSeconds > 0;
                   final bool canMakeCall = !hasReachedDailyLimit && !isCooldownActive;
 
                   // Format cooldown message
@@ -1679,7 +1969,9 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                                       ? 'Daily limit reached (2 calls today). If customer does not answer, this will be marked OVERDUE tomorrow for another 2 attempts.'
                                       : isCooldownActive
                                           ? '1-hour gap required between calls. Next attempt available in ~$minutesLeft minute${minutesLeft == 1 ? '' : 's'}.'
-                                          : 'Attempt #$_todayCallAttempts made today ($_callAttempts total lifetime attempts). Customer hasn\'t answered yet.',
+                                          : _todayCallAttempts > 0
+                                              ? 'Attempt #$_todayCallAttempts made today. 60+ minutes have passed since last attempt — you can call again now.'
+                                              : 'Attempt #$_todayCallAttempts made today ($_callAttempts total lifetime attempts). Customer hasn\'t answered yet.',
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
