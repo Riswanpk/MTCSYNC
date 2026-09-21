@@ -44,6 +44,9 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
 
   bool _hasShortAttendedCall = false;
 
+  bool _hasPendingRequest = false;
+  String? _pendingRequestType;
+
   List<Map<String, dynamic>> _salesHistory = [];
   bool _isLoadingHistory = false;
   List<Map<String, dynamic>> _reminderCallLogs = [];
@@ -92,6 +95,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     _fetchReminderCallLogs();
     _checkCallLogHistoryAndCooldown();
     _checkIfShortAttendedCallExists();
+    _checkPendingRequests();
   }
 
   Future<void> _fetchReminderCallLogs() async {
@@ -227,6 +231,47 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     } catch (_) {}
   }
 
+  Future<void> _checkPendingRequests() async {
+    try {
+      final client = await DmeConfig.getClient();
+      final remId = _reminder['id'];
+      final custId = _reminder['customer_id'];
+      if (client != null && (remId != null || custId != null)) {
+        var query = client
+            .from('dme_change_requests')
+            .select('id, request_type, status, created_at')
+            .eq('status', 'pending');
+
+        if (remId != null && custId != null) {
+          query = query.or('reminder_id.eq.$remId,customer_id.eq.$custId');
+        } else if (remId != null) {
+          query = query.eq('reminder_id', remId);
+        } else if (custId != null) {
+          query = query.eq('customer_id', custId);
+        }
+
+        final res = await query.order('created_at', ascending: false).limit(1);
+
+        if (mounted) {
+          if ((res as List).isNotEmpty) {
+            final first = res.first;
+            setState(() {
+              _hasPendingRequest = true;
+              _pendingRequestType = first['request_type']?.toString();
+            });
+          } else {
+            setState(() {
+              _hasPendingRequest = false;
+              _pendingRequestType = null;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[DmeReminderDetail] Error checking pending requests: $e');
+    }
+  }
+
   final Map<String, String> _userNames = {};
 
   Future<void> _loadUserNames() async {
@@ -278,6 +323,11 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
 
     if (result != null && result is Map && result['success'] == true) {
       final requestType = result['type'];
+      setState(() {
+        _hasPendingRequest = true;
+        _pendingRequestType = requestType?.toString();
+      });
+      _checkPendingRequests();
       if (requestType == 'phone_number_change') {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -340,8 +390,11 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _callInitiatedTime != null) {
-      _checkCallLogAfterCall();
+    if (state == AppLifecycleState.resumed) {
+      if (_callInitiatedTime != null) {
+        _checkCallLogAfterCall();
+      }
+      _checkPendingRequests();
     }
   }
 
@@ -2110,7 +2163,47 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                       ],
                     ),
                     const SizedBox(height: 10),
-                    if (!_callMade) ...[
+                    if (_hasPendingRequest) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.amber.withValues(alpha: 0.4),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.pending_actions_rounded,
+                              color: Colors.amber,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _pendingRequestType == 'phone_number_change'
+                                    ? 'A phone number change request is pending Admin approval. Completion and remarks are locked.'
+                                    : (_pendingRequestType == 'call_completion'
+                                        ? 'A call completion request is pending Admin approval. Completion and remarks are locked.'
+                                        : (_pendingRequestType == 'preference_change'
+                                            ? 'A preference change request is pending Admin approval. Completion and remarks are locked.'
+                                            : (_pendingRequestType == 'edit_customer_details'
+                                                ? 'A customer details change request is pending Admin approval. Completion and remarks are locked.'
+                                                : 'A change request is pending Admin approval. Completion and remarks are locked until approved or rejected.'))),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isDark ? Colors.amber[200] : Colors.amber[900],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                    ] else if (!_callMade) ...[
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -2159,16 +2252,18 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                     ],
                     TextField(
                       controller: _remarksController,
-                      enabled: _callMade && !isCompleted,
+                      enabled: _callMade && !isCompleted && !_hasPendingRequest,
                       maxLines: 3,
                       decoration: InputDecoration(
                         hintText: isCompleted
                             ? 'Reminder is completed. Remarks are locked.'
-                            : (_callMade
-                                ? 'Enter discussion summary, customer feedback, etc...'
-                                : 'Remarks disabled (call must exceed 10s)...'),
+                            : (_hasPendingRequest
+                                ? 'Remarks are locked while a request is pending Admin approval.'
+                                : (_callMade
+                                    ? 'Enter discussion summary, customer feedback, etc...'
+                                    : 'Remarks disabled (call must exceed 10s)...')),
                         filled: true,
-                        fillColor: (!_callMade || isCompleted)
+                        fillColor: (!_callMade || isCompleted || _hasPendingRequest)
                             ? (isDark ? Colors.grey[850] : Colors.grey[200])
                             : (isDark ? Colors.grey[900] : Colors.grey[100]),
                         border: OutlineInputBorder(
@@ -2181,7 +2276,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: (_isSaving || !_callMade || isCompleted) ? null : _saveAndMarkCompleted,
+                        onPressed: (_isSaving || !_callMade || isCompleted || _hasPendingRequest) ? null : _saveAndMarkCompleted,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF005BAC),
                           disabledBackgroundColor: Colors.grey[400],
@@ -2196,7 +2291,9 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                                 child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                               )
                             : Text(
-                                isCompleted ? 'Reminder Completed' : 'Save Remarks & Mark Completed',
+                                _hasPendingRequest
+                                    ? 'Request Pending Approval'
+                                    : (isCompleted ? 'Reminder Completed' : 'Save Remarks & Mark Completed'),
                                 style: const TextStyle(fontWeight: FontWeight.bold),
                               ),
                       ),
