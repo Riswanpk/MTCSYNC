@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -14,6 +15,7 @@ import 'dme_requests_phone_number_invalid.dart';
 import 'dme_requests_change_preference.dart';
 import 'dme_requests_mark_call_as_completed.dart';
 import 'dme_requests_edit_customer_details.dart';
+import 'dme_notification_service.dart';
 
 class DmeRaiseRequestPage extends StatefulWidget {
   final Map<String, dynamic> reminder;
@@ -195,7 +197,18 @@ class _DmeRaiseRequestPageState extends State<DmeRaiseRequestPage> {
         }
       }
 
-      await client.from(DmeConstants.tableChangeRequests).insert(payload);
+      final insertRes = await client.from(DmeConstants.tableChangeRequests).insert(payload).select('id');
+      final insertedId = insertRes.isNotEmpty
+          ? insertRes.first['id']?.toString()
+          : null;
+
+      // Notify DME Admins asynchronously
+      unawaited(DmeNotificationService.instance.notifyAdminsOnRequestRaised(
+        customerName: customerName,
+        requestType: requestType,
+        requestedBy: userEmail,
+        requestId: insertedId,
+      ));
 
       if (mounted) {
         setState(() => _isSubmitting = false);

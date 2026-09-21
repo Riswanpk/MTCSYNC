@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -5,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../dme_config.dart';
 import '../../dme_constants.dart';
 import '../../User/dme_user_stats_service.dart';
+import '../../User/Requests/dme_notification_service.dart';
 
 class DmeAdminApprovalsPage extends StatefulWidget {
   const DmeAdminApprovalsPage({super.key});
@@ -546,6 +548,16 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
       }
       await client.from(DmeConstants.tableChangeRequests).update(reqUpdates).eq('id', request['id']);
 
+      // Notify the requesting user that their request has been approved
+      unawaited(DmeNotificationService.instance.notifyUserOnRequestDecision(
+        requestedByUid: requestingUserUid.isNotEmpty ? requestingUserUid : null,
+        requestedByEmail: requestingUserEmail.isNotEmpty ? requestingUserEmail : null,
+        customerName: customerName,
+        requestType: requestType,
+        isApproved: true,
+        requestId: request['id']?.toString(),
+      ));
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -634,12 +646,38 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
       final adminEmail = adminUser?.email ?? adminUser?.displayName ?? 'admin';
       final now = DateTime.now().toIso8601String();
 
+      final rejectionReason = noteController.text.trim();
       await client.from(DmeConstants.tableChangeRequests).update({
         'status': 'rejected',
         'reviewed_by': adminEmail,
-        'admin_notes': noteController.text.trim(),
+        'admin_notes': rejectionReason,
         'updated_at': now,
       }).eq('id', request['id']);
+
+      // Notify the requesting user that their request has been rejected
+      final customerName = (request['customer_name'] ?? 'Customer').toString();
+      final requestType = (request['request_type'] ?? '').toString();
+      final requestedByEmail = (request['requested_by'] ?? '').toString();
+      String? requestedByUid;
+      final newVal = (request['new_value'] ?? '').toString();
+      if (newVal.startsWith('{')) {
+        try {
+          final parsed = jsonDecode(newVal);
+          if (parsed is Map && parsed['user_uid'] != null && parsed['user_uid'].toString().isNotEmpty) {
+            requestedByUid = parsed['user_uid'].toString();
+          }
+        } catch (_) {}
+      }
+
+      unawaited(DmeNotificationService.instance.notifyUserOnRequestDecision(
+        requestedByUid: requestedByUid,
+        requestedByEmail: requestedByEmail.isNotEmpty ? requestedByEmail : null,
+        customerName: customerName,
+        requestType: requestType,
+        isApproved: false,
+        rejectionReason: rejectionReason.isNotEmpty ? rejectionReason : null,
+        requestId: request['id']?.toString(),
+      ));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

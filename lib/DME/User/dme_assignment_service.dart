@@ -1095,10 +1095,11 @@ class DmeAssignmentService {
 
 
 
-  /// Fetch completed calls for the current user for today
+  /// Fetch completed calls assigned to and completed by the current user for today
   static Future<List<Map<String, dynamic>>> fetchUserCompletedToday({
     required List<int> userBranches,
     required String currentUserId,
+    String? currentUserEmail,
     int? filterBranchId,
   }) async {
     final client = await DmeConfig.getClient();
@@ -1107,6 +1108,7 @@ class DmeAssignmentService {
     final now = DateTime.now();
     final todayStr = formatDate(now);
     final branches = filterBranchId != null ? [filterBranchId] : userBranches;
+    final normalizedEmail = currentUserEmail?.toLowerCase().trim();
 
     try {
       final List<dynamic> data = [];
@@ -1120,8 +1122,9 @@ class DmeAssignmentService {
           batch = await client
               .from('dme_reminders')
               .select(
-                  'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, called_by, assigned_to, dme_customers(id, name, phone, address, salesman)')
-              .inFilter('status', ['completed', 'called'])
+                  'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, called_by, assigned_to, assigned_date, dme_customers(id, name, phone, address, salesman)')
+              .eq('status', 'completed')
+              .eq('assigned_to', currentUserId)
               .inFilter('last_purchase_branch', branches)
               .gte('updated_at', '${todayStr}T00:00:00')
               .lte('updated_at', '${todayStr}T23:59:59')
@@ -1130,8 +1133,9 @@ class DmeAssignmentService {
           batch = await client
               .from('dme_reminders')
               .select(
-                  'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, assigned_to, dme_customers(id, name, phone, address, salesman)')
-              .inFilter('status', ['completed', 'called'])
+                  'id, customer_id, reminder_date, last_purchase_date, last_purchase_branch, status, remarks, updated_at, call_duration, called_timestamp, assigned_to, assigned_date, dme_customers(id, name, phone, address, salesman)')
+              .eq('status', 'completed')
+              .eq('assigned_to', currentUserId)
               .inFilter('last_purchase_branch', branches)
               .gte('updated_at', '${todayStr}T00:00:00')
               .lte('updated_at', '${todayStr}T23:59:59')
@@ -1148,17 +1152,27 @@ class DmeAssignmentService {
       }
 
       final parsed = _parseReminderList(data);
-      // Filter to current user if assigned_to or called_by matches
+      // Filter strictly: assigned to current user, completed status, and completed today by the user
       final userFiltered = parsed.where((r) {
         final assigned = r['assigned_to']?.toString();
-        final called = r['called_by']?.toString().toLowerCase();
+        if (assigned != currentUserId) {
+          return false;
+        }
+
+        final status = r['status']?.toString().toLowerCase();
+        if (status != 'completed') {
+          return false;
+        }
+
+        final called = r['called_by']?.toString().toLowerCase().trim();
         if (called != null && called.isNotEmpty) {
-          // If called_by email is set, show it to matching branch user or assigned user
-          return true;
+          if (called == currentUserId.toLowerCase()) return true;
+          if (normalizedEmail != null && normalizedEmail.isNotEmpty && called == normalizedEmail) {
+            return true;
+          }
+          return false;
         }
-        if (assigned != null && assigned.isNotEmpty) {
-          return assigned == currentUserId;
-        }
+
         return true;
       }).toList();
 

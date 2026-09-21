@@ -25,6 +25,7 @@ import 'Task/task_admin.dart';
 import 'Supersale/User/supersale_user_mainpage.dart';
 import 'Misc/network_guard.dart';
 import 'DME/Complaints/User/complaint_detail_page.dart';
+import 'DME/Admin/Approvals/dme_admin_approvals_page.dart';
 
 /// Top-level background message handler for FCM Push Notifications
 @pragma('vm:entry-point')
@@ -167,6 +168,12 @@ Future<void> _setupFirebaseMessaging() async {
       String channelKey = 'basic_channel_v2';
       if (type == 'customer_editing_request' || type == 'customer_deletion_request' || type == 'customer_approval') {
         channelKey = 'customer_approval_channel';
+      } else if (type == 'dme_request_raised' || type == 'dme_request') {
+        channelKey = 'dme_requests_channel';
+      } else if (type == 'dme_request_approved') {
+        channelKey = 'dme_requests_approved_channel';
+      } else if (type == 'dme_request_rejected') {
+        channelKey = 'dme_requests_rejected_channel';
       } else if (type == 'complaint_resolved' || type == 'dme_complaint_resolved') {
         channelKey = 'dme_complaints_resolved_channel';
       } else if (type == 'complaint_review_pending' || type == 'complaint_action_taken' || type == 'dme_complaint_review_pending') {
@@ -380,6 +387,42 @@ Future<void> _initializeNotifications() async {
       importance: NotificationImportance.High,
       channelShowBadge: true,
       criticalAlerts: false,
+      playSound: true,
+    ),
+    NotificationChannel(
+      channelKey: 'dme_requests_channel',
+      channelName: 'DME Requests Raised',
+      channelDescription: 'Channel for DME requests raised to admin',
+      defaultColor: const Color(0xFF005BAC),
+      ledColor: Colors.purple,
+      soundSource: 'resource://raw/you_have_a_request',
+      importance: NotificationImportance.Max,
+      channelShowBadge: true,
+      criticalAlerts: true,
+      playSound: true,
+    ),
+    NotificationChannel(
+      channelKey: 'dme_requests_approved_channel',
+      channelName: 'DME Requests Approved',
+      channelDescription: 'Channel for DME requests approved',
+      defaultColor: const Color(0xFF28A745),
+      ledColor: Colors.green,
+      soundSource: 'resource://raw/request_has_been_approved',
+      importance: NotificationImportance.Max,
+      channelShowBadge: true,
+      criticalAlerts: true,
+      playSound: true,
+    ),
+    NotificationChannel(
+      channelKey: 'dme_requests_rejected_channel',
+      channelName: 'DME Requests Rejected',
+      channelDescription: 'Channel for DME requests rejected',
+      defaultColor: const Color(0xFFDC3545),
+      ledColor: Colors.red,
+      soundSource: 'resource://raw/request_has_been_rejected',
+      importance: NotificationImportance.Max,
+      channelShowBadge: true,
+      criticalAlerts: true,
       playSound: true,
     ),
   ];
@@ -632,6 +675,14 @@ class NotificationController {
 
     if (isSupersaleOpen || notifType == 'supersale') {
       _doPush((_) => const SupersaleUserMainPage());
+      return;
+    }
+
+    // Handle DME Request notifications navigation (Admin: Approvals page)
+    if (notifType == 'dme_request_raised' ||
+        notifType == 'dme_request' ||
+        channelKey == 'dme_requests_channel') {
+      _doPush((_) => const DmeAdminApprovalsPage());
       return;
     }
 

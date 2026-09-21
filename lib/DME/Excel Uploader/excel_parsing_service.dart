@@ -6,25 +6,13 @@ import '../dme_constants.dart';
 import 'excel_uploader_models.dart';
 
 class ExcelParsingService {
-  /// Extracts 10-digit mobile number, removing +91, 91 prefix if present
+  /// Extracts digit sequence from phone column without stripping prefixes
   static String cleanPhoneNumber(dynamic rawValue) {
     if (rawValue == null) return '';
     String str = rawValue.toString().trim();
-    String digits = str.replaceAll(RegExp(r'[^\d]'), '');
-
-    if (digits.length == 10) {
-      return digits;
-    } else if (digits.length > 10) {
-      if (digits.startsWith('91') && digits.length == 12) {
-        return digits.substring(2);
-      }
-      if (digits.startsWith('0') && digits.length == 11) {
-        return digits.substring(1);
-      }
-      return digits.substring(digits.length - 10);
-    }
-    return digits;
+    return str.replaceAll(RegExp(r'[^\d]'), '');
   }
+
 
   /// Merges Address1, Address2, Address3 into one clean string
   static String mergeAddress(dynamic a1, dynamic a2, dynamic a3) {
@@ -186,23 +174,10 @@ class ExcelParsingService {
 
         final mergedAddr = mergeAddress(address1, address2, address3);
 
-        // Determine phone number specifically from this row (Col 7 or address fallback)
+        // Determine phone number strictly from the phone column (Col 7)
         String rowPhone = cleanPhoneNumber(rawMobile);
-        if (rowPhone.isEmpty || rowPhone.length != 10) {
-          final p3 = extractMobileFromText(address3);
-          if (p3.isNotEmpty) rowPhone = p3;
-        }
-        if (rowPhone.isEmpty || rowPhone.length != 10) {
-          final p2 = extractMobileFromText(address2);
-          if (p2.isNotEmpty) rowPhone = p2;
-        }
-        if (rowPhone.isEmpty || rowPhone.length != 10) {
-          final p1 = extractMobileFromText(address1);
-          if (p1.isNotEmpty) rowPhone = p1;
-        }
-        // If still not 10 digits, fallback to whatever digits rawMobile had (for length validation reporting)
         if (rowPhone.isEmpty && rawMobile != null && rawMobile.toString().trim().isNotEmpty) {
-          rowPhone = cleanPhoneNumber(rawMobile);
+          rowPhone = rawMobile.toString().trim();
         }
 
         // Determine if this row belongs to the same ongoing sale or is a new sale

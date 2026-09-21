@@ -167,6 +167,7 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
       final completed = await DmeAssignmentService.fetchUserCompletedToday(
         userBranches: _userAssignedBranches,
         currentUserId: user.uid,
+        currentUserEmail: user.email,
         filterBranchId: _selectedBranchId,
       );
 

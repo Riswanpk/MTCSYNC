@@ -190,7 +190,9 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
           if (syncResult.totalTodayAttempts > 0) {
             _todayCallAttempts = syncResult.totalTodayAttempts;
           }
-          if (syncResult.hasAttendedCall || (entry?.duration ?? 0) > 10) {
+          final currentStatus = (_reminder['status'] ?? '').toString().toLowerCase();
+          final bool isAlreadyCompleted = currentStatus == 'completed';
+          if (!isAlreadyCompleted && (syncResult.hasAttendedCall || (entry?.duration ?? 0) > 10)) {
             _callMade = true;
             _reminder['status'] = 'called';
             _callDuration = entry?.duration;
@@ -699,6 +701,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
           lastAttemptTimestamp: calledTime,
         );
 
+        final bool isAlreadyCompleted = (_reminder['status'] ?? '').toString().toLowerCase() == 'completed';
         final bool isAttended = syncResult.hasAttendedCall || duration > 10;
         final bool isShortAttended = syncResult.hasShortCall || (duration > 0 && duration <= 10);
 
@@ -707,22 +710,24 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
             _reminderCallLogs = syncResult.recordedLogs;
             _callDuration = duration;
             _calledTimestamp = calledTime;
-            _callMade = isAttended;
-            _reminder['call_duration'] = duration;
-            _reminder['called_timestamp'] = calledTime.toIso8601String();
-            if (isShortAttended) {
-              _hasShortAttendedCall = true;
-            }
-            if (isAttended) {
-              _reminder['status'] = 'called';
+            if (!isAlreadyCompleted) {
+              _callMade = isAttended;
+              _reminder['call_duration'] = duration;
+              _reminder['called_timestamp'] = calledTime.toIso8601String();
+              if (isShortAttended) {
+                _hasShortAttendedCall = true;
+              }
+              if (isAttended) {
+                _reminder['status'] = 'called';
+              }
             }
             _isCheckingCall = false;
           });
 
-          // Update Supabase with attempt count, duration, called_by, and status
+          // Update Supabase with attempt count, duration, called_by, and status (skip status if completed)
           final client = await DmeConfig.getClient();
           final remId = _reminder['id'];
-          if (client != null && remId != null) {
+          if (client != null && remId != null && !isAlreadyCompleted) {
             final payload = <String, dynamic>{
               'call_attempts': _callAttempts,
               'today_call_attempts': _todayCallAttempts,

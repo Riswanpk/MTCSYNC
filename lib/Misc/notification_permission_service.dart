@@ -139,6 +139,9 @@ class NotificationPermissionService {
         'delivery_reminder_channel': 'resource://raw/delivery_reminder',
         'supersale_open_channel': 'resource://raw/supersale_bookings_open',
         'supersale_closed_channel': 'resource://raw/supersale_bookins_closed',
+        'dme_requests_channel': 'resource://raw/you_have_a_request',
+        'dme_requests_approved_channel': 'resource://raw/request_has_been_approved',
+        'dme_requests_rejected_channel': 'resource://raw/request_has_been_rejected',
       };
 
       final sound = soundSourceMap[channelKey] ?? 'resource://raw/leadsreminder';

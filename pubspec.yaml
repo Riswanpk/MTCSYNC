@@ -120,6 +120,9 @@ flutter:
      - assets/sounds/sme_leads_assigned.mp3
      - assets/sounds/you_have_todos_pending.mp3
      - assets/sounds/task_completed.mp3
+     - assets/sounds/you_have_a_request.mp3
+     - assets/sounds/request_has_been_approved.mp3
+     - assets/sounds/request_has_been_rejected.mp3
      - assets/fonts/NotoSans-Regular.ttf
      - assets/fonts/Electrolize-Regular.ttf
      - assets/fonts/Montserrat-Regular.ttf
