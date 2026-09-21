@@ -171,6 +171,10 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
   }
 
   Future<void> _openCamera() async {
+    // Ensure current inputs are saved to draft before launching camera
+    // (Crucial for Android activity recreation on devices like OnePlus 12R)
+    await _saveDraft();
+    if (!mounted) return;
     final result = await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const CameraPage()),

@@ -33,6 +33,30 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Check if Android killed the Activity during camera capture (e.g. on OnePlus / ColorOS / OxygenOS)
+    _checkLostData();
+  }
+
+  /// Handles Android Activity recreation after camera app was in foreground.
+  /// On devices with high megapixel cameras (like OnePlus 12R) and aggressive RAM management,
+  /// the system kills the MainActivity while the native camera is open.
+  /// ImagePicker.retrieveLostData() retrieves that captured image upon app resurrection.
+  Future<void> _checkLostData() async {
+    try {
+      final picker = ImagePicker();
+      final LostDataResponse response = await picker.retrieveLostData();
+      if (response.isEmpty) {
+        return;
+      }
+      if (response.file != null) {
+        debugPrint('Retrieved lost image from camera session: ${response.file!.path}');
+        await _processCapturedFile(response.file!);
+      } else if (response.exception != null) {
+        debugPrint('Lost data exception: ${response.exception}');
+      }
+    } catch (e) {
+      debugPrint('Error retrieving lost camera data: $e');
+    }
   }
 
   @override
@@ -331,6 +355,102 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _processCapturedFile(XFile pickedFile) async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Verify the picked file actually exists
+      final pickedImageFile = File(pickedFile.path);
+      if (!pickedImageFile.existsSync()) {
+        debugPrint('Picked image file does not exist: ${pickedFile.path}');
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to access captured image. Please try again.')),
+        );
+        return;
+      }
+
+      // --- OPTIMIZATION: Run compression and location fetch in parallel ---
+      final compressionFuture = _compressImage(pickedImageFile);
+      final locationFuture = _getLocation().timeout(
+        const Duration(seconds: 30), // Allow enough time for GPS fix + dialogs
+        onTimeout: () {
+          debugPrint('Location fetch timed out after 30 seconds');
+          return null;
+        },
+      );
+
+      final results = await Future.wait([compressionFuture, locationFuture]);
+      final compressedImageFile = results[0] as File?;
+      final locationResult = results[1] as _LocationResult?;
+
+      if (!mounted) return;
+
+      if (compressedImageFile == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to process image. Please try again.')),
+        );
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // GPS is MANDATORY - cannot proceed without location
+      if (locationResult == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ GPS location is required. Please enable location and try again.'),
+            duration: Duration(seconds: 5),
+            backgroundColor: Colors.red,
+          ),
+        );
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final position = locationResult.position;
+      String locationText;
+      try {
+        final placemarks =
+            await placemarkFromCoordinates(position.latitude, position.longitude);
+        if (!mounted) return;
+        if (placemarks.isNotEmpty) {
+          final placemark = placemarks.first;
+          locationText =
+              "${placemark.locality ?? ''}, ${placemark.administrativeArea ?? ''}, ${placemark.country ?? ''}\nLat ${position.latitude.toStringAsFixed(6)}, Long ${position.longitude.toStringAsFixed(6)}";
+        } else {
+          locationText =
+              "Lat ${position.latitude.toStringAsFixed(6)}, Long ${position.longitude.toStringAsFixed(6)}";
+        }
+      } catch (e) {
+        debugPrint('Error getting placemark: $e');
+        locationText =
+            "Lat ${position.latitude.toStringAsFixed(6)}, Long ${position.longitude.toStringAsFixed(6)}";
+      }
+
+      final now = DateTime.now();
+      if (!mounted) return;
+      setState(() {
+        _capturedImage = compressedImageFile;
+        _locationString = locationText;
+        _dateTimeString =
+            "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} "
+            "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error processing captured file: $e');
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error processing photo: ${e.toString().length > 80 ? e.toString().substring(0, 80) : e}')),
+      );
+    }
+  }
+
   Future<void> _takePhoto() async {
     if (!mounted) return;
     setState(() {
@@ -339,11 +459,18 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     try {
       final picker = ImagePicker();
 
-      // Attempt to pick image — this can throw PlatformException if camera
-      // permission is denied at the OS level. We catch it gracefully.
+      // Attempt to pick image with native size constraints:
+      // High-res sensors (e.g. OnePlus 12R 50MP) can cause low memory killer (LMK)
+      // to terminate MainActivity in the background. Setting maxWidth/maxHeight/imageQuality
+      // forces native-level downscaling, dramatically reducing memory pressure and preventing crashes.
       XFile? pickedFile;
       try {
-        pickedFile = await picker.pickImage(source: ImageSource.camera);
+        pickedFile = await picker.pickImage(
+          source: ImageSource.camera,
+          maxWidth: 1920,
+          maxHeight: 1920,
+          imageQuality: 85,
+        );
       } catch (cameraError) {
         debugPrint('Camera error (likely permission denied): $cameraError');
         if (!mounted) return;
@@ -372,85 +499,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
       }
 
       if (pickedFile != null) {
-        // Verify the picked file actually exists
-        final pickedImageFile = File(pickedFile.path);
-        if (!pickedImageFile.existsSync()) {
-          debugPrint('Picked image file does not exist: ${pickedFile.path}');
-          if (!mounted) return;
-          setState(() => _isLoading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to access captured image. Please try again.')),
-          );
-          return;
-        }
-
-        // --- OPTIMIZATION: Run compression and location fetch in parallel ---
-        final compressionFuture = _compressImage(pickedImageFile);
-        final locationFuture = _getLocation().timeout(
-          const Duration(seconds: 30), // Allow enough time for GPS fix + dialogs
-          onTimeout: () {
-            debugPrint('Location fetch timed out after 30 seconds');
-            return null;
-          },
-        );
-
-        final results = await Future.wait([compressionFuture, locationFuture]);
-        final compressedImageFile = results[0] as File?;
-        final locationResult = results[1] as _LocationResult?;
-
-        if (!mounted) return;
-
-        if (compressedImageFile == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to process image. Please try again.')),
-          );
-          setState(() => _isLoading = false);
-          return;
-        }
-
-        // GPS is MANDATORY - cannot proceed without location
-        if (locationResult == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('❌ GPS location is required. Please enable location and try again.'),
-              duration: Duration(seconds: 5),
-              backgroundColor: Colors.red,
-            ),
-          );
-          setState(() => _isLoading = false);
-          return;
-        }
-
-        final position = locationResult.position;
-        String locationText;
-        try {
-          final placemarks =
-              await placemarkFromCoordinates(position.latitude, position.longitude);
-          if (!mounted) return;
-          if (placemarks.isNotEmpty) {
-            final placemark = placemarks.first;
-            locationText =
-                "${placemark.locality ?? ''}, ${placemark.administrativeArea ?? ''}, ${placemark.country ?? ''}\nLat ${position.latitude.toStringAsFixed(6)}, Long ${position.longitude.toStringAsFixed(6)}";
-          } else {
-            locationText =
-                "Lat ${position.latitude.toStringAsFixed(6)}, Long ${position.longitude.toStringAsFixed(6)}";
-          }
-        } catch (e) {
-          debugPrint('Error getting placemark: $e');
-          locationText =
-              "Lat ${position.latitude.toStringAsFixed(6)}, Long ${position.longitude.toStringAsFixed(6)}";
-        }
-
-        final now = DateTime.now();
-        if (!mounted) return;
-        setState(() {
-          _capturedImage = compressedImageFile;
-          _locationString = locationText;
-          _dateTimeString =
-              "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} "
-              "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
-          _isLoading = false;
-        });
+        await _processCapturedFile(pickedFile);
       } else {
         // User cancelled the camera picker
         if (!mounted) return;
