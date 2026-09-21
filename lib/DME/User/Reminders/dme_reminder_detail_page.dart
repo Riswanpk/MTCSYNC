@@ -1090,15 +1090,6 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                 );
               },
             ),
-          IconButton(
-            icon: const Icon(Icons.sync_rounded),
-            tooltip: 'Check Call Logs / Reload',
-            onPressed: isCompleted
-                ? null
-                : () {
-                    _checkCallLogAfterCall();
-                  },
-          ),
           Padding(
             padding: const EdgeInsets.only(right: 8.0),
             child: ElevatedButton.icon(
