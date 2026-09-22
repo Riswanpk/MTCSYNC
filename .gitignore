@@ -1,13 +1,55 @@
 # Hide everything by default
 *
 
-# Allow lib directory and its contents
+# Whitelist gitignore
+!/.gitignore
+
+# Whitelist allowed root files
+!/pubspec.yaml
+!/analysis_options.yaml
+
+# Whitelist lib directory and its contents
 !/lib/
 !/lib/**
 
-# Allow pubspec.yaml
-!/pubspec.yaml
+# Whitelist functions directory and its contents
+!/functions/
+!/functions/**
 
-# Hide secrets file
+# Whitelist assets directory and its contents
+!/assets/
+!/assets/**
+
+# Whitelist android directory and its contents
+!/android/
+!/android/**
+
+# =============================================================
+# Ignored files (API keys, secrets, build artifacts, dependencies)
+# =============================================================
+
+# Secrets and API keys
 lib/Misc/constant.dart
 lib/DME/dme_config.dart
+
+
+# Functions ignored files
+functions/node_modules/
+functions/*.local
+functions/.env*
+
+# Android ignored files (credentials, local SDK config, build outputs)
+android/.gradle/
+android/.kotlin/
+android/build/
+android/*/build/
+android/*/.cxx/
+android/.cxx/
+android/captures/
+android/local.properties
+android/key.properties
+android/**/*.keystore
+android/**/*.jks
+android/**/GeneratedPluginRegistrant.java
+android/*.iml
+android/*/*.iml
