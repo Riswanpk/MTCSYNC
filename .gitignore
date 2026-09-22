@@ -32,7 +32,6 @@
 lib/Misc/constant.dart
 lib/DME/dme_config.dart
 
-
 # Functions ignored files
 functions/node_modules/
 functions/*.local
