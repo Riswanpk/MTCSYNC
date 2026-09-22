@@ -11,6 +11,3 @@
 # Hide secrets file
 lib/Misc/constant.dart
 lib/DME/dme_config.dart
-
-
-lib/DME_MTC/dme_config.dart
