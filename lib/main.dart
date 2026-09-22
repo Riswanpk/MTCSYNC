@@ -692,13 +692,21 @@ class NotificationController {
         notifType == 'complaint_raised' ||
         notifType == 'complaint_resolved' ||
         notifType == 'dme_complaint_resolved' ||
+        notifType == 'complaint_review_pending' ||
+        notifType == 'complaint_action_taken' ||
+        notifType == 'dme_complaint_review_pending' ||
         notifType == 'complaint' ||
         channelKey == 'dme_complaints_channel' ||
-        channelKey == 'dme_complaints_resolved_channel') {
+        channelKey == 'dme_complaints_resolved_channel' ||
+        channelKey == 'dme_complaints_review_channel') {
       final complaintIdStr = payload?['complaintId'] ?? payload?['leadDocId'] ?? payload?['docId'];
       final complaintId = int.tryParse(complaintIdStr?.toString() ?? '');
+      final isUnreg = payload?['isUnregistered'] == 'true' || payload?['is_unregistered'] == 'true';
       if (complaintId != null) {
-        _doPush((_) => ComplaintDetailPage(complaintId: complaintId));
+        _doPush((_) => ComplaintDetailPage(
+          complaintId: complaintId,
+          isUnregistered: isUnreg,
+        ));
         return;
       }
     }

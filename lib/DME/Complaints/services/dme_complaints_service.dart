@@ -15,6 +15,7 @@ class DmeComplaintsService {
     required String title,
     required String body,
     required int complaintId,
+    bool isUnregistered = false,
     String notifType = 'dme_complaint',
   }) async {
     if (recipientUid.trim().isEmpty) return;
@@ -28,6 +29,7 @@ class DmeComplaintsService {
         'notifType': notifType,
         'leadDocId': complaintId.toString(),
         'complaintId': complaintId.toString(),
+        'isUnregistered': isUnregistered.toString(),
       });
     } catch (e) {
       debugPrint('FCM Warning: Failed to send complaint notification to $recipientUid: $e');
@@ -200,6 +202,7 @@ class DmeComplaintsService {
       title: 'New Complaint Assigned (Unregistered Customer)',
       body: 'Complaint for "$customerName" assigned to you: "$description"',
       complaintId: complaintId,
+      isUnregistered: true,
     ));
 
     // 4. Send notification to branch manager(s)
@@ -219,6 +222,7 @@ class DmeComplaintsService {
               title: 'Branch Complaint Raised ($branch)',
               body: 'Complaint for "$customerName" (Unregistered) assigned to ${assignedToName ?? 'team member'}',
               complaintId: complaintId,
+              isUnregistered: true,
             );
           }
         }
@@ -282,6 +286,7 @@ class DmeComplaintsService {
       title: 'Complaint Update Submitted',
       body: '$actionByName took action on complaint for "$customerName". Please verify resolution.',
       complaintId: complaintId,
+      isUnregistered: isUnregistered,
       notifType: 'complaint_review_pending',
     ));
   }
@@ -334,6 +339,7 @@ class DmeComplaintsService {
         title: 'Complaint Resolved ✓',
         body: 'Complaint for "$customerName" has been marked as resolved.',
         complaintId: complaintId,
+        isUnregistered: isUnregistered,
         notifType: 'complaint_resolved',
       ));
     }
@@ -345,6 +351,7 @@ class DmeComplaintsService {
         title: 'Complaint Resolved ✓',
         body: 'Complaint for "$customerName" has been marked as resolved.',
         complaintId: complaintId,
+        isUnregistered: isUnregistered,
         notifType: 'complaint_resolved',
       ));
     }
@@ -395,6 +402,7 @@ class DmeComplaintsService {
       title: 'Complaint Not Resolved - Action Required',
       body: 'Remarks from DME: "$remarks". Please follow up with customer again.',
       complaintId: complaintId,
+      isUnregistered: isUnregistered,
     ));
   }
 
@@ -453,6 +461,7 @@ class DmeComplaintsService {
       title: 'Complaint Escalated',
       body: 'Complaint for "$customerName" has been escalated to Manager $managerName.',
       complaintId: complaintId,
+      isUnregistered: isUnregistered,
     ));
   }
 
@@ -462,7 +471,6 @@ class DmeComplaintsService {
     if (client == null) throw Exception('Supabase is not configured.');
 
     final tableName = isUnregistered ? 'dme_unregistered_customer_complaints' : 'dme_complaints';
-    final updatesTable = isUnregistered ? 'dme_unregistered_complaint_updates' : 'dme_complaint_updates';
 
     Map<String, dynamic>? complaintData;
     bool foundInUnregistered = isUnregistered;
