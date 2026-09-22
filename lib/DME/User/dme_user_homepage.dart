@@ -19,7 +19,7 @@ class DmeUserHomePage extends StatelessWidget {
 }
 
 /// Builds the DME User buttons: Upload, Reminders, Customers, Complaints, Leads
-Widget buildDmeUserTiles(BuildContext context) {
+Widget buildDmeUserTiles(BuildContext context, {int? complaintCount}) {
   final List<Widget> buttons = [
     // 1. Upload
     NeumorphicButton(
@@ -91,7 +91,11 @@ Widget buildDmeUserTiles(BuildContext context) {
       color: primaryGreen,
       textColor: Colors.white,
       icon: Icons.feedback_rounded,
+      badgeCount: (complaintCount != null && complaintCount > 0)
+          ? complaintCount
+          : null,
     ),
+
 
     // 5. Leads
     NeumorphicButton(

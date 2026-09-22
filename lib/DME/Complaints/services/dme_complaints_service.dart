@@ -416,6 +416,30 @@ class DmeComplaintsService {
     }
   }
 
+  /// Fetch count of complaints with action taken (for DME user homepage badge)
+  Future<int> fetchActionTakenCount({String? createdByUid}) async {
+    final client = await DmeConfig.getClient();
+    if (client == null) return 0;
+
+    try {
+      var query = client
+          .from('dme_complaints')
+          .select('id')
+          .eq('status', 'action_taken');
+
+      if (createdByUid != null && createdByUid.isNotEmpty) {
+        query = query.eq('created_by_uid', createdByUid);
+      }
+
+      final res = await query;
+      return (res as List).length;
+    } catch (e) {
+      debugPrint('Error counting action taken complaints: $e');
+      return 0;
+    }
+  }
+
+
   /// Fetch complaints for DME User view
   Future<List<DmeComplaint>> fetchDmeComplaints({String? statusFilter, String? createdByUid}) async {
     final client = await DmeConfig.getClient();

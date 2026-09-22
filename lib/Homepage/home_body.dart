@@ -954,8 +954,9 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
 
   /// Builds the DME User-specific home tiles (Upload, Customers, Complaints, Leads).
   Widget _buildDmeUserTiles(BuildContext context) {
-    return buildDmeUserTiles(context);
+    return buildDmeUserTiles(context, complaintCount: widget.complaintCount);
   }
+
 
   /// Builds the DME Admin-specific home tiles.
   Widget _buildDmeAdminTiles(BuildContext context) {

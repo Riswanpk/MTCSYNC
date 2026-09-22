@@ -341,7 +341,13 @@ class _HomePageState extends State<HomePage>
 
       int complaintCount = 0;
       try {
-        complaintCount = await DmeComplaintsService.instance.fetchActiveAssignedCount(uid);
+        if (_role == 'dme_user') {
+          complaintCount = await DmeComplaintsService.instance
+              .fetchActionTakenCount(createdByUid: uid);
+        } else {
+          complaintCount =
+              await DmeComplaintsService.instance.fetchActiveAssignedCount(uid);
+        }
       } catch (_) {}
 
       if (mounted) {
