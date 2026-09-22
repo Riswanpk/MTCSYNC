@@ -52,9 +52,90 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
           .select('*')
           .order('created_at', ascending: false);
 
+      final requests = List<Map<String, dynamic>>.from(res as List);
+
+      // Collect customer IDs and reminder IDs to fetch branch and salesman
+      final customerIds = <int>{};
+      final reminderIds = <int>{};
+
+      for (final req in requests) {
+        final cid = int.tryParse(req['customer_id']?.toString() ?? '');
+        if (cid != null) customerIds.add(cid);
+        final rid = int.tryParse(req['reminder_id']?.toString() ?? '');
+        if (rid != null) reminderIds.add(rid);
+      }
+
+      final customerMap = <int, Map<String, dynamic>>{};
+      if (customerIds.isNotEmpty) {
+        try {
+          final custRes = await client
+              .from(DmeConstants.tableCustomers)
+              .select('id, salesman, primary_branch')
+              .filter('id', 'in', customerIds.toList());
+          for (final c in (custRes as List)) {
+            final cid = int.tryParse(c['id']?.toString() ?? '');
+            if (cid != null) {
+              customerMap[cid] = Map<String, dynamic>.from(c as Map);
+            }
+          }
+        } catch (ce) {
+          debugPrint('Notice loading customer info for approvals: $ce');
+        }
+      }
+
+      final reminderMap = <int, Map<String, dynamic>>{};
+      if (reminderIds.isNotEmpty) {
+        try {
+          final remRes = await client
+              .from(DmeConstants.tableReminders)
+              .select('id, last_purchase_branch')
+              .filter('id', 'in', reminderIds.toList());
+          for (final r in (remRes as List)) {
+            final rid = int.tryParse(r['id']?.toString() ?? '');
+            if (rid != null) {
+              reminderMap[rid] = Map<String, dynamic>.from(r as Map);
+            }
+          }
+        } catch (re) {
+          debugPrint('Notice loading reminder info for approvals: $re');
+        }
+      }
+
+      // Attach branch and salesman to each request map
+      for (final req in requests) {
+        final cid = int.tryParse(req['customer_id']?.toString() ?? '');
+        final rid = int.tryParse(req['reminder_id']?.toString() ?? '');
+
+        final cust = cid != null ? customerMap[cid] : null;
+        final rem = rid != null ? reminderMap[rid] : null;
+
+        // Salesman priority: request's salesman/payload -> customer's salesman
+        String? salesman = req['salesman']?.toString();
+        if (salesman == null || salesman.trim().isEmpty) {
+          salesman = cust?['salesman']?.toString();
+        }
+
+        // Branch priority: request's branch_name/branch_id -> reminder's last_purchase_branch -> customer's primary_branch
+        int? branchId = int.tryParse(req['branch_id']?.toString() ?? '');
+        branchId ??= int.tryParse(rem?['last_purchase_branch']?.toString() ?? '');
+        branchId ??= int.tryParse(cust?['primary_branch']?.toString() ?? '');
+
+        String? branchName = req['branch_name']?.toString();
+        if (branchName == null || branchName.trim().isEmpty) {
+          if (branchId != null) {
+            branchName = DmeConstants.getBranchName(branchId);
+          }
+        }
+
+        req['_computed_salesman'] = (salesman != null && salesman.trim().isNotEmpty) ? salesman.trim() : null;
+        req['_computed_branch'] = (branchName != null && branchName.trim().isNotEmpty && branchName != 'N/A' && branchName != 'Unknown')
+            ? branchName.trim()
+            : (branchId != null ? DmeConstants.getBranchName(branchId) : null);
+      }
+
       if (mounted) {
         setState(() {
-          _allRequests = List<Map<String, dynamic>>.from(res as List);
+          _allRequests = requests;
           _isLoading = false;
         });
       }
@@ -73,9 +154,21 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
   }
 
   List<Map<String, dynamic>> _filterByStatus(String status) {
+    final now = DateTime.now();
+    final todayStr = DateFormat('yyyy-MM-dd').format(now);
+
     return _allRequests.where((req) {
       final reqStatus = (req['status'] ?? 'pending').toString().toLowerCase();
       if (reqStatus != status.toLowerCase()) return false;
+
+      // For 'approved' tab, only show requests approved today
+      if (status.toLowerCase() == 'approved') {
+        final approvedAtStr = req['updated_at']?.toString() ?? req['created_at']?.toString() ?? '';
+        final approvedDate = DateTime.tryParse(approvedAtStr)?.toLocal();
+        if (approvedDate == null) return false;
+        final approvedDayStr = DateFormat('yyyy-MM-dd').format(approvedDate);
+        if (approvedDayStr != todayStr) return false;
+      }
 
       // Type filter
       if (_selectedTypeFilter != 'all') {
@@ -91,12 +184,16 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
         final newPhone = (req['new_value'] ?? '').toString().toLowerCase();
         final requestedBy = (req['requested_by'] ?? '').toString().toLowerCase();
         final reason = (req['reason'] ?? '').toString().toLowerCase();
+        final salesman = (req['_computed_salesman'] ?? '').toString().toLowerCase();
+        final branch = (req['_computed_branch'] ?? '').toString().toLowerCase();
 
         return name.contains(query) ||
             phone.contains(query) ||
             newPhone.contains(query) ||
             requestedBy.contains(query) ||
-            reason.contains(query);
+            reason.contains(query) ||
+            salesman.contains(query) ||
+            branch.contains(query);
       }
 
       return true;
@@ -961,6 +1058,8 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
           final createdAtStr = _formatDateTime(req['created_at']);
           final reviewedBy = req['reviewed_by'] ?? '';
           final adminNotes = req['admin_notes'] ?? '';
+          final branchName = req['_computed_branch']?.toString() ?? '';
+          final salesmanName = req['_computed_salesman']?.toString() ?? '';
 
           int completionDuration = 0;
           String completionRemarks = '';
@@ -1088,8 +1187,9 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
 
                   const SizedBox(height: 10),
 
-                  // Customer Name
+                  // Customer Name, Branch Badge & Salesman
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       CircleAvatar(
                         radius: 16,
@@ -1099,9 +1199,68 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Text(
-                          customerName,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    customerName,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15.5),
+                                  ),
+                                ),
+                                if (branchName.isNotEmpty) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF005BAC).withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: const Color(0xFF005BAC).withValues(alpha: 0.25), width: 0.8),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.store_rounded, size: 11, color: Color(0xFF005BAC)),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          branchName,
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF005BAC),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            if (salesmanName.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Icon(Icons.badge_outlined, size: 13, color: Colors.grey[600]),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Salesman: ',
+                                    style: TextStyle(fontSize: 11.5, color: Colors.grey[600]),
+                                  ),
+                                  Text(
+                                    salesmanName,
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? Colors.grey[300] : Colors.grey[800],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ],
