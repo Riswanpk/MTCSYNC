@@ -27,6 +27,7 @@ class DmeComplaint {
   final String? dmeResolutionRemarks;
   final DateTime? resolvedAt;
   final bool isEscalated;
+  final bool isUnregistered;
   final String? formerAssignedToUid;
   final String? formerAssignedToName;
   final String? formerAssignedToEmail;
@@ -61,6 +62,7 @@ class DmeComplaint {
     this.dmeResolutionRemarks,
     this.resolvedAt,
     this.isEscalated = false,
+    this.isUnregistered = false,
     this.formerAssignedToUid,
     this.formerAssignedToName,
     this.formerAssignedToEmail,
@@ -70,7 +72,7 @@ class DmeComplaint {
     required this.updatedAt,
   });
 
-  factory DmeComplaint.fromMap(Map<String, dynamic> map) {
+  factory DmeComplaint.fromMap(Map<String, dynamic> map, {bool isUnregistered = false}) {
     return DmeComplaint(
       id: map['id'] is int ? map['id'] : int.tryParse(map['id']?.toString() ?? '0') ?? 0,
       reminderId: map['reminder_id'] != null ? int.tryParse(map['reminder_id'].toString()) : null,
@@ -97,6 +99,7 @@ class DmeComplaint {
       dmeResolutionRemarks: map['dme_resolution_remarks']?.toString(),
       resolvedAt: map['resolved_at'] != null ? DateTime.tryParse(map['resolved_at'].toString()) : null,
       isEscalated: map['is_escalated'] == true,
+      isUnregistered: isUnregistered || map['is_unregistered'] == true,
       formerAssignedToUid: map['former_assigned_to_uid']?.toString(),
       formerAssignedToName: map['former_assigned_to_name']?.toString(),
       formerAssignedToEmail: map['former_assigned_to_email']?.toString(),

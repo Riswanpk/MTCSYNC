@@ -134,9 +134,106 @@ class DmeComplaintsService {
     return complaintId;
   }
 
+  /// Register a complaint for an unregistered customer (stored in dme_unregistered_customer_complaints)
+  Future<int> registerUnregisteredComplaint({
+    required String customerName,
+    required String customerPhone,
+    String? customerAddress,
+    required String branch,
+    required String description,
+    required String createdByUid,
+    String? createdByName,
+    String? createdByEmail,
+    required String assignedToUid,
+    String? assignedToName,
+    String? assignedToEmail,
+    String? assignedToRole,
+    String? initialAudioUrl,
+  }) async {
+    final client = await DmeConfig.getClient();
+    if (client == null) throw Exception('Supabase is not configured.');
+
+    final insertMap = <String, dynamic>{
+      'customer_name': customerName,
+      'customer_phone': customerPhone,
+      'branch': branch,
+      'description': description,
+      'created_by_uid': createdByUid,
+      'assigned_to_uid': assignedToUid,
+      'status': 'assigned',
+      'is_escalated': false,
+      'created_at': DateTime.now().toIso8601String(),
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+
+    if (customerAddress != null && customerAddress.isNotEmpty) insertMap['customer_address'] = customerAddress;
+    if (createdByName != null) insertMap['created_by_name'] = createdByName;
+    if (createdByEmail != null) insertMap['created_by_email'] = createdByEmail;
+    if (assignedToName != null) insertMap['assigned_to_name'] = assignedToName;
+    if (assignedToEmail != null) insertMap['assigned_to_email'] = assignedToEmail;
+    if (assignedToRole != null) insertMap['assigned_to_role'] = assignedToRole;
+    if (initialAudioUrl != null && initialAudioUrl.isNotEmpty) insertMap['initial_audio_url'] = initialAudioUrl;
+
+    // 1. Insert into dme_unregistered_customer_complaints
+    final res = await client.from('dme_unregistered_customer_complaints').insert(insertMap).select('id').single();
+    final complaintId = res['id'] is int ? res['id'] as int : int.parse(res['id'].toString());
+
+    // 2. Insert initial timeline entry into dme_unregistered_complaint_updates
+    try {
+      await client.from('dme_unregistered_complaint_updates').insert({
+        'complaint_id': complaintId,
+        'action_type': 'created',
+        'action_by_uid': createdByUid,
+        'action_by_name': createdByName ?? 'DME User',
+        'action_by_role': 'dme_user',
+        'remarks': description,
+        'audio_url': initialAudioUrl,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('Warning: Failed to insert unregistered timeline update: $e');
+    }
+
+    // 3. Send notification to assigned user
+    unawaited(sendComplaintNotification(
+      recipientUid: assignedToUid,
+      title: 'New Complaint Assigned (Unregistered Customer)',
+      body: 'Complaint for "$customerName" assigned to you: "$description"',
+      complaintId: complaintId,
+    ));
+
+    // 4. Send notification to branch manager(s)
+    unawaited(() async {
+      try {
+        final managersSnap = await FirebaseFirestore.instance
+            .collection('users')
+            .where('branch', isEqualTo: branch)
+            .where('role', isEqualTo: 'manager')
+            .get();
+
+        for (var doc in managersSnap.docs) {
+          final mUid = doc.id;
+          if (mUid != assignedToUid) {
+            await sendComplaintNotification(
+              recipientUid: mUid,
+              title: 'Branch Complaint Raised ($branch)',
+              body: 'Complaint for "$customerName" (Unregistered) assigned to ${assignedToName ?? 'team member'}',
+              complaintId: complaintId,
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('Warning: Could not notify branch managers: $e');
+      }
+    }());
+
+    return complaintId;
+  }
+
   /// Assigned user submits action taken (called customer, remarks, voice record)
   Future<void> submitActionTaken({
     required int complaintId,
+    bool isUnregistered = false,
     required String actionByUid,
     required String actionByName,
     String? actionByRole,
@@ -149,9 +246,11 @@ class DmeComplaintsService {
     if (client == null) throw Exception('Supabase is not configured.');
 
     final now = DateTime.now();
+    final tableName = isUnregistered ? 'dme_unregistered_customer_complaints' : 'dme_complaints';
+    final updatesTable = isUnregistered ? 'dme_unregistered_complaint_updates' : 'dme_complaint_updates';
 
-    // 1. Update dme_complaints
-    await client.from('dme_complaints').update({
+    // 1. Update complaints table
+    await client.from(tableName).update({
       'status': 'action_taken',
       'action_remarks': remarks,
       'action_audio_url': audioUrl,
@@ -161,9 +260,9 @@ class DmeComplaintsService {
       'updated_at': now.toIso8601String(),
     }).eq('id', complaintId);
 
-    // 2. Insert into dme_complaint_updates
+    // 2. Insert into complaint updates table
     try {
-      await client.from('dme_complaint_updates').insert({
+      await client.from(updatesTable).insert({
         'complaint_id': complaintId,
         'action_type': 'action_taken',
         'action_by_uid': actionByUid,
@@ -190,6 +289,7 @@ class DmeComplaintsService {
   /// DME User marks complaint as Resolved
   Future<void> markResolved({
     required int complaintId,
+    bool isUnregistered = false,
     required String verifiedByUid,
     required String verifiedByName,
     String? remarks,
@@ -201,9 +301,11 @@ class DmeComplaintsService {
     if (client == null) throw Exception('Supabase is not configured.');
 
     final now = DateTime.now();
+    final tableName = isUnregistered ? 'dme_unregistered_customer_complaints' : 'dme_complaints';
+    final updatesTable = isUnregistered ? 'dme_unregistered_complaint_updates' : 'dme_complaint_updates';
 
-    // 1. Update dme_complaints
-    await client.from('dme_complaints').update({
+    // 1. Update complaints table
+    await client.from(tableName).update({
       'status': 'resolved',
       'dme_resolution_remarks': remarks ?? 'Resolved by DME',
       'resolved_at': now.toIso8601String(),
@@ -212,7 +314,7 @@ class DmeComplaintsService {
 
     // 2. Insert timeline entry
     try {
-      await client.from('dme_complaint_updates').insert({
+      await client.from(updatesTable).insert({
         'complaint_id': complaintId,
         'action_type': 'resolved',
         'action_by_uid': verifiedByUid,
@@ -251,6 +353,7 @@ class DmeComplaintsService {
   /// DME User marks complaint as Not Resolved (sends back to assigned user with remarks)
   Future<void> markNotResolved({
     required int complaintId,
+    bool isUnregistered = false,
     required String verifiedByUid,
     required String verifiedByName,
     required String remarks,
@@ -261,9 +364,11 @@ class DmeComplaintsService {
     if (client == null) throw Exception('Supabase is not configured.');
 
     final now = DateTime.now();
+    final tableName = isUnregistered ? 'dme_unregistered_customer_complaints' : 'dme_complaints';
+    final updatesTable = isUnregistered ? 'dme_unregistered_complaint_updates' : 'dme_complaint_updates';
 
-    // 1. Update dme_complaints
-    await client.from('dme_complaints').update({
+    // 1. Update complaints table
+    await client.from(tableName).update({
       'status': 'not_resolved',
       'dme_resolution_remarks': remarks,
       'updated_at': now.toIso8601String(),
@@ -271,7 +376,7 @@ class DmeComplaintsService {
 
     // 2. Insert timeline entry
     try {
-      await client.from('dme_complaint_updates').insert({
+      await client.from(updatesTable).insert({
         'complaint_id': complaintId,
         'action_type': 'not_resolved',
         'action_by_uid': verifiedByUid,
@@ -296,6 +401,7 @@ class DmeComplaintsService {
   /// Manager escalates complaint to themselves
   Future<void> escalateComplaint({
     required int complaintId,
+    bool isUnregistered = false,
     required String managerUid,
     required String managerName,
     required String managerEmail,
@@ -308,9 +414,11 @@ class DmeComplaintsService {
     if (client == null) throw Exception('Supabase is not configured.');
 
     final now = DateTime.now();
+    final tableName = isUnregistered ? 'dme_unregistered_customer_complaints' : 'dme_complaints';
+    final updatesTable = isUnregistered ? 'dme_unregistered_complaint_updates' : 'dme_complaint_updates';
 
-    // 1. Update dme_complaints: assign to manager, store former user data
-    await client.from('dme_complaints').update({
+    // 1. Update complaints table: assign to manager, store former user data
+    await client.from(tableName).update({
       'assigned_to_uid': managerUid,
       'assigned_to_name': managerName,
       'assigned_to_email': managerEmail,
@@ -326,7 +434,7 @@ class DmeComplaintsService {
 
     // 2. Insert timeline entry
     try {
-      await client.from('dme_complaint_updates').insert({
+      await client.from(updatesTable).insert({
         'complaint_id': complaintId,
         'action_type': 'escalated',
         'action_by_uid': managerUid,
@@ -349,20 +457,44 @@ class DmeComplaintsService {
   }
 
   /// Fetch single complaint by ID with its timeline updates
-  Future<Map<String, dynamic>> fetchComplaintWithHistory(int complaintId) async {
+  Future<Map<String, dynamic>> fetchComplaintWithHistory(int complaintId, {bool isUnregistered = false}) async {
     final client = await DmeConfig.getClient();
     if (client == null) throw Exception('Supabase is not configured.');
 
-    final complaintData = await client
-        .from('dme_complaints')
-        .select('*')
-        .eq('id', complaintId)
-        .single();
+    final tableName = isUnregistered ? 'dme_unregistered_customer_complaints' : 'dme_complaints';
+    final updatesTable = isUnregistered ? 'dme_unregistered_complaint_updates' : 'dme_complaint_updates';
+
+    Map<String, dynamic>? complaintData;
+    bool foundInUnregistered = isUnregistered;
+
+    try {
+      complaintData = await client
+          .from(tableName)
+          .select('*')
+          .eq('id', complaintId)
+          .maybeSingle();
+    } catch (_) {}
+
+    // Fallback if not found in requested table
+    if (complaintData == null) {
+      final altTable = isUnregistered ? 'dme_complaints' : 'dme_unregistered_customer_complaints';
+      final altRes = await client.from(altTable).select('*').eq('id', complaintId).maybeSingle();
+      if (altRes != null) {
+        complaintData = altRes;
+        foundInUnregistered = !isUnregistered;
+      }
+    }
+
+    if (complaintData == null) {
+      throw Exception('Complaint #$complaintId not found.');
+    }
+
+    final effectiveUpdatesTable = foundInUnregistered ? 'dme_unregistered_complaint_updates' : 'dme_complaint_updates';
 
     List<DmeComplaintUpdate> updates = [];
     try {
       final updatesRes = await client
-          .from('dme_complaint_updates')
+          .from(effectiveUpdatesTable)
           .select('*')
           .eq('complaint_id', complaintId)
           .order('created_at', ascending: true);
@@ -373,24 +505,29 @@ class DmeComplaintsService {
     }
 
     return {
-      'complaint': DmeComplaint.fromMap(complaintData),
+      'complaint': DmeComplaint.fromMap(complaintData, isUnregistered: foundInUnregistered),
       'updates': updates,
     };
   }
 
   /// Fetch active complaints assigned to a specific user (for Sales / Asst. Manager)
+  /// Combines standard complaints and unregistered complaints
   Future<List<DmeComplaint>> fetchAssignedComplaints(String uid) async {
     final client = await DmeConfig.getClient();
     if (client == null) return [];
 
     try {
-      final res = await client
-          .from('dme_complaints')
-          .select('*')
-          .eq('assigned_to_uid', uid)
-          .order('updated_at', ascending: false);
+      final futures = await Future.wait([
+        client.from('dme_complaints').select('*').eq('assigned_to_uid', uid).order('updated_at', ascending: false),
+        client.from('dme_unregistered_customer_complaints').select('*').eq('assigned_to_uid', uid).order('updated_at', ascending: false).catchError((_) => []),
+      ]);
 
-      return (res as List).map((m) => DmeComplaint.fromMap(m)).toList();
+      final regular = (futures[0] as List).map((m) => DmeComplaint.fromMap(m)).toList();
+      final unregistered = (futures[1] as List).map((m) => DmeComplaint.fromMap(m, isUnregistered: true)).toList();
+
+      final combined = [...regular, ...unregistered];
+      combined.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      return combined;
     } catch (e) {
       debugPrint('Error fetching assigned complaints: $e');
       return [];
@@ -403,13 +540,12 @@ class DmeComplaintsService {
     if (client == null) return 0;
 
     try {
-      final res = await client
-          .from('dme_complaints')
-          .select('id')
-          .eq('assigned_to_uid', uid)
-          .neq('status', 'resolved');
+      final results = await Future.wait([
+        client.from('dme_complaints').select('id').eq('assigned_to_uid', uid).neq('status', 'resolved'),
+        client.from('dme_unregistered_customer_complaints').select('id').eq('assigned_to_uid', uid).neq('status', 'resolved').catchError((_) => []),
+      ]);
 
-      return (res as List).length;
+      return (results[0] as List).length + (results[1] as List).length;
     } catch (e) {
       debugPrint('Error counting assigned complaints: $e');
       return 0;
@@ -422,48 +558,62 @@ class DmeComplaintsService {
     if (client == null) return 0;
 
     try {
-      var query = client
-          .from('dme_complaints')
-          .select('id')
-          .eq('status', 'action_taken');
+      var query1 = client.from('dme_complaints').select('id').eq('status', 'action_taken');
+      var query2 = client.from('dme_unregistered_customer_complaints').select('id').eq('status', 'action_taken');
 
       if (createdByUid != null && createdByUid.isNotEmpty) {
-        query = query.eq('created_by_uid', createdByUid);
+        query1 = query1.eq('created_by_uid', createdByUid);
+        query2 = query2.eq('created_by_uid', createdByUid);
       }
 
-      final res = await query;
-      return (res as List).length;
+      final results = await Future.wait([
+        query1,
+        query2.catchError((_) => []),
+      ]);
+
+      return (results[0] as List).length + (results[1] as List).length;
     } catch (e) {
       debugPrint('Error counting action taken complaints: $e');
       return 0;
     }
   }
 
-
-  /// Fetch complaints for DME User view
+  /// Fetch complaints for DME User view (combines regular & unregistered)
   Future<List<DmeComplaint>> fetchDmeComplaints({String? statusFilter, String? createdByUid}) async {
     final client = await DmeConfig.getClient();
     if (client == null) return [];
 
     try {
-      var query = client.from('dme_complaints').select('*');
+      var q1 = client.from('dme_complaints').select('*');
+      var q2 = client.from('dme_unregistered_customer_complaints').select('*');
+
       if (createdByUid != null && createdByUid.isNotEmpty) {
-        query = query.eq('created_by_uid', createdByUid);
+        q1 = q1.eq('created_by_uid', createdByUid);
+        q2 = q2.eq('created_by_uid', createdByUid);
       }
       if (statusFilter != null && statusFilter.isNotEmpty && statusFilter != 'all') {
-        query = query.eq('status', statusFilter);
+        q1 = q1.eq('status', statusFilter);
+        q2 = q2.eq('status', statusFilter);
       }
-      final res = await query.order('created_at', ascending: false).limit(100);
-      return (res as List).map((m) => DmeComplaint.fromMap(m)).toList();
+
+      final results = await Future.wait([
+        q1.order('created_at', ascending: false).limit(100),
+        q2.order('created_at', ascending: false).limit(100).catchError((_) => []),
+      ]);
+
+      final regular = (results[0] as List).map((m) => DmeComplaint.fromMap(m)).toList();
+      final unregistered = (results[1] as List).map((m) => DmeComplaint.fromMap(m, isUnregistered: true)).toList();
+
+      final combined = [...regular, ...unregistered];
+      combined.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return combined;
     } catch (e) {
       debugPrint('Error fetching DME complaints: $e');
       return [];
     }
   }
 
-  /// Fetch complaints for Manager view
-  /// - If userUid is specified: complaints assigned to that user
-  /// - If userUid is null: all complaints for the branch
+  /// Fetch complaints for Manager view (combines regular & unregistered)
   Future<List<DmeComplaint>> fetchManagerComplaints({
     required String branch,
     String? userUid,
@@ -472,12 +622,25 @@ class DmeComplaintsService {
     if (client == null) return [];
 
     try {
-      var query = client.from('dme_complaints').select('*').eq('branch', branch);
+      var q1 = client.from('dme_complaints').select('*').eq('branch', branch);
+      var q2 = client.from('dme_unregistered_customer_complaints').select('*').eq('branch', branch);
+
       if (userUid != null && userUid.isNotEmpty) {
-        query = query.eq('assigned_to_uid', userUid);
+        q1 = q1.eq('assigned_to_uid', userUid);
+        q2 = q2.eq('assigned_to_uid', userUid);
       }
-      final res = await query.order('created_at', ascending: false).limit(100);
-      return (res as List).map((m) => DmeComplaint.fromMap(m)).toList();
+
+      final results = await Future.wait([
+        q1.order('created_at', ascending: false).limit(100),
+        q2.order('created_at', ascending: false).limit(100).catchError((_) => []),
+      ]);
+
+      final regular = (results[0] as List).map((m) => DmeComplaint.fromMap(m)).toList();
+      final unregistered = (results[1] as List).map((m) => DmeComplaint.fromMap(m, isUnregistered: true)).toList();
+
+      final combined = [...regular, ...unregistered];
+      combined.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return combined;
     } catch (e) {
       debugPrint('Error fetching manager complaints: $e');
       return [];
@@ -493,15 +656,29 @@ class DmeComplaintsService {
     if (client == null) return [];
 
     try {
-      var query = client.from('dme_complaints').select('*');
+      var q1 = client.from('dme_complaints').select('*');
+      var q2 = client.from('dme_unregistered_customer_complaints').select('*');
+
       if (branch.isNotEmpty && branch != 'All') {
-        query = query.eq('branch', branch);
+        q1 = q1.eq('branch', branch);
+        q2 = q2.eq('branch', branch);
       }
       if (userUid != null && userUid.isNotEmpty && userUid != 'All') {
-        query = query.eq('assigned_to_uid', userUid);
+        q1 = q1.eq('assigned_to_uid', userUid);
+        q2 = q2.eq('assigned_to_uid', userUid);
       }
-      final res = await query.order('created_at', ascending: false).limit(100);
-      return (res as List).map((m) => DmeComplaint.fromMap(m)).toList();
+
+      final results = await Future.wait([
+        q1.order('created_at', ascending: false).limit(100),
+        q2.order('created_at', ascending: false).limit(100).catchError((_) => []),
+      ]);
+
+      final regular = (results[0] as List).map((m) => DmeComplaint.fromMap(m)).toList();
+      final unregistered = (results[1] as List).map((m) => DmeComplaint.fromMap(m, isUnregistered: true)).toList();
+
+      final combined = [...regular, ...unregistered];
+      combined.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return combined;
     } catch (e) {
       debugPrint('Error fetching admin complaints: $e');
       return [];
@@ -509,19 +686,22 @@ class DmeComplaintsService {
   }
 
   /// Delete a complaint and its timeline updates
-  Future<void> deleteComplaint(int complaintId) async {
+  Future<void> deleteComplaint(int complaintId, {bool isUnregistered = false}) async {
     final client = await DmeConfig.getClient();
     if (client == null) throw Exception('Supabase is not configured.');
 
+    final tableName = isUnregistered ? 'dme_unregistered_customer_complaints' : 'dme_complaints';
+    final updatesTable = isUnregistered ? 'dme_unregistered_complaint_updates' : 'dme_complaint_updates';
+
     // 1. Delete timeline updates for this complaint
     try {
-      await client.from('dme_complaint_updates').delete().eq('complaint_id', complaintId);
+      await client.from(updatesTable).delete().eq('complaint_id', complaintId);
     } catch (e) {
       debugPrint('Warning: Failed to delete complaint updates: $e');
     }
 
     // 2. Delete complaint record
-    await client.from('dme_complaints').delete().eq('id', complaintId);
+    await client.from(tableName).delete().eq('id', complaintId);
   }
 
   /// Fetch customer sales history with products detail from Supabase

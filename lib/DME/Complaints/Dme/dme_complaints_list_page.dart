@@ -245,7 +245,10 @@ class _DmeComplaintsListPageState extends State<DmeComplaintsListPage> with Sing
                             await Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => ComplaintDetailPage(complaintId: c.id),
+                                builder: (_) => ComplaintDetailPage(
+                                  complaintId: c.id,
+                                  isUnregistered: c.isUnregistered,
+                                ),
                               ),
                             );
                             if (mounted) _loadComplaints();
@@ -283,6 +286,27 @@ class _DmeComplaintsListPageState extends State<DmeComplaintsListPage> with Sing
                                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF8CC63F)),
                                           ),
                                         ),
+                                        if (c.isUnregistered) ...[
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: Colors.amber.withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(4),
+                                              border: Border.all(color: Colors.amber.shade700.withValues(alpha: 0.5)),
+                                            ),
+                                            child: Text(
+                                              'Unregistered',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                                color: Theme.of(context).brightness == Brightness.dark
+                                                    ? Colors.amber.shade300
+                                                    : Colors.amber.shade900,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ],
                                     ),
                                     Row(

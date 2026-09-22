@@ -10,11 +10,13 @@ import '../widgets/dme_complaint_voice_widget.dart';
 class ComplaintDetailPage extends StatefulWidget {
   final int complaintId;
   final bool readOnly;
+  final bool isUnregistered;
 
   const ComplaintDetailPage({
     super.key,
     required this.complaintId,
     this.readOnly = false,
+    this.isUnregistered = false,
   });
 
   @override
@@ -71,7 +73,10 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
   Future<void> _loadComplaintData() async {
     setState(() => _isLoading = true);
     try {
-      final res = await DmeComplaintsService.instance.fetchComplaintWithHistory(widget.complaintId);
+      final res = await DmeComplaintsService.instance.fetchComplaintWithHistory(
+        widget.complaintId,
+        isUnregistered: widget.isUnregistered,
+      );
       if (mounted) {
         setState(() {
           _complaint = res['complaint'] as DmeComplaint;
@@ -141,8 +146,10 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
     setState(() => _isSubmitting = true);
 
     try {
+      final isUnreg = widget.isUnregistered || (_complaint?.isUnregistered ?? false);
       await DmeComplaintsService.instance.submitActionTaken(
         complaintId: _complaint!.id,
+        isUnregistered: isUnreg,
         actionByUid: _currentUserUid ?? '',
         actionByName: _currentUserName ?? 'Assigned User',
         actionByRole: _currentUserRole,
@@ -178,15 +185,44 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
 
   /// DME user marks complaint as Resolved
   Future<void> _markResolved() async {
+    final remarksController = TextEditingController();
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Confirm Resolution'),
-        content: const Text('Are you sure you want to mark this complaint as Resolved?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Please provide resolution remarks explaining how the issue was resolved:',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: remarksController,
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: 'Enter resolution remarks / notes...',
+                labelText: 'Resolution Remarks *',
+                filled: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
+            onPressed: () {
+              if (remarksController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('Please enter resolution remarks.')),
+                );
+                return;
+              }
+              Navigator.pop(ctx, true);
+            },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
             child: const Text('Mark Resolved'),
           ),
@@ -196,12 +232,16 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
 
     if (confirm != true) return;
 
+    final remarks = remarksController.text.trim();
     setState(() => _isSubmitting = true);
     try {
+      final isUnreg = widget.isUnregistered || (_complaint?.isUnregistered ?? false);
       await DmeComplaintsService.instance.markResolved(
         complaintId: _complaint!.id,
+        isUnregistered: isUnreg,
         verifiedByUid: _currentUserUid ?? '',
         verifiedByName: _currentUserName ?? 'DME User',
+        remarks: remarks.isNotEmpty ? remarks : null,
         assignedToUid: _complaint!.assignedToUid,
         createdByUid: _complaint!.createdByUid,
         customerName: _complaint!.customerName,
@@ -276,8 +316,10 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
     setState(() => _isSubmitting = true);
 
     try {
+      final isUnreg = widget.isUnregistered || (_complaint?.isUnregistered ?? false);
       await DmeComplaintsService.instance.markNotResolved(
         complaintId: _complaint!.id,
+        isUnregistered: isUnreg,
         verifiedByUid: _currentUserUid ?? '',
         verifiedByName: _currentUserName ?? 'DME User',
         remarks: remarks,
@@ -329,8 +371,10 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
 
     setState(() => _isSubmitting = true);
     try {
+      final isUnreg = widget.isUnregistered || (_complaint?.isUnregistered ?? false);
       await DmeComplaintsService.instance.escalateComplaint(
         complaintId: _complaint!.id,
+        isUnregistered: isUnreg,
         managerUid: _currentUserUid ?? '',
         managerName: _currentUserName ?? 'Manager',
         managerEmail: _currentUserEmail ?? '',
@@ -389,7 +433,11 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
 
     setState(() => _isSubmitting = true);
     try {
-      await DmeComplaintsService.instance.deleteComplaint(_complaint!.id);
+      final isUnreg = widget.isUnregistered || (_complaint?.isUnregistered ?? false);
+      await DmeComplaintsService.instance.deleteComplaint(
+        _complaint!.id,
+        isUnregistered: isUnreg,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -619,16 +667,40 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
                             ],
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF005BAC).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            'Branch: ${c.branch}',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF005BAC)),
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF005BAC).withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                'Branch: ${c.branch}',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF005BAC)),
+                              ),
+                            ),
+                            if (c.isUnregistered) ...[
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: Colors.amber.shade700.withValues(alpha: 0.5)),
+                                ),
+                                child: Text(
+                                  'Unregistered',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark ? Colors.amber.shade300 : Colors.amber.shade900,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ],
                     ),

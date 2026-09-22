@@ -156,7 +156,10 @@ class _UserComplaintsListPageState extends State<UserComplaintsListPage> with Si
                 await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ComplaintDetailPage(complaintId: c.id),
+                    builder: (_) => ComplaintDetailPage(
+                      complaintId: c.id,
+                      isUnregistered: c.isUnregistered,
+                    ),
                   ),
                 );
                 if (mounted) _loadComplaints();
@@ -169,9 +172,32 @@ class _UserComplaintsListPageState extends State<UserComplaintsListPage> with Si
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Complaint #${c.id}',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF005BAC)),
+                        Row(
+                          children: [
+                            Text(
+                              'Complaint #${c.id}',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF005BAC)),
+                            ),
+                            if (c.isUnregistered) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: Colors.amber.shade700.withValues(alpha: 0.5)),
+                                ),
+                                child: Text(
+                                  'Unregistered',
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark ? Colors.amber.shade300 : Colors.amber.shade900,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

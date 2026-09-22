@@ -335,7 +335,10 @@ class _ManagerComplaintsPageState extends State<ManagerComplaintsPage> {
                                   await Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) => ComplaintDetailPage(complaintId: c.id),
+                                      builder: (_) => ComplaintDetailPage(
+                                        complaintId: c.id,
+                                        isUnregistered: c.isUnregistered,
+                                      ),
                                     ),
                                   );
                                   if (mounted) _loadComplaints();
@@ -361,6 +364,27 @@ class _ManagerComplaintsPageState extends State<ManagerComplaintsPage> {
                                                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF005BAC)),
                                                 ),
                                               ),
+                                              if (c.isUnregistered) ...[
+                                                const SizedBox(width: 6),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.amber.withValues(alpha: 0.15),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                    border: Border.all(color: Colors.amber.shade700.withValues(alpha: 0.5)),
+                                                  ),
+                                                  child: Text(
+                                                    'Unregistered',
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: Theme.of(context).brightness == Brightness.dark
+                                                          ? Colors.amber.shade300
+                                                          : Colors.amber.shade900,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
                                               if (c.isEscalated) ...[
                                                 const SizedBox(width: 6),
                                                 Container(

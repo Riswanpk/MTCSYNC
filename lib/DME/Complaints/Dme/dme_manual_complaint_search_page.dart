@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mtcsync/DME/Misc/dme_config.dart';
 import 'dme_register_complaint_page.dart';
+import 'dme_unregistered_customer_complaints.dart';
 
 class DmeManualComplaintSearchPage extends StatefulWidget {
   const DmeManualComplaintSearchPage({super.key});
@@ -216,6 +217,46 @@ class _DmeManualComplaintSearchPageState extends State<DmeManualComplaintSearchP
               ),
             ),
         ],
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF0F1B2B) : Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, -3),
+              ),
+            ],
+          ),
+          child: ElevatedButton.icon(
+            onPressed: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const DmeUnregisteredCustomerComplaintsPage(),
+                ),
+              );
+              if (result == true && mounted) {
+                Navigator.pop(context, true);
+              }
+            },
+            icon: const Icon(Icons.person_add_alt_1_rounded, size: 20),
+            label: const Text(
+              'Unregistered Customer',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF8CC63F),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 2,
+            ),
+          ),
+        ),
       ),
     );
   }
