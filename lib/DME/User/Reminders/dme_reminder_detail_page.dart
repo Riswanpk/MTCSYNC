@@ -115,7 +115,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
         for (final log in list) {
           final tStr = log['attempt_timestamp']?.toString();
           if (tStr != null) {
-            final dt = DateTime.tryParse(tStr)?.toLocal();
+            final dt = _parseAttemptTimestamp(tStr);
             if (dt != null && (latestTs == null || dt.isAfter(latestTs))) {
               latestTs = dt;
             }
@@ -170,7 +170,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
       for (final log in syncResult.recordedLogs) {
         final tsStr = log['attempt_timestamp']?.toString();
         if (tsStr == null) continue;
-        final dt = DateTime.tryParse(tsStr)?.toLocal();
+        final dt = _parseAttemptTimestamp(tsStr);
         if (dt != null && (latestCallTime == null || dt.isAfter(latestCallTime))) {
           latestCallTime = dt;
         }
@@ -412,18 +412,28 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
     return str;
   }
 
+  DateTime? _parseAttemptTimestamp(dynamic ts) {
+    if (ts == null) return null;
+    if (ts is DateTime) return ts;
+    final str = ts.toString().trim();
+    if (str.isEmpty) return null;
+    // Call attempt timestamps stored in DB are already in IST, so do not add any extra offset.
+    final cleanStr = str.replaceAll(RegExp(r'(Z|[+-]\d{2}(:\d{2})?)$'), '');
+    final parsed = DateTime.tryParse(cleanStr);
+    if (parsed != null) {
+      return DateTime(parsed.year, parsed.month, parsed.day, parsed.hour, parsed.minute, parsed.second);
+    }
+    return null;
+  }
+
   String _formatDateTime(dynamic date) {
     if (date == null) return 'N/A';
-    if (date is DateTime) {
-      return DateFormat('dd-MM-yyyy hh:mm a').format(date);
+    final dt = _parseAttemptTimestamp(date);
+    if (dt != null) {
+      return DateFormat('dd-MM-yyyy hh:mm a').format(dt);
     }
     final str = date.toString().trim();
-    if (str.isEmpty) return 'N/A';
-    final parsed = DateTime.tryParse(str);
-    if (parsed != null) {
-      return DateFormat('dd-MM-yyyy hh:mm a').format(parsed);
-    }
-    return str;
+    return str.isEmpty ? 'N/A' : str;
   }
 
   String _getUserDisplayName(dynamic userIdentifier) {
@@ -1934,7 +1944,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage> with Widg
                     for (final log in _reminderCallLogs) {
                       final tsStr = log['attempt_timestamp']?.toString();
                       if (tsStr == null) continue;
-                      final dt = DateTime.tryParse(tsStr)?.toLocal();
+                      final dt = _parseAttemptTimestamp(tsStr);
                       if (dt != null && (effectiveLastCall == null || dt.isAfter(effectiveLastCall))) {
                         effectiveLastCall = dt;
                       }

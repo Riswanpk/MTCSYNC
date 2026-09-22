@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../../Misc/dme_config.dart';
 import '../../Misc/dme_constants.dart';
@@ -23,11 +24,13 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
   String _selectedTypeFilter = 'all'; // 'all', 'phone_number_change', 'preference_change'
 
   List<Map<String, dynamic>> _allRequests = [];
+  final Map<String, String> _userNames = {};
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _loadUserNames();
     _loadRequests();
   }
 
@@ -35,6 +38,44 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadUserNames() async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection('users').get();
+      for (var doc in snap.docs) {
+        final data = doc.data();
+        final uid = doc.id;
+        final email = data['email']?.toString() ?? '';
+        final username = data['username']?.toString() ??
+            data['name']?.toString() ??
+            (email.isNotEmpty ? email.split('@').first : 'User');
+        _userNames[uid] = username;
+        if (email.isNotEmpty) {
+          _userNames[email] = username;
+          _userNames[email.toLowerCase()] = username;
+        }
+      }
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('Notice loading user names for admin approvals: $e');
+    }
+  }
+
+  String _getUserDisplayName(dynamic userIdentifier) {
+    if (userIdentifier == null) return '';
+    final raw = userIdentifier.toString().trim();
+    if (raw.isEmpty) return '';
+    if (_userNames.containsKey(raw)) return _userNames[raw]!;
+    if (_userNames.containsKey(raw.toLowerCase())) return _userNames[raw.toLowerCase()]!;
+    if (raw.contains('@')) {
+      final prefix = raw.split('@').first;
+      if (prefix.isNotEmpty) {
+        return prefix[0].toUpperCase() + prefix.substring(1);
+      }
+      return prefix;
+    }
+    return raw;
   }
 
   Future<void> _loadRequests() async {
@@ -183,6 +224,7 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
         final phone = (req['customer_phone'] ?? '').toString().toLowerCase();
         final newPhone = (req['new_value'] ?? '').toString().toLowerCase();
         final requestedBy = (req['requested_by'] ?? '').toString().toLowerCase();
+        final requestedByName = _getUserDisplayName(req['requested_by']).toLowerCase();
         final reason = (req['reason'] ?? '').toString().toLowerCase();
         final salesman = (req['_computed_salesman'] ?? '').toString().toLowerCase();
         final branch = (req['_computed_branch'] ?? '').toString().toLowerCase();
@@ -191,6 +233,7 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
             phone.contains(query) ||
             newPhone.contains(query) ||
             requestedBy.contains(query) ||
+            requestedByName.contains(query) ||
             reason.contains(query) ||
             salesman.contains(query) ||
             branch.contains(query);
@@ -1495,7 +1538,7 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'By: $requestedBy',
+                        'By: ${_getUserDisplayName(requestedBy)}',
                         style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                       ),
                       Text(
@@ -1508,7 +1551,7 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
                   if (reviewedBy.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Text(
-                      'Reviewed by: $reviewedBy ${adminNotes.isNotEmpty ? "($adminNotes)" : ""}',
+                      'Reviewed by: ${_getUserDisplayName(reviewedBy)} ${adminNotes.isNotEmpty ? "($adminNotes)" : ""}',
                       style: TextStyle(fontSize: 11, color: Colors.grey[700], fontStyle: FontStyle.italic),
                     ),
                   ],
