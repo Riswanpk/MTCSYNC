@@ -2,7 +2,7 @@ import 'dart:typed_data';
 import 'package:excel/excel.dart';
 import 'package:intl/intl.dart';
 
-import '../dme_constants.dart';
+import '../Misc/dme_constants.dart';
 import 'excel_uploader_models.dart';
 
 class ExcelParsingService {

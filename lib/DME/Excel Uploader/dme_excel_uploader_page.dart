@@ -6,8 +6,8 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:crypto/crypto.dart';
 
-import '../dme_config.dart';
-import '../dme_constants.dart';
+import '../Misc/dme_config.dart';
+import '../Misc/dme_constants.dart';
 import 'excel_uploader_models.dart';
 import 'excel_parsing_service.dart';
 import 'excel_upload_service.dart';

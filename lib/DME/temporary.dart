@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:mtcsync/DME/dme_config.dart';
+import 'package:mtcsync/DME/Misc/dme_config.dart';
 
 class DmeCustomerTypeFixer {
   /// Fixes customer types in `dme_customer_branches` for customers who have REGULAR (id 2)

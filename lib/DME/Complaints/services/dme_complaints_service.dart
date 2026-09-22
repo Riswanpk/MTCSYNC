@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:mtcsync/DME/dme_config.dart';
+import 'package:mtcsync/DME/Misc/dme_config.dart';
 import '../models/dme_complaint_model.dart';
 
 class DmeComplaintsService {

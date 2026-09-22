@@ -3,8 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
-import '../../../dme_constants.dart';
-import '../../../dme_config.dart';
+import '../../../Misc/dme_constants.dart';
+import '../../../Misc/dme_config.dart';
 import 'package:mtcsync/DME/User/dme_user_stats_service.dart';
 import 'dme_call_report_models.dart';
 import 'dme_user_call_detail_page.dart';

@@ -2,8 +2,8 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'package:mtcsync/DME/dme_config.dart';
-import 'package:mtcsync/DME/dme_constants.dart';
+import 'package:mtcsync/DME/Misc/dme_config.dart';
+import 'package:mtcsync/DME/Misc/dme_constants.dart';
 import 'package:mtcsync/DME/User/dme_user_stats_service.dart';
 
 class DmeAssignmentService {

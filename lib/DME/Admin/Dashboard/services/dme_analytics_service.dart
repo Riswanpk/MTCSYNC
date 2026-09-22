@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
-import '../../../dme_config.dart';
+import '../../../Misc/dme_config.dart';
 import '../models/dme_analytics_data.dart';
 
 class DmeAnalyticsService {

@@ -2,8 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../dme_constants.dart';
-import '../../dme_config.dart';
+import '../../Misc/dme_constants.dart';
+import '../../Misc/dme_config.dart';
 import 'dme_admin_customer_detail_page.dart';
 
 class DmeAdminCustomersPage extends StatefulWidget {

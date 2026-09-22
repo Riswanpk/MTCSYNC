@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../dme_constants.dart';
+import '../../../Misc/dme_constants.dart';
 
 class CategoryDistributionCard extends StatelessWidget {
   final Map<int, int> salesByCategory;

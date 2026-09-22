@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'excel_uploader_models.dart';
 import 'excel_parsing_service.dart';
-import '../dme_constants.dart';
+import '../Misc/dme_constants.dart';
 
 class ExcelUploadService {
   /// Check if the exact Excel file has already been uploaded by its SHA-256 hash

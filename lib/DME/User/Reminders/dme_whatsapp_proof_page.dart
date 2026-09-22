@@ -6,7 +6,7 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import '../../dme_config.dart';
+import '../../Misc/dme_config.dart';
 import 'package:mtcsync/DME/User/dme_user_stats_service.dart';
 
 class DmeWhatsAppProofPage extends StatefulWidget {

@@ -1,4 +1,4 @@
-import 'package:mtcsync/DME/dme_config.dart';
+import 'package:mtcsync/DME/Misc/dme_config.dart';
 import 'package:flutter/foundation.dart';
 
 /// Manages per-user daily statistics stored in `dme_user_daily_stats`.

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'package:mtcsync/DME/dme_constants.dart';
+import 'package:mtcsync/DME/Misc/dme_constants.dart';
 import '../models/dme_complaint_model.dart';
 import '../services/dme_complaints_service.dart';
 import '../User/complaint_detail_page.dart';

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:mtcsync/DME/dme_config.dart';
+import 'package:mtcsync/DME/Misc/dme_config.dart';
 import 'package:mtcsync/Misc/firebase_storage_helper.dart';
 
 /// Widget to select, upload, and play an audio recording for a complaint.

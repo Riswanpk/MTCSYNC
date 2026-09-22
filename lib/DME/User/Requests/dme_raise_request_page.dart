@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../dme_config.dart';
-import '../../dme_constants.dart';
+import '../../Misc/dme_config.dart';
+import '../../Misc/dme_constants.dart';
 
 // Export all request components for modular access
 export 'dme_requests_phone_number_invalid.dart';

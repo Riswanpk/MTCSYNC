@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import '../../dme_config.dart';
-import '../../dme_constants.dart';
+import '../../Misc/dme_config.dart';
+import '../../Misc/dme_constants.dart';
 
 /// Data bundle representing customer detail changes
 class DmeEditCustomerDetailsData {

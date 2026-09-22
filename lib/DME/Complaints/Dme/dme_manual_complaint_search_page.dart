@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:mtcsync/DME/dme_config.dart';
+import 'package:mtcsync/DME/Misc/dme_config.dart';
 import 'dme_register_complaint_page.dart';
 
 class DmeManualComplaintSearchPage extends StatefulWidget {

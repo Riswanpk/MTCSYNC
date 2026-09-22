@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:call_log/call_log.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:intl/intl.dart';
-import '../../dme_config.dart';
+import '../../Misc/dme_config.dart';
 import 'package:mtcsync/DME/User/dme_user_stats_service.dart';
 
 /// Result object for syncing call logs for a specific reminder

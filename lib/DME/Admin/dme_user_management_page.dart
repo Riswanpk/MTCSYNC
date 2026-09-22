@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../dme_constants.dart';
-import '../dme_config.dart';
+import '../Misc/dme_constants.dart';
+import '../Misc/dme_config.dart';
 
 class DmeUserManagementPage extends StatefulWidget {
   const DmeUserManagementPage({super.key});

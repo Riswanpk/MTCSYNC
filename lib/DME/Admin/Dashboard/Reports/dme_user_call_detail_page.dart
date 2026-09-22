@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../../dme_constants.dart';
-import '../../../dme_config.dart';
+import '../../../Misc/dme_constants.dart';
+import '../../../Misc/dme_config.dart';
 import 'dme_call_report_models.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);

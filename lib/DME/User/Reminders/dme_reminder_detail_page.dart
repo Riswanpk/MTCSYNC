@@ -4,8 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../dme_constants.dart';
-import '../../dme_config.dart';
+import '../../Misc/dme_constants.dart';
+import '../../Misc/dme_config.dart';
 import 'dme_whatsapp_proof_page.dart';
 // ignore: unused_import
 import '../dme_assignment_service.dart';

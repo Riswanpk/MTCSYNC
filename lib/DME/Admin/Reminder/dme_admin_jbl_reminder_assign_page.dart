@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../../dme_config.dart';
+import '../../Misc/dme_config.dart';
 import '../../User/dme_assignment_service.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);

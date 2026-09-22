@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import '../../dme_config.dart';
-import '../../dme_constants.dart';
+import '../../Misc/dme_config.dart';
+import '../../Misc/dme_constants.dart';
 import '../../User/dme_user_stats_service.dart';
 import '../../User/Requests/dme_notification_service.dart';
 
