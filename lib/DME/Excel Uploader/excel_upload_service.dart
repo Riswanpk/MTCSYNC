@@ -102,10 +102,12 @@ class ExcelUploadService {
           throw Exception('Upload blocked: Sale with phone $activePhone has a missing party name. Please message branch to update excel and reupload.');
         }
 
+        final cleanPincode = sale.pincode?.trim();
         customersToUpsert[activePhone] = {
           'name': cleanParty,
           'phone': activePhone,
           'address': sale.address.isNotEmpty ? sale.address : null,
+          'pincode': (cleanPincode != null && cleanPincode.isNotEmpty) ? cleanPincode : null,
           'salesman': sale.salesman.isNotEmpty ? sale.salesman : null,
           'last_purchase_date': DateFormat('yyyy-MM-dd').format(sale.date),
           'updated_at': DateTime.now().toIso8601String(),
@@ -214,11 +216,12 @@ class ExcelUploadService {
           )
           .select('id, phone');
     } catch (upsertErr) {
-      // If primary_branch or creation_date column has not been added to DB yet, fallback gracefully
+      // If primary_branch, creation_date, or pincode column has not been added to DB yet, fallback gracefully
       debugPrint('Customers upsert failed: $upsertErr. Falling back without extra columns.');
       for (var map in customersToUpsert.values) {
         map.remove('primary_branch');
         map.remove('creation_date');
+        map.remove('pincode');
       }
       upsertedCustRes = await client
           .from('dme_customers')

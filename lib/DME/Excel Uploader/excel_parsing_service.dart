@@ -13,6 +13,15 @@ class ExcelParsingService {
     return str.replaceAll(RegExp(r'[^\d]'), '');
   }
 
+  /// Extracts and cleans pincode (returns null if empty or 'null')
+  static String? cleanPincode(dynamic rawValue) {
+    if (rawValue == null) return null;
+    String str = rawValue.toString().trim();
+    if (str.isEmpty || str.toLowerCase() == 'null') return null;
+    final digitsOnly = str.replaceAll(RegExp(r'[^\d]'), '');
+    return digitsOnly.isNotEmpty ? digitsOnly : str;
+  }
+
 
   /// Merges Address1, Address2, Address3 into one clean string
   static String mergeAddress(dynamic a1, dynamic a2, dynamic a3) {
@@ -133,12 +142,26 @@ class ExcelParsingService {
       // Row 1: Header row
       // Row 2+: Data Rows
 
+      // Check header row (row index 1) for dynamic "Pincode" column index
+      int pincodeColIdx = -1;
+      if (rows.length > 1) {
+        final headerRow = rows[1];
+        for (int c = 0; c < headerRow.length; c++) {
+          final hVal = getCellValue(c < headerRow.length ? headerRow[c] : null).toString().trim().toLowerCase();
+          if (hVal == 'pincode' || hVal == 'pin code' || hVal == 'pin') {
+            pincodeColIdx = c;
+            break;
+          }
+        }
+      }
+
       String lastBranchName = '';
       int? lastBranchId;
       DateTime? lastDate;
       String lastVoucher = '';
       String lastParty = '';
       String lastAddress = '';
+      String? lastPincode;
       String lastPhone = '';
       String lastTypeName = '';
       int? lastTypeId;
@@ -152,7 +175,7 @@ class ExcelParsingService {
         if (row.isEmpty) continue;
 
         // Safe cell accessor to prevent RangeError on short/malformed rows
-        Data? safeCell(int colIdx) => colIdx < row.length ? row[colIdx] : null;
+        Data? safeCell(int colIdx) => (colIdx >= 0 && colIdx < row.length) ? row[colIdx] : null;
 
         String rawBranch = getCellValue(safeCell(0)).toString().trim().toUpperCase();
         dynamic rawDate = getCellValue(safeCell(1));
@@ -161,20 +184,53 @@ class ExcelParsingService {
         dynamic address1 = getCellValue(safeCell(4));
         dynamic address2 = getCellValue(safeCell(5));
         dynamic address3 = getCellValue(safeCell(6));
-        dynamic rawMobile = getCellValue(safeCell(7));
-        String rawType = getCellValue(safeCell(8)).toString().trim().toUpperCase();
-        String rawCat = getCellValue(safeCell(9)).toString().trim().toUpperCase();
-        String rawSalesman = getCellValue(safeCell(10)).toString().trim();
-        String itemName = getCellValue(safeCell(11)).toString().trim();
-        String qty = getCellValue(safeCell(12)).toString().trim();
+        
+        // Pincode is either at detected header index or immediately after address3 (Col 7)
+        dynamic rawPincode;
+        dynamic rawMobile;
+        String rawType;
+        String rawCat;
+        String rawSalesman;
+        String itemName;
+        String qty;
+
+        if (pincodeColIdx != -1) {
+          rawPincode = getCellValue(safeCell(pincodeColIdx));
+          // If pincode column is explicitly found at col 7, subsequent columns shift by 1
+          if (pincodeColIdx == 7) {
+            rawMobile = getCellValue(safeCell(8));
+            rawType = getCellValue(safeCell(9)).toString().trim().toUpperCase();
+            rawCat = getCellValue(safeCell(10)).toString().trim().toUpperCase();
+            rawSalesman = getCellValue(safeCell(11)).toString().trim();
+            itemName = getCellValue(safeCell(12)).toString().trim();
+            qty = getCellValue(safeCell(13)).toString().trim();
+          } else {
+            rawMobile = getCellValue(safeCell(7));
+            rawType = getCellValue(safeCell(8)).toString().trim().toUpperCase();
+            rawCat = getCellValue(safeCell(9)).toString().trim().toUpperCase();
+            rawSalesman = getCellValue(safeCell(10)).toString().trim();
+            itemName = getCellValue(safeCell(11)).toString().trim();
+            qty = getCellValue(safeCell(12)).toString().trim();
+          }
+        } else {
+          // Standard layout when no Pincode header exists
+          rawPincode = null;
+          rawMobile = getCellValue(safeCell(7));
+          rawType = getCellValue(safeCell(8)).toString().trim().toUpperCase();
+          rawCat = getCellValue(safeCell(9)).toString().trim().toUpperCase();
+          rawSalesman = getCellValue(safeCell(10)).toString().trim();
+          itemName = getCellValue(safeCell(11)).toString().trim();
+          qty = getCellValue(safeCell(12)).toString().trim();
+        }
 
         if (rawBranch.isEmpty && rawParty.isEmpty && rawVoucher.isEmpty && itemName.isEmpty) {
           continue;
         }
 
         final mergedAddr = mergeAddress(address1, address2, address3);
+        final rowPincode = cleanPincode(rawPincode);
 
-        // Determine phone number strictly from the phone column (Col 7)
+        // Determine phone number strictly from the phone column
         String rowPhone = cleanPhoneNumber(rawMobile);
         if (rowPhone.isEmpty && rawMobile != null && rawMobile.toString().trim().isNotEmpty) {
           rowPhone = rawMobile.toString().trim();
@@ -207,6 +263,10 @@ class ExcelParsingService {
             lastPhone = rowPhone;
           }
 
+          if (rowPincode != null && lastPincode == null) {
+            lastPincode = rowPincode;
+          }
+
           final branchName = lastBranchName.isNotEmpty ? lastBranchName : rawBranch;
           final branchId = lastBranchId ?? DmeConstants.getBranchIdByName(branchName);
           final date = lastDate ?? (rawDate != null ? parseExcelDate(rawDate) : DateTime.now());
@@ -214,6 +274,7 @@ class ExcelParsingService {
           final party = lastParty;
           final voucherNo = lastVoucher;
           final address = lastAddress.isNotEmpty ? lastAddress : mergedAddr;
+          final pincode = lastPincode ?? rowPincode;
           final typeName = lastTypeName.isNotEmpty ? lastTypeName : rawType;
           final typeId = lastTypeId ?? (typeName.isNotEmpty ? DmeConstants.getCustomerTypeIdByName(typeName) : null);
           final categoryName = lastCatName.isNotEmpty ? lastCatName : rawCat;
@@ -227,6 +288,7 @@ class ExcelParsingService {
             voucherNo: voucherNo,
             party: party,
             address: address,
+            pincode: pincode,
             phone: phone,
             typeName: typeName,
             typeId: typeId,
@@ -249,6 +311,7 @@ class ExcelParsingService {
           lastParty = rawParty;
           lastPhone = '';
           lastAddress = '';
+          lastPincode = null;
           lastSalesman = '';
           lastTypeName = '';
           lastTypeId = null;
@@ -282,6 +345,7 @@ class ExcelParsingService {
         lastPhone = rowPhone;
 
         lastAddress = mergedAddr;
+        lastPincode = rowPincode;
         lastTypeName = rawType;
         lastTypeId = rawType.isNotEmpty ? DmeConstants.getCustomerTypeIdByName(rawType) : null;
         lastCatName = rawCat;
@@ -297,6 +361,7 @@ class ExcelParsingService {
         final party = rawParty;
         final voucherNo = rawVoucher;
         final address = mergedAddr;
+        final pincode = rowPincode;
         final typeName = rawType;
         final typeId = lastTypeId;
         final categoryName = rawCat;
@@ -310,6 +375,7 @@ class ExcelParsingService {
           voucherNo: voucherNo,
           party: party,
           address: address,
+          pincode: pincode,
           phone: phone,
           typeName: typeName,
           typeId: typeId,
@@ -352,6 +418,7 @@ class ExcelParsingService {
           date: row.date,
           party: row.party,
           address: row.address,
+          pincode: row.pincode,
           phone: row.phone,
           typeName: row.typeName,
           typeId: row.typeId,

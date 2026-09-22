@@ -15,6 +15,7 @@ class ParsedExcelRow {
   final String voucherNo;
   final String party;
   final String address;
+  final String? pincode;
   String phone;
   String typeName;
   int? typeId;
@@ -32,6 +33,7 @@ class ParsedExcelRow {
     required this.voucherNo,
     required this.party,
     required this.address,
+    this.pincode,
     required this.phone,
     required this.typeName,
     this.typeId,
@@ -52,6 +54,7 @@ class GroupedSale {
   final DateTime date;
   String party;
   String address;
+  String? pincode;
   String phone;
   String typeName;
   int? typeId;
@@ -67,6 +70,7 @@ class GroupedSale {
     required this.date,
     required this.party,
     required this.address,
+    this.pincode,
     required this.phone,
     required this.typeName,
     this.typeId,

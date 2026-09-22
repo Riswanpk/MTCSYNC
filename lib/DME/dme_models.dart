@@ -54,6 +54,7 @@ class DmeCustomer {
   final String name;
   final String phone;
   final String? address;
+  final String? pincode;
   final String? salesman;
   final String preference; // 'Call' or 'Whatsapp' (default: 'Call')
   final DateTime? lastPurchaseDate;
@@ -65,6 +66,7 @@ class DmeCustomer {
     required this.name,
     required this.phone,
     this.address,
+    this.pincode,
     this.salesman,
     this.preference = 'Call',
     this.lastPurchaseDate,
@@ -78,6 +80,7 @@ class DmeCustomer {
       'name': name,
       'phone': phone,
       'address': address,
+      'pincode': pincode,
       'salesman': salesman,
       'preference': preference,
       'last_purchase_date': lastPurchaseDate?.toIso8601String(),
@@ -92,6 +95,7 @@ class DmeCustomer {
       name: map['name'] as String? ?? '',
       phone: map['phone'] as String? ?? '',
       address: map['address'] as String?,
+      pincode: map['pincode'] as String?,
       salesman: map['salesman'] as String?,
       preference: map['preference'] as String? ?? 'Call',
       lastPurchaseDate: map['last_purchase_date'] != null
