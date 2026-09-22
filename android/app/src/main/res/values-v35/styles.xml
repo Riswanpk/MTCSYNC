@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    API 35+ (Android 15) overrides.
+    android:statusBarColor and android:navigationBarColor are deprecated in API 35
+    and ignored — the OS enforces edge-to-edge automatically.
+    enableEdgeToEdge() in MainActivity handles transparent system bars and insets.
+    Do NOT add statusBarColor or navigationBarColor here.
+-->
+<resources>
+    <style name="LaunchTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+    <style name="NormalTheme" parent="Theme.AppCompat.Light.NoActionBar">
+    </style>
+</resources>

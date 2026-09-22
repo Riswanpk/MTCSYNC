@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1502033749",
+    "project_id": "mtc-sync",
+    "storage_bucket": "mtc-sync.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1502033749:android:855bb8a9b41580d30aa1dc",
+        "android_client_info": {
+          "package_name": "com.mtc.mtcsync"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBUCaFKvUWE5KZGDgdAYVnCYx-p8LmV5ok"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
