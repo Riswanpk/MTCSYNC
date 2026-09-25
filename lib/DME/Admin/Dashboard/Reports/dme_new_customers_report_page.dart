@@ -62,8 +62,8 @@ class DmeNewCustomersReportPage extends StatefulWidget {
 }
 
 class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
-  late DateTime _startDate;
-  late DateTime _endDate;
+  DateTime? _startDate;
+  DateTime? _endDate;
 
   int? _selectedBranchId; // null means 'All Allowed Branches'
   List<int> _assignedBranches = [];
@@ -77,9 +77,8 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    _startDate = widget.initialStartDate ?? DateTime(now.year, now.month, 1);
-    _endDate = widget.initialEndDate ?? now;
+    _startDate = widget.initialStartDate;
+    _endDate = widget.initialEndDate;
     _selectedBranchId = widget.initialBranchId;
     _initBranchAccess();
   }
@@ -107,15 +106,26 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
       }
     }
     if (!mounted) return;
-    _fetchReportData();
+    // Only load automatically if date range was explicitly provided
+    if (_startDate != null && _endDate != null) {
+      _fetchReportData();
+    }
   }
 
   Future<void> _pickDateRange() async {
+    final now = DateTime.now();
+    final initialRange = (_startDate != null && _endDate != null)
+        ? DateTimeRange(start: _startDate!, end: _endDate!)
+        : DateTimeRange(
+            start: DateTime(now.year, now.month, 1),
+            end: now,
+          );
+
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2020),
       lastDate: DateTime.now().add(const Duration(days: 365)),
-      initialDateRange: DateTimeRange(start: _startDate, end: _endDate),
+      initialDateRange: initialRange,
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -140,6 +150,16 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
   }
 
   Future<void> _fetchReportData() async {
+    if (_startDate == null || _endDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a date range first.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     final client = await DmeConfig.getClient();
     if (client == null) {
       if (mounted) {
@@ -153,14 +173,14 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
     setState(() => _isLoading = true);
 
     try {
-      final startStr = DateFormat('yyyy-MM-dd').format(_startDate);
-      final endStr = DateFormat('yyyy-MM-dd').format(_endDate);
+      final startStr = DateFormat('yyyy-MM-dd').format(_startDate!);
+      final endStr = DateFormat('yyyy-MM-dd').format(_endDate!);
 
       final startIso =
-          DateTime(_startDate.year, _startDate.month, _startDate.day, 0, 0, 0)
+          DateTime(_startDate!.year, _startDate!.month, _startDate!.day, 0, 0, 0)
               .toIso8601String();
       final endIso =
-          DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59, 59, 999)
+          DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59, 999)
               .toIso8601String();
 
       // 1. Fetch Customers created in the date interval (checking creation_date with fallback to created_at)
@@ -368,8 +388,9 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
       final String branchTitle = _selectedBranchId != null
           ? DmeConstants.getBranchName(_selectedBranchId!)
           : 'All Branches';
-      final String dateIntervalTitle =
-          '${DateFormat('dd MMM yyyy').format(_startDate)} to ${DateFormat('dd MMM yyyy').format(_endDate)}';
+      final String dateIntervalTitle = (_startDate != null && _endDate != null)
+          ? '${DateFormat('dd MMM yyyy').format(_startDate!)} to ${DateFormat('dd MMM yyyy').format(_endDate!)}'
+          : 'All Time';
 
       sheet.getRangeByName('A1:H1').merge();
       final xlsio.Range titleRange = sheet.getRangeByName('A1');
@@ -575,8 +596,15 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                           decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey.shade400),
+                            border: Border.all(
+                              color: (_startDate != null && _endDate != null)
+                                  ? _primaryBlue
+                                  : Colors.grey.shade400,
+                            ),
                             borderRadius: BorderRadius.circular(8),
+                            color: (_startDate != null && _endDate != null)
+                                ? _primaryBlue.withValues(alpha: 0.05)
+                                : null,
                           ),
                           child: Row(
                             children: [
@@ -584,8 +612,18 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  '${DateFormat('dd-MM-yy').format(_startDate)} to ${DateFormat('dd-MM-yy').format(_endDate)}',
-                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                  (_startDate != null && _endDate != null)
+                                      ? '${DateFormat('dd-MM-yy').format(_startDate!)} to ${DateFormat('dd-MM-yy').format(_endDate!)}'
+                                      : 'Select Date Range',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: (_startDate != null && _endDate != null)
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                    color: (_startDate != null && _endDate != null)
+                                        ? null
+                                        : Colors.grey[600],
+                                  ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
@@ -626,7 +664,9 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
                             ],
                             onChanged: (val) {
                               setState(() => _selectedBranchId = val);
-                              _fetchReportData();
+                              if (_startDate != null && _endDate != null) {
+                                _fetchReportData();
+                              }
                             },
                           ),
                         ),
@@ -679,44 +719,86 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
             ),
           ),
 
-          // Total Count Banner
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: _primaryBlue.withValues(alpha: 0.08),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'New Customers Found: ${filteredItems.length}',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _primaryBlue),
-                ),
-                if (_selectedBranchId != null)
+          // Total Count Banner (only shown when date range is selected)
+          if (_startDate != null && _endDate != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: _primaryBlue.withValues(alpha: 0.08),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
                   Text(
-                    'Branch: ${DmeConstants.getBranchName(_selectedBranchId!)}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                    'New Customers Found: ${filteredItems.length}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _primaryBlue),
                   ),
-              ],
+                  if (_selectedBranchId != null)
+                    Text(
+                      'Branch: ${DmeConstants.getBranchName(_selectedBranchId!)}',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                    ),
+                ],
+              ),
             ),
-          ),
 
           // Customer Table / List View
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : filteredItems.isEmpty
+                : (_startDate == null || _endDate == null)
                     ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.person_off_rounded, size: 48, color: Colors.grey[400]),
-                            const SizedBox(height: 8),
-                            Text(
-                              'No new customers found for this period.',
-                              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                            ),
-                          ],
+                        child: Padding(
+                          padding: const EdgeInsets.all(32.0),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: _primaryBlue.withValues(alpha: 0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.date_range_rounded, size: 48, color: _primaryBlue),
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'Select Date Range',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Select a date interval above to fetch and view new customers.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton.icon(
+                                onPressed: _pickDateRange,
+                                icon: const Icon(Icons.calendar_month_rounded, size: 18),
+                                label: const Text('Choose Dates'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _primaryBlue,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       )
+                    : filteredItems.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.person_off_rounded, size: 48, color: Colors.grey[400]),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'No new customers found for this period.',
+                                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                                ),
+                              ],
+                            ),
+                          )
                     : ListView.separated(
                         padding: const EdgeInsets.all(12),
                         itemCount: filteredItems.length,

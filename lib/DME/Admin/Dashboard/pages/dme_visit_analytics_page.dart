@@ -31,21 +31,20 @@ class DmeVisitAnalyticsPage extends StatefulWidget {
 }
 
 class _DmeVisitAnalyticsPageState extends State<DmeVisitAnalyticsPage> {
-  bool _isLoading = true;
+  bool _isLoading = false;
 
-  late DateTime _startDate;
-  late DateTime _endDate;
+  DateTime? _startDate;
+  DateTime? _endDate;
   int? _selectedBranchId;
   List<int> _assignedBranches = [];
 
-  DmeAnalyticsSummary _summary = DmeAnalyticsSummary.empty();
+  DmeAnalyticsSummary? _summary;
 
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    _startDate = widget.initialStartDate ?? DateTime(now.year, now.month, 1);
-    _endDate = widget.initialEndDate ?? DateTime(now.year, now.month, now.day);
+    _startDate = widget.initialStartDate;
+    _endDate = widget.initialEndDate;
     _selectedBranchId = widget.initialBranchId;
     _initBranchAccess();
   }
@@ -75,17 +74,24 @@ class _DmeVisitAnalyticsPageState extends State<DmeVisitAnalyticsPage> {
       }
     }
 
-    if (_assignedBranches.length == 1 && _selectedBranchId == null) {
-      _selectedBranchId = _assignedBranches.first;
+    // Only load if initial dates were explicitly provided (e.g. navigation from another page)
+    if (_startDate != null && _endDate != null) {
+      await _loadAnalyticsData();
     }
-
-    await _loadAnalyticsData();
   }
 
   Future<void> _pickDateRange() async {
+    final now = DateTime.now();
+    final initialRange = (_startDate != null && _endDate != null)
+        ? DateTimeRange(start: _startDate!, end: _endDate!)
+        : DateTimeRange(
+            start: DateTime(now.year, now.month, 1),
+            end: DateTime(now.year, now.month, now.day),
+          );
+
     final picked = await showDateRangePicker(
       context: context,
-      initialDateRange: DateTimeRange(start: _startDate, end: _endDate),
+      initialDateRange: initialRange,
       firstDate: DateTime(2020),
       lastDate: DateTime.now().add(const Duration(days: 365)),
       builder: (context, child) {
@@ -112,12 +118,22 @@ class _DmeVisitAnalyticsPageState extends State<DmeVisitAnalyticsPage> {
   }
 
   Future<void> _loadAnalyticsData() async {
+    if (_startDate == null || _endDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a date range first.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
       final summary = await DmeAnalyticsService.fetchAnalytics(
-        startDate: _startDate,
-        endDate: _endDate,
+        startDate: _startDate!,
+        endDate: _endDate!,
         selectedBranchId: _selectedBranchId,
         assignedBranches: _assignedBranches,
       );
@@ -151,11 +167,12 @@ class _DmeVisitAnalyticsPageState extends State<DmeVisitAnalyticsPage> {
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Reload Data',
-            onPressed: _loadAnalyticsData,
-          ),
+          if (_startDate != null && _endDate != null)
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded),
+              tooltip: 'Reload Data',
+              onPressed: _loadAnalyticsData,
+            ),
         ],
       ),
       body: SingleChildScrollView(
@@ -172,7 +189,9 @@ class _DmeVisitAnalyticsPageState extends State<DmeVisitAnalyticsPage> {
               onPickDateRange: _pickDateRange,
               onBranchChanged: (val) {
                 setState(() => _selectedBranchId = val);
-                _loadAnalyticsData();
+                if (_startDate != null && _endDate != null) {
+                  _loadAnalyticsData();
+                }
               },
             ),
             const SizedBox(height: 16),
@@ -184,6 +203,61 @@ class _DmeVisitAnalyticsPageState extends State<DmeVisitAnalyticsPage> {
                   child: CircularProgressIndicator(),
                 ),
               )
+            else if (_summary == null)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 48.0, horizontal: 20.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF005BAC).withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.date_range_rounded,
+                          size: 48,
+                          color: Color(0xFF005BAC),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Select Date Range to View Analytics',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Choose a date interval and optional branch filter above to generate analytics and charts.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[600],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 20),
+                      ElevatedButton.icon(
+                        onPressed: _pickDateRange,
+                        icon: const Icon(Icons.calendar_month_rounded, size: 18),
+                        label: const Text('Select Date Range'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF005BAC),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
             else ...[
               // 2. Metric KPI Cards (Row of 3)
               Row(
@@ -191,7 +265,7 @@ class _DmeVisitAnalyticsPageState extends State<DmeVisitAnalyticsPage> {
                   Expanded(
                     child: MetricKpiCard(
                       title: 'Visited',
-                      value: '${_summary.uniqueCustomersVisited}',
+                      value: '${_summary!.uniqueCustomersVisited}',
                       subtitle: 'Parties in period',
                       icon: Icons.people_alt_rounded,
                       color: const Color(0xFF005BAC),
@@ -201,7 +275,7 @@ class _DmeVisitAnalyticsPageState extends State<DmeVisitAnalyticsPage> {
                   Expanded(
                     child: MetricKpiCard(
                       title: 'New Added',
-                      value: '${_summary.newCustomersCreated}',
+                      value: '${_summary!.newCustomersCreated}',
                       subtitle: 'Created in period',
                       icon: Icons.person_add_alt_1_rounded,
                       color: const Color(0xFF8CC63F),
@@ -224,7 +298,7 @@ class _DmeVisitAnalyticsPageState extends State<DmeVisitAnalyticsPage> {
                   Expanded(
                     child: MetricKpiCard(
                       title: 'Completed',
-                      value: '${_summary.completedRemindersCount}',
+                      value: '${_summary!.completedRemindersCount}',
                       subtitle: 'Calls verified',
                       icon: Icons.phone_callback_rounded,
                       color: Colors.orange,
@@ -245,19 +319,19 @@ class _DmeVisitAnalyticsPageState extends State<DmeVisitAnalyticsPage> {
               const SizedBox(height: 20),
 
               // 3. Branch Distribution Breakdown (When All Branches is selected)
-              if (_selectedBranchId == null && _summary.salesByBranch.isNotEmpty) ...[
-                BranchDistributionCard(salesByBranch: _summary.salesByBranch),
+              if (_selectedBranchId == null && _summary!.salesByBranch.isNotEmpty) ...[
+                BranchDistributionCard(salesByBranch: _summary!.salesByBranch),
                 const SizedBox(height: 20),
               ],
 
               // 4. Category Breakdown Distribution
               CategoryDistributionCard(
-                salesByCategory: _summary.salesByCategory,
+                salesByCategory: _summary!.salesByCategory,
               ),
               const SizedBox(height: 20),
 
               // 5. Customer Types Breakdown
-              CustomerTypeCard(salesByType: _summary.salesByType),
+              CustomerTypeCard(salesByType: _summary!.salesByType),
             ],
           ],
         ),

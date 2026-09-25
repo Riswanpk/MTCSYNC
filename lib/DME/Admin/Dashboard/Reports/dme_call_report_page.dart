@@ -22,8 +22,8 @@ class DmeCallReportPage extends StatefulWidget {
 }
 
 class _DmeCallReportPageState extends State<DmeCallReportPage> {
-  DateTime _startDate = DateTime(DateTime.now().year, DateTime.now().month, 1);
-  DateTime _endDate = DateTime.now();
+  DateTime? _startDate;
+  DateTime? _endDate;
 
   int? _selectedBranchId; // null = 'All Branches'
   List<int> _allowedBranches = [];
@@ -67,15 +67,26 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
       }
     }
     if (!mounted) return;
-    _fetchCallReportData();
+    // Do not auto-fetch until user selects date range
+    if (_startDate != null && _endDate != null) {
+      _fetchCallReportData();
+    }
   }
 
   Future<void> _pickDateRange() async {
+    final now = DateTime.now();
+    final initialRange = (_startDate != null && _endDate != null)
+        ? DateTimeRange(start: _startDate!, end: _endDate!)
+        : DateTimeRange(
+            start: DateTime(now.year, now.month, 1),
+            end: now,
+          );
+
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2020),
       lastDate: DateTime.now().add(const Duration(days: 365)),
-      initialDateRange: DateTimeRange(start: _startDate, end: _endDate),
+      initialDateRange: initialRange,
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -100,6 +111,16 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
   }
 
   Future<void> _fetchCallReportData() async {
+    if (_startDate == null || _endDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a date range first.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     final client = await DmeConfig.getClient();
     if (client == null) {
       if (mounted) {
@@ -113,8 +134,8 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
     setState(() => _isLoading = true);
 
     try {
-      final startStr = DateFormat('yyyy-MM-dd').format(_startDate);
-      final endStr = DateFormat('yyyy-MM-dd').format(_endDate);
+      final startStr = DateFormat('yyyy-MM-dd').format(_startDate!);
+      final endStr = DateFormat('yyyy-MM-dd').format(_endDate!);
 
       // 1. Fetch DME Users from Firestore
       final usersSnap = await FirebaseFirestore.instance
@@ -449,8 +470,18 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  '${DateFormat('dd-MM-yy').format(_startDate)} to ${DateFormat('dd-MM-yy').format(_endDate)}',
-                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                  (_startDate != null && _endDate != null)
+                                      ? '${DateFormat('dd-MM-yy').format(_startDate!)} to ${DateFormat('dd-MM-yy').format(_endDate!)}'
+                                      : 'Select Date Range',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: (_startDate != null && _endDate != null)
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                    color: (_startDate != null && _endDate != null)
+                                        ? null
+                                        : Colors.grey[600],
+                                  ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
@@ -491,7 +522,9 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
                             ],
                             onChanged: (val) {
                               setState(() => _selectedBranchId = val);
-                              _fetchCallReportData();
+                              if (_startDate != null && _endDate != null) {
+                                _fetchCallReportData();
+                              }
                             },
                           ),
                         ),
@@ -518,48 +551,90 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
             ),
           ),
 
-          // KPI Summary Cards Banner
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            color: _primaryBlue.withValues(alpha: 0.05),
-            child: Row(
-              children: [
-                _buildKpiCard('Total Calls', '$_grandTotalCalls', Icons.phone_in_talk_rounded, Colors.blue[800]!),
-                const SizedBox(width: 8),
-                _buildKpiCard('WhatsApp', '$_grandTotalWhatsApp', Icons.chat_bubble_rounded, const Color(0xFF0E7A38)),
-                const SizedBox(width: 8),
-                _buildKpiCard('Total Actions', '$_grandTotalActions', Icons.task_alt_rounded, _primaryBlue),
-              ],
+          // KPI Summary Cards Banner (only shown when date range is selected)
+          if (_startDate != null && _endDate != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              color: _primaryBlue.withValues(alpha: 0.05),
+              child: Row(
+                children: [
+                  _buildKpiCard('Total Calls', '$_grandTotalCalls', Icons.phone_in_talk_rounded, Colors.blue[800]!),
+                  const SizedBox(width: 8),
+                  _buildKpiCard('WhatsApp', '$_grandTotalWhatsApp', Icons.chat_bubble_rounded, const Color(0xFF0E7A38)),
+                  const SizedBox(width: 8),
+                  _buildKpiCard('Total Actions', '$_grandTotalActions', Icons.task_alt_rounded, _primaryBlue),
+                ],
+              ),
             ),
-          ),
 
           // User Call Stats List
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : filteredUsers.isEmpty
+                : (_startDate == null || _endDate == null)
                     ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.person_search_rounded, size: 48, color: Colors.grey[400]),
-                            const SizedBox(height: 8),
-                            Text(
-                              'No DME user activity found for this period.',
-                              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                            ),
-                          ],
+                        child: Padding(
+                          padding: const EdgeInsets.all(32.0),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: _primaryBlue.withValues(alpha: 0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.date_range_rounded, size: 48, color: _primaryBlue),
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'Select Date Range',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Select a date interval above to fetch and view DME call and WhatsApp activity.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton.icon(
+                                onPressed: _pickDateRange,
+                                icon: const Icon(Icons.calendar_month_rounded, size: 18),
+                                label: const Text('Choose Dates'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _primaryBlue,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       )
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(12),
-                        itemCount: filteredUsers.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (context, idx) {
-                          final userStat = filteredUsers[idx];
-                          return _buildUserStatCard(context, userStat);
-                        },
-                      ),
+                    : filteredUsers.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.person_search_rounded, size: 48, color: Colors.grey[400]),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'No DME user activity found for this period.',
+                                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.all(12),
+                            itemCount: filteredUsers.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 10),
+                            itemBuilder: (context, idx) {
+                              final userStat = filteredUsers[idx];
+                              return _buildUserStatCard(context, userStat);
+                            },
+                          ),
           ),
         ],
       ),
@@ -608,13 +683,14 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () {
+          if (_startDate == null || _endDate == null) return;
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (_) => DmeUserCallDetailPage(
                 userStat: userStat,
-                startDate: _startDate,
-                endDate: _endDate,
+                startDate: _startDate!,
+                endDate: _endDate!,
               ),
             ),
           );

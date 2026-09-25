@@ -3,8 +3,8 @@ import 'package:intl/intl.dart';
 import '../../../Misc/dme_constants.dart';
 
 class DashboardFilterCard extends StatelessWidget {
-  final DateTime startDate;
-  final DateTime endDate;
+  final DateTime? startDate;
+  final DateTime? endDate;
   final int? selectedBranchId;
   final List<int> assignedBranches;
   final VoidCallback onPickDateRange;
@@ -28,6 +28,8 @@ class DashboardFilterCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+
+    final hasDateSelected = startDate != null && endDate != null;
 
     return Card(
       elevation: 3,
@@ -70,27 +72,37 @@ class DashboardFilterCard extends StatelessWidget {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF005BAC).withValues(alpha: 0.08),
+                      color: hasDateSelected
+                          ? const Color(0xFF005BAC).withValues(alpha: 0.08)
+                          : Colors.grey.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: const Color(0xFF005BAC).withValues(alpha: 0.2),
+                        color: hasDateSelected
+                            ? const Color(0xFF005BAC).withValues(alpha: 0.3)
+                            : Colors.grey.shade400,
                       ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.calendar_month_rounded,
                           size: 16,
-                          color: Color(0xFF005BAC),
+                          color: hasDateSelected
+                              ? const Color(0xFF005BAC)
+                              : (isDark ? Colors.grey[300] : Colors.grey[700]),
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          '${_formatDate(startDate)} - ${_formatDate(endDate)}',
-                          style: const TextStyle(
+                          hasDateSelected
+                              ? '${_formatDate(startDate!)} - ${_formatDate(endDate!)}'
+                              : 'Select Date Range',
+                          style: TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 12,
-                            color: Color(0xFF005BAC),
+                            color: hasDateSelected
+                                ? const Color(0xFF005BAC)
+                                : (isDark ? Colors.grey[300] : Colors.grey[700]),
                           ),
                         ),
                       ],
@@ -122,6 +134,7 @@ class DashboardFilterCard extends StatelessWidget {
                       child: DropdownButton<int?>(
                         value: selectedBranchId,
                         isExpanded: true,
+                        hint: const Text('Select Branch', style: TextStyle(fontSize: 13)),
                         items: [
                           DropdownMenuItem<int?>(
                             value: null,
