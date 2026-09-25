@@ -7,6 +7,7 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mtcsync/Misc/notification_permission_service.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'leads.dart';
 import 'leads_helpers.dart';
@@ -59,6 +60,8 @@ class _FollowUpFormState extends State<FollowUpForm> {
   // FocusNodes for RawAutocomplete widgets
   late FocusNode _nameFieldFocusNode;
   late FocusNode _phoneFieldFocusNode;
+  Timer? _nameSearchTimer;
+  Timer? _phoneSearchTimer;
 
   String _status = 'In Progress';
   String _priority = 'High';
@@ -352,6 +355,8 @@ class _FollowUpFormState extends State<FollowUpForm> {
 
   @override
   void dispose() {
+    _nameSearchTimer?.cancel();
+    _phoneSearchTimer?.cancel();
     _nameFieldFocusNode.dispose();
     _phoneFieldFocusNode.dispose();
     _nameController.dispose();
@@ -537,15 +542,32 @@ class _FollowUpFormState extends State<FollowUpForm> {
                             textEditingController: _nameController,
                             focusNode: _nameFieldFocusNode,
                             optionsBuilder: (TextEditingValue textEditingValue) async {
-                              if (textEditingValue.text.isEmpty || !mounted) {
+                              final query = textEditingValue.text.trim();
+                              if (query.isEmpty || !mounted) {
                                 return const Iterable<Map<String, dynamic>>.empty();
                               }
-                              try {
-                                return await fetchCustomerSuggestions(textEditingValue.text, branch);
-                              } catch (e) {
-                                debugPrint('Error in name autocomplete: $e');
-                                return const Iterable<Map<String, dynamic>>.empty();
-                              }
+                              _nameSearchTimer?.cancel();
+                              final completer = Completer<Iterable<Map<String, dynamic>>>();
+                              _nameSearchTimer = Timer(const Duration(milliseconds: 300), () async {
+                                if (!mounted) {
+                                  if (!completer.isCompleted) {
+                                    completer.complete(const Iterable<Map<String, dynamic>>.empty());
+                                  }
+                                  return;
+                                }
+                                try {
+                                  final results = await fetchCustomerSuggestions(query, branch);
+                                  if (!completer.isCompleted) {
+                                    completer.complete(results);
+                                  }
+                                } catch (e) {
+                                  debugPrint('Error in name autocomplete: $e');
+                                  if (!completer.isCompleted) {
+                                    completer.complete(const Iterable<Map<String, dynamic>>.empty());
+                                  }
+                                }
+                              });
+                              return await completer.future;
                             },
                             displayStringForOption: (option) => option['name'] ?? '',
                             fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
@@ -614,19 +636,41 @@ class _FollowUpFormState extends State<FollowUpForm> {
                         textEditingController: _phoneController,
                         focusNode: _phoneFieldFocusNode,
                         optionsBuilder: (TextEditingValue textEditingValue) async {
-                          if (textEditingValue.text.isEmpty || !mounted) {
+                          final query = textEditingValue.text.trim();
+                          if (query.isEmpty || !mounted) {
                             return const Iterable<Map<String, dynamic>>.empty();
                           }
-                          try {
-                            final user = FirebaseAuth.instance.currentUser;
-                            if (user == null) return const Iterable<Map<String, dynamic>>.empty();
-                            final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-                            final branch = userDoc.data()?['branch'] ?? '';
-                            return await fetchCustomerSuggestions(textEditingValue.text, branch);
-                          } catch (e) {
-                            debugPrint('Error in phone autocomplete: $e');
-                            return const Iterable<Map<String, dynamic>>.empty();
-                          }
+                          _phoneSearchTimer?.cancel();
+                          final completer = Completer<Iterable<Map<String, dynamic>>>();
+                          _phoneSearchTimer = Timer(const Duration(milliseconds: 300), () async {
+                            if (!mounted) {
+                              if (!completer.isCompleted) {
+                                completer.complete(const Iterable<Map<String, dynamic>>.empty());
+                              }
+                              return;
+                            }
+                            try {
+                              final user = FirebaseAuth.instance.currentUser;
+                              if (user == null) {
+                                if (!completer.isCompleted) {
+                                  completer.complete(const Iterable<Map<String, dynamic>>.empty());
+                                }
+                                return;
+                              }
+                              final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+                              final branch = userDoc.data()?['branch'] ?? '';
+                              final results = await fetchCustomerSuggestions(query, branch);
+                              if (!completer.isCompleted) {
+                                completer.complete(results);
+                              }
+                            } catch (e) {
+                              debugPrint('Error in phone autocomplete: $e');
+                              if (!completer.isCompleted) {
+                                completer.complete(const Iterable<Map<String, dynamic>>.empty());
+                              }
+                            }
+                          });
+                          return await completer.future;
                         },
                         displayStringForOption: (option) => option['phone'] ?? '',
                         fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {

@@ -94,6 +94,8 @@ class _HomePageState extends State<HomePage>
         _listenForTransferredLeads();
         _listenForAssignedLeadsAndComplaints();
       }
+    }).catchError((e, stack) {
+      debugPrint('Error loading user cache in HomePage: $e');
     });
     // Stagger heavy startup tasks so they don't all hit the event loop at once.
     // This is the primary fix for ANR on low-spec devices (Xiaomi/Redmi etc.)

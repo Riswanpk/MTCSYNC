@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -37,6 +38,8 @@ class _OrderFormPageState extends State<OrderFormPage> {
 
   final FocusNode _nameFocusNode = FocusNode();
   final FocusNode _phoneFocusNode = FocusNode();
+  Timer? _nameSearchTimer;
+  Timer? _phoneSearchTimer;
 
   String _priority = 'High';
   DateTime? _selectedDeliveryDateTime;
@@ -48,6 +51,8 @@ class _OrderFormPageState extends State<OrderFormPage> {
 
   @override
   void dispose() {
+    _nameSearchTimer?.cancel();
+    _phoneSearchTimer?.cancel();
     _nameController.dispose();
     _addressController.dispose();
     _phoneController.dispose();
@@ -209,10 +214,32 @@ class _OrderFormPageState extends State<OrderFormPage> {
                         textEditingController: _nameController,
                         focusNode: _nameFocusNode,
                         optionsBuilder: (value) async {
-                          if (value.text.isEmpty) {
+                          final query = value.text.trim();
+                          if (query.isEmpty) {
                             return const Iterable<Map<String, dynamic>>.empty();
                           }
-                          return fetchCustomerSuggestions(value.text, branch);
+                          _nameSearchTimer?.cancel();
+                          final completer = Completer<Iterable<Map<String, dynamic>>>();
+                          _nameSearchTimer = Timer(const Duration(milliseconds: 300), () async {
+                            if (!mounted) {
+                              if (!completer.isCompleted) {
+                                completer.complete(const Iterable<Map<String, dynamic>>.empty());
+                              }
+                              return;
+                            }
+                            try {
+                              final results = await fetchCustomerSuggestions(query, branch);
+                              if (!completer.isCompleted) {
+                                completer.complete(results);
+                              }
+                            } catch (e) {
+                              debugPrint('Error in order customer name search: $e');
+                              if (!completer.isCompleted) {
+                                completer.complete(const Iterable<Map<String, dynamic>>.empty());
+                              }
+                            }
+                          });
+                          return await completer.future;
                         },
                         displayStringForOption: (option) => option['name'] ?? '',
                         fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
@@ -277,19 +304,44 @@ class _OrderFormPageState extends State<OrderFormPage> {
                     textEditingController: _phoneController,
                     focusNode: _phoneFocusNode,
                     optionsBuilder: (value) async {
-                      if (value.text.isEmpty) {
+                      final query = value.text.trim();
+                      if (query.isEmpty) {
                         return const Iterable<Map<String, dynamic>>.empty();
                       }
-                      final user = FirebaseAuth.instance.currentUser;
-                      if (user == null) {
-                        return const Iterable<Map<String, dynamic>>.empty();
-                      }
-                      final userDoc = await FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(user.uid)
-                          .get();
-                      final branch = userDoc.data()?['branch'] ?? '';
-                      return fetchCustomerSuggestions(value.text, branch);
+                      _phoneSearchTimer?.cancel();
+                      final completer = Completer<Iterable<Map<String, dynamic>>>();
+                      _phoneSearchTimer = Timer(const Duration(milliseconds: 300), () async {
+                        if (!mounted) {
+                          if (!completer.isCompleted) {
+                            completer.complete(const Iterable<Map<String, dynamic>>.empty());
+                          }
+                          return;
+                        }
+                        try {
+                          final user = FirebaseAuth.instance.currentUser;
+                          if (user == null) {
+                            if (!completer.isCompleted) {
+                              completer.complete(const Iterable<Map<String, dynamic>>.empty());
+                            }
+                            return;
+                          }
+                          final userDoc = await FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(user.uid)
+                              .get();
+                          final branch = userDoc.data()?['branch'] ?? '';
+                          final results = await fetchCustomerSuggestions(query, branch);
+                          if (!completer.isCompleted) {
+                            completer.complete(results);
+                          }
+                        } catch (e) {
+                          debugPrint('Error in order customer phone search: $e');
+                          if (!completer.isCompleted) {
+                            completer.complete(const Iterable<Map<String, dynamic>>.empty());
+                          }
+                        }
+                      });
+                      return await completer.future;
                     },
                     displayStringForOption: (option) => option['phone'] ?? '',
                     fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {

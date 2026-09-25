@@ -76,6 +76,13 @@ class _LeadsPageState extends State<LeadsPage> {
         'branch': UserCacheService.instance.branch,
         'username': UserCacheService.instance.username,
       };
+    }).catchError((e) {
+      debugPrint('Error loading user data in LeadsPage: $e');
+      return {
+        'role': UserCacheService.instance.role,
+        'branch': UserCacheService.instance.branch,
+        'username': UserCacheService.instance.username,
+      };
     });
     _initialize();
   }

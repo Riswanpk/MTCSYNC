@@ -36,6 +36,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
   final TextEditingController _adNameController = TextEditingController();
   // FocusNode for RawAutocomplete widget
   late FocusNode _nameFieldFocusNode;
+  Timer? _nameSearchTimer;
 
   final String _priority = 'High';
   String? _selectedPlatform;
@@ -63,6 +64,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
 
   @override
   void dispose() {
+    _nameSearchTimer?.cancel();
     _nameFieldFocusNode.dispose();
     _nameController.dispose();
     _addressController.dispose();
@@ -583,19 +585,35 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                       textEditingController: _nameController,
                       focusNode: _nameFieldFocusNode,
                       optionsBuilder: (TextEditingValue textEditingValue) async {
-                        if (textEditingValue.text.isEmpty) {
+                        final query = textEditingValue.text.trim();
+                        if (query.isEmpty) {
                           return const Iterable<Map<String, dynamic>>.empty();
                         }
-                        // Check if widget is still mounted before making async call
                         if (!mounted) {
                           return const Iterable<Map<String, dynamic>>.empty();
                         }
-                        try {
-                          return await fetchCustomersByName(textEditingValue.text);
-                        } catch (e) {
-                          debugPrint('Error in autocomplete optionsBuilder: $e');
-                          return const Iterable<Map<String, dynamic>>.empty();
-                        }
+                        _nameSearchTimer?.cancel();
+                        final completer = Completer<Iterable<Map<String, dynamic>>>();
+                        _nameSearchTimer = Timer(const Duration(milliseconds: 350), () async {
+                          if (!mounted) {
+                            if (!completer.isCompleted) {
+                              completer.complete(const Iterable<Map<String, dynamic>>.empty());
+                            }
+                            return;
+                          }
+                          try {
+                            final results = await fetchCustomersByName(query);
+                            if (!completer.isCompleted) {
+                              completer.complete(results);
+                            }
+                          } catch (e) {
+                            debugPrint('Error in autocomplete optionsBuilder: $e');
+                            if (!completer.isCompleted) {
+                              completer.complete(const Iterable<Map<String, dynamic>>.empty());
+                            }
+                          }
+                        });
+                        return await completer.future;
                       },
                       displayStringForOption: (option) => option['name'] ?? '',
                       fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
