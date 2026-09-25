@@ -47,6 +47,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage>
   DateTime? _lastCallAttemptTimestamp;
   Timer? _cooldownTimer;
   bool _isCheckingCall = false;
+  String? _callNoticeMessage;
   bool _hasShortAttendedCall = false;
   bool _hasPendingRequest = false;
   String? _pendingRequestType;
@@ -298,7 +299,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage>
   }
 
   Future<void> _checkCallLogAfterCall() async {
-    if (_isCheckingCall) return;
+    if (!mounted || _isCheckingCall) return;
     setState(() => _isCheckingCall = true);
 
     try {
@@ -358,6 +359,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage>
 
         if (mounted) {
           setState(() {
+            _callNoticeMessage = null; // Clear any pending notice
             _reminderCallLogs = syncResult.recordedLogs;
             _callDuration = duration;
             _calledTimestamp = calledTime;
@@ -395,15 +397,12 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage>
           }
         }
       } else if (mounted) {
-        setState(() => _isCheckingCall = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(wasInitiated ? 'Call not detected in Android call log yet.' : 'No outgoing call log found for today.'),
-            backgroundColor: Colors.orange[800],
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(label: 'Recheck', textColor: Colors.white, onPressed: _checkCallLogAfterCall),
-          ),
-        );
+        setState(() {
+          _isCheckingCall = false;
+          _callNoticeMessage = wasInitiated
+              ? 'Call not detected in Android call log yet.'
+              : 'No outgoing call log found for today.';
+        });
       }
     } catch (e) {
       debugPrint('Error inspecting call log: $e');
@@ -499,7 +498,56 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage>
             children: [
               if (isCompleted) DmeReminderDetailHelpers.buildCompletedBanner(),
 
-              // 1. Customer Information Card
+              // In-Page Call Notice Banner (shown locally, automatically destroyed if user leaves the page)
+              if (_callNoticeMessage != null) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF3E0),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFFB74D)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline_rounded, color: Color(0xFFE65100), size: 22),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _callNoticeMessage!,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFFBF360C),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: _checkCallLogAfterCall,
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          backgroundColor: const Color(0xFFE65100),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        child: const Text('Recheck', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(width: 4),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 18, color: Color(0xFF8D6E63)),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        tooltip: 'Dismiss',
+                        onPressed: () {
+                          if (mounted) setState(() => _callNoticeMessage = null);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               CustomerInfoCard(
                 reminder: _reminder,
                 customerName: _reminder['customer_name'] ?? 'Unnamed Customer',

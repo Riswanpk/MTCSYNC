@@ -557,26 +557,41 @@ class ExcelUploadService {
     if (customerIdsWithNewReminders.isNotEmpty) {
       final Map<int, List<Map<String, dynamic>>> existingRemindersByCustomer = {};
       try {
-        // Fetch existing database reminders in chunks of 500
-        for (int i = 0; i < customerIdsWithNewReminders.length; i += 500) {
+        // Fetch existing database reminders in chunks of 200 with pagination to avoid hitting postgREST max rows
+        const int chunkSize = 200;
+        const int pageSize = 1000;
+        for (int i = 0; i < customerIdsWithNewReminders.length; i += chunkSize) {
           final chunk = customerIdsWithNewReminders.sublist(
             i,
-            (i + 500 > customerIdsWithNewReminders.length) ? customerIdsWithNewReminders.length : i + 500,
+            (i + chunkSize > customerIdsWithNewReminders.length) ? customerIdsWithNewReminders.length : i + chunkSize,
           );
-          final existingDbReminders = await client
-              .from('dme_reminders')
-              .select('id, customer_id, last_purchase_date, reminder_date, status')
-              .inFilter('customer_id', chunk);
 
-          for (var dbRow in (existingDbReminders as List)) {
-            final cId = dbRow['customer_id'] as int?;
-            if (cId != null) {
-              existingRemindersByCustomer.putIfAbsent(cId, () => []).add(Map<String, dynamic>.from(dbRow));
+          int offset = 0;
+          bool hasMore = true;
+          while (hasMore) {
+            final List<dynamic> dbPage = await client
+                .from('dme_reminders')
+                .select('id, customer_id, last_purchase_date, reminder_date, status')
+                .inFilter('customer_id', chunk)
+                .range(offset, offset + pageSize - 1);
+
+            for (var dbRow in dbPage) {
+              final cId = dbRow['customer_id'] as int?;
+              if (cId != null) {
+                existingRemindersByCustomer.putIfAbsent(cId, () => []).add(Map<String, dynamic>.from(dbRow));
+              }
+            }
+
+            if (dbPage.length < pageSize) {
+              hasMore = false;
+            } else {
+              offset += pageSize;
             }
           }
         }
       } catch (checkErr) {
-        debugPrint('Notice checking existing reminders: $checkErr');
+        debugPrint('Error checking existing reminders: $checkErr');
+        onLog('⚠ Notice checking existing reminders: $checkErr');
       }
 
       for (var entry in remindersByCustomer.entries) {
@@ -584,36 +599,37 @@ class ExcelUploadService {
         final newObj = entry.value;
         final existingList = existingRemindersByCustomer[cId] ?? [];
 
-        // Check if there is an active pending reminder that hasn't been called yet
-        final pendingList = existingList.where((r) {
-          final st = (r['status'] ?? '').toString().toLowerCase();
-          return st == 'pending';
+        // Check if there is ANY active / non-completed reminder for this customer
+        final nonCompletedList = existingList.where((r) {
+          final st = (r['status'] ?? '').toString().trim().toLowerCase();
+          return st.isNotEmpty && st != 'completed';
         }).toList();
 
-        if (pendingList.isNotEmpty) {
-          // An active pending reminder exists: update it if new invoice is newer
-          final activePending = pendingList.first;
-          final dbLastPurchaseStr = activePending['last_purchase_date']?.toString();
+        if (nonCompletedList.isNotEmpty) {
+          // A non-completed reminder already exists for this customer!
+          // NEVER insert a duplicate. UPDATE the existing active reminder.
+          final activeReminder = nonCompletedList.first;
+          final dbLastPurchaseStr = activeReminder['last_purchase_date']?.toString();
           final dbLastPurchase = dbLastPurchaseStr != null ? DateTime.tryParse(dbLastPurchaseStr) : null;
 
           final newLastPurchaseStr = newObj['last_purchase_date']?.toString();
           final newLastPurchase = newLastPurchaseStr != null ? DateTime.tryParse(newLastPurchaseStr) : null;
 
           if (dbLastPurchase != null && newLastPurchase != null && dbLastPurchase.isAfter(newLastPurchase)) {
-            // DB invoice is newer, preserve existing reminder date
+            // Existing DB invoice is newer, preserve existing reminder date
             remindersToUpdate.add({
-              'id': activePending['id'],
+              'id': activeReminder['id'],
               'customer_id': cId,
-              'reminder_date': activePending['reminder_date'],
-              'last_purchase_date': activePending['last_purchase_date'],
+              'reminder_date': activeReminder['reminder_date'],
+              'last_purchase_date': activeReminder['last_purchase_date'],
               'last_purchase_branch': newObj['last_purchase_branch'],
-              'status': 'pending',
+              'status': activeReminder['status'] ?? 'pending',
               'updated_at': DateTime.now().toIso8601String(),
             });
           } else {
-            // Excel invoice is newer: update existing pending reminder with new dates
+            // Excel invoice is newer: advance existing reminder with the new dates & branch
             remindersToUpdate.add({
-              'id': activePending['id'],
+              'id': activeReminder['id'],
               'customer_id': cId,
               'reminder_date': newObj['reminder_date'],
               'last_purchase_date': newObj['last_purchase_date'],
@@ -626,34 +642,35 @@ class ExcelUploadService {
             });
           }
         } else {
-          // No active pending reminder exists.
-          // Check if the customer already has a completed reminder for this purchase date (or a newer purchase date).
-          // If so, do NOT re-create or duplicate a reminder for a sale that has already been reminded and completed!
-          final newLastPurchaseStr = newObj['last_purchase_date']?.toString();
-          final newLastPurchase = newLastPurchaseStr != null ? DateTime.tryParse(newLastPurchaseStr) : null;
+          // Either no existing reminders exist at all, or ALL existing reminders are 'completed'.
+          if (existingList.isEmpty) {
+            // Brand new customer reminder
+            remindersToInsert.add(newObj);
+          } else {
+            // All previous reminders for this customer have been completed.
+            // Only create a new reminder if this new sale date is actually AFTER the completed sales dates.
+            final newLastPurchaseStr = newObj['last_purchase_date']?.toString();
+            final newLastPurchase = newLastPurchaseStr != null ? DateTime.tryParse(newLastPurchaseStr) : null;
 
-          bool isAlreadyCompletedForThisOrNewerSale = false;
-          for (var r in existingList) {
-            final st = (r['status'] ?? '').toString().toLowerCase();
-            if (st == 'completed') {
+            bool isNewerThanAllCompleted = true;
+            for (var r in existingList) {
               final compLastPurchaseStr = r['last_purchase_date']?.toString();
               final compLastPurchase = compLastPurchaseStr != null ? DateTime.tryParse(compLastPurchaseStr) : null;
               if (compLastPurchase != null && newLastPurchase != null) {
-                // If the completed reminder's purchase date is the same day or newer than the Excel sale, skip!
                 if (!newLastPurchase.isAfter(compLastPurchase)) {
-                  isAlreadyCompletedForThisOrNewerSale = true;
+                  isNewerThanAllCompleted = false;
                   break;
                 }
               } else if (compLastPurchaseStr != null && compLastPurchaseStr == newLastPurchaseStr) {
-                isAlreadyCompletedForThisOrNewerSale = true;
+                isNewerThanAllCompleted = false;
                 break;
               }
             }
-          }
 
-          if (!isAlreadyCompletedForThisOrNewerSale) {
-            // Only insert a fresh reminder if the customer is brand new, or if this sale is genuinely newer than all previous completed sales
-            remindersToInsert.add(newObj);
+            if (isNewerThanAllCompleted) {
+              // Genuinely a new cycle purchase after previous reminder was completed: create new reminder!
+              remindersToInsert.add(newObj);
+            }
           }
         }
       }
@@ -683,7 +700,13 @@ class ExcelUploadService {
     if (remindersToUpdate.isNotEmpty) {
       parallelTasks.add(() async {
         try {
-          await client.from('dme_reminders').upsert(remindersToUpdate, onConflict: 'id');
+          for (int i = 0; i < remindersToUpdate.length; i += 500) {
+            final chunk = remindersToUpdate.sublist(
+              i,
+              (i + 500 > remindersToUpdate.length) ? remindersToUpdate.length : i + 500,
+            );
+            await client.from('dme_reminders').upsert(chunk, onConflict: 'id');
+          }
         } catch (updateErr) {
           debugPrint('Reminders update error: $updateErr');
           onLog('⚠ Reminders update error: $updateErr');
@@ -693,16 +716,22 @@ class ExcelUploadService {
     if (remindersToInsert.isNotEmpty) {
       parallelTasks.add(() async {
         try {
-          await client.from('dme_reminders').insert(remindersToInsert);
-        } catch (insertErr) {
-          debugPrint('Reminders insert notice: $insertErr');
-          // If unique constraint on customer_id still exists in Supabase, fallback to upsert on customer_id
-          try {
-            await client.from('dme_reminders').upsert(remindersToInsert, onConflict: 'customer_id');
-            onLog('⚠ Note: Reminder updated (To preserve history, drop customer_id unique constraint in Supabase)');
-          } catch (fallbackErr) {
-            onLog('⚠ Reminders insert error: $fallbackErr');
+          for (int i = 0; i < remindersToInsert.length; i += 500) {
+            final chunk = remindersToInsert.sublist(
+              i,
+              (i + 500 > remindersToInsert.length) ? remindersToInsert.length : i + 500,
+            );
+            try {
+              await client.from('dme_reminders').insert(chunk);
+            } catch (insertErr) {
+              debugPrint('Reminders insert notice: $insertErr');
+              // If unique constraint on customer_id still exists in Supabase, fallback to upsert on customer_id
+              await client.from('dme_reminders').upsert(chunk, onConflict: 'customer_id');
+              onLog('⚠ Note: Reminder updated (To preserve history, drop customer_id unique constraint in Supabase)');
+            }
           }
+        } catch (fallbackErr) {
+          onLog('⚠ Reminders insert error: $fallbackErr');
         }
       }());
     }
