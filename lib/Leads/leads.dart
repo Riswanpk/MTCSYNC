@@ -224,6 +224,19 @@ class _LeadsPageState extends State<LeadsPage> {
     }
     if (selectedSource != 'All') {
       query = query.where('source', whereIn: [selectedSource, selectedSource.toLowerCase()]);
+      // For SME source: only show promoted leads (screening completed)
+      if (selectedSource == 'SME') {
+        query = query.where('screening_status', isEqualTo: 'promoted');
+      }
+    } else {
+      // For 'All' sources: include non-SME leads (any screening_status)
+      // AND SME leads that are promoted. Exclude pending/rejected SME leads.
+      query = query.where(
+        Filter.or(
+          Filter('source', whereNotIn: ['SME', 'sme']),
+          Filter('screening_status', isEqualTo: 'promoted'),
+        ),
+      );
     }
 
     query = query.orderBy('created_at', descending: !sortAscending);
@@ -265,11 +278,7 @@ class _LeadsPageState extends State<LeadsPage> {
 
       if (!mounted) return;
       setState(() {
-        _leads = snapshot.docs.where((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          final screening = data['screening_status']?.toString().toLowerCase();
-          return screening == null || screening == 'promoted';
-        }).toList();
+        _leads = snapshot.docs;
         _isLoading = false;
       });
 
