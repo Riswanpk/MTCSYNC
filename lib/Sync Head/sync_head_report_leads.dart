@@ -207,84 +207,87 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         return;
       }
 
-      // ── 2. Fetch stats per user (parallel) ─────────────────────────────
-        final List<Map<String, dynamic>> stats = [];
-        await Future.wait(users.map((user) async {
-        final uid = user['uid'] as String;
-        final userBranch = user['branch'] as String? ?? '';
-        final branchForQuery = _selectedBranch == 'All Branches' ? userBranch : _selectedBranch;
+      // ── 2. Fetch leads per branch (3 queries/branch vs old 6 queries/user) ──
+      // Group users by branch so we fire only 3 queries per unique branch,
+      // then distribute results client-side by created_by/assigned_to uid.
+      final Map<String, List<Map<String, dynamic>>> usersByBranch = {};
+      for (final user in users) {
+        final b = user['branch'] as String;
+        usersByBranch.putIfAbsent(b, () => []).add(user);
+      }
 
-        int inProgressCount = 0;
-        int saleCount = 0;
-        int cancelledCount = 0;
-        List<DocumentSnapshot> inProgressLeads = [];
-        List<DocumentSnapshot> saleLeads = [];
-        List<DocumentSnapshot> cancelledLeads = [];
+      final Map<String, List<DocumentSnapshot>> inProgressByUid = {};
+      final Map<String, List<DocumentSnapshot>> saleByUid = {};
+      final Map<String, List<DocumentSnapshot>> cancelledByUid = {};
 
-        // Helper to merge two query snapshots, deduplicating by document ID
-        List<DocumentSnapshot> mergeDocs(QuerySnapshot a, QuerySnapshot b) {
-          final seen = <String>{};
-          final merged = <DocumentSnapshot>[];
-          for (final doc in [...a.docs, ...b.docs]) {
-            if (seen.add(doc.id)) merged.add(doc);
-          }
-          return merged;
-        }
-
-        // Helper to build query with optional date range
-        Query buildQuery(String createdBy, String status) {
-          Query q = FirebaseFirestore.instance
+      Query buildBranchQuery(String branchVal, String status) {
+        return FirebaseFirestore.instance
             .collection('follow_ups')
-            .where(createdBy, isEqualTo: uid)
-            .where('branch', isEqualTo: branchForQuery)
-            .where('status', isEqualTo: status);
-          
-          if (_statusFilter != 'All') {
-            q = q.where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
-                 .where('created_at', isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd));
-          }
-          return q;
-        }
+            .where('branch', isEqualTo: branchVal)
+            .where('status', isEqualTo: status)
+            .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
+            .where('created_at', isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd));
+      }
 
-        // Fetch leads both created_by the user AND assigned_to the user,
-        // then merge (SME/DME leads are assigned_to the user, not created_by).
+      await Future.wait(usersByBranch.keys.map((branchVal) async {
+        final uidsInBranch = usersByBranch[branchVal]!
+            .map((u) => u['uid'] as String)
+            .toSet();
+
         final results = await Future.wait([
-          // In Progress — created by user
-          buildQuery('created_by', 'In Progress').get(),
-          // In Progress — assigned to user
-          buildQuery('assigned_to', 'In Progress').get(),
-          // Sale — created by user
-          buildQuery('created_by', 'Sale').get(),
-          // Sale — assigned to user
-          buildQuery('assigned_to', 'Sale').get(),
-          // Cancelled — created by user
-          buildQuery('created_by', 'Cancelled').get(),
-          // Cancelled — assigned to user
-          buildQuery('assigned_to', 'Cancelled').get(),
+          buildBranchQuery(branchVal, 'In Progress').get(),
+          buildBranchQuery(branchVal, 'Sale').get(),
+          buildBranchQuery(branchVal, 'Cancelled').get(),
         ]);
 
-        inProgressLeads = filterBySource(mergeDocs(results[0], results[1]));
-        saleLeads       = filterBySource(mergeDocs(results[2], results[3]));
-        cancelledLeads  = filterBySource(mergeDocs(results[4], results[5]));
-        inProgressCount = inProgressLeads.length;
-        saleCount       = saleLeads.length;
-        cancelledCount  = cancelledLeads.length;
+        void distributeDoc(
+          DocumentSnapshot doc,
+          Map<String, List<DocumentSnapshot>> bucketByUid,
+        ) {
+          final d = doc.data() as Map<String, dynamic>;
+          final createdBy = d['created_by'] as String?;
+          final assignedTo = d['assigned_to'] as String?;
+          final attributed = <String>{};
+          if (createdBy != null && uidsInBranch.contains(createdBy)) {
+            attributed.add(createdBy);
+          }
+          if (assignedTo != null && uidsInBranch.contains(assignedTo)) {
+            attributed.add(assignedTo);
+          }
+          for (final uid in attributed) {
+            bucketByUid.putIfAbsent(uid, () => []).add(doc);
+          }
+        }
 
-        final totalCreated = inProgressCount + saleCount + cancelledCount;
+        for (final doc in results[0].docs) distributeDoc(doc, inProgressByUid);
+        for (final doc in results[1].docs) distributeDoc(doc, saleByUid);
+        for (final doc in results[2].docs) distributeDoc(doc, cancelledByUid);
+      }));
+
+      // ── 3. Build stats list ───────────────────────────────────────────
+      final List<Map<String, dynamic>> stats = [];
+      for (final user in users) {
+        final uid = user['uid'] as String;
+        final userBranch = user['branch'] as String? ?? '';
+
+        final inProgressLeads = filterBySource(inProgressByUid[uid] ?? []);
+        final saleLeads       = filterBySource(saleByUid[uid] ?? []);
+        final cancelledLeads  = filterBySource(cancelledByUid[uid] ?? []);
+        final totalCreated    = inProgressLeads.length + saleLeads.length + cancelledLeads.length;
 
         stats.add({
           'username': user['username'],
           'role': user['role'],
           'branch': userBranch,
           'totalCreated': totalCreated,
-          'inProgress': inProgressCount,
-          'sale': saleCount,
-          'cancelled': cancelledCount,
+          'inProgress': inProgressLeads.length,
+          'sale': saleLeads.length,
+          'cancelled': cancelledLeads.length,
           'inProgressLeads': inProgressLeads,
           'saleLeads': saleLeads,
           'cancelledLeads': cancelledLeads,
         });
-        }));
+      }
 
       if (_selectedBranch == 'All Branches') {
         // Group users by branch
