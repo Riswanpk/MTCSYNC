@@ -157,10 +157,13 @@ exports.sendDailyTodoReport = onSchedule(
         // Summary table data
         for (const userId in branchUserStatus[branch]) {
           const userStatus = branchUserStatus[branch][userId];
+          // Mark 'Yes' if the user has todos fetched and displayed in the table below
+          const hasTodos = Boolean(todosByUser[userId] && todosByUser[userId].length > 0);
+
           const row = sheet.addRow({
             username: userStatus.username,
             lead: userStatus.lead ? "Yes" : "No",
-            todo: userStatus.todo ? "Yes" : "No",
+            todo: hasTodos ? "Yes" : "No",
           });
 
           // Color code Yes/No
@@ -172,7 +175,7 @@ exports.sendDailyTodoReport = onSchedule(
           }
 
           const todoCell = row.getCell(3);
-          if (userStatus.todo) {
+          if (hasTodos) {
             todoCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF90EE90" } };
           } else {
             todoCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFCCCB" } };
