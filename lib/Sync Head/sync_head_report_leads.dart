@@ -770,7 +770,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         final reportTypeLabel = reportType == 'summary' ? '' : ' [${_reportTypeLabel(reportType)}]';
         final message = Message()
           ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
-          ..recipients.addAll('performancemtc@gmail.com')
+          ..recipients.addAll(['performancemtc@gmail.com'])
           ..subject = 'Leads Report — All Branches$allBranchesEmailText$reportTypeLabel'
           ..text = 'Please find attached the leads report for all branches.'
           ..attachments = [FileAttachment(file)];
