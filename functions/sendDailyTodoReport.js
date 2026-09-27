@@ -9,37 +9,30 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-exports.sendDailyTodoReport = onSchedule(
-  {
-    schedule: "1 12 * * *",
-    timeZone: "Asia/Kolkata",
-    region: "asia-south1",
-  },
+async function generateAndSendDailyTodoReport({ force = false, targetEmail = null } = {}) {
+  const now = moment().tz("Asia/Kolkata");
+  const yesterday = now.clone().subtract(1, "day");
 
-  async (event) => {
-    const now = moment().tz("Asia/Kolkata");
-    const yesterday = now.clone().subtract(1, "day");
+  // Do not send report on Sunday (isoWeekday 7) unless forced for testing
+  if (now.isoWeekday() === 7 && !force) {
+    console.log("No report sent on Sunday.");
+    return { skipped: true, reason: "Sunday" };
+  }
 
-    // Do not send report on Sunday (isoWeekday 7)
-    if (now.isoWeekday() === 7) {
-      console.log("No report sent on Sunday.");
-      return null;
-    }
+  let start, end;
 
-    let start, end;
+  if (now.isoWeekday() === 1) { // Monday
+    // Saturday 12:00 PM to Monday 12:00 PM
+    const saturday = now.clone().subtract(2, "days");
+    start = saturday.clone().hour(12).minute(0).second(0).millisecond(0);
+    end = now.clone().hour(12).minute(0).second(0).millisecond(0);
+  } else {
+    // Previous day 12:00 PM to today 12:00 PM
+    start = yesterday.clone().hour(12).minute(0).second(0).millisecond(0);
+    end = now.clone().hour(12).minute(0).second(0).millisecond(0);
+  }
 
-    if (now.isoWeekday() === 1) { // Monday
-      // Saturday 12:00 PM to Monday 12:00 PM
-      const saturday = now.clone().subtract(2, "days");
-      start = saturday.clone().hour(12).minute(0).second(0).millisecond(0);
-      end = now.clone().hour(12).minute(0).second(0).millisecond(0);
-    } else {
-      // Previous day 12:00 PM to today 12:00 PM
-      start = yesterday.clone().hour(12).minute(0).second(0).millisecond(0);
-      end = now.clone().hour(12).minute(0).second(0).millisecond(0);
-    }
-
-    console.log(`Generating Daily Todo Report for interval: ${start.format()} to ${end.format()}`);
+  console.log(`Generating Daily Todo Report for interval: ${start.format()} to ${end.format()}`);
 
     try {
       // Fetch users
@@ -240,9 +233,11 @@ exports.sendDailyTodoReport = onSchedule(
         },
       });
 
+      const recipients = targetEmail ? [targetEmail] : ["performancemtc@gmail.com"];
+
       await transporter.sendMail({
         from: '"MTC Sync" <crmmalabar@gmail.com>',
-        to: ["performancemtc@gmail.com"],
+        to: recipients,
         subject: `Daily Leads & Todo Report for ${now.format("DD-MM-YYYY")}`,
         html: `
           <h2>Daily Leads & Todo Report</h2>
@@ -259,10 +254,25 @@ exports.sendDailyTodoReport = onSchedule(
       });
 
       console.log("Excel report sent successfully for interval:", start.format(), "to", end.format());
-      return null;
+      return { success: true, interval: { start: start.format(), end: end.format() } };
     } catch (error) {
       console.error("Error generating Daily Todo Report:", error);
       throw error;
     }
+}
+
+// Scheduled Trigger (Runs everyday at 12:01 PM IST)
+exports.sendDailyTodoReport = onSchedule(
+  {
+    schedule: "1 12 * * *",
+    timeZone: "Asia/Kolkata",
+    region: "asia-south1",
+  },
+  async (event) => {
+    return await generateAndSendDailyTodoReport();
   }
 );
+
+// Manual / Test Trigger
+exports.generateAndSendDailyTodoReport = generateAndSendDailyTodoReport;
+

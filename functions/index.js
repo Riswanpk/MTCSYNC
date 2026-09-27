@@ -47,7 +47,13 @@ exports.deleteUserFromAuth = onCall(async (request) => {
   }
 });
 
-exports.sendDailyTodoReport = require("./sendDailyTodoReport").sendDailyTodoReport;
+const dailyTodoReport = require("./sendDailyTodoReport");
+exports.sendDailyTodoReport = dailyTodoReport.sendDailyTodoReport;
+exports.triggerDailyTodoReport = onCall({ invoker: "public" }, async (request) => {
+  const force = request.data?.force ?? true;
+  const targetEmail = request.data?.targetEmail ?? null;
+  return await dailyTodoReport.generateAndSendDailyTodoReport({ force, targetEmail });
+});
 
 // Customer Individual Report Functions
 const customerIndividual = require("./CustomerIndividual");
