@@ -581,6 +581,14 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
         ),
       if (role == 'sync_head')
         NeumorphicButton(
+          onTap: () => _navigateToTodo(context),
+          text: 'Todos',
+          color: primaryGreen,
+          textColor: Colors.white,
+          icon: Icons.checklist_rounded,
+        ),
+      if (role == 'sync_head')
+        NeumorphicButton(
           onTap: () => _navigateToTransferCallList(context),
           text: 'Transfer Call List',
           color: primaryBlue,
@@ -787,17 +795,10 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
         icon: Icons.people_alt_rounded,
       ),
       NeumorphicButton(
-        onTap: () => _navigateToTodo(context),
-        text: 'Todos',
-        color: primaryGreen,
-        textColor: Colors.white,
-        icon: Icons.checklist_rounded,
-      ),
-      NeumorphicButton(
         onTap: () => _navigateToSyncHeadTodos(context),
         onLongPress: () => _navigateToSyncHeadReportTodo(context),
         text: 'Todo Reports',
-        color: primaryBlue,
+        color: primaryGreen,
         textColor: Colors.white,
         icon: Icons.assignment_rounded,
       ),
