@@ -46,48 +46,6 @@ List<DateTime> getCurrentISTWindow() {
   }
 }
 
-/// Creates a daily_report document for this user+type in the current 12 PM–12 PM IST window.
-/// Always ensures a document is created and saved in Firestore so daily reporting
-/// is 100% reliable under all network and execution conditions.
-Future<void> _createDailyReportIfNeeded({
-  required String userId,
-  required String documentId,
-  required String type,
-  String? email,
-}) async {
-  final data = <String, dynamic>{
-    'timestamp': FieldValue.serverTimestamp(),
-    'userId': userId,
-    'documentId': documentId,
-    'type': type,
-  };
-  if (email != null && email.isNotEmpty) {
-    data['email'] = email;
-  }
-
-  // 1. Direct collection.add ensures a fresh record with server timestamp always exists
-  try {
-    await FirebaseFirestore.instance.collection('daily_report').add(data);
-    debugPrint('Successfully added daily_report document for user $userId (type: $type)');
-  } catch (e) {
-    debugPrint('Error directly adding daily_report document: $e');
-  }
-
-  // 2. Also set deterministic docId with updated timestamp for deduplicated indexing
-  try {
-    final window = getCurrentISTWindow();
-    final start = window[0];
-    final windowKey = "${start.year}${start.month.toString().padLeft(2, '0')}${start.day.toString().padLeft(2, '0')}";
-    final docId = "${userId}_${type}_$windowKey";
-
-    await FirebaseFirestore.instance.collection('daily_report').doc(docId).set(
-      data,
-      SetOptions(merge: true),
-    );
-  } catch (e) {
-    debugPrint('Error setting deterministic daily_report doc: $e');
-  }
-}
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -224,13 +182,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
           'created_by': createdBy,
         });
 
-        // Ensure daily_report record is created/updated immediately
-        await _createDailyReportIfNeeded(
-          userId: createdBy,
-          documentId: widget.docId!,
-          type: 'todo',
-          email: email,
-        );
+
 
         await _clearDraft();
 
@@ -284,13 +236,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
         'reminder_sent': false,
       });
 
-      // Ensure daily_report record is created immediately
-      await _createDailyReportIfNeeded(
-        userId: createdBy,
-        documentId: todoRef.id,
-        type: 'todo',
-        email: email,
-      );
+
 
       // Schedule local notification for the exact reminder time
       try {

@@ -138,22 +138,37 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
               ? today
               : nextMonthDate.subtract(const Duration(days: 1))).day;
 
-          final dailySnap = await FirebaseFirestore.instance
-              .collection('daily_report')
-              .where('userId', isEqualTo: userId)
-              .where('type', isEqualTo: 'todo')
-              .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfMonth.subtract(const Duration(days: 2))))
-              .where('timestamp', isLessThan: Timestamp.fromDate(nextMonthDate.add(const Duration(hours: 12))))
-              .get();
-
+          final userEmail = (userDoc.data()['email'] ?? '').toString().trim();
           final Set<DateTime> todoDates = {};
-          for (final dDoc in dailySnap.docs) {
+          final todoSnaps = await Future.wait([
+            FirebaseFirestore.instance
+                .collection('todo')
+                .where('created_by', isEqualTo: userId)
+                .get(),
+            if (userEmail.isNotEmpty)
+              FirebaseFirestore.instance
+                  .collection('todo')
+                  .where('email', isEqualTo: userEmail)
+                  .get()
+            else
+              Future.value(null),
+          ]);
+
+          final snapUid = todoSnaps[0] as QuerySnapshot<Map<String, dynamic>>;
+          final snapEmail = todoSnaps[1];
+
+          for (final dDoc in snapUid.docs) {
             final ts = dDoc.data()['timestamp'];
             if (ts is Timestamp) {
               todoDates.add(ts.toDate());
-            } else if (ts is String) {
-              final parsed = DateTime.tryParse(ts);
-              if (parsed != null) todoDates.add(parsed);
+            }
+          }
+          if (snapEmail != null) {
+            for (final dDoc in snapEmail.docs) {
+              final ts = dDoc.data()['timestamp'];
+              if (ts is Timestamp) {
+                todoDates.add(ts.toDate());
+              }
             }
           }
 

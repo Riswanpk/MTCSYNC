@@ -32,27 +32,33 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
       };
     }
 
-    // Batch fetch daily_report for all users in the window (instead of N+1 queries)
-    final dailyReportSnap = await FirebaseFirestore.instance
-        .collection('daily_report')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
-        .where('timestamp', isLessThan: Timestamp.fromDate(end))
+    // Build email→userId lookup
+    final emailToUserId = <String, String>{};
+    for (var userId in userMap.keys) {
+      final email = userMap[userId]?['email']?.toString().trim().toLowerCase();
+      if (email != null && email.isNotEmpty) emailToUserId[email] = userId;
+    }
+
+    // Batch fetch follow_ups for all users in the window
+    final allFollowUpsSnap = await FirebaseFirestore.instance
+        .collection('follow_ups')
+        .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('created_at', isLessThan: Timestamp.fromDate(end))
         .get();
 
-    for (final doc in dailyReportSnap.docs) {
+    for (final doc in allFollowUpsSnap.docs) {
       final data = doc.data();
-      final userId = data['userId'] as String?;
-      final type = data['type'] as String?;
-      if (userId == null || type == null) continue;
-      if (!userMap.containsKey(userId)) continue;
+      final createdBy = data['created_by'] as String?;
+      final email = data['email']?.toString().trim().toLowerCase();
+      String? userId = (createdBy != null && userMap.containsKey(createdBy)) ? createdBy : null;
+      if (userId == null && email != null) {
+        userId = emailToUserId[email];
+      }
+      if (userId == null) continue;
       final branch = userMap[userId]?['branch'] ?? 'Unknown';
       if (branchUserStatus.containsKey(branch) &&
           branchUserStatus[branch]!.containsKey(userId)) {
-        if (type == 'leads') {
-          branchUserStatus[branch]![userId]!['lead'] = true;
-        } else if (type == 'todo') {
-          branchUserStatus[branch]![userId]!['todo'] = true;
-        }
+        branchUserStatus[branch]![userId]!['lead'] = true;
       }
     }
 
@@ -62,13 +68,6 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
         .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
         .where('timestamp', isLessThan: Timestamp.fromDate(end))
         .get();
-
-    // Build email→userId lookup
-    final emailToUserId = <String, String>{};
-    for (var userId in userMap.keys) {
-      final email = userMap[userId]?['email'];
-      if (email != null) emailToUserId[email] = userId;
-    }
 
     final todosByUser = <String, List<Map<String, dynamic>>>{};
     for (final doc in allTodosSnap.docs) {

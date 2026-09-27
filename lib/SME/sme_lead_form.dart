@@ -221,12 +221,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
         }
       }());
 
-      // Daily report tracking
-      await createDailyReportIfNeededLeads(
-        userId: user.uid,
-        documentId: followUpRef.id,
-        type: 'leads',
-      );
+
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

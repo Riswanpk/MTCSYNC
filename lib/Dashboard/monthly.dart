@@ -145,30 +145,65 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
         ? today 
         : nextMonth.subtract(const Duration(days: 1))).day;
 
-    // Fetch both snapshots in parallel for faster loading
+    final userEmail = (_selectedUser?['email'] ?? '').toString().trim();
+
+    // Fetch both follow_ups and todos in parallel for faster loading
     final results = await Future.wait([
       FirebaseFirestore.instance
-          .collection('daily_report')
-          .where('userId', isEqualTo: uid)
-          .where('type', isEqualTo: 'leads')
-          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
-          .where('timestamp', isLessThan: Timestamp.fromDate(nextMonth))
+          .collection('follow_ups')
+          .where('created_by', isEqualTo: uid)
           .get(),
       FirebaseFirestore.instance
-          .collection('daily_report')
-          .where('userId', isEqualTo: uid)
-          .where('type', isEqualTo: 'todo')
-          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart.subtract(const Duration(days: 2))))
-          .where('timestamp', isLessThan: Timestamp.fromDate(nextMonth.add(const Duration(hours: 12))))
+          .collection('todo')
+          .where('created_by', isEqualTo: uid)
           .get(),
+      if (userEmail.isNotEmpty)
+        FirebaseFirestore.instance
+            .collection('todo')
+            .where('email', isEqualTo: userEmail)
+            .get()
+      else
+        Future.value(null),
     ]);
 
-    final leadDates = results[0].docs
-        .map((doc) => (doc['timestamp'] as Timestamp).toDate())
-        .toSet();
-    final todoDates = results[1].docs
-        .map((doc) => (doc['timestamp'] as Timestamp).toDate())
-        .toSet();
+    final leadSnap = results[0] as QuerySnapshot;
+    final todoSnapUid = results[1] as QuerySnapshot;
+    final todoSnapEmail = results[2] as QuerySnapshot?;
+
+    final leadDates = <DateTime>{};
+    for (final doc in leadSnap.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final ts = data['created_at'];
+      if (ts is Timestamp) {
+        leadDates.add(ts.toDate());
+      } else {
+        final dt = data['date'];
+        if (dt is Timestamp) {
+          leadDates.add(dt.toDate());
+        } else if (dt is String) {
+          final parsed = DateTime.tryParse(dt);
+          if (parsed != null) leadDates.add(parsed);
+        }
+      }
+    }
+
+    final todoDates = <DateTime>{};
+    for (final doc in todoSnapUid.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final ts = data['timestamp'];
+      if (ts is Timestamp) {
+        todoDates.add(ts.toDate());
+      }
+    }
+    if (todoSnapEmail != null) {
+      for (final doc in todoSnapEmail.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final ts = data['timestamp'];
+        if (ts is Timestamp) {
+          todoDates.add(ts.toDate());
+        }
+      }
+    }
 
     List<Map<String, dynamic>> missedReport = [];
 

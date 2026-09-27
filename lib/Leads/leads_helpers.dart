@@ -25,31 +25,6 @@ List<DateTime> getCurrentISTWindowLeads() {
   return [windowStart, windowEnd];
 }
 
-/// Creates a daily_report document only if one doesn't already exist
-/// for this user+type in the current 12 PM–12 PM IST window.
-Future<void> createDailyReportIfNeededLeads({
-  required String userId,
-  required String documentId,
-  required String type,
-}) async {
-  final window = getCurrentISTWindowLeads();
-  final existing = await FirebaseFirestore.instance
-      .collection('daily_report')
-      .where('userId', isEqualTo: userId)
-      .where('type', isEqualTo: type)
-      .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(window[0]))
-      .where('timestamp', isLessThan: Timestamp.fromDate(window[1]))
-      .limit(1)
-      .get();
-  if (existing.docs.isEmpty) {
-    await FirebaseFirestore.instance.collection('daily_report').add({
-      'timestamp': FieldValue.serverTimestamp(),
-      'userId': userId,
-      'documentId': documentId,
-      'type': type,
-    });
-  }
-}
 
 /// Search customers by name OR phone within a branch.
 Future<List<Map<String, dynamic>>> fetchCustomerSuggestions(String query, String branch) async {

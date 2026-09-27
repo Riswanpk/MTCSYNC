@@ -50,54 +50,49 @@ exports.sendDailyTodoReport = onSchedule(
       });
 
 
-      // Prepare user status per branch (only todo)
+      // Build email -> userId lookup
+      const emailToUserId = {};
+      for (const uid in userMap) {
+        if (userMap[uid].email) {
+          emailToUserId[userMap[uid].email.trim().toLowerCase()] = uid;
+        }
+      }
+
+      // Prepare user status per branch (leads and todo)
       const branchUserStatus = {};
       for (const userId in userMap) {
         const user = userMap[userId];
         const branch = user.branch || "Unknown";
         if (!branchUserStatus[branch]) branchUserStatus[branch] = {};
         branchUserStatus[branch][userId] = {
+          lead: false,
           todo: false,
           username: user.username || user.email || "Unknown"
         };
       }
 
-      // Fetch all daily_report entries in the time window at once for efficiency
-      const dailyReportSnap = await admin.firestore()
-        .collection("daily_report")
-        .where("timestamp", ">=", admin.firestore.Timestamp.fromDate(start.toDate()))
-        .where("timestamp", "<", admin.firestore.Timestamp.fromDate(end.toDate()))
+      // Fetch all follow_ups created in the time window
+      const followUpsSnap = await admin.firestore()
+        .collection("follow_ups")
+        .where("created_at", ">=", admin.firestore.Timestamp.fromDate(start.toDate()))
+        .where("created_at", "<", admin.firestore.Timestamp.fromDate(end.toDate()))
         .get();
 
-      // Process daily_report entries (only todo)
-      dailyReportSnap.forEach(doc => {
+      followUpsSnap.forEach(doc => {
         const data = doc.data();
-        let userId = data.userId || data.user_id || data.created_by;
-        const type = data.type;
-
-        // Fallback to match by email if userId is missing or not in userMap
+        let userId = data.created_by || data.userId;
         if ((!userId || !userMap[userId]) && data.email) {
-          const targetEmail = data.email.trim().toLowerCase();
-          for (const uid in userMap) {
-            if (userMap[uid].email && userMap[uid].email.trim().toLowerCase() === targetEmail) {
-              userId = uid;
-              break;
-            }
-          }
+          userId = emailToUserId[data.email.trim().toLowerCase()];
         }
-
         if (userId && userMap[userId]) {
           const branch = userMap[userId].branch || "Unknown";
           if (branchUserStatus[branch] && branchUserStatus[branch][userId]) {
-            if (type === "todo") {
-              branchUserStatus[branch][userId].todo = true;
-            }
+            branchUserStatus[branch][userId].lead = true;
           }
         }
       });
 
-      // Fetch todos created/updated by each user in the interval
-      // Query by created_by (userId) to match Flutter logic
+      // Fetch todos created in the interval
       const todosByUser = {};
       
       // Get all todos in the time window
@@ -110,21 +105,16 @@ exports.sendDailyTodoReport = onSchedule(
       // Group todos by user (using created_by or email)
       todosSnap.forEach(doc => {
         const data = doc.data();
-        // Use created_by (userId) if available, otherwise find user by email
         let userId = data.created_by || data.userId;
-        
-        // If userId is missing or not in userMap, match by email
         if ((!userId || !userMap[userId]) && data.email) {
-          const targetEmail = data.email.trim().toLowerCase();
-          for (const uid in userMap) {
-            if (userMap[uid].email && userMap[uid].email.trim().toLowerCase() === targetEmail) {
-              userId = uid;
-              break;
-            }
-          }
+          userId = emailToUserId[data.email.trim().toLowerCase()];
         }
 
         if (userId && userMap[userId]) {
+          const branch = userMap[userId].branch || "Unknown";
+          if (branchUserStatus[branch] && branchUserStatus[branch][userId]) {
+            branchUserStatus[branch][userId].todo = true;
+          }
           if (!todosByUser[userId]) {
             todosByUser[userId] = [];
           }
@@ -139,17 +129,6 @@ exports.sendDailyTodoReport = onSchedule(
         }
       });
 
-      // Synchronize summary: If a user has any actual todos created in this interval,
-      // mark their todo status as 'Yes' (true) in the summary table
-      for (const userId in todosByUser) {
-        if (todosByUser[userId] && todosByUser[userId].length > 0 && userMap[userId]) {
-          const branch = userMap[userId].branch || "Unknown";
-          if (branchUserStatus[branch] && branchUserStatus[branch][userId]) {
-            branchUserStatus[branch][userId].todo = true;
-          }
-        }
-      }
-
       // Generate Excel
       const workbook = new ExcelJS.Workbook();
       workbook.creator = "MTC Sync";
@@ -162,6 +141,7 @@ exports.sendDailyTodoReport = onSchedule(
         // Style header
         sheet.columns = [
           { header: "Username", key: "username", width: 25 },
+          { header: "Leads", key: "lead", width: 12 },
           { header: "Todo", key: "todo", width: 12 },
         ];
 
@@ -179,11 +159,19 @@ exports.sendDailyTodoReport = onSchedule(
           const userStatus = branchUserStatus[branch][userId];
           const row = sheet.addRow({
             username: userStatus.username,
+            lead: userStatus.lead ? "Yes" : "No",
             todo: userStatus.todo ? "Yes" : "No",
           });
 
           // Color code Yes/No
-          const todoCell = row.getCell(2);
+          const leadCell = row.getCell(2);
+          if (userStatus.lead) {
+            leadCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF90EE90" } };
+          } else {
+            leadCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFCCCB" } };
+          }
+
+          const todoCell = row.getCell(3);
           if (userStatus.todo) {
             todoCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF90EE90" } };
           } else {
@@ -240,11 +228,11 @@ exports.sendDailyTodoReport = onSchedule(
       await transporter.sendMail({
         from: '"MTC Sync" <crmmalabar@gmail.com>',
         to: ["performancemtc@gmail.com"],
-        subject: `Daily Todo Report for ${now.format("DD-MM-YYYY")}`,
+        subject: `Daily Leads & Todo Report for ${now.format("DD-MM-YYYY")}`,
         html: `
-          <h2>Daily Todo Report</h2>
+          <h2>Daily Leads & Todo Report</h2>
           <p><strong>Report Period:</strong> ${start.format("DD-MM-YYYY HH:mm")} to ${end.format("DD-MM-YYYY HH:mm")}</p>
-          <p>Please find attached the daily todo report.</p>
+          <p>Please find attached the daily leads and todo report.</p>
           <br/>
           <p style="color: #666; font-size: 12px;">This report was automatically generated by MTC Sync.</p>
         `,

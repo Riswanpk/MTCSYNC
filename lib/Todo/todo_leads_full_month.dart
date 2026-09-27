@@ -77,28 +77,26 @@ class _TodoLeadsFullMonthPageState extends State<TodoLeadsFullMonthPage> {
       branchUserStatus[branch]![userId] = {'lead': false, 'todo': false};
     }
 
-    // --- Optimization: Batch fetch daily_report for all users in interval ---
-    final dailyReportSnap = await FirebaseFirestore.instance
-        .collection('daily_report')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
-        .where('timestamp', isLessThan: Timestamp.fromDate(end))
+    // --- Optimization: Batch fetch follow_ups for all users in interval ---
+    final followUpsSnap = await FirebaseFirestore.instance
+        .collection('follow_ups')
+        .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('created_at', isLessThan: Timestamp.fromDate(end))
         .get();
 
-    // Map userId to lead/todo status
-    for (final doc in dailyReportSnap.docs) {
+    for (final doc in followUpsSnap.docs) {
       final data = doc.data();
-      final userId = data['userId'];
-      final type = data['type'];
-      if (userId == null || type == null) continue;
-      // Only process users in userMap
-      if (!userMap.containsKey(userId)) continue;
+      final createdBy = data['created_by'] as String?;
+      final email = data['email'] as String?;
+      String? userId = (createdBy != null && userMap.containsKey(createdBy)) ? createdBy : null;
+      if (userId == null && email != null) {
+        userId = emailToUserId[email];
+      }
+      if (userId == null) continue;
       final branch = userMap[userId]?['branch'] ?? 'Unknown';
-      if (!branchUserStatus.containsKey(branch)) continue;
-      if (!branchUserStatus[branch]!.containsKey(userId)) continue;
-      if (type == 'leads') {
+      if (branchUserStatus.containsKey(branch) &&
+          branchUserStatus[branch]!.containsKey(userId)) {
         branchUserStatus[branch]![userId]!['lead'] = true;
-      } else if (type == 'todo') {
-        branchUserStatus[branch]![userId]!['todo'] = true;
       }
     }
 

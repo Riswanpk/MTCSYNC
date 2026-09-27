@@ -292,25 +292,42 @@ class _TodoPageState extends State<TodoPage>
     if (_userEmail == null) return;
     final now = DateTime.now();
 
-    // Get all completed todos for this user
-    final snapshot = await _firestore
+    final uid = _auth.currentUser?.uid;
+    final List<DocumentSnapshot<Map<String, dynamic>>> allDocs = [];
+    final seenIds = <String>{};
+
+    final snapEmail = await _firestore
         .collection('todo')
         .where('email', isEqualTo: _userEmail)
-        .where('status', isEqualTo: 'done') // Only completed todos
+        .where('status', isEqualTo: 'done')
         .get();
+    for (var d in snapEmail.docs) {
+      if (seenIds.add(d.id)) allDocs.add(d);
+    }
+
+    if (uid != null && uid.isNotEmpty) {
+      final snapUid = await _firestore
+          .collection('todo')
+          .where('created_by', isEqualTo: uid)
+          .where('status', isEqualTo: 'done')
+          .get();
+      for (var d in snapUid.docs) {
+        if (seenIds.add(d.id)) allDocs.add(d);
+      }
+    }
 
     final batch = _firestore.batch();
 
-    for (var doc in snapshot.docs) {
+    for (var doc in allDocs) {
       final data = doc.data();
+      if (data == null) continue;
       final timestamp = data['timestamp'];
       if (timestamp is Timestamp) {
         final todoTime = timestamp.toDate();
         final difference = now.difference(todoTime);
-        // Delete after 60 days (about 2 months) of completion
-        if (difference.inDays >= 60) {
+        // Auto deletion of todo after 40 days has passed since todo creation
+        if (difference.inDays >= 40) {
           batch.delete(doc.reference);
-          // Do NOT update daily_report here!
         }
       }
     }

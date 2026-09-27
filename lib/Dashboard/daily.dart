@@ -109,31 +109,55 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
     }
     final windowEnd = tz.TZDateTime(ist, todayIST.year, todayIST.month, todayIST.day, 12);
 
-    // --- OPTIMIZATION: Use Future.wait to run queries for all users in parallel ---
-    await Future.wait(users.map((user) async {
-      final userId = user['uid'];
-      final results = await Future.wait([
-        FirebaseFirestore.instance
-            .collection('daily_report')
-            .where('userId', isEqualTo: userId)
-            .where('type', isEqualTo: 'leads')
-            .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(windowStart))
-            .where('timestamp', isLessThan: Timestamp.fromDate(windowEnd))
-            .limit(1)
-            .get(),
-        FirebaseFirestore.instance
-            .collection('daily_report')
-            .where('userId', isEqualTo: userId)
-            .where('type', isEqualTo: 'todo')
-            .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(windowStart))
-            .where('timestamp', isLessThan: Timestamp.fromDate(windowEnd))
-            .limit(1)
-            .get(),
-      ]);
-      user['lead'] = (results[0] as QuerySnapshot).docs.isNotEmpty;
-      user['todo'] = (results[1] as QuerySnapshot).docs.isNotEmpty;
-    }));
-    // --- END OPTIMIZATION ---
+    // Batch fetch follow_ups and todos created in the window
+    final results = await Future.wait([
+      FirebaseFirestore.instance
+          .collection('follow_ups')
+          .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(windowStart))
+          .where('created_at', isLessThan: Timestamp.fromDate(windowEnd))
+          .get(),
+      FirebaseFirestore.instance
+          .collection('todo')
+          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(windowStart))
+          .where('timestamp', isLessThan: Timestamp.fromDate(windowEnd))
+          .get(),
+    ]);
+
+    final followUpsDocs = (results[0] as QuerySnapshot).docs;
+    final todosDocs = (results[1] as QuerySnapshot).docs;
+
+    final userCreatedLead = <String>{};
+    for (final doc in followUpsDocs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final createdBy = data['created_by']?.toString();
+      if (createdBy != null && createdBy.isNotEmpty) {
+        userCreatedLead.add(createdBy);
+      }
+      final email = data['email']?.toString().trim().toLowerCase();
+      if (email != null && email.isNotEmpty) {
+        userCreatedLead.add(email);
+      }
+    }
+
+    final userCreatedTodo = <String>{};
+    for (final doc in todosDocs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final createdBy = data['created_by']?.toString();
+      if (createdBy != null && createdBy.isNotEmpty) {
+        userCreatedTodo.add(createdBy);
+      }
+      final email = data['email']?.toString().trim().toLowerCase();
+      if (email != null && email.isNotEmpty) {
+        userCreatedTodo.add(email);
+      }
+    }
+
+    for (var user in users) {
+      final uid = user['uid']?.toString() ?? '';
+      final email = (user['email']?.toString() ?? '').trim().toLowerCase();
+      user['lead'] = userCreatedLead.contains(uid) || (email.isNotEmpty && userCreatedLead.contains(email));
+      user['todo'] = userCreatedTodo.contains(uid) || (email.isNotEmpty && userCreatedTodo.contains(email));
+    }
 
     return users;
   }
