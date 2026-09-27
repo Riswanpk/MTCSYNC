@@ -687,42 +687,45 @@ class _SyncHeadReportTodoPageState extends State<SyncHeadReportTodoPage> {
             const SizedBox(height: 20),
 
             // Detailed Checkbox / Switch Option Card
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF162236) : Colors.white,
+            Material(
+              color: isDark ? const Color(0xFF162236) : Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(
+                side: BorderSide(
                   color: _isDetailed
                       ? _primaryGreen
                       : (isDark ? Colors.white12 : Colors.black12),
                   width: 1.5,
                 ),
               ),
-              child: SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                activeThumbColor: _primaryGreen,
-                title: Text(
-                  'Include Detailed Pending List',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.black87,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  activeThumbColor: _primaryGreen,
+                  title: Text(
+                    'Include Detailed Pending List',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
                   ),
-                ),
-                subtitle: Text(
-                  _isDetailed
-                      ? 'Detailed breakdown per user will be added below the summary table'
-                      : 'Only summary table (username, created, pending) will be exported',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.white54 : Colors.black54,
+                  subtitle: Text(
+                    _isDetailed
+                        ? 'Detailed breakdown per user will be added below the summary table'
+                        : 'Only summary table (username, created, pending) will be exported',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? Colors.white54 : Colors.black54,
+                    ),
                   ),
+                  value: _isDetailed,
+                  onChanged: (val) {
+                    setState(() => _isDetailed = val);
+                  },
                 ),
-                value: _isDetailed,
-                onChanged: (val) {
-                  setState(() => _isDetailed = val);
-                },
               ),
             ),
 
