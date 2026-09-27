@@ -50,11 +50,15 @@ exports.sendDailyTodoReport = onSchedule(
       });
 
 
-      // Build email -> userId lookup
+      // Build email and username lookups for reliable user matching
       const emailToUserId = {};
+      const usernameToUserId = {};
       for (const uid in userMap) {
         if (userMap[uid].email) {
           emailToUserId[userMap[uid].email.trim().toLowerCase()] = uid;
+        }
+        if (userMap[uid].username) {
+          usernameToUserId[userMap[uid].username.trim().toLowerCase()] = uid;
         }
       }
 
@@ -80,9 +84,13 @@ exports.sendDailyTodoReport = onSchedule(
 
       followUpsSnap.forEach(doc => {
         const data = doc.data();
-        let userId = data.created_by || data.userId;
+        let userId = data.created_by || data.userId || data.user_id;
         if ((!userId || !userMap[userId]) && data.email) {
           userId = emailToUserId[data.email.trim().toLowerCase()];
+        }
+        if ((!userId || !userMap[userId]) && (data.username || data.user_name || data.created_by_name)) {
+          const name = (data.username || data.user_name || data.created_by_name).trim().toLowerCase();
+          userId = usernameToUserId[name];
         }
         if (userId && userMap[userId]) {
           const branch = userMap[userId].branch || "Unknown";
@@ -102,12 +110,16 @@ exports.sendDailyTodoReport = onSchedule(
         .where("timestamp", "<", admin.firestore.Timestamp.fromDate(end.toDate()))
         .get();
 
-      // Group todos by user (using created_by or email)
+      // Group todos by user (using created_by, email, or username)
       todosSnap.forEach(doc => {
         const data = doc.data();
-        let userId = data.created_by || data.userId;
+        let userId = data.created_by || data.userId || data.user_id;
         if ((!userId || !userMap[userId]) && data.email) {
           userId = emailToUserId[data.email.trim().toLowerCase()];
+        }
+        if ((!userId || !userMap[userId]) && (data.username || data.user_name || data.created_by_name)) {
+          const name = (data.username || data.user_name || data.created_by_name).trim().toLowerCase();
+          userId = usernameToUserId[name];
         }
 
         if (userId && userMap[userId]) {
@@ -119,7 +131,7 @@ exports.sendDailyTodoReport = onSchedule(
             todosByUser[userId] = [];
           }
           todosByUser[userId].push({
-            title: data.title || "",
+            title: data.title || data.text || "",
             description: data.description || "",
             priority: data.priority || "High",
             status: data.status || "pending",
@@ -197,11 +209,11 @@ exports.sendDailyTodoReport = onSchedule(
 
         // Todos Table Data
         for (const userId in branchUserStatus[branch]) {
-          const user = userMap[userId];
+          const userStatus = branchUserStatus[branch][userId];
           const todos = todosByUser[userId] || [];
           for (const todo of todos) {
             sheet.addRow([
-              user.username || user.email || "",
+              userStatus.username,
               todo.title,
               todo.description,
               todo.priority,
