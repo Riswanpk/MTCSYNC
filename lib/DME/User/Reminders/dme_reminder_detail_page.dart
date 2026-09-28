@@ -474,7 +474,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage>
     );
 
     return PopScope(
-      canPop: !isCalledWithoutRemarks,
+      canPop: !isCalledWithoutRemarks || _hasPendingRequest,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -489,6 +489,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage>
           isCompleted: isCompleted,
           isCalledWithoutRemarks: isCalledWithoutRemarks,
           callMade: _callMade,
+          hasPendingRequest: _hasPendingRequest,
           onOpenRaiseRequest: _openRaiseRequestPage,
         ),
         body: SingleChildScrollView(

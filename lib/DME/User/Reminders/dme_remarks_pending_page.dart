@@ -78,9 +78,27 @@ class _DmeRemarksPendingPageState extends State<DmeRemarksPendingPage> {
         }
       }
 
-      // Also check if any called reminders from Supabase for today with duration > 0 are missing remarks
+      // 4. Query ongoing pending change requests from dme_change_requests to exclude reminders with ongoing requests
       final client = await DmeConfig.getClient();
+      final Set<int> ongoingCustomerIds = {};
+      final Set<int> ongoingReminderIds = {};
+
       if (client != null) {
+        try {
+          final reqRes = await client
+              .from('dme_change_requests')
+              .select('customer_id, reminder_id')
+              .eq('status', 'pending');
+          for (var row in (reqRes as List)) {
+            final cId = int.tryParse(row['customer_id']?.toString() ?? '');
+            if (cId != null) ongoingCustomerIds.add(cId);
+            final rId = int.tryParse(row['reminder_id']?.toString() ?? '');
+            if (rId != null) ongoingReminderIds.add(rId);
+          }
+        } catch (e) {
+          debugPrint('Error fetching pending change requests: $e');
+        }
+
         final todayStr = DmeAssignmentService.formatDate(DateTime.now());
         try {
           final res = await client
@@ -111,9 +129,18 @@ class _DmeRemarksPendingPageState extends State<DmeRemarksPendingPage> {
         } catch (_) {}
       }
 
+      // Filter out any reminder with an ongoing pending change request
+      final filteredPending = pending.where((r) {
+        final cId = int.tryParse(r['customer_id']?.toString() ?? '');
+        final rId = int.tryParse(r['id']?.toString() ?? '');
+        final hasOngoingRequest = (cId != null && ongoingCustomerIds.contains(cId)) ||
+            (rId != null && ongoingReminderIds.contains(rId));
+        return !hasOngoingRequest;
+      }).toList();
+
       if (!mounted) return;
       setState(() {
-        _pendingReminders = pending;
+        _pendingReminders = filteredPending;
         _loading = false;
       });
     } catch (e) {

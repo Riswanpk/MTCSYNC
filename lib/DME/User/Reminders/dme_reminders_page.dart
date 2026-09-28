@@ -171,22 +171,28 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
         filterBranchId: _selectedBranchId,
       );
 
-      // 3. Fetch pending phone change requests to lock/grey out affected reminders
+      // 3. Fetch pending change requests to lock/grey out affected reminders and exclude from pending remarks
       Set<int> pendingPhoneCustomerIds = {};
       Set<int> pendingPhoneReminderIds = {};
+      Set<int> ongoingRequestCustomerIds = {};
+      Set<int> ongoingRequestReminderIds = {};
       try {
         final client = await DmeConfig.getClient();
         if (client != null) {
           final pendingRes = await client
               .from('dme_change_requests')
-              .select('customer_id, reminder_id')
-              .eq('request_type', 'phone_number_change')
+              .select('customer_id, reminder_id, request_type')
               .eq('status', 'pending');
           for (var row in (pendingRes as List)) {
             final cId = int.tryParse(row['customer_id']?.toString() ?? '');
-            if (cId != null) pendingPhoneCustomerIds.add(cId);
             final rId = int.tryParse(row['reminder_id']?.toString() ?? '');
-            if (rId != null) pendingPhoneReminderIds.add(rId);
+            final type = row['request_type']?.toString();
+            if (cId != null) ongoingRequestCustomerIds.add(cId);
+            if (rId != null) ongoingRequestReminderIds.add(rId);
+            if (type == 'phone_number_change') {
+              if (cId != null) pendingPhoneCustomerIds.add(cId);
+              if (rId != null) pendingPhoneReminderIds.add(rId);
+            }
           }
         }
       } catch (_) {}
@@ -196,6 +202,8 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
         final rId = int.tryParse(r['id']?.toString() ?? '');
         r['is_phone_change_pending'] = (cId != null && pendingPhoneCustomerIds.contains(cId)) ||
             (rId != null && pendingPhoneReminderIds.contains(rId));
+        r['has_ongoing_request'] = (cId != null && ongoingRequestCustomerIds.contains(cId)) ||
+            (rId != null && ongoingRequestReminderIds.contains(rId));
       }
 
       for (var r in completed) {
@@ -203,6 +211,8 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
         final rId = int.tryParse(r['id']?.toString() ?? '');
         r['is_phone_change_pending'] = (cId != null && pendingPhoneCustomerIds.contains(cId)) ||
             (rId != null && pendingPhoneReminderIds.contains(rId));
+        r['has_ongoing_request'] = (cId != null && ongoingRequestCustomerIds.contains(cId)) ||
+            (rId != null && ongoingRequestReminderIds.contains(rId));
       }
 
       if (mounted) {
@@ -273,7 +283,8 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
       final remarks = (r['remarks'] ?? '').toString().trim();
       final status = (r['status'] ?? '').toString().toLowerCase();
       final duration = int.tryParse(r['call_duration']?.toString() ?? '') ?? 0;
-      return duration > 10 && remarks.isEmpty && status != 'completed';
+      final hasOngoingRequest = r['has_ongoing_request'] == true;
+      return duration > 10 && remarks.isEmpty && status != 'completed' && !hasOngoingRequest;
     }).length;
 
     // Filter customers who were called today but haven't picked up yet

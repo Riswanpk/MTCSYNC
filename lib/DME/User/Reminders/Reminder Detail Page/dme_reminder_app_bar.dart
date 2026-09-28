@@ -7,6 +7,7 @@ class DmeReminderAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool isCompleted;
   final bool isCalledWithoutRemarks;
   final bool callMade;
+  final bool hasPendingRequest;
   final VoidCallback onOpenRaiseRequest;
 
   const DmeReminderAppBar({
@@ -16,6 +17,7 @@ class DmeReminderAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.isCompleted,
     required this.isCalledWithoutRemarks,
     required this.callMade,
+    this.hasPendingRequest = false,
     required this.onOpenRaiseRequest,
   });
 
@@ -28,7 +30,7 @@ class DmeReminderAppBar extends StatelessWidget implements PreferredSizeWidget {
       leading: IconButton(
         icon: const Icon(Icons.arrow_back),
         onPressed: () {
-          if (isCalledWithoutRemarks) {
+          if (isCalledWithoutRemarks && !hasPendingRequest) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Please enter remarks and tap "Save Remarks & Mark Completed" before leaving.'),
