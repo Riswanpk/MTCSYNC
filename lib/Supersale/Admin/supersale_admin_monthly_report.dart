@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
@@ -10,14 +10,19 @@ const List<String> _targetRoles = ['sales', 'manager', 'asst_manager'];
 
 /// Generates an Excel monthly performance report for a given [year] and [month].
 ///
-/// Two sections per branch sheet:
+/// If [isSummary] is false (Detailed mode):
 ///  A. Users who created NO supersale orders for campaigns whose deliveryEnd
-///     falls within the selected month.
+///     falls within the selected month (per campaign breakdown).
 ///  B. Orders (pending) whose delivery deadline falls within the month but
 ///     have NOT been delivered.
+///
+/// If [isSummary] is true (Summary mode):
+///  A. Per user: Username, Role, Total Campaigns applicable, Completed Campaigns count.
+///  B. Per user: Username, Role, Overdue Orders count.
 Future<void> generateMonthlyReport({
   required int year,
   required int month,
+  bool isSummary = false,
 }) async {
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
@@ -149,141 +154,133 @@ Future<void> generateMonthlyReport({
       for (final u in branchUsers) u['uid'] as String: u,
     };
 
-    // --- Section A: Non-participants ---
-    final List<Map<String, dynamic>> nonParticipants = [];
+    if (isSummary) {
+      // ================= SUMMARY REPORT MODE =================
 
-    for (final campaign in relevantCampaigns) {
-      final String campaignId = campaign['id'];
-      final String itemName = campaign['item'];
-      final List<dynamic> campaignBranches = campaign['branches'];
-      final DateTime deliveryEnd = campaign['deliveryEnd'] as DateTime;
+      // Section A: For each user in branch, count applicable campaigns and completed campaigns
+      // A user "completed" a campaign if they have at least one delivered order in it.
+      // Total = count of relevant campaigns that apply to this branch.
+      final List<Map<String, dynamic>> branchCampaigns = relevantCampaigns.where((campaign) {
+        final List<dynamic> cb = campaign['branches'] ?? [];
+        return cb.isEmpty || cb.contains('all') || cb.contains(branch);
+      }).toList();
 
-      final bool appliesToBranch = campaignBranches.isEmpty ||
-          campaignBranches.contains('all') ||
-          campaignBranches.contains(branch);
-      if (!appliesToBranch) continue;
+      final int totalCampaignsCount = branchCampaigns.length;
 
-      final List<Map<String, dynamic>> entries =
-          campaignEntries[campaignId]?[branch] ?? [];
-
-      final Set<String> participatingUids = {};
-      for (final entry in entries) {
-        final String status = (entry['status'] ?? '').toString().toLowerCase();
-        if (status != 'cancelled') {
-          final String uid = (entry['userId'] ?? '').toString();
-          if (uid.isNotEmpty) participatingUids.add(uid);
-        }
-      }
+      final List<Map<String, dynamic>> userCampaignSummary = [];
 
       for (final user in branchUsers) {
         final String uid = user['uid'] as String;
-        if (!participatingUids.contains(uid)) {
-          nonParticipants.add({
-            'username': user['username'],
-            'role': user['role'],
-            'campaign': itemName,
-            'deliveryEnd': dateFmt.format(deliveryEnd),
+        int completedCount = 0;
+
+        for (final campaign in branchCampaigns) {
+          final String campaignId = campaign['id'] as String;
+          final List<Map<String, dynamic>> entries = campaignEntries[campaignId]?[branch] ?? [];
+
+          final bool hasCompleted = entries.any((entry) {
+            final String entryUid = (entry['userId'] ?? '').toString();
+            final String status = (entry['status'] ?? '').toString().toLowerCase();
+            return entryUid == uid && status == 'delivered';
+          });
+
+          if (hasCompleted) {
+            completedCount++;
+          }
+        }
+
+        userCampaignSummary.add({
+          'username': user['username'] as String,
+          'role': user['role'] as String,
+          'total': totalCampaignsCount,
+          'completed': completedCount,
+        });
+      }
+
+      // Section B: For each user, count overdue orders in this branch
+      final Map<String, int> overdueCountByUser = {};
+      for (final campaign in branchCampaigns) {
+        final String campaignId = campaign['id'] as String;
+        final List<Map<String, dynamic>> entries = campaignEntries[campaignId]?[branch] ?? [];
+
+        for (final entry in entries) {
+          final String status = (entry['status'] ?? '').toString().toLowerCase();
+          if (status == 'delivered' || status == 'cancelled') continue;
+
+          DateTime? deadline;
+          final dynamic drRaw = entry['deliveryReminder'];
+          final dynamic deRaw = entry['deliveryEnd'];
+
+          if (drRaw is Timestamp) {
+            deadline = drRaw.toDate();
+          } else if (deRaw is Timestamp) {
+            deadline = deRaw.toDate();
+          } else if (deRaw is String) {
+            deadline = DateTime.tryParse(deRaw);
+          }
+
+          if (deadline == null) continue;
+          if (deadline.isAfter(monthEnd)) continue;
+
+          final String uid = (entry['userId'] ?? '').toString();
+          if (uid.isNotEmpty) {
+            overdueCountByUser[uid] = (overdueCountByUser[uid] ?? 0) + 1;
+          }
+        }
+      }
+
+      final List<Map<String, dynamic>> userOverdueSummary = [];
+      for (final user in branchUsers) {
+        final String uid = user['uid'] as String;
+        final int count = overdueCountByUser[uid] ?? 0;
+        if (count > 0) {
+          userOverdueSummary.add({
+            'username': user['username'] as String,
+            'role': user['role'] as String,
+            'overdueCount': count,
           });
         }
       }
-    }
 
-    // --- Section B: Overdue orders ---
-    final List<Map<String, dynamic>> overdueOrders = [];
+      // Check if there is anything to show
+      if (branchCampaigns.isEmpty && userOverdueSummary.isEmpty) continue;
 
-    for (final campaign in relevantCampaigns) {
-      final String campaignId = campaign['id'];
-      final String itemName = campaign['item'];
-      final List<dynamic> campaignBranches = campaign['branches'];
-
-      final bool appliesToBranch = campaignBranches.isEmpty ||
-          campaignBranches.contains('all') ||
-          campaignBranches.contains(branch);
-      if (!appliesToBranch) continue;
-
-      final List<Map<String, dynamic>> entries =
-          campaignEntries[campaignId]?[branch] ?? [];
-
-      for (final entry in entries) {
-        final String status = (entry['status'] ?? '').toString().toLowerCase();
-        if (status == 'delivered' || status == 'cancelled') continue;
-
-        DateTime? deadline;
-        final dynamic drRaw = entry['deliveryReminder'];
-        final dynamic deRaw = entry['deliveryEnd'];
-
-        if (drRaw is Timestamp) {
-          deadline = drRaw.toDate();
-        } else if (deRaw is Timestamp) {
-          deadline = deRaw.toDate();
-        } else if (deRaw is String) {
-          deadline = DateTime.tryParse(deRaw);
-        }
-
-        if (deadline == null) continue;
-        if (deadline.isAfter(monthEnd)) continue;
-
-        final String uid = (entry['userId'] ?? '').toString();
-        final Map<String, dynamic>? userInfo =
-            branchUsersById[uid] ?? allUsersById[uid];
-
-        final String username =
-            userInfo?['username'] ?? entry['username']?.toString() ?? 'Unknown';
-        final String role =
-            userInfo?['role'] ?? entry['role']?.toString() ?? '-';
-
-        final String customerName = entry['customerName']?.toString() ?? '-';
-        final dynamic createdRaw = entry['created_at'];
-        final String bookedDate = createdRaw is Timestamp
-            ? dateFmt.format(createdRaw.toDate())
-            : '-';
-
-        overdueOrders.add({
-          'username': username,
-          'role': role,
-          'campaign': itemName,
-          'customerName': customerName,
-          'bookedDate': bookedDate,
-          'deadline': dateFmt.format(deadline),
-          'daysOverdue': DateTime.now().difference(deadline).inDays,
-        });
+      xlsio.Worksheet sheet;
+      if (isFirstSheet) {
+        sheet = workbook.worksheets[0];
+        sheet.name = branch;
+        isFirstSheet = false;
+      } else {
+        sheet = workbook.worksheets.addWithName(branch);
       }
-    }
 
-    if (nonParticipants.isEmpty && overdueOrders.isEmpty) continue;
+      int row = 1;
+      final titleCell = sheet.getRangeByIndex(row, 1);
+      titleCell.setText('MONTHLY PERFORMANCE SUMMARY — $branch — $monthLabel');
+      titleCell.cellStyle.bold = true;
+      titleCell.cellStyle.fontSize = 14;
+      sheet.getRangeByIndex(row, 1, row, 6).merge();
+      row += 2;
 
-    xlsio.Worksheet sheet;
-    if (isFirstSheet) {
-      sheet = workbook.worksheets[0];
-      sheet.name = branch;
-      isFirstSheet = false;
-    } else {
-      sheet = workbook.worksheets.addWithName(branch);
-    }
-
-    int row = 1;
-
-    final titleCell = sheet.getRangeByIndex(row, 1);
-    titleCell.setText('MONTHLY PERFORMANCE REPORT — $branch — $monthLabel');
-    titleCell.cellStyle.bold = true;
-    titleCell.cellStyle.fontSize = 14;
-    sheet.getRangeByIndex(row, 1, row, 8).merge();
-    row += 2;
-
-    // SECTION A
-    writeSectionTitle(sheet, row, 'SECTION A — Users With NO Supersale Orders (Delivery ending in $monthLabel)', 8, '#C00000');
-    row++;
-
-    if (nonParticipants.isEmpty) {
-      sheet.getRangeByIndex(row, 1).setText('All eligible users participated in all campaigns this month.');
-      sheet.getRangeByIndex(row, 1, row, 8).merge();
-      sheet.getRangeByIndex(row, 1).cellStyle.fontColor = '#375623';
-      row++;
-    } else {
-      styleHeader(sheet, row, ['Sl.No', 'Username', 'Role', 'Campaign / Item', 'Delivery End Date'], '#FCE4D6');
+      // --- SECTION A: Campaign Completion Summary ---
+      writeSectionTitle(
+        sheet,
+        row,
+        'SECTION A — Campaign Completion Summary (Delivery ending in $monthLabel)',
+        6,
+        '#005BAC',
+      );
       row++;
 
-      nonParticipants.sort((a, b) {
+      styleHeader(
+        sheet,
+        row,
+        ['Sl.No', 'Username', 'Role', 'Total Campaigns', 'Completed', 'Completion %'],
+        '#D9E1F2',
+      );
+      row++;
+
+      // Sort by role then username
+      userCampaignSummary.sort((a, b) {
         final ra = roleOrder.indexOf(a['role'] as String);
         final rb = roleOrder.indexOf(b['role'] as String);
         final roleComp = (ra == -1 ? 99 : ra).compareTo(rb == -1 ? 99 : rb);
@@ -291,73 +288,298 @@ Future<void> generateMonthlyReport({
         return (a['username'] as String).compareTo(b['username'] as String);
       });
 
-      int sl = 1;
-      for (final rec in nonParticipants) {
-        sheet.getRangeByIndex(row, 1).setNumber(sl.toDouble());
+      int slA = 1;
+      for (final rec in userCampaignSummary) {
+        final int total = rec['total'] as int;
+        final int completed = rec['completed'] as int;
+        final double pct = total > 0 ? (completed / total) * 100 : 0.0;
+
+        sheet.getRangeByIndex(row, 1).setNumber(slA.toDouble());
         sheet.getRangeByIndex(row, 2).setText(rec['username'] as String);
         sheet.getRangeByIndex(row, 3).setText(_formatRole(rec['role'] as String));
-        sheet.getRangeByIndex(row, 4).setText(rec['campaign'] as String);
-        sheet.getRangeByIndex(row, 5).setText(rec['deliveryEnd'] as String);
+        sheet.getRangeByIndex(row, 4).setNumber(total.toDouble());
+        sheet.getRangeByIndex(row, 5).setNumber(completed.toDouble());
+        sheet.getRangeByIndex(row, 6).setText('${pct.toStringAsFixed(0)}%');
 
         final String r = rec['role'] as String;
         String rowColor = '';
         if (r == 'manager') rowColor = '#FFF2CC';
         if (r == 'asst_manager') rowColor = '#EAF1FB';
         if (rowColor.isNotEmpty) {
-          for (int c = 1; c <= 5; c++) {
+          for (int c = 1; c <= 6; c++) {
             sheet.getRangeByIndex(row, c).cellStyle.backColor = rowColor;
           }
         }
-        sl++;
+        slA++;
         row++;
       }
-    }
 
-    row += 2;
+      row += 2;
 
-    // SECTION B
-    writeSectionTitle(sheet, row, 'SECTION B — Orders Not Completed Within Delivery Date (as of $monthLabel)', 8, '#7030A0');
-    row++;
-
-    if (overdueOrders.isEmpty) {
-      sheet.getRangeByIndex(row, 1).setText('No overdue orders for this branch in $monthLabel.');
-      sheet.getRangeByIndex(row, 1, row, 8).merge();
-      sheet.getRangeByIndex(row, 1).cellStyle.fontColor = '#375623';
-      row++;
-    } else {
-      styleHeader(
+      // --- SECTION B: Overdue Orders Summary ---
+      writeSectionTitle(
         sheet,
         row,
-        ['Sl.No', 'Username', 'Role', 'Campaign / Item', 'Customer Name', 'Booked Date', 'Delivery Deadline', 'Days Overdue'],
-        '#E2EFDA',
+        'SECTION B — Overdue Orders Count (as of $monthLabel)',
+        6,
+        '#7030A0',
       );
       row++;
 
-      overdueOrders.sort((a, b) => (b['daysOverdue'] as int).compareTo(a['daysOverdue'] as int));
-
-      int sl = 1;
-      for (final rec in overdueOrders) {
-        final int daysOverdue = rec['daysOverdue'] as int;
-        sheet.getRangeByIndex(row, 1).setNumber(sl.toDouble());
-        sheet.getRangeByIndex(row, 2).setText(rec['username'] as String);
-        sheet.getRangeByIndex(row, 3).setText(_formatRole(rec['role'] as String));
-        sheet.getRangeByIndex(row, 4).setText(rec['campaign'] as String);
-        sheet.getRangeByIndex(row, 5).setText(rec['customerName'] as String);
-        sheet.getRangeByIndex(row, 6).setText(rec['bookedDate'] as String);
-        sheet.getRangeByIndex(row, 7).setText(rec['deadline'] as String);
-        sheet.getRangeByIndex(row, 8).setNumber(daysOverdue.toDouble());
-
-        final String rowColor = daysOverdue > 14 ? '#FFCCCC' : (daysOverdue > 7 ? '#FFE5CC' : '#FFFACD');
-        for (int c = 1; c <= 8; c++) {
-          sheet.getRangeByIndex(row, c).cellStyle.backColor = rowColor;
-        }
-        sl++;
+      if (userOverdueSummary.isEmpty) {
+        sheet.getRangeByIndex(row, 1).setText('No overdue orders for this branch in $monthLabel.');
+        sheet.getRangeByIndex(row, 1, row, 6).merge();
+        sheet.getRangeByIndex(row, 1).cellStyle.fontColor = '#375623';
         row++;
-      }
-    }
+      } else {
+        styleHeader(
+          sheet,
+          row,
+          ['Sl.No', 'Username', 'Role', 'No. of Overdue Orders'],
+          '#FCE4D6',
+        );
+        row++;
 
-    for (int c = 1; c <= 8; c++) {
-      sheet.autoFitColumn(c);
+        // Sort descending by overdue count, then username
+        userOverdueSummary.sort((a, b) {
+          final countComp = (b['overdueCount'] as int).compareTo(a['overdueCount'] as int);
+          if (countComp != 0) return countComp;
+          return (a['username'] as String).compareTo(b['username'] as String);
+        });
+
+        int slB = 1;
+        for (final rec in userOverdueSummary) {
+          final int count = rec['overdueCount'] as int;
+          sheet.getRangeByIndex(row, 1).setNumber(slB.toDouble());
+          sheet.getRangeByIndex(row, 2).setText(rec['username'] as String);
+          sheet.getRangeByIndex(row, 3).setText(_formatRole(rec['role'] as String));
+          sheet.getRangeByIndex(row, 4).setNumber(count.toDouble());
+
+          final String rowColor = count >= 5 ? '#FFCCCC' : (count >= 2 ? '#FFE5CC' : '#FFFACD');
+          for (int c = 1; c <= 4; c++) {
+            sheet.getRangeByIndex(row, c).cellStyle.backColor = rowColor;
+          }
+          slB++;
+          row++;
+        }
+      }
+
+      for (int c = 1; c <= 6; c++) {
+        sheet.autoFitColumn(c);
+      }
+    } else {
+      // ================= DETAILED REPORT MODE (Original) =================
+
+      // --- Section A: Non-participants ---
+      final List<Map<String, dynamic>> nonParticipants = [];
+
+      for (final campaign in relevantCampaigns) {
+        final String campaignId = campaign['id'];
+        final String itemName = campaign['item'];
+        final List<dynamic> campaignBranches = campaign['branches'];
+        final DateTime deliveryEnd = campaign['deliveryEnd'] as DateTime;
+
+        final bool appliesToBranch = campaignBranches.isEmpty ||
+            campaignBranches.contains('all') ||
+            campaignBranches.contains(branch);
+        if (!appliesToBranch) continue;
+
+        final List<Map<String, dynamic>> entries =
+            campaignEntries[campaignId]?[branch] ?? [];
+
+        final Set<String> participatingUids = {};
+        for (final entry in entries) {
+          final String status = (entry['status'] ?? '').toString().toLowerCase();
+          if (status != 'cancelled') {
+            final String uid = (entry['userId'] ?? '').toString();
+            if (uid.isNotEmpty) participatingUids.add(uid);
+          }
+        }
+
+        for (final user in branchUsers) {
+          final String uid = user['uid'] as String;
+          if (!participatingUids.contains(uid)) {
+            nonParticipants.add({
+              'username': user['username'],
+              'role': user['role'],
+              'campaign': itemName,
+              'deliveryEnd': dateFmt.format(deliveryEnd),
+            });
+          }
+        }
+      }
+
+      // --- Section B: Overdue orders ---
+      final List<Map<String, dynamic>> overdueOrders = [];
+
+      for (final campaign in relevantCampaigns) {
+        final String campaignId = campaign['id'];
+        final String itemName = campaign['item'];
+        final List<dynamic> campaignBranches = campaign['branches'];
+
+        final bool appliesToBranch = campaignBranches.isEmpty ||
+            campaignBranches.contains('all') ||
+            campaignBranches.contains(branch);
+        if (!appliesToBranch) continue;
+
+        final List<Map<String, dynamic>> entries =
+            campaignEntries[campaignId]?[branch] ?? [];
+
+        for (final entry in entries) {
+          final String status = (entry['status'] ?? '').toString().toLowerCase();
+          if (status == 'delivered' || status == 'cancelled') continue;
+
+          DateTime? deadline;
+          final dynamic drRaw = entry['deliveryReminder'];
+          final dynamic deRaw = entry['deliveryEnd'];
+
+          if (drRaw is Timestamp) {
+            deadline = drRaw.toDate();
+          } else if (deRaw is Timestamp) {
+            deadline = deRaw.toDate();
+          } else if (deRaw is String) {
+            deadline = DateTime.tryParse(deRaw);
+          }
+
+          if (deadline == null) continue;
+          if (deadline.isAfter(monthEnd)) continue;
+
+          final String uid = (entry['userId'] ?? '').toString();
+          final Map<String, dynamic>? userInfo =
+              branchUsersById[uid] ?? allUsersById[uid];
+
+          final String username =
+              userInfo?['username'] ?? entry['username']?.toString() ?? 'Unknown';
+          final String role =
+              userInfo?['role'] ?? entry['role']?.toString() ?? '-';
+
+          final String customerName = entry['customerName']?.toString() ?? '-';
+          final dynamic createdRaw = entry['created_at'];
+          final String bookedDate = createdRaw is Timestamp
+              ? dateFmt.format(createdRaw.toDate())
+              : '-';
+
+          overdueOrders.add({
+            'username': username,
+            'role': role,
+            'campaign': itemName,
+            'customerName': customerName,
+            'bookedDate': bookedDate,
+            'deadline': dateFmt.format(deadline),
+            'daysOverdue': DateTime.now().difference(deadline).inDays,
+          });
+        }
+      }
+
+      if (nonParticipants.isEmpty && overdueOrders.isEmpty) continue;
+
+      xlsio.Worksheet sheet;
+      if (isFirstSheet) {
+        sheet = workbook.worksheets[0];
+        sheet.name = branch;
+        isFirstSheet = false;
+      } else {
+        sheet = workbook.worksheets.addWithName(branch);
+      }
+
+      int row = 1;
+
+      final titleCell = sheet.getRangeByIndex(row, 1);
+      titleCell.setText('MONTHLY PERFORMANCE REPORT (DETAILED) — $branch — $monthLabel');
+      titleCell.cellStyle.bold = true;
+      titleCell.cellStyle.fontSize = 14;
+      sheet.getRangeByIndex(row, 1, row, 8).merge();
+      row += 2;
+
+      // SECTION A
+      writeSectionTitle(sheet, row, 'SECTION A — Users With NO Supersale Orders (Delivery ending in $monthLabel)', 8, '#C00000');
+      row++;
+
+      if (nonParticipants.isEmpty) {
+        sheet.getRangeByIndex(row, 1).setText('All eligible users participated in all campaigns this month.');
+        sheet.getRangeByIndex(row, 1, row, 8).merge();
+        sheet.getRangeByIndex(row, 1).cellStyle.fontColor = '#375623';
+        row++;
+      } else {
+        styleHeader(sheet, row, ['Sl.No', 'Username', 'Role', 'Campaign / Item', 'Delivery End Date'], '#FCE4D6');
+        row++;
+
+        nonParticipants.sort((a, b) {
+          final ra = roleOrder.indexOf(a['role'] as String);
+          final rb = roleOrder.indexOf(b['role'] as String);
+          final roleComp = (ra == -1 ? 99 : ra).compareTo(rb == -1 ? 99 : rb);
+          if (roleComp != 0) return roleComp;
+          return (a['username'] as String).compareTo(b['username'] as String);
+        });
+
+        int sl = 1;
+        for (final rec in nonParticipants) {
+          sheet.getRangeByIndex(row, 1).setNumber(sl.toDouble());
+          sheet.getRangeByIndex(row, 2).setText(rec['username'] as String);
+          sheet.getRangeByIndex(row, 3).setText(_formatRole(rec['role'] as String));
+          sheet.getRangeByIndex(row, 4).setText(rec['campaign'] as String);
+          sheet.getRangeByIndex(row, 5).setText(rec['deliveryEnd'] as String);
+
+          final String r = rec['role'] as String;
+          String rowColor = '';
+          if (r == 'manager') rowColor = '#FFF2CC';
+          if (r == 'asst_manager') rowColor = '#EAF1FB';
+          if (rowColor.isNotEmpty) {
+            for (int c = 1; c <= 5; c++) {
+              sheet.getRangeByIndex(row, c).cellStyle.backColor = rowColor;
+            }
+          }
+          sl++;
+          row++;
+        }
+      }
+
+      row += 2;
+
+      // SECTION B
+      writeSectionTitle(sheet, row, 'SECTION B — Orders Not Completed Within Delivery Date (as of $monthLabel)', 8, '#7030A0');
+      row++;
+
+      if (overdueOrders.isEmpty) {
+        sheet.getRangeByIndex(row, 1).setText('No overdue orders for this branch in $monthLabel.');
+        sheet.getRangeByIndex(row, 1, row, 8).merge();
+        sheet.getRangeByIndex(row, 1).cellStyle.fontColor = '#375623';
+        row++;
+      } else {
+        styleHeader(
+          sheet,
+          row,
+          ['Sl.No', 'Username', 'Role', 'Campaign / Item', 'Customer Name', 'Booked Date', 'Delivery Deadline', 'Days Overdue'],
+          '#E2EFDA',
+        );
+        row++;
+
+        overdueOrders.sort((a, b) => (b['daysOverdue'] as int).compareTo(a['daysOverdue'] as int));
+
+        int sl = 1;
+        for (final rec in overdueOrders) {
+          final int daysOverdue = rec['daysOverdue'] as int;
+          sheet.getRangeByIndex(row, 1).setNumber(sl.toDouble());
+          sheet.getRangeByIndex(row, 2).setText(rec['username'] as String);
+          sheet.getRangeByIndex(row, 3).setText(_formatRole(rec['role'] as String));
+          sheet.getRangeByIndex(row, 4).setText(rec['campaign'] as String);
+          sheet.getRangeByIndex(row, 5).setText(rec['customerName'] as String);
+          sheet.getRangeByIndex(row, 6).setText(rec['bookedDate'] as String);
+          sheet.getRangeByIndex(row, 7).setText(rec['deadline'] as String);
+          sheet.getRangeByIndex(row, 8).setNumber(daysOverdue.toDouble());
+
+          final String rowColor = daysOverdue > 14 ? '#FFCCCC' : (daysOverdue > 7 ? '#FFE5CC' : '#FFFACD');
+          for (int c = 1; c <= 8; c++) {
+            sheet.getRangeByIndex(row, c).cellStyle.backColor = rowColor;
+          }
+          sl++;
+          row++;
+        }
+      }
+
+      for (int c = 1; c <= 8; c++) {
+        sheet.autoFitColumn(c);
+      }
     }
   }
 
@@ -372,14 +594,15 @@ Future<void> generateMonthlyReport({
   workbook.dispose();
 
   final Directory directory = await getTemporaryDirectory();
+  final String modeSuffix = isSummary ? 'Summary' : 'Detailed';
   final String fileName =
-      'Supersale_Monthly_Report_${DateFormat('MMMM_yyyy').format(DateTime(year, month))}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
+      'Supersale_Monthly_${modeSuffix}_Report_${DateFormat('MMMM_yyyy').format(DateTime(year, month))}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.xlsx';
   final File file = File('${directory.path}/$fileName');
   await file.writeAsBytes(bytes, flush: true);
 
   await Share.shareXFiles(
     [XFile(file.path)],
-    text: 'Supersale Monthly Report — $monthLabel',
+    text: 'Supersale Monthly $modeSuffix Report — $monthLabel',
   );
 }
 
