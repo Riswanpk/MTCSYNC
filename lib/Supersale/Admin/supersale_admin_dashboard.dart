@@ -125,7 +125,12 @@ class _SupersaleAdminDashboardState extends State<SupersaleAdminDashboard> {
             .where('adminPostingId', isEqualTo: _selectedSupersaleDocId)
             .get();
             
-        paired.add(MapEntry(branch, entriesSnapshot.docs.length.toDouble()));
+        final nonCancelledCount = entriesSnapshot.docs.where((doc) {
+          final status = doc.data()['status']?.toString().toLowerCase();
+          return status != 'cancelled';
+        }).length;
+
+        paired.add(MapEntry(branch, nonCancelledCount.toDouble()));
       }
       
       // Sort in descending order

@@ -38,6 +38,11 @@ Future<void> generateBookingReport({
 
     for (var doc in docs) {
       final data = doc.data();
+      final String status = data['status']?.toString().toLowerCase() ?? 'pending';
+      if (status == 'cancelled') {
+        continue;
+      }
+
       final double qty = (data['quantity'] ?? 0).toDouble();
       final double rate = (data['rate'] ?? 0).toDouble();
       final double advance = (data['advance'] ?? 0).toDouble();

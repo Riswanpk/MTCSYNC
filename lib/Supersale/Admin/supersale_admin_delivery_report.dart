@@ -37,8 +37,12 @@ Future<void> generateDeliveryReport({
 
     for (var doc in docs) {
       final data = doc.data();
+      final String status = data['status']?.toString().toLowerCase() ?? 'pending';
+      if (status == 'cancelled') {
+        continue;
+      }
+
       final double qty = (data['quantity'] ?? 0).toDouble();
-      final String status = data['status']?.toString() ?? 'pending';
 
       totalBooking += qty;
       if (status == 'delivered') {

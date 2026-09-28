@@ -106,6 +106,11 @@ Future<void> generateFullReport({
       for (var doc in userDocs) {
         final data = doc.data();
 
+        final String rawStatus = data['status']?.toString() ?? 'pending';
+        if (rawStatus.toLowerCase() == 'cancelled') {
+          continue;
+        }
+
         final String customerName = data['customerName']?.toString() ?? '';
         final String phone = data['phone']?.toString() ?? '';
         final String description = data['description']?.toString() ?? '';
@@ -126,7 +131,6 @@ Future<void> generateFullReport({
             ? dateFormat.format(deliveryReminderTs.toDate())
             : '';
 
-        final String rawStatus = data['status']?.toString() ?? 'pending';
         final bool isDelivered = rawStatus.toLowerCase() == 'delivered';
         final String deliveryStatus = isDelivered ? 'Delivered' : 'Pending';
 
