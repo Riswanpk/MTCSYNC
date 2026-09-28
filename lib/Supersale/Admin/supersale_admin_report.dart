@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'supersale_admin_booking_report.dart';
 import 'supersale_admin_delivery_report.dart';
 import 'supersale_admin_full_report.dart';
+import 'supersale_admin_monthly_report.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -22,7 +23,11 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
 
   List<Map<String, dynamic>> _supersaleList = [];
   String? _selectedDocId;
-  String _selectedReportType = 'Booking Report'; // 'Booking Report', 'Delivery Report', 'Full Report'
+  String _selectedReportType = 'Booking Report'; // 'Booking Report', 'Delivery Report', 'Full Report', 'Monthly Report'
+
+  // Monthly report month/year selection
+  int _selectedYear = DateTime.now().year;
+  int _selectedMonth = DateTime.now().month;
 
   @override
   void initState() {
@@ -78,6 +83,38 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
   }
 
   Future<void> _generateReport() async {
+    // Monthly report does not need a specific campaign selection
+    if (_selectedReportType == 'Monthly Report') {
+      setState(() => _isGenerating = true);
+      try {
+        await generateMonthlyReport(
+          year: _selectedYear,
+          month: _selectedMonth,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Monthly Report generated successfully! Opening...'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        debugPrint('Error generating monthly report: \$e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to generate monthly report: \$e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isGenerating = false);
+      }
+      return;
+    }
+
     if (_selectedDocId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -374,6 +411,115 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 8),
+                  // Second row: Monthly Report
+                  Row(
+                    children: [
+                      _buildReportTypeOption(
+                        title: 'Monthly',
+                        subtitle: 'Performance',
+                        icon: Icons.calendar_month_rounded,
+                        value: 'Monthly Report',
+                        isDark: isDark,
+                      ),
+                      const SizedBox(width: 8),
+                      const Expanded(child: SizedBox()),
+                      const SizedBox(width: 8),
+                      const Expanded(child: SizedBox()),
+                    ],
+                  ),
+
+                  // Month / Year picker — only shown when Monthly Report is selected
+                  if (_selectedReportType == 'Monthly Report') ...[
+                    const SizedBox(height: 20),
+                    Text(
+                      'Select Month & Year',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.3,
+                        color: isDark ? Colors.white70 : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isDark ? Colors.white12 : Colors.grey[200]!,
+                          width: 1.2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          // Month dropdown
+                          Expanded(
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<int>(
+                                value: _selectedMonth,
+                                isExpanded: true,
+                                dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+                                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: primaryBlue),
+                                items: List.generate(12, (i) {
+                                  final m = i + 1;
+                                  return DropdownMenuItem<int>(
+                                    value: m,
+                                    child: Text(
+                                      DateFormat('MMMM').format(DateTime(2000, m)),
+                                      style: TextStyle(
+                                        color: isDark ? Colors.white : Colors.black87,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  );
+                                }),
+                                onChanged: (val) {
+                                  if (val != null) setState(() => _selectedMonth = val);
+                                },
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          // Year dropdown (current year ± 2)
+                          Expanded(
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<int>(
+                                value: _selectedYear,
+                                isExpanded: true,
+                                dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+                                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: primaryBlue),
+                                items: List.generate(5, (i) {
+                                  final y = DateTime.now().year - 2 + i;
+                                  return DropdownMenuItem<int>(
+                                    value: y,
+                                    child: Text(
+                                      y.toString(),
+                                      style: TextStyle(
+                                        color: isDark ? Colors.white : Colors.black87,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  );
+                                }),
+                                onChanged: (val) {
+                                  if (val != null) setState(() => _selectedYear = val);
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 40),
 
                   SizedBox(
