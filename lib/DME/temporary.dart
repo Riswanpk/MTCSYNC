@@ -1,366 +1,226 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:mtcsync/DME/Misc/dme_config.dart';
+import 'package:intl/intl.dart';
 
-class DmeCustomerTypeFixer {
-  /// Fixes customer types in `dme_customer_branches` for customers who have REGULAR (id 2)
-  /// and another customer type in the same branch in their sales records.
-  /// Sets their `customer_type_id` in `dme_customer_branches` to the latest customer_type_id from `dme_sales`.
-  static Future<Map<String, dynamic>> fixCustomerTypesForRegularAndOther({
+class LeadDuplicateRemover {
+  /// Cleans duplicate leads from the Firestore `follow_ups` collection.
+  /// Duplicates are identified when customer name, phone, and date match.
+  /// If duplicates exist:
+  /// - Only 1 lead is retained.
+  /// - Priority is given to leads with status 'Sale' (or 'Sold') or 'Cancelled'.
+  /// - If none is sold or cancelled (e.g., all are 'In Progress'), one is kept and others deleted.
+  static Future<Map<String, dynamic>> removeDuplicateLeads({
     required Function(String log) onLog,
     required Function(double progress, String status) onProgress,
   }) async {
-    final client = await DmeConfig.getClient();
-    if (client == null) {
-      throw Exception('Supabase client not initialized');
-    }
+    final firestore = FirebaseFirestore.instance;
 
-    onLog('Starting customer type reconciliation for customers with REGULAR and another type in the same branch...');
-    onProgress(0.05, 'Fetching sales data...');
+    onLog('Starting duplicate leads cleanup...');
+    onProgress(0.05, 'Fetching all leads from follow_ups collection...');
 
-    // 1. Fetch all sales with customer_id, purchased_branch, customer_type_id, date
-    // Note: Supabase PostgREST default max limit per request is 1000 rows.
-    const int pageSize = 1000;
-    int offset = 0;
-    bool hasMore = true;
-    final List<Map<String, dynamic>> allSales = [];
+    // 1. Fetch all documents in follow_ups
+    final QuerySnapshot querySnapshot =
+        await firestore.collection('follow_ups').get();
+    final allDocs = querySnapshot.docs;
 
-    while (hasMore) {
-      final res = await client
-          .from('dme_sales')
-          .select('customer_id, purchased_branch, customer_type_id, date')
-          .not('customer_id', 'is', null)
-          .not('purchased_branch', 'is', null)
-          .not('customer_type_id', 'is', null)
-          .range(offset, offset + pageSize - 1);
-
-      final list = res as List;
-      for (var item in list) {
-        allSales.add(Map<String, dynamic>.from(item));
-      }
-
-      if (list.isEmpty || list.length < pageSize) {
-        hasMore = false;
-      } else {
-        offset += list.length;
-      }
-      onProgress(0.1 + (allSales.length / 50000).clamp(0.0, 0.3), 'Fetched ${allSales.length} sales records...');
-    }
-
-    onLog('✓ Fetched ${allSales.length} total sales records');
-    onProgress(0.45, 'Analyzing customer sales by branch...');
-
-    // 2. Group sales by key: "${customerId}_${branchId}"
-    // Track set of customer types and the latest sale info (date + type)
-    final Map<String, Set<int>> typesByKey = {};
-    final Map<String, Map<String, dynamic>> latestSaleByKey = {};
-
-    for (var sale in allSales) {
-      final cId = int.tryParse(sale['customer_id']?.toString() ?? '');
-      final bId = int.tryParse(sale['purchased_branch']?.toString() ?? '');
-      final tId = int.tryParse(sale['customer_type_id']?.toString() ?? '');
-      final dateStr = sale['date']?.toString() ?? '';
-
-      if (cId == null || bId == null || tId == null) continue;
-      final key = '${cId}_$bId';
-
-      typesByKey.putIfAbsent(key, () => <int>{}).add(tId);
-
-      final saleDate = DateTime.tryParse(dateStr) ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final currentLatest = latestSaleByKey[key];
-      if (currentLatest == null) {
-        latestSaleByKey[key] = {
-          'customer_id': cId,
-          'branch_id': bId,
-          'customer_type_id': tId,
-          'date': saleDate,
-        };
-      } else {
-        final currentDate = currentLatest['date'] as DateTime;
-        if (saleDate.isAfter(currentDate)) {
-          latestSaleByKey[key] = {
-            'customer_id': cId,
-            'branch_id': bId,
-            'customer_type_id': tId,
-            'date': saleDate,
-          };
-        }
-      }
-    }
-
-    // 3. Filter strictly for customer-branch keys that have REGULAR (typeId 2) AND another type
-    final List<Map<String, dynamic>> targetsToUpdate = [];
-    int totalIdentified = 0;
-
-    for (var entry in typesByKey.entries) {
-      final key = entry.key;
-      final types = entry.value;
-
-      // Check condition: Must have REGULAR (id 2) AND another type (!= 2) in the same branch
-      final hasRegular = types.contains(2);
-      final hasAnotherType = types.any((t) => t != 2);
-
-      if (hasRegular && hasAnotherType) {
-        totalIdentified++;
-        final latest = latestSaleByKey[key];
-        if (latest != null) {
-          targetsToUpdate.add(latest);
-        }
-      }
-    }
-
-    onLog('Found $totalIdentified customer-branch instance(s) having both REGULAR and another customer type.');
-    if (targetsToUpdate.isEmpty) {
-      onProgress(1.0, 'No updates needed.');
+    onLog('✓ Fetched ${allDocs.length} total lead documents.');
+    if (allDocs.isEmpty) {
+      onProgress(1.0, 'No leads found.');
       return {
-        'total_identified': 0,
-        'updated_count': 0,
+        'total_leads': 0,
+        'duplicate_groups': 0,
+        'deleted_count': 0,
       };
     }
 
-    onProgress(0.6, 'Updating customer branches to latest customer type...');
+    onProgress(0.3, 'Analyzing leads for duplicates (Name, Phone, Date)...');
 
-    // 4. Update dme_customer_branches in batches
-    int updatedCount = 0;
-    const int updateBatchSize = 100;
+    // Helper functions for normalization
+    String normalizeName(String? name) {
+      if (name == null) return '';
+      return name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    }
 
-    for (int i = 0; i < targetsToUpdate.length; i += updateBatchSize) {
-      final chunk = targetsToUpdate.sublist(
-        i,
-        (i + updateBatchSize > targetsToUpdate.length) ? targetsToUpdate.length : i + updateBatchSize,
-      );
+    String normalizePhone(String? phone) {
+      if (phone == null) return '';
+      // Keep only digits
+      final digits = phone.replaceAll(RegExp(r'\D'), '');
+      if (digits.length >= 10) {
+        return digits.substring(digits.length - 10);
+      }
+      return digits;
+    }
 
-      final List<Map<String, dynamic>> upsertPayload = chunk.map((item) {
-        return {
-          'customer_id': item['customer_id'],
-          'branch_id': item['branch_id'],
-          'customer_type_id': item['customer_type_id'],
-        };
-      }).toList();
-
-      try {
-        await client.from('dme_customer_branches').upsert(
-          upsertPayload,
-          onConflict: 'customer_id,branch_id',
-        );
-        updatedCount += chunk.length;
-        onProgress(
-          0.6 + (0.35 * (updatedCount / targetsToUpdate.length)),
-          'Updated $updatedCount / ${targetsToUpdate.length} branch records...',
-        );
-      } catch (err) {
-        onLog('Batch upsert error: $err. Falling back to individual updates...');
-        for (var item in chunk) {
+    String formatDate(dynamic dateVal) {
+      DateTime? parsed;
+      if (dateVal is Timestamp) {
+        parsed = dateVal.toDate();
+      } else if (dateVal is DateTime) {
+        parsed = dateVal;
+      } else if (dateVal is String && dateVal.trim().isNotEmpty) {
+        final str = dateVal.trim();
+        try {
+          parsed = DateTime.parse(str);
+        } catch (_) {
           try {
-            await client
-                .from('dme_customer_branches')
-                .update({'customer_type_id': item['customer_type_id']})
-                .eq('customer_id', item['customer_id'])
-                .eq('branch_id', item['branch_id']);
-            updatedCount++;
-          } catch (singleErr) {
-            onLog('Error updating customer ${item['customer_id']} branch ${item['branch_id']}: $singleErr');
+            parsed = DateFormat('dd-MM-yyyy').parse(str);
+          } catch (_) {
+            try {
+              parsed = DateFormat('dd/MM/yyyy').parse(str);
+            } catch (_) {
+              parsed = null;
+            }
           }
         }
       }
+
+      if (parsed != null) {
+        return DateFormat('dd-MM-yyyy').format(parsed);
+      }
+      return 'NO_DATE';
     }
 
-    onProgress(1.0, 'Completed successfully!');
-    onLog('✓ Successfully updated $updatedCount customer branch record(s) to their latest sales customer type.');
-
-    return {
-      'total_identified': totalIdentified,
-      'updated_count': updatedCount,
-    };
-  }
-
-  /// Sets communication preference to 'Whatsapp' for all customers associated with CBE branch (branch ID 2)
-  static Future<Map<String, dynamic>> setCbeCustomersPreferenceToWhatsapp({
-    required Function(String log) onLog,
-    required Function(double progress, String status) onProgress,
-  }) async {
-    final client = await DmeConfig.getClient();
-    if (client == null) {
-      throw Exception('Supabase client not initialized');
+    // Status rank: Sale/Sold and Cancelled get priority (rank 1), others (In Progress, etc.) get rank 2
+    int getStatusPriorityRank(String? status) {
+      if (status == null) return 2;
+      final st = status.trim().toLowerCase();
+      if (st == 'sale' || st == 'sold' || st == 'cancelled' || st == 'canceled') {
+        return 1;
+      }
+      return 2;
     }
 
-    onLog('Starting update: Setting preference to "Whatsapp" for all CBE (Coimbatore) customers...');
-    onProgress(0.05, 'Identifying CBE customers...');
+    // 2. Group documents by "name_phone_date"
+    final Map<String, List<QueryDocumentSnapshot>> groups = {};
 
-    final Set<int> cbeCustomerIds = {};
+    for (final doc in allDocs) {
+      final data = doc.data() as Map<String, dynamic>?;
+      if (data == null) continue;
 
-    // 1. Check customers whose primary_branch == 2 in dme_customers
-    try {
-      const int pageSize = 1000;
-      int offset = 0;
-      bool hasMore = true;
+      final normName = normalizeName(data['name']?.toString());
+      final normPhone = normalizePhone(data['phone']?.toString());
+      final formattedDate = formatDate(data['date']);
 
-      while (hasMore) {
-        final res = await client
-            .from('dme_customers')
-            .select('id')
-            .eq('primary_branch', 2)
-            .range(offset, offset + pageSize - 1);
+      // Only consider if name or phone is non-empty to avoid grouping blank documents improperly
+      if (normName.isEmpty && normPhone.isEmpty) continue;
 
-        final list = res as List;
-        for (var item in list) {
-          final id = int.tryParse(item['id']?.toString() ?? '');
-          if (id != null) cbeCustomerIds.add(id);
-        }
+      final key = '${normName}_${normPhone}_$formattedDate';
+      groups.putIfAbsent(key, () => []).add(doc);
+    }
 
-        if (list.isEmpty || list.length < pageSize) {
-          hasMore = false;
-        } else {
-          offset += list.length;
+    final List<String> docIdsToDelete = [];
+    int duplicateGroupsCount = 0;
+
+    for (final entry in groups.entries) {
+      final docsInGroup = entry.value;
+      if (docsInGroup.length > 1) {
+        duplicateGroupsCount++;
+
+        // Sort: Priority rank ascending (1 before 2)
+        // Secondary sort: Keep document with created_at or earliest/latest if available
+        docsInGroup.sort((a, b) {
+          final dataA = a.data() as Map<String, dynamic>;
+          final dataB = b.data() as Map<String, dynamic>;
+
+          final rankA = getStatusPriorityRank(dataA['status']?.toString());
+          final rankB = getStatusPriorityRank(dataB['status']?.toString());
+
+          if (rankA != rankB) {
+            return rankA.compareTo(rankB);
+          }
+
+          // If ranks are equal, prefer the one that has comments or reminder info
+          final commentsA = (dataA['comments']?.toString() ?? '').trim().length;
+          final commentsB = (dataB['comments']?.toString() ?? '').trim().length;
+          return commentsB.compareTo(commentsA);
+        });
+
+        final keptDoc = docsInGroup.first;
+        final keptData = keptDoc.data() as Map<String, dynamic>;
+        final keptName = keptData['name'] ?? 'Unknown';
+        final keptPhone = keptData['phone'] ?? 'Unknown';
+        final keptStatus = keptData['status'] ?? 'Unknown';
+
+        onLog('Duplicate group for "$keptName" ($keptPhone): Keeping 1 (${keptDoc.id}, Status: $keptStatus), Deleting ${docsInGroup.length - 1} duplicates');
+
+        // All subsequent docs are marked for deletion
+        for (int i = 1; i < docsInGroup.length; i++) {
+          docIdsToDelete.add(docsInGroup[i].id);
         }
       }
-      onLog('Found ${cbeCustomerIds.length} customer(s) with primary_branch = CBE (2)');
-    } catch (e) {
-      onLog('Notice checking primary_branch in dme_customers: $e');
     }
 
-    // 2. Check customers who have branch_id == 2 in dme_customer_branches
-    try {
-      const int pageSize = 1000;
-      int offset = 0;
-      bool hasMore = true;
+    onLog('Found $duplicateGroupsCount duplicate group(s) with ${docIdsToDelete.length} total duplicate document(s) to delete.');
 
-      while (hasMore) {
-        final res = await client
-            .from('dme_customer_branches')
-            .select('customer_id')
-            .eq('branch_id', 2)
-            .range(offset, offset + pageSize - 1);
-
-        final list = res as List;
-        for (var item in list) {
-          final id = int.tryParse(item['customer_id']?.toString() ?? '');
-          if (id != null) cbeCustomerIds.add(id);
-        }
-
-        if (list.isEmpty || list.length < pageSize) {
-          hasMore = false;
-        } else {
-          offset += list.length;
-        }
-      }
-      onLog('Total unique CBE customers after dme_customer_branches: ${cbeCustomerIds.length}');
-    } catch (e) {
-      onLog('Notice checking dme_customer_branches for CBE: $e');
-    }
-
-    // 3. Check customers who have purchased_branch == 2 in dme_sales
-    try {
-      const int pageSize = 1000;
-      int offset = 0;
-      bool hasMore = true;
-
-      while (hasMore) {
-        final res = await client
-            .from('dme_sales')
-            .select('customer_id')
-            .eq('purchased_branch', 2)
-            .range(offset, offset + pageSize - 1);
-
-        final list = res as List;
-        for (var item in list) {
-          final id = int.tryParse(item['customer_id']?.toString() ?? '');
-          if (id != null) cbeCustomerIds.add(id);
-        }
-
-        if (list.isEmpty || list.length < pageSize) {
-          hasMore = false;
-        } else {
-          offset += list.length;
-        }
-      }
-      onLog('Total unique CBE customers after dme_sales check: ${cbeCustomerIds.length}');
-    } catch (e) {
-      onLog('Notice checking dme_sales for CBE: $e');
-    }
-
-    if (cbeCustomerIds.isEmpty) {
-      onProgress(1.0, 'No CBE customers found.');
+    if (docIdsToDelete.isEmpty) {
+      onProgress(1.0, 'No duplicate leads found. All clean!');
       return {
-        'total_identified': 0,
-        'updated_count': 0,
+        'total_leads': allDocs.length,
+        'duplicate_groups': 0,
+        'deleted_count': 0,
       };
     }
 
-    onProgress(0.3, 'Updating preference to "Whatsapp" for ${cbeCustomerIds.length} customer(s)...');
+    onProgress(0.6, 'Deleting ${docIdsToDelete.length} duplicate lead(s)...');
 
-    // 4. Batch update dme_customers: set preference = 'Whatsapp'
-    final customerIdList = cbeCustomerIds.toList();
-    const int updateBatchSize = 200;
-    int updatedCount = 0;
+    // 3. Batch delete duplicate documents in chunks of 450 (Firestore limit is 500 operations per batch)
+    int deletedCount = 0;
+    const int batchSize = 450;
 
-    for (int i = 0; i < customerIdList.length; i += updateBatchSize) {
-      final chunk = customerIdList.sublist(
-        i,
-        (i + updateBatchSize > customerIdList.length) ? customerIdList.length : i + updateBatchSize,
-      );
+    for (int i = 0; i < docIdsToDelete.length; i += batchSize) {
+      final end = (i + batchSize > docIdsToDelete.length)
+          ? docIdsToDelete.length
+          : i + batchSize;
+      final chunk = docIdsToDelete.sublist(i, end);
 
-      try {
-        await client
-            .from('dme_customers')
-            .update({
-              'preference': 'Whatsapp',
-              'updated_at': DateTime.now().toIso8601String(),
-            })
-            .inFilter('id', chunk);
-
-        updatedCount += chunk.length;
-        onProgress(
-          0.3 + (0.7 * (updatedCount / customerIdList.length)),
-          'Updated $updatedCount / ${customerIdList.length} customers...',
-        );
-      } catch (err) {
-        onLog('Error batch updating customers: $err');
+      final batch = firestore.batch();
+      for (final docId in chunk) {
+        batch.delete(firestore.collection('follow_ups').doc(docId));
       }
+
+      await batch.commit();
+      deletedCount += chunk.length;
+
+      final progressVal = 0.6 + (0.38 * (deletedCount / docIdsToDelete.length));
+      onProgress(progressVal, 'Deleted $deletedCount / ${docIdsToDelete.length} duplicates...');
     }
 
     onProgress(1.0, 'Completed successfully!');
-    onLog('✓ Successfully set preference to "Whatsapp" for $updatedCount CBE customer(s).');
+    onLog('✓ Successfully removed $deletedCount duplicate lead(s).');
 
     return {
-      'total_identified': cbeCustomerIds.length,
-      'updated_count': updatedCount,
+      'total_leads': allDocs.length,
+      'duplicate_groups': duplicateGroupsCount,
+      'deleted_count': deletedCount,
     };
   }
 
-  /// Show interactive dialog in UI for Customer Type Reconciliation
-  static void showFixDialog(BuildContext context) {
+  /// Show interactive dialog in UI to trigger duplicate leads cleanup
+  static void showDuplicateCleanupDialog(BuildContext context) {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => const _CustomerTypeFixDialog(),
-    );
-  }
-
-  /// Show interactive dialog in UI for CBE Whatsapp Preference Update
-  static void showCbeWhatsappDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => const _CbeWhatsappDialog(),
+      builder: (ctx) => const _DuplicateCleanupDialog(),
     );
   }
 }
 
-class _CustomerTypeFixDialog extends StatefulWidget {
-  const _CustomerTypeFixDialog();
+class _DuplicateCleanupDialog extends StatefulWidget {
+  const _DuplicateCleanupDialog();
 
   @override
-  State<_CustomerTypeFixDialog> createState() => _CustomerTypeFixDialogState();
+  State<_DuplicateCleanupDialog> createState() =>
+      _DuplicateCleanupDialogState();
 }
 
-class _CustomerTypeFixDialogState extends State<_CustomerTypeFixDialog> {
+class _DuplicateCleanupDialogState extends State<_DuplicateCleanupDialog> {
   bool _isRunning = false;
   double _progress = 0.0;
-  String _status = 'Ready to reconcile customer types.';
+  String _status = 'Ready to find and remove duplicate leads.';
   final List<String> _logs = [];
   Map<String, dynamic>? _result;
 
-  void _runFix() async {
+  void _runCleanup() async {
     setState(() {
       _isRunning = true;
       _progress = 0.0;
@@ -369,7 +229,7 @@ class _CustomerTypeFixDialogState extends State<_CustomerTypeFixDialog> {
     });
 
     try {
-      final res = await DmeCustomerTypeFixer.fixCustomerTypesForRegularAndOther(
+      final res = await LeadDuplicateRemover.removeDuplicateLeads(
         onLog: (msg) {
           if (mounted) {
             setState(() {
@@ -413,11 +273,11 @@ class _CustomerTypeFixDialogState extends State<_CustomerTypeFixDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Row(
         children: [
-          const Icon(Icons.sync_alt_rounded, color: Color(0xFF005BAC)),
+          const Icon(Icons.cleaning_services_rounded, color: Colors.orange),
           const SizedBox(width: 8),
           const Expanded(
             child: Text(
-              'Reconcile Customer Types',
+              'Remove Duplicate Leads',
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
             ),
           ),
@@ -430,7 +290,7 @@ class _CustomerTypeFixDialogState extends State<_CustomerTypeFixDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'This tool identifies customers who have both REGULAR and another customer type in the same branch, and sets their customer type to the latest type from sales data.',
+              'This tool checks for duplicate leads with the same Customer Name, Phone Number, and Date. If all three match, only 1 lead is kept (favoring Sale or Cancelled over In Progress).',
               style: TextStyle(fontSize: 13, color: Colors.grey[700]),
             ),
             const SizedBox(height: 14),
@@ -438,12 +298,13 @@ class _CustomerTypeFixDialogState extends State<_CustomerTypeFixDialog> {
               LinearProgressIndicator(
                 value: _progress > 0 ? _progress : null,
                 backgroundColor: Colors.grey[300],
-                color: const Color(0xFF005BAC),
+                color: Colors.orange,
               ),
               const SizedBox(height: 8),
               Text(
                 _status,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                style:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 10),
             ],
@@ -453,16 +314,21 @@ class _CustomerTypeFixDialogState extends State<_CustomerTypeFixDialog> {
                 decoration: BoxDecoration(
                   color: Colors.green.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.green.withValues(alpha: 0.4)),
+                  border:
+                      Border.all(color: Colors.green.withValues(alpha: 0.4)),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                    const Icon(Icons.check_circle,
+                        color: Colors.green, size: 20),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Completed: ${_result!['updated_count']} customer branch record(s) updated to their latest customer type.',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green),
+                        'Completed: ${_result!['deleted_count']} duplicate lead(s) deleted across ${_result!['duplicate_groups']} group(s).',
+                        style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green),
                       ),
                     ),
                   ],
@@ -471,10 +337,11 @@ class _CustomerTypeFixDialogState extends State<_CustomerTypeFixDialog> {
               const SizedBox(height: 10),
             ],
             if (_logs.isNotEmpty) ...[
-              const Text('Execution Logs:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              const Text('Execution Logs:',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
               Container(
-                height: 140,
+                height: 160,
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: isDark ? Colors.grey[900] : Colors.grey[100],
@@ -486,7 +353,10 @@ class _CustomerTypeFixDialogState extends State<_CustomerTypeFixDialog> {
                   itemCount: _logs.length,
                   itemBuilder: (_, idx) => Text(
                     _logs[idx],
-                    style: TextStyle(fontSize: 11, fontFamily: 'monospace', color: isDark ? Colors.white70 : Colors.black87),
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontFamily: 'monospace',
+                        color: isDark ? Colors.white70 : Colors.black87),
                   ),
                 ),
               ),
@@ -501,186 +371,20 @@ class _CustomerTypeFixDialogState extends State<_CustomerTypeFixDialog> {
             child: const Text('Close'),
           ),
         ElevatedButton.icon(
-          onPressed: _isRunning ? null : _runFix,
+          onPressed: _isRunning ? null : _runCleanup,
           icon: _isRunning
-              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : const Icon(Icons.play_arrow_rounded, size: 18),
-          label: Text(_result != null ? 'Run Again' : 'Start Reconciliation'),
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white))
+              : const Icon(Icons.delete_sweep_rounded, size: 18),
+          label: Text(_result != null ? 'Run Again' : 'Start Duplicate Cleanup'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF005BAC),
+            backgroundColor: Colors.orange,
             foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _CbeWhatsappDialog extends StatefulWidget {
-  const _CbeWhatsappDialog();
-
-  @override
-  State<_CbeWhatsappDialog> createState() => _CbeWhatsappDialogState();
-}
-
-class _CbeWhatsappDialogState extends State<_CbeWhatsappDialog> {
-  bool _isRunning = false;
-  double _progress = 0.0;
-  String _status = 'Ready to set CBE customer preference to WhatsApp.';
-  final List<String> _logs = [];
-  Map<String, dynamic>? _result;
-
-  void _runUpdate() async {
-    setState(() {
-      _isRunning = true;
-      _progress = 0.0;
-      _logs.clear();
-      _result = null;
-    });
-
-    try {
-      final res = await DmeCustomerTypeFixer.setCbeCustomersPreferenceToWhatsapp(
-        onLog: (msg) {
-          if (mounted) {
-            setState(() {
-              _logs.add(msg);
-            });
-          }
-        },
-        onProgress: (p, s) {
-          if (mounted) {
-            setState(() {
-              _progress = p;
-              _status = s;
-            });
-          }
-        },
-      );
-
-      if (mounted) {
-        setState(() {
-          _isRunning = false;
-          _result = res;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isRunning = false;
-          _logs.add('❌ Error: $e');
-          _status = 'Failed with error: $e';
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Row(
-        children: [
-          const Icon(Icons.chat_rounded, color: Color(0xFF25D366)),
-          const SizedBox(width: 8),
-          const Expanded(
-            child: Text(
-              'Set CBE Customers to WhatsApp',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-      content: SizedBox(
-        width: double.maxFinite,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'This tool updates all customers of CBE (Coimbatore) branch to have communication preference = "Whatsapp".',
-              style: TextStyle(fontSize: 13, color: Colors.grey[700]),
-            ),
-            const SizedBox(height: 14),
-            if (_isRunning || _progress > 0) ...[
-              LinearProgressIndicator(
-                value: _progress > 0 ? _progress : null,
-                backgroundColor: Colors.grey[300],
-                color: const Color(0xFF25D366),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _status,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 10),
-            ],
-            if (_result != null) ...[
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.green.withValues(alpha: 0.4)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.check_circle, color: Colors.green, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Completed: ${_result!['updated_count']} CBE customer(s) updated to WhatsApp preference.',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-            ],
-            if (_logs.isNotEmpty) ...[
-              const Text('Execution Logs:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Container(
-                height: 140,
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.grey[900] : Colors.grey[100],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
-                ),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _logs.length,
-                  itemBuilder: (_, idx) => Text(
-                    _logs[idx],
-                    style: TextStyle(fontSize: 11, fontFamily: 'monospace', color: isDark ? Colors.white70 : Colors.black87),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-      actions: [
-        if (!_isRunning)
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ElevatedButton.icon(
-          onPressed: _isRunning ? null : _runUpdate,
-          icon: _isRunning
-              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : const Icon(Icons.play_arrow_rounded, size: 18),
-          label: Text(_result != null ? 'Run Again' : 'Start Update'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF25D366),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
         ),
       ],

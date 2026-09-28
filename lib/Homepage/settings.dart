@@ -1,7 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import '../Misc/theme_notifier.dart';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -24,125 +23,150 @@ class SettingsPage extends StatelessWidget {
       'createdAt': FieldValue.serverTimestamp(),
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Registration code generated: $code')),
-    );
-  }
-
-  Future<void> _showForceUpdateDialog(BuildContext context) async {
-    // Fetch current config and current running app version
-    int? currentMin;
-    String currentInstalled = '';
-    try {
-      final results = await Future.wait([
-        FirebaseFirestore.instance
-            .collection('config')
-            .doc('app_config')
-            .get(),
-        PackageInfo.fromPlatform(),
-      ]);
-      final doc = results[0] as DocumentSnapshot<Map<String, dynamic>>;
-      final pkg = results[1] as PackageInfo;
-
-      if (doc.exists) {
-        currentMin = (doc.data()?['min_version_code'] as num?)?.toInt();
-      }
-      currentInstalled = '${pkg.version}+${pkg.buildNumber}';
-    } catch (_) {}
-
-    if (!context.mounted) return;
-
-    final controller = TextEditingController(
-      text: currentMin != null ? '$currentMin' : '',
-    );
-
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Force Update Config'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Users with a build number BELOW this value will be forced to update before using the app.',
-              style: TextStyle(fontSize: 13, color: Colors.grey[700]),
-            ),
-            if (currentInstalled.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Current app build: $currentInstalled',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF005BAC),
-                ),
-              ),
-            ],
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Minimum Build Number (versionCode)',
-                border: const OutlineInputBorder(),
-                hintText: currentMin != null ? '$currentMin' : 'e.g. 201',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final value = int.tryParse(controller.text.trim());
-              if (value == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text('Please enter a valid build number.')),
-                );
-                return;
-              }
-              try {
-                await FirebaseFirestore.instance
-                    .collection('config')
-                    .doc('app_config')
-                    .set({'min_version_code': value}, SetOptions(merge: true));
-                if (ctx.mounted) Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content:
-                        Text('Force update threshold set to build $value.'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to save: $e')),
-                );
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
+      SnackBar(
+        content: Text('Generated Registration Code: $code'),
+        duration: const Duration(seconds: 5),
+        backgroundColor: Colors.green,
       ),
     );
-
-    controller.dispose();
   }
 
   Future<String?> getUserRole() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return null;
-    final doc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get();
-    final roleRaw = doc.data()?['role'];
-    if (roleRaw == null) return null;
-    return roleRaw.toString().toLowerCase().replaceAll('_', ' ').trim();
+    if (user != null) {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      return (doc.data()?['role'] as String?)?.toLowerCase();
+    }
+    return null;
+  }
+
+  void _showForceUpdateDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return FutureBuilder<DocumentSnapshot>(
+          future: FirebaseFirestore.instance
+              .collection('app_config')
+              .doc('version_info')
+              .get(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final data = snapshot.data?.data() as Map<String, dynamic>?;
+            final isForceUpdateEnabled =
+                data?['force_update_enabled'] as bool? ?? false;
+            final minVersion = data?['min_version'] as String? ?? '1.0.0';
+            final updateMessage = data?['update_message'] as String? ?? '';
+            final appUrl = data?['app_url'] as String? ?? '';
+
+            final minVersionController =
+                TextEditingController(text: minVersion);
+            final updateMessageController =
+                TextEditingController(text: updateMessage);
+            final appUrlController = TextEditingController(text: appUrl);
+            bool forceUpdate = isForceUpdateEnabled;
+
+            return StatefulBuilder(
+              builder: (context, setState) {
+                return AlertDialog(
+                  title: const Text('Force Update Configuration'),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SwitchListTile(
+                          title: const Text('Enable Force Update'),
+                          value: forceUpdate,
+                          onChanged: (bool value) {
+                            setState(() {
+                              forceUpdate = value;
+                            });
+                          },
+                        ),
+                        TextField(
+                          controller: minVersionController,
+                          decoration: const InputDecoration(
+                            labelText: 'Minimum Required Version',
+                            hintText: 'e.g., 1.0.0',
+                          ),
+                        ),
+                        TextField(
+                          controller: updateMessageController,
+                          decoration: const InputDecoration(
+                            labelText: 'Update Message',
+                            hintText: 'Message to show to users',
+                          ),
+                          maxLines: 3,
+                        ),
+                        TextField(
+                          controller: appUrlController,
+                          decoration: const InputDecoration(
+                            labelText: 'App Download URL',
+                            hintText: 'URL to download the update',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () async {
+                        try {
+                          await FirebaseFirestore.instance
+                              .collection('app_config')
+                              .doc('version_info')
+                              .set({
+                            'force_update_enabled': forceUpdate,
+                            'min_version': minVersionController.text.trim(),
+                            'update_message':
+                                updateMessageController.text.trim(),
+                            'app_url': appUrlController.text.trim(),
+                            'updated_at': FieldValue.serverTimestamp(),
+                          }, SetOptions(merge: true));
+
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Configuration saved successfully'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Error saving configuration: $e'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF005BAC),
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('Save'),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -215,9 +239,8 @@ class SettingsPage extends StatelessWidget {
                           final isSyncHead = role == 'sync head' ||
                               role == 'synchead' ||
                               role == 'sync-head';
-                          final isDmeAdmin =
-                              role == 'dme admin' || role == 'dme_admin';
-                          if (isAdmin || isSyncHead || isDmeAdmin) {
+
+                          if (isAdmin || isSyncHead) {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
@@ -232,33 +255,6 @@ class SettingsPage extends StatelessWidget {
                                     foregroundColor: Colors.white,
                                   ),
                                 ),
-                                if (isAdmin || isDmeAdmin) ...[
-                                  const SizedBox(height: 16),
-                                  ElevatedButton.icon(
-                                    onPressed: () =>
-                                        DmeCustomerTypeFixer.showFixDialog(
-                                            context),
-                                    icon: const Icon(Icons.sync_alt_rounded),
-                                    label: const Text(
-                                        'Reconcile DME Customer Types (Temporary)'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.indigo,
-                                      foregroundColor: Colors.white,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  ElevatedButton.icon(
-                                    onPressed: () => DmeCustomerTypeFixer
-                                        .showCbeWhatsappDialog(context),
-                                    icon: const Icon(Icons.chat_rounded),
-                                    label: const Text(
-                                        'Set CBE Customers to WhatsApp (Temporary)'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF25D366),
-                                      foregroundColor: Colors.white,
-                                    ),
-                                  ),
-                                ],
                                 if (isAdmin) ...[
                                   const SizedBox(height: 16),
                                   ElevatedButton.icon(
@@ -269,6 +265,18 @@ class SettingsPage extends StatelessWidget {
                                     label: const Text('Force Update Config'),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: const Color(0xFF005BAC),
+                                      foregroundColor: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  ElevatedButton.icon(
+                                    onPressed: () =>
+                                        LeadDuplicateRemover.showDuplicateCleanupDialog(context),
+                                    icon: const Icon(
+                                        Icons.cleaning_services_rounded),
+                                    label: const Text('Clean Duplicate Leads'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.orange,
                                       foregroundColor: Colors.white,
                                     ),
                                   ),

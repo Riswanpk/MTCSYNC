@@ -34,6 +34,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
   bool _loadingLastRemarks = false;
   bool _remarksSaved = false;
   bool _checkingCall = false;
+  bool _isSavingRemarks = false;
 
   @override
   void initState() {
@@ -334,29 +335,37 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
                 called: called,
                 remarksEntered: remarksEntered,
                 primaryColor: primaryColor,
-                onSavePressed: (called && remarksEntered)
+                isSaving: _isSavingRemarks,
+                onSavePressed: (called && remarksEntered && !_isSavingRemarks)
                     ? () async {
                         final remarks = remarksController.text.trim();
                         if (customer.isNotEmpty) {
-                          customer['remarks'] = remarks;
-                          await updateRemarksInFirestore(
-                            customer: customer,
-                            remarks: remarks,
-                            context: context,
-                            mounted: mounted,
-                          );
-                          if (widget.onStatusChanged != null) {
-                            await widget.onStatusChanged!(remarks);
-                          }
-                          if (mounted) {
-                            setState(() {
-                              _remarksSaved = true;
-                            });
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text('Remarks saved.'),
-                                  backgroundColor: Colors.green),
+                          setState(() => _isSavingRemarks = true);
+                          try {
+                            customer['remarks'] = remarks;
+                            await updateRemarksInFirestore(
+                              customer: customer,
+                              remarks: remarks,
+                              context: context,
+                              mounted: mounted,
                             );
+                            if (widget.onStatusChanged != null) {
+                              await widget.onStatusChanged!(remarks);
+                            }
+                            if (mounted) {
+                              setState(() {
+                                _remarksSaved = true;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text('Remarks saved.'),
+                                    backgroundColor: Colors.green),
+                              );
+                            }
+                          } finally {
+                            if (mounted) {
+                              setState(() => _isSavingRemarks = false);
+                            }
                           }
                         }
                       }
@@ -368,6 +377,11 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
                 remarksEntered: remarksEntered,
                 remarksSaved: _remarksSaved,
                 primaryColor: primaryColor,
+                onLeadAdded: () {
+                  if (widget.onStatusChanged != null) {
+                    widget.onStatusChanged!(remarksController.text.trim());
+                  }
+                },
               ),
               const SizedBox(height: 24),
             ],

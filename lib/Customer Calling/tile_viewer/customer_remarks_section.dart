@@ -6,6 +6,7 @@ class CustomerRemarksSection extends StatelessWidget {
   final bool remarksEntered;
   final Color primaryColor;
   final VoidCallback? onSavePressed;
+  final bool isSaving;
 
   const CustomerRemarksSection({
     super.key,
@@ -14,6 +15,7 @@ class CustomerRemarksSection extends StatelessWidget {
     required this.remarksEntered,
     required this.primaryColor,
     required this.onSavePressed,
+    this.isSaving = false,
   });
 
   @override
@@ -87,7 +89,7 @@ class CustomerRemarksSection extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
             child: Container(
               decoration: BoxDecoration(
-                gradient: remarksEntered
+                gradient: (remarksEntered && !isSaving)
                     ? LinearGradient(
                         colors: [
                           primaryColor,
@@ -97,23 +99,33 @@ class CustomerRemarksSection extends StatelessWidget {
                         end: Alignment.bottomRight,
                       )
                     : null,
-                color: remarksEntered ? null : Colors.grey[400],
+                color: (remarksEntered && !isSaving) ? null : Colors.grey[400],
               ),
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  onTap: onSavePressed,
+                  onTap: isSaving ? null : onSavePressed,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.save, color: remarksEntered ? Colors.white : Colors.white70),
+                        if (isSaving)
+                          const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        else
+                          Icon(Icons.save, color: remarksEntered ? Colors.white : Colors.white70),
                         const SizedBox(width: 8),
                         Text(
-                          'Save',
+                          isSaving ? 'Saving...' : 'Save',
                           style: TextStyle(
-                            color: remarksEntered ? Colors.white : Colors.white70,
+                            color: (remarksEntered || isSaving) ? Colors.white : Colors.white70,
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),

@@ -97,13 +97,15 @@ class _FollowUpFormState extends State<FollowUpForm> {
   }
 
   Future<void> _saveFollowUp() async {
+    if (_isSaving) return;
+    if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
     try {
-      if (!_formKey.currentState!.validate()) return;
-
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User not logged in')));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User not logged in')));
+        }
         return;
       }
 
@@ -211,7 +213,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
         );
       }
 
-      if (widget.source == 'SME') {
+      if (widget.source == 'SME' || widget.source == 'CC') {
         if (mounted) Navigator.pop(context, true);
       } else {
         Navigator.pop(context);
@@ -226,9 +228,11 @@ class _FollowUpFormState extends State<FollowUpForm> {
       }
     } catch (e) {
       // Handle error, show snackbar, etc.
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save: $e')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -976,33 +980,43 @@ class _FollowUpFormState extends State<FollowUpForm> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _saveFollowUp,
+                      onPressed: _isSaving ? null : _saveFollowUp,
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         elevation: 4,
                         shadowColor: const Color(0xFF005BAC).withValues(alpha: 0.4),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         backgroundColor: Colors.transparent,
+                        disabledBackgroundColor: Colors.transparent,
                       ).copyWith(
                         elevation: WidgetStateProperty.all(4),
                       ),
                       child: Ink(
                         decoration: BoxDecoration(
-                          gradient: primaryGradient,
+                          gradient: _isSaving ? null : primaryGradient,
+                          color: _isSaving ? Colors.grey[400] : null,
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           alignment: Alignment.center,
-                          child: const Row(
+                          child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.save_rounded, color: Colors.white, size: 20),
-                              SizedBox(width: 8),
-                              Text(
-                                'Save Follow Up',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.3),
-                              ),
+                              if (_isSaving)
+                                const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              else ...[
+                                const Icon(Icons.save_rounded, color: Colors.white, size: 20),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'Save Follow Up',
+                                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.3),
+                                ),
+                              ],
                             ],
                           ),
                         ),
