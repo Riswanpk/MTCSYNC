@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:collection/collection.dart'; // Add this for groupBy
+import 'package:package_info_plus/package_info_plus.dart';
 import '../Navigation/user_detail_page.dart';
 import '../Navigation/user_cache_service.dart';
 
@@ -242,6 +243,22 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
   }
 
   void _showUserVersionsDialog() async {
+    final packageInfo = await PackageInfo.fromPlatform().catchError((_) => PackageInfo(
+          appName: '',
+          packageName: '',
+          version: '',
+          buildNumber: '0',
+          buildSignature: '',
+        ));
+    final latestVersion = packageInfo.version.isNotEmpty
+        ? (int.tryParse(packageInfo.buildNumber) != null && int.parse(packageInfo.buildNumber) > 0
+            ? '${packageInfo.version}+${packageInfo.buildNumber}'
+            : packageInfo.version)
+        : '';
+    final latestVersionName = packageInfo.version;
+
+    if (!mounted) return;
+
     showDialog(
       context: context,
       builder: (context) {
@@ -264,9 +281,6 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                     .where((entry) => entry.key.toLowerCase() != 'admin')
                     .toList()
                   ..sort((a, b) => a.key.compareTo(b.key));
-
-                // Get latest version from app_constants.dart
-                const String latestVersion = '2.0.200';
 
                 return AlertDialog(
                   title: Row(
@@ -342,13 +356,14 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
                                           user['version'] ?? 'N/A',
                                           style: TextStyle(
                                             fontWeight: FontWeight.bold,
-                                            color: (user['version'] ==
-                                                    latestVersion)
+                                            color: (user['version'] == latestVersion ||
+                                                    user['version'] == latestVersionName)
                                                 ? Colors.green
                                                 : null,
                                           ),
                                         ),
-                                        if (user['version'] == latestVersion)
+                                        if (user['version'] == latestVersion ||
+                                            user['version'] == latestVersionName)
                                           const Padding(
                                             padding: EdgeInsets.only(left: 4.0),
                                             child: Icon(Icons.check_circle,

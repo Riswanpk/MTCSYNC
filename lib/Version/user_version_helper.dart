@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
-import 'app_constants.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 Future<void> updateUserVersionInfo() async {
   final user = FirebaseAuth.instance.currentUser;
@@ -26,6 +26,28 @@ Future<void> _updateUserVersionInfoWithRetry(User user) async {
   const maxAttempts = 3;
   const initialDelayMs = 1000; // 1 second
 
+  // Retrieve current app version and build number from pubspec.yaml dynamically
+  String appVersionStr = '';
+  int buildNum = 0;
+  try {
+    final packageInfo = await PackageInfo.fromPlatform().timeout(
+      const Duration(seconds: 3),
+      onTimeout: () => PackageInfo(
+        appName: '',
+        packageName: '',
+        version: '',
+        buildNumber: '0',
+        buildSignature: '',
+      ),
+    );
+    buildNum = int.tryParse(packageInfo.buildNumber) ?? 0;
+    appVersionStr = packageInfo.version.isNotEmpty
+        ? (buildNum > 0 ? '${packageInfo.version}+$buildNum' : packageInfo.version)
+        : '';
+  } catch (e) {
+    debugPrint('Failed to get package info: $e');
+  }
+
   for (int attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       // Fetch username from Firestore user document
@@ -40,7 +62,8 @@ Future<void> _updateUserVersionInfoWithRetry(User user) async {
       await docRef.set({
         'email': user.email,
         'username': username,
-        'appVersion': appVersion,
+        if (appVersionStr.isNotEmpty) 'appVersion': appVersionStr,
+        if (buildNum > 0) 'buildNumber': buildNum,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 

@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../Misc/theme_notifier.dart';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -28,16 +29,24 @@ class SettingsPage extends StatelessWidget {
   }
 
   Future<void> _showForceUpdateDialog(BuildContext context) async {
-    // Fetch current value first
+    // Fetch current config and current running app version
     int? currentMin;
+    String currentInstalled = '';
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('config')
-          .doc('app_config')
-          .get();
+      final results = await Future.wait([
+        FirebaseFirestore.instance
+            .collection('config')
+            .doc('app_config')
+            .get(),
+        PackageInfo.fromPlatform(),
+      ]);
+      final doc = results[0] as DocumentSnapshot<Map<String, dynamic>>;
+      final pkg = results[1] as PackageInfo;
+
       if (doc.exists) {
         currentMin = (doc.data()?['min_version_code'] as num?)?.toInt();
       }
+      currentInstalled = '${pkg.version}+${pkg.buildNumber}';
     } catch (_) {}
 
     if (!context.mounted) return;
@@ -58,14 +67,25 @@ class SettingsPage extends StatelessWidget {
               'Users with a build number BELOW this value will be forced to update before using the app.',
               style: TextStyle(fontSize: 13, color: Colors.grey[700]),
             ),
+            if (currentInstalled.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Current app build: $currentInstalled',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF005BAC),
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
             TextField(
               controller: controller,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Minimum Build Number (versionCode)',
-                border: OutlineInputBorder(),
-                hintText: 'e.g. 200',
+                border: const OutlineInputBorder(),
+                hintText: currentMin != null ? '$currentMin' : 'e.g. 201',
               ),
             ),
           ],
