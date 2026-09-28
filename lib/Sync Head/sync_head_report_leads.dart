@@ -98,21 +98,26 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
     required Set<String> selectedSources,
     required DateTime start,
     required DateTime end,
+    bool isInterval = true,
   }) {
     final typeLabel = _reportTypeLabel(reportType);
     final sourceLabel = _selectedSourceLabel(selectedSources);
-    final dateLabel =
-        '${DateFormat('dd-MM').format(start)} to ${DateFormat('dd-MM').format(end)}';
+    final dateLabel = isInterval
+        ? '${DateFormat('dd-MM').format(start)} to ${DateFormat('dd-MM').format(end)}'
+        : 'All';
     return '$typeLabel - $sourceLabel - $dateLabel.xlsx';
   }
 
   /// Fetches lead stats for all users in the selected branch & date range,
   /// then generates and shares an Excel report.
   Future<void> _generateReport() async {
-    if (_selectedBranch == null || _selectedRange == null) {
+    final isInterval = _statusFilter == 'Created in this Interval';
+    if (_selectedBranch == null || (isInterval && _selectedRange == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Please select a branch and date range.')),
+        SnackBar(
+            content: Text(isInterval
+                ? 'Please select a branch and date range.'
+                : 'Please select a branch.')),
       );
       return;
     }
@@ -151,7 +156,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           final src = (d['source'] ?? '').toString().toUpperCase();
           return createdAt is Timestamp &&
               completedAt is Timestamp &&
-              _isTimestampWithinRange(completedAt, rangeStart, rangeEnd) &&
+              (!isInterval || _isTimestampWithinRange(completedAt, rangeStart, rangeEnd)) &&
               completedAt.toDate().difference(createdAt.toDate()).inDays.abs() <= 2 &&
               !['CC', 'SME', 'DME'].contains(src);
         }).toList();
@@ -159,7 +164,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         return inProgress.where((doc) {
           final d = (doc as QueryDocumentSnapshot).data() as Map<String, dynamic>;
           return d['reminder_date_changed'] == true &&
-              _isTimestampWithinRange(d['created_at'], rangeStart, rangeEnd);
+              (!isInterval || _isTimestampWithinRange(d['created_at'], rangeStart, rangeEnd));
         }).toList();
       } else {
         return [...inProgress, ...sale, ...cancelled];
@@ -167,11 +172,16 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
     }
 
     try {
-      final rangeStart = _selectedRange!.start;
+      final range = _selectedRange ??
+          DateTimeRange(
+            start: DateTime.now().subtract(const Duration(days: 30)),
+            end: DateTime.now(),
+          );
+      final rangeStart = range.start;
       final rangeEnd = DateTime(
-        _selectedRange!.end.year,
-        _selectedRange!.end.month,
-        _selectedRange!.end.day,
+        range.end.year,
+        range.end.month,
+        range.end.day,
         23,
         59,
         59,
@@ -221,12 +231,16 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
       final Map<String, List<DocumentSnapshot>> cancelledByUid = {};
 
       Query buildBranchQuery(String branchVal, String status) {
-        return FirebaseFirestore.instance
+        Query query = FirebaseFirestore.instance
             .collection('follow_ups')
             .where('branch', isEqualTo: branchVal)
-            .where('status', isEqualTo: status)
-            .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
-            .where('created_at', isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd));
+            .where('status', isEqualTo: status);
+        if (isInterval) {
+          query = query
+              .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
+              .where('created_at', isLessThanOrEqualTo: Timestamp.fromDate(rangeEnd));
+        }
+        return query;
       }
 
       await Future.wait(usersByBranch.keys.map((branchVal) async {
@@ -317,11 +331,14 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           sheetIdx++;
 
           // Title row
-          final allBranchesStatusText = _statusFilter == 'All' ? '' : ' [$_statusFilter]';
+          final allBranchesStatusText = _statusFilter == 'All' ? ' [All leads]' : ' [$_statusFilter]';
+          final dateHeader = isInterval
+              ? ' (${_formatDate(rangeStart)} → ${_formatDate(rangeEnd)})'
+              : '';
           final titleRange = sheet.getRangeByName('A1:G1');
           titleRange.merge();
           titleRange.setText(
-              'Leads Report — $branch$allBranchesStatusText  (${_formatDate(rangeStart)} → ${_formatDate(rangeEnd)})');
+              'Leads Report — $branch$allBranchesStatusText$dateHeader');
           titleRange.cellStyle.bold = true;
           titleRange.cellStyle.fontSize = 14;
           titleRange.cellStyle.hAlign = xlsio.HAlignType.center;
@@ -763,6 +780,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
               selectedSources: selectedSources,
               start: rangeStart,
               end: rangeEnd,
+              isInterval: isInterval,
             )}';
         final File file = File(fileName);
         await file.writeAsBytes(bytes, flush: true);
@@ -797,11 +815,14 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
       sheet.name = _selectedBranch ?? 'Report';
 
       // Title row
-      final singleBranchStatusText = _statusFilter == 'All' ? '' : ' [$_statusFilter]';
+      final singleBranchStatusText = _statusFilter == 'All' ? ' [All leads]' : ' [$_statusFilter]';
+      final dateHeader = isInterval
+          ? ' (${_formatDate(rangeStart)} → ${_formatDate(rangeEnd)})'
+          : '';
       final titleRange = sheet.getRangeByName('A1:G1');
       titleRange.merge();
       titleRange.setText(
-          'Leads Report — $_selectedBranch$singleBranchStatusText  (${_formatDate(rangeStart)} → ${_formatDate(rangeEnd)})');
+          'Leads Report — $_selectedBranch$singleBranchStatusText$dateHeader');
       titleRange.cellStyle.bold = true;
       titleRange.cellStyle.fontSize = 14;
       titleRange.cellStyle.hAlign = xlsio.HAlignType.center;
@@ -1244,6 +1265,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
             selectedSources: selectedSources,
             start: rangeStart,
             end: rangeEnd,
+            isInterval: isInterval,
           )}';
       final File file = File(fileName);
       await file.writeAsBytes(bytes, flush: true);
@@ -1298,96 +1320,6 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ── Date range picker ──────────────────────────────────────
-            InkWell(
-              onTap: _pickDateRange,
-              borderRadius: BorderRadius.circular(10),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  border:
-                      Border.all(color: _primaryBlue.withValues(alpha: 0.4)),
-                  borderRadius: BorderRadius.circular(10),
-                  color: isDark
-                      ? const Color(0xFF162236)
-                      : const Color(0xFFF0F5FF),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.date_range_rounded,
-                        color: _primaryBlue, size: 20),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _selectedRange == null
-                            ? 'Select Date Range'
-                            : '${_formatDate(_selectedRange!.start)}  →  ${_formatDate(_selectedRange!.end)}',
-                        style: TextStyle(
-                          color: isDark ? Colors.white : _primaryBlue,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                    Icon(Icons.arrow_drop_down_rounded,
-                        color: isDark ? Colors.white54 : _primaryBlue),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // ── Branch dropdown ────────────────────────────────────────
-            _branchesLoading
-                ? const LinearProgressIndicator()
-                : DropdownButtonFormField<String>(
-                    initialValue: _selectedBranch,
-                    decoration: InputDecoration(
-                      labelText: 'Branch',
-                      labelStyle:
-                          const TextStyle(color: _primaryBlue),
-                      prefixIcon: const Icon(
-                          Icons.location_city_rounded,
-                          color: _primaryBlue,
-                          size: 20),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(
-                            color: _primaryBlue.withValues(alpha: 0.4)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(
-                            color: _primaryBlue.withValues(alpha: 0.4)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(
-                            color: _primaryBlue, width: 1.5),
-                      ),
-                      filled: true,
-                      fillColor: isDark
-                          ? const Color(0xFF162236)
-                          : const Color(0xFFF0F5FF),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 12),
-                    ),
-                    dropdownColor: isDark
-                        ? const Color(0xFF162236)
-                        : Colors.white,
-                    style: TextStyle(
-                        color: isDark ? Colors.white : Colors.black87,
-                        fontSize: 14),
-                    items: _branches
-                        .map((b) =>
-                            DropdownMenuItem(value: b, child: Text(b)))
-                        .toList(),
-                    onChanged: (val) =>
-                        setState(() => _selectedBranch = val),
-                  ),
-
-            const SizedBox(height: 16),
             // ── Status filter dropdown ────────────────────────────────
             DropdownButtonFormField<String>(
               initialValue: _statusFilter,
@@ -1437,6 +1369,98 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
               onChanged: (val) =>
                   setState(() => _statusFilter = val ?? 'All'),
             ),
+            const SizedBox(height: 16),
+
+            // ── Date range picker (visible only when 'Created in this Interval' is selected) ──
+            if (_statusFilter == 'Created in this Interval') ...[
+              InkWell(
+                onTap: _pickDateRange,
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    border:
+                        Border.all(color: _primaryBlue.withValues(alpha: 0.4)),
+                    borderRadius: BorderRadius.circular(10),
+                    color: isDark
+                        ? const Color(0xFF162236)
+                        : const Color(0xFFF0F5FF),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.date_range_rounded,
+                          color: _primaryBlue, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _selectedRange == null
+                              ? 'Select Date Range'
+                              : '${_formatDate(_selectedRange!.start)}  →  ${_formatDate(_selectedRange!.end)}',
+                          style: TextStyle(
+                            color: isDark ? Colors.white : _primaryBlue,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                      Icon(Icons.arrow_drop_down_rounded,
+                          color: isDark ? Colors.white54 : _primaryBlue),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // ── Branch dropdown ────────────────────────────────────────
+            _branchesLoading
+                ? const LinearProgressIndicator()
+                : DropdownButtonFormField<String>(
+                    initialValue: _selectedBranch,
+                    decoration: InputDecoration(
+                      labelText: 'Branch',
+                      labelStyle:
+                          const TextStyle(color: _primaryBlue),
+                      prefixIcon: const Icon(
+                          Icons.location_city_rounded,
+                          color: _primaryBlue,
+                          size: 20),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                            color: _primaryBlue.withValues(alpha: 0.4)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                            color: _primaryBlue.withValues(alpha: 0.4)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(
+                            color: _primaryBlue, width: 1.5),
+                      ),
+                      filled: true,
+                      fillColor: isDark
+                          ? const Color(0xFF162236)
+                          : const Color(0xFFF0F5FF),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
+                    ),
+                    dropdownColor: isDark
+                        ? const Color(0xFF162236)
+                        : Colors.white,
+                    style: TextStyle(
+                        color: isDark ? Colors.white : Colors.black87,
+                        fontSize: 14),
+                    items: _branches
+                        .map((b) =>
+                            DropdownMenuItem(value: b, child: Text(b)))
+                        .toList(),
+                    onChanged: (val) =>
+                        setState(() => _selectedBranch = val),
+                  ),
 
             const SizedBox(height: 16),
             // ── Source filter ─────────────────────────────────────────
