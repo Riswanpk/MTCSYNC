@@ -245,133 +245,135 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
                   ),
                   const SizedBox(height: 36),
 
-                  // Supersale Selection Card
-                  Text(
-                    'Select Supersale Campaign',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.3,
-                      color: isDark ? Colors.white70 : Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isDark ? Colors.white12 : Colors.grey[200]!,
-                        width: 1.2,
+                  // Supersale Selection Card (only needed for campaign-specific reports)
+                  if (_selectedReportType != 'Monthly Report') ...[
+                    Text(
+                      'Select Supersale Campaign',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.3,
+                        color: isDark ? Colors.white70 : Colors.black87,
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.04),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
                     ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedDocId,
-                        hint: const Text('Select a Supersale Campaign'),
-                        isExpanded: true,
-                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: primaryBlue, size: 26),
-                        dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF1E293B) : Colors.white,
                         borderRadius: BorderRadius.circular(16),
-                        itemHeight: null, // dynamic height for multi-line items
-                        items: _supersaleList.map((sale) {
-                          final String docId = sale['id'];
-                          final String itemName = sale['item'];
-                          final String startStr = _formatSimpleDate(sale['bookingStart']);
-                          final String endStr = _formatSimpleDate(sale['bookingEnd']);
-                          final List<dynamic> branches = sale['branches'] ?? [];
+                        border: Border.all(
+                          color: isDark ? Colors.white12 : Colors.grey[200]!,
+                          width: 1.2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedDocId,
+                          hint: const Text('Select a Supersale Campaign'),
+                          isExpanded: true,
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: primaryBlue, size: 26),
+                          dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          itemHeight: null, // dynamic height for multi-line items
+                          items: _supersaleList.map((sale) {
+                            final String docId = sale['id'];
+                            final String itemName = sale['item'];
+                            final String startStr = _formatSimpleDate(sale['bookingStart']);
+                            final String endStr = _formatSimpleDate(sale['bookingEnd']);
+                            final List<dynamic> branches = sale['branches'] ?? [];
 
-                          return DropdownMenuItem<String>(
-                            value: docId,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(6),
-                                        decoration: BoxDecoration(
-                                          color: primaryBlue.withValues(alpha: 0.1),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: const Icon(Icons.flash_on_rounded, size: 16, color: primaryBlue),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Text(
-                                          itemName,
-                                          style: TextStyle(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.bold,
-                                            color: isDark ? Colors.white : Colors.black87,
-                                          ),
-                                        ),
-                                      ),
-                                      if (startStr.isNotEmpty && endStr.isNotEmpty)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: primaryGreen.withValues(alpha: 0.15),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: Text(
-                                            '$startStr - $endStr',
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                              color: primaryGreen,
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                  if (branches.isNotEmpty) ...[
-                                    const SizedBox(height: 6),
+                            return DropdownMenuItem<String>(
+                              value: docId,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
                                     Row(
                                       children: [
-                                        const SizedBox(width: 32),
-                                        Icon(Icons.location_on_outlined, size: 12, color: Colors.grey[500]),
-                                        const SizedBox(width: 4),
+                                        Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: primaryBlue.withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Icon(Icons.flash_on_rounded, size: 16, color: primaryBlue),
+                                        ),
+                                        const SizedBox(width: 10),
                                         Expanded(
                                           child: Text(
-                                            branches.contains('all')
-                                                ? 'All Branches'
-                                                : 'Branches: ${branches.take(4).join(", ")}${branches.length > 4 ? " +${branches.length - 4}" : ""}',
+                                            itemName,
                                             style: TextStyle(
-                                              fontSize: 11,
-                                              color: isDark ? Colors.white54 : Colors.black54,
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.bold,
+                                              color: isDark ? Colors.white : Colors.black87,
                                             ),
-                                            overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
+                                        if (startStr.isNotEmpty && endStr.isNotEmpty)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: primaryGreen.withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              '$startStr - $endStr',
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: primaryGreen,
+                                              ),
+                                            ),
+                                          ),
                                       ],
                                     ),
+                                    if (branches.isNotEmpty) ...[
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        children: [
+                                          const SizedBox(width: 32),
+                                          Icon(Icons.location_on_outlined, size: 12, color: Colors.grey[500]),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              branches.contains('all')
+                                                  ? 'All Branches'
+                                                  : 'Branches: ${branches.take(4).join(", ")}${branches.length > 4 ? " +${branches.length - 4}" : ""}',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: isDark ? Colors.white54 : Colors.black54,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ],
-                                ],
+                                ),
                               ),
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          setState(() {
-                            _selectedDocId = val;
-                          });
-                        },
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            setState(() {
+                              _selectedDocId = val;
+                            });
+                          },
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 24),
+                  ],
 
                   // Report Type Selector
                   Text(
