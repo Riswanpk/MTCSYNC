@@ -229,14 +229,8 @@ class _LeadsPageState extends State<LeadsPage> {
         query = query.where('screening_status', isEqualTo: 'promoted');
       }
     } else {
-      // For 'All' sources: include non-SME leads (any screening_status)
-      // AND SME leads that are promoted. Exclude pending/rejected SME leads.
-      query = query.where(
-        Filter.or(
-          Filter('source', whereNotIn: ['SME', 'sme']),
-          Filter('screening_status', isEqualTo: 'promoted'),
-        ),
-      );
+      // Note: Firestore does not support 'whereNotIn' inside 'Filter.or' or combined with other 'IN'/'OR' filters.
+      // We filter out unpromoted SME leads after fetching.
     }
 
     query = query.orderBy('created_at', descending: !sortAscending);
@@ -265,6 +259,18 @@ class _LeadsPageState extends State<LeadsPage> {
         snapshot = await query.limit(_leadsPerPage).get();
       }
 
+      // Filter out non-promoted SME leads if 'All' sources is selected
+      final filteredDocs = snapshot.docs.where((doc) {
+        if (selectedSource != 'All') return true;
+        final data = doc.data() as Map<String, dynamic>?;
+        if (data == null) return true;
+        final src = (data['source'] as String?)?.toLowerCase();
+        if (src == 'sme') {
+          return data['screening_status'] == 'promoted';
+        }
+        return true;
+      }).toList();
+
       if (snapshot.docs.isNotEmpty) {
         if (!isSearch || searchQuery.isEmpty) {
           _lastDocument = snapshot.docs.last;
@@ -278,11 +284,11 @@ class _LeadsPageState extends State<LeadsPage> {
 
       if (!mounted) return;
       setState(() {
-        _leads = snapshot.docs;
+        _leads = filteredDocs;
         _isLoading = false;
       });
 
-      await _prefetchCreatorUsernames(snapshot.docs);
+      await _prefetchCreatorUsernames(filteredDocs);
     } catch (e, stack) {
       debugPrint('Error fetching leads in leads.dart: $e\n$stack');
       if (!mounted) return;
