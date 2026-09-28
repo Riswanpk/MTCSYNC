@@ -271,12 +271,12 @@ class SettingsPage extends StatelessWidget {
                                   const SizedBox(height: 16),
                                   ElevatedButton.icon(
                                     onPressed: () =>
-                                        LeadDuplicateRemover.showDuplicateCleanupDialog(context),
+                                        OldLeadsRemover.showOldLeadsCleanupDialog(context),
                                     icon: const Icon(
-                                        Icons.cleaning_services_rounded),
-                                    label: const Text('Clean Duplicate Leads'),
+                                        Icons.auto_delete_rounded),
+                                    label: const Text('Delete Leads Older Than 2 Months'),
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.orange,
+                                      backgroundColor: Colors.redAccent,
                                       foregroundColor: Colors.white,
                                     ),
                                   ),

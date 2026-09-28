@@ -2,23 +2,24 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-class LeadDuplicateRemover {
-  /// Cleans duplicate leads from the Firestore `follow_ups` collection.
-  /// Duplicates are identified when customer name, phone, and date match.
-  /// If duplicates exist:
-  /// - Only 1 lead is retained.
-  /// - Priority is given to leads with status 'Sale' (or 'Sold') or 'Cancelled'.
-  /// - If none is sold or cancelled (e.g., all are 'In Progress'), one is kept and others deleted.
-  static Future<Map<String, dynamic>> removeDuplicateLeads({
+class OldLeadsRemover {
+  /// Deletes leads from the Firestore `follow_ups` collection that were created
+  /// more than 2 months ago based strictly on creation date (`created_at` or `date`).
+  /// Note: Reminder dates are intentionally ignored.
+  static Future<Map<String, dynamic>> deleteLeadsOlderThan2Months({
     required Function(String log) onLog,
     required Function(double progress, String status) onProgress,
   }) async {
     final firestore = FirebaseFirestore.instance;
 
-    onLog('Starting duplicate leads cleanup...');
+    final now = DateTime.now();
+    // Calculate cutoff date: exactly 60 days / 2 calendar months ago
+    final cutoffDate = DateTime(now.year, now.month - 2, now.day, 0, 0, 0);
+    final cutoffStr = DateFormat('dd MMM yyyy').format(cutoffDate);
+
+    onLog('Starting cleanup of leads older than 2 months (Created before $cutoffStr)...');
     onProgress(0.05, 'Fetching all leads from follow_ups collection...');
 
-    // 1. Fetch all documents in follow_ups
     final QuerySnapshot querySnapshot =
         await firestore.collection('follow_ups').get();
     final allDocs = querySnapshot.docs;
@@ -28,142 +29,83 @@ class LeadDuplicateRemover {
       onProgress(1.0, 'No leads found.');
       return {
         'total_leads': 0,
-        'duplicate_groups': 0,
         'deleted_count': 0,
       };
     }
 
-    onProgress(0.3, 'Analyzing leads for duplicates (Name, Phone, Date)...');
+    onProgress(0.3, 'Checking creation dates against cutoff ($cutoffStr)...');
 
-    // Helper functions for normalization
-    String normalizeName(String? name) {
-      if (name == null) return '';
-      return name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
-    }
-
-    String normalizePhone(String? phone) {
-      if (phone == null) return '';
-      // Keep only digits
-      final digits = phone.replaceAll(RegExp(r'\D'), '');
-      if (digits.length >= 10) {
-        return digits.substring(digits.length - 10);
+    DateTime? extractCreationDate(Map<String, dynamic> data) {
+      // 1. Check created_at (Timestamp or DateTime or String)
+      final createdAt = data['created_at'];
+      if (createdAt is Timestamp) return createdAt.toDate();
+      if (createdAt is DateTime) return createdAt;
+      if (createdAt is String && createdAt.trim().isNotEmpty) {
+        final parsed = DateTime.tryParse(createdAt.trim());
+        if (parsed != null) return parsed;
       }
-      return digits;
-    }
 
-    String formatDate(dynamic dateVal) {
-      DateTime? parsed;
-      if (dateVal is Timestamp) {
-        parsed = dateVal.toDate();
-      } else if (dateVal is DateTime) {
-        parsed = dateVal;
-      } else if (dateVal is String && dateVal.trim().isNotEmpty) {
+      // 2. Fallback to date field (creation date set when lead is logged)
+      final dateVal = data['date'];
+      if (dateVal is Timestamp) return dateVal.toDate();
+      if (dateVal is DateTime) return dateVal;
+      if (dateVal is String && dateVal.trim().isNotEmpty) {
         final str = dateVal.trim();
         try {
-          parsed = DateTime.parse(str);
+          return DateTime.parse(str);
         } catch (_) {
           try {
-            parsed = DateFormat('dd-MM-yyyy').parse(str);
+            return DateFormat('dd-MM-yyyy').parse(str);
           } catch (_) {
             try {
-              parsed = DateFormat('dd/MM/yyyy').parse(str);
+              return DateFormat('dd/MM/yyyy').parse(str);
             } catch (_) {
-              parsed = null;
+              return null;
             }
           }
         }
       }
 
-      if (parsed != null) {
-        return DateFormat('dd-MM-yyyy').format(parsed);
-      }
-      return 'NO_DATE';
+      return null;
     }
 
-    // Status rank: Sale/Sold and Cancelled get priority (rank 1), others (In Progress, etc.) get rank 2
-    int getStatusPriorityRank(String? status) {
-      if (status == null) return 2;
-      final st = status.trim().toLowerCase();
-      if (st == 'sale' || st == 'sold' || st == 'cancelled' || st == 'canceled') {
-        return 1;
-      }
-      return 2;
-    }
-
-    // 2. Group documents by "name_phone_date"
-    final Map<String, List<QueryDocumentSnapshot>> groups = {};
+    final List<String> docIdsToDelete = [];
 
     for (final doc in allDocs) {
       final data = doc.data() as Map<String, dynamic>?;
       if (data == null) continue;
 
-      final normName = normalizeName(data['name']?.toString());
-      final normPhone = normalizePhone(data['phone']?.toString());
-      final formattedDate = formatDate(data['date']);
+      final creationDate = extractCreationDate(data);
+      if (creationDate == null) {
+        // If no creation date could be determined, do not delete to be safe
+        continue;
+      }
 
-      // Only consider if name or phone is non-empty to avoid grouping blank documents improperly
-      if (normName.isEmpty && normPhone.isEmpty) continue;
+      if (creationDate.isBefore(cutoffDate)) {
+        docIdsToDelete.add(doc.id);
+        final leadName = data['name'] ?? 'Unknown';
+        final leadPhone = data['phone'] ?? 'No Phone';
+        final leadDateStr = DateFormat('dd-MM-yyyy').format(creationDate);
+        final leadStatus = data['status'] ?? 'Unknown';
+        final leadSource = data['source'] ?? 'General';
 
-      final key = '${normName}_${normPhone}_$formattedDate';
-      groups.putIfAbsent(key, () => []).add(doc);
-    }
-
-    final List<String> docIdsToDelete = [];
-    int duplicateGroupsCount = 0;
-
-    for (final entry in groups.entries) {
-      final docsInGroup = entry.value;
-      if (docsInGroup.length > 1) {
-        duplicateGroupsCount++;
-
-        // Sort: Priority rank ascending (1 before 2)
-        // Secondary sort: Keep document with created_at or earliest/latest if available
-        docsInGroup.sort((a, b) {
-          final dataA = a.data() as Map<String, dynamic>;
-          final dataB = b.data() as Map<String, dynamic>;
-
-          final rankA = getStatusPriorityRank(dataA['status']?.toString());
-          final rankB = getStatusPriorityRank(dataB['status']?.toString());
-
-          if (rankA != rankB) {
-            return rankA.compareTo(rankB);
-          }
-
-          // If ranks are equal, prefer the one that has comments or reminder info
-          final commentsA = (dataA['comments']?.toString() ?? '').trim().length;
-          final commentsB = (dataB['comments']?.toString() ?? '').trim().length;
-          return commentsB.compareTo(commentsA);
-        });
-
-        final keptDoc = docsInGroup.first;
-        final keptData = keptDoc.data() as Map<String, dynamic>;
-        final keptName = keptData['name'] ?? 'Unknown';
-        final keptPhone = keptData['phone'] ?? 'Unknown';
-        final keptStatus = keptData['status'] ?? 'Unknown';
-
-        onLog('Duplicate group for "$keptName" ($keptPhone): Keeping 1 (${keptDoc.id}, Status: $keptStatus), Deleting ${docsInGroup.length - 1} duplicates');
-
-        // All subsequent docs are marked for deletion
-        for (int i = 1; i < docsInGroup.length; i++) {
-          docIdsToDelete.add(docsInGroup[i].id);
-        }
+        onLog('Lead to delete: "$leadName" ($leadPhone) | Created: $leadDateStr | Source: $leadSource | Status: $leadStatus');
       }
     }
 
-    onLog('Found $duplicateGroupsCount duplicate group(s) with ${docIdsToDelete.length} total duplicate document(s) to delete.');
+    onLog('Found ${docIdsToDelete.length} lead(s) created before $cutoffStr out of ${allDocs.length} total leads.');
 
     if (docIdsToDelete.isEmpty) {
-      onProgress(1.0, 'No duplicate leads found. All clean!');
+      onProgress(1.0, 'No leads older than 2 months found. Database is clean!');
       return {
         'total_leads': allDocs.length,
-        'duplicate_groups': 0,
         'deleted_count': 0,
       };
     }
 
-    onProgress(0.6, 'Deleting ${docIdsToDelete.length} duplicate lead(s)...');
+    onProgress(0.6, 'Deleting ${docIdsToDelete.length} old lead(s)...');
 
-    // 3. Batch delete duplicate documents in chunks of 450 (Firestore limit is 500 operations per batch)
+    // Batch delete in chunks of 450 (Firestore limit is 500 operations per batch)
     int deletedCount = 0;
     const int batchSize = 450;
 
@@ -182,41 +124,42 @@ class LeadDuplicateRemover {
       deletedCount += chunk.length;
 
       final progressVal = 0.6 + (0.38 * (deletedCount / docIdsToDelete.length));
-      onProgress(progressVal, 'Deleted $deletedCount / ${docIdsToDelete.length} duplicates...');
+      onProgress(
+        progressVal,
+        'Deleted $deletedCount / ${docIdsToDelete.length} old leads...',
+      );
     }
 
     onProgress(1.0, 'Completed successfully!');
-    onLog('✓ Successfully removed $deletedCount duplicate lead(s).');
+    onLog('✓ Successfully deleted $deletedCount lead(s) older than 2 months.');
 
     return {
       'total_leads': allDocs.length,
-      'duplicate_groups': duplicateGroupsCount,
       'deleted_count': deletedCount,
     };
   }
 
-  /// Show interactive dialog in UI to trigger duplicate leads cleanup
-  static void showDuplicateCleanupDialog(BuildContext context) {
+  /// Show interactive dialog in UI to trigger old leads cleanup
+  static void showOldLeadsCleanupDialog(BuildContext context) {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => const _DuplicateCleanupDialog(),
+      builder: (ctx) => const _OldLeadsCleanupDialog(),
     );
   }
 }
 
-class _DuplicateCleanupDialog extends StatefulWidget {
-  const _DuplicateCleanupDialog();
+class _OldLeadsCleanupDialog extends StatefulWidget {
+  const _OldLeadsCleanupDialog();
 
   @override
-  State<_DuplicateCleanupDialog> createState() =>
-      _DuplicateCleanupDialogState();
+  State<_OldLeadsCleanupDialog> createState() => _OldLeadsCleanupDialogState();
 }
 
-class _DuplicateCleanupDialogState extends State<_DuplicateCleanupDialog> {
+class _OldLeadsCleanupDialogState extends State<_OldLeadsCleanupDialog> {
   bool _isRunning = false;
   double _progress = 0.0;
-  String _status = 'Ready to find and remove duplicate leads.';
+  String _status = 'Ready to find and delete leads older than 2 months.';
   final List<String> _logs = [];
   Map<String, dynamic>? _result;
 
@@ -229,7 +172,7 @@ class _DuplicateCleanupDialogState extends State<_DuplicateCleanupDialog> {
     });
 
     try {
-      final res = await LeadDuplicateRemover.removeDuplicateLeads(
+      final res = await OldLeadsRemover.deleteLeadsOlderThan2Months(
         onLog: (msg) {
           if (mounted) {
             setState(() {
@@ -269,15 +212,19 @@ class _DuplicateCleanupDialogState extends State<_DuplicateCleanupDialog> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
+    final now = DateTime.now();
+    final cutoffDate = DateTime(now.year, now.month - 2, now.day);
+    final cutoffStr = DateFormat('dd MMM yyyy').format(cutoffDate);
+
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Row(
         children: [
-          const Icon(Icons.cleaning_services_rounded, color: Colors.orange),
+          const Icon(Icons.auto_delete_rounded, color: Colors.redAccent),
           const SizedBox(width: 8),
           const Expanded(
             child: Text(
-              'Remove Duplicate Leads',
+              'Delete Old Leads (> 2 Months)',
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
             ),
           ),
@@ -290,7 +237,7 @@ class _DuplicateCleanupDialogState extends State<_DuplicateCleanupDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'This tool checks for duplicate leads with the same Customer Name, Phone Number, and Date. If all three match, only 1 lead is kept (favoring Sale or Cancelled over In Progress).',
+              'This tool checks the creation date (`created_at` / `date`) of all leads in follow_ups and permanently deletes any lead created before $cutoffStr (older than 2 months). Reminder dates are ignored.',
               style: TextStyle(fontSize: 13, color: Colors.grey[700]),
             ),
             const SizedBox(height: 14),
@@ -298,7 +245,7 @@ class _DuplicateCleanupDialogState extends State<_DuplicateCleanupDialog> {
               LinearProgressIndicator(
                 value: _progress > 0 ? _progress : null,
                 backgroundColor: Colors.grey[300],
-                color: Colors.orange,
+                color: Colors.redAccent,
               ),
               const SizedBox(height: 8),
               Text(
@@ -324,7 +271,7 @@ class _DuplicateCleanupDialogState extends State<_DuplicateCleanupDialog> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Completed: ${_result!['deleted_count']} duplicate lead(s) deleted across ${_result!['duplicate_groups']} group(s).',
+                        'Completed: ${_result!['deleted_count']} old lead(s) deleted.',
                         style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
@@ -378,10 +325,10 @@ class _DuplicateCleanupDialogState extends State<_DuplicateCleanupDialog> {
                   height: 14,
                   child: CircularProgressIndicator(
                       strokeWidth: 2, color: Colors.white))
-              : const Icon(Icons.delete_sweep_rounded, size: 18),
-          label: Text(_result != null ? 'Run Again' : 'Start Duplicate Cleanup'),
+              : const Icon(Icons.delete_forever_rounded, size: 18),
+          label: Text(_result != null ? 'Run Again' : 'Delete Old Leads'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.orange,
+            backgroundColor: Colors.redAccent,
             foregroundColor: Colors.white,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
