@@ -149,6 +149,25 @@ class _TransferLeadDialogState extends State<TransferLeadDialog> {
         updateData['original_branch'] = widget.currentBranch;
       }
 
+      // Ensure created_at is present so queries ordering by created_at include this lead
+      if (!currentData.containsKey('created_at') || currentData['created_at'] == null) {
+        final rawDate = currentData['date'];
+        if (rawDate is Timestamp) {
+          updateData['created_at'] = rawDate;
+        } else if (rawDate is DateTime) {
+          updateData['created_at'] = Timestamp.fromDate(rawDate);
+        } else if (rawDate is String) {
+          final parsed = DateTime.tryParse(rawDate);
+          if (parsed != null) {
+            updateData['created_at'] = Timestamp.fromDate(parsed);
+          } else {
+            updateData['created_at'] = FieldValue.serverTimestamp();
+          }
+        } else {
+          updateData['created_at'] = FieldValue.serverTimestamp();
+        }
+      }
+
       // Perform the transfer
       await FirebaseFirestore.instance
           .collection('follow_ups')
