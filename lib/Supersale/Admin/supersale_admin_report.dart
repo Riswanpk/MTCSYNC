@@ -28,6 +28,7 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
   // Monthly report month/year selection
   int _selectedYear = DateTime.now().year;
   int _selectedMonth = DateTime.now().month;
+  String _monthlyReportMode = 'Detailed'; // 'Detailed' or 'Summary'
 
   @override
   void initState() {
@@ -90,11 +91,12 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
         await generateMonthlyReport(
           year: _selectedYear,
           month: _selectedMonth,
+          isSummary: _monthlyReportMode == 'Summary',
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Monthly Report generated successfully! Opening...'),
+            SnackBar(
+              content: Text('Monthly $_monthlyReportMode Report generated successfully! Opening...'),
               backgroundColor: Colors.green,
             ),
           );
@@ -520,6 +522,140 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
                           ),
                         ],
                       ),
+                    ),
+                    const SizedBox(height: 18),
+
+                    // Report Format Mode: Detailed or Summary
+                    Text(
+                      'Report Detail Level',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.3,
+                        color: isDark ? Colors.white70 : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () {
+                              setState(() {
+                                _monthlyReportMode = 'Detailed';
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(14),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: _monthlyReportMode == 'Detailed'
+                                    ? primaryBlue.withValues(alpha: 0.12)
+                                    : (isDark ? const Color(0xFF1E293B) : Colors.white),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: _monthlyReportMode == 'Detailed'
+                                      ? primaryBlue
+                                      : (isDark ? Colors.white12 : Colors.grey[200]!),
+                                  width: _monthlyReportMode == 'Detailed' ? 2 : 1,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: _monthlyReportMode == 'Detailed'
+                                        ? primaryBlue.withValues(alpha: 0.15)
+                                        : Colors.black.withValues(alpha: 0.02),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.list_alt_rounded,
+                                    size: 20,
+                                    color: _monthlyReportMode == 'Detailed'
+                                        ? primaryBlue
+                                        : (isDark ? Colors.white60 : Colors.grey[600]),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Detailed',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: _monthlyReportMode == 'Detailed'
+                                          ? primaryBlue
+                                          : (isDark ? Colors.white : Colors.black87),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () {
+                              setState(() {
+                                _monthlyReportMode = 'Summary';
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(14),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: _monthlyReportMode == 'Summary'
+                                    ? primaryBlue.withValues(alpha: 0.12)
+                                    : (isDark ? const Color(0xFF1E293B) : Colors.white),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: _monthlyReportMode == 'Summary'
+                                      ? primaryBlue
+                                      : (isDark ? Colors.white12 : Colors.grey[200]!),
+                                  width: _monthlyReportMode == 'Summary' ? 2 : 1,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: _monthlyReportMode == 'Summary'
+                                        ? primaryBlue.withValues(alpha: 0.15)
+                                        : Colors.black.withValues(alpha: 0.02),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.analytics_rounded,
+                                    size: 20,
+                                    color: _monthlyReportMode == 'Summary'
+                                        ? primaryBlue
+                                        : (isDark ? Colors.white60 : Colors.grey[600]),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Summary',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: _monthlyReportMode == 'Summary'
+                                          ? primaryBlue
+                                          : (isDark ? Colors.white : Colors.black87),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                   const SizedBox(height: 40),
