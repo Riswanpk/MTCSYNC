@@ -82,13 +82,15 @@ class _SyncHeadCustomerListDeletionApprovalPageState
 
     final email = (data['userEmail'] as String?)?.trim().toLowerCase() ?? '';
     final userDocId = (data['userDocId'] as String?)?.trim().toLowerCase() ?? '';
+    final userName = (data['userName'] as String?)?.trim().toLowerCase() ?? '';
 
     if (_allUsers.isNotEmpty) {
       final matched = _allUsers.firstWhere(
         (u) =>
             (u['email'] as String? ?? '').toLowerCase() == email ||
             (u['email'] as String? ?? '').toLowerCase() == userDocId ||
-            (u['uid'] as String? ?? '').toLowerCase() == userDocId,
+            (u['uid'] as String? ?? '').toLowerCase() == userDocId ||
+            (userName.isNotEmpty && (u['username'] as String? ?? '').trim().toLowerCase() == userName),
         orElse: () => {},
       );
       if (matched.isNotEmpty) {
@@ -96,7 +98,7 @@ class _SyncHeadCustomerListDeletionApprovalPageState
         if (b.isNotEmpty) return b;
       }
     }
-    return '';
+    return 'Other';
   }
 
   List<String> _getUniqueBranches(List<Map<String, dynamic>> allRequests) {

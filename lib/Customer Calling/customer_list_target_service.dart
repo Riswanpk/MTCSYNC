@@ -82,79 +82,151 @@ class CustomerListTargetService {
     );
 
     if (reasonResult != null && reasonResult.isNotEmpty) {
-      customer['pendingDeletion'] = true;
-      await onUpdateFirestore();
+      // Show loading dialog
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => const Center(
+            child: Card(
+              child: Padding(
+                padding: EdgeInsets.all(20.0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(width: 16),
+                    Text('Submitting request...'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }
 
       final user = FirebaseAuth.instance.currentUser;
+      final effectiveDocId = docId ?? user?.email?.toLowerCase();
       final now = DateTime.now();
       final monthYear = "${monthName(now.month)} ${now.year}";
 
-      await UserCacheService.instance.ensureLoaded();
+      try {
+        await UserCacheService.instance.ensureLoaded();
+      } catch (e) {
+        debugPrint('UserCacheService.ensureLoaded error: $e');
+      }
+
       final reqUsername =
           UserCacheService.instance.username ?? user?.displayName ?? user?.email ?? '';
       final reqBranch = UserCacheService.instance.branch ?? '';
 
-      final docRef = await FirebaseFirestore.instance
-          .collection('customer_deletion_requests')
-          .add({
-        'monthYear': monthYear,
-        'userDocId': docId,
-        'userEmail': user?.email ?? '',
-        'userName': reqUsername,
-        'userBranch': reqBranch,
-        'customerData': customer,
-        'reason': reasonResult,
-        'requestedAt': FieldValue.serverTimestamp(),
-        'status': 'pending',
-      });
+      // Mark pendingDeletion locally
+      customer['pendingDeletion'] = true;
 
-      unawaited(() async {
+      try {
+        // 1. Create the customer_deletion_requests doc
+        final docRef = await FirebaseFirestore.instance
+            .collection('customer_deletion_requests')
+            .add({
+          'monthYear': monthYear,
+          'userDocId': effectiveDocId,
+          'userEmail': user?.email ?? '',
+          'userName': reqUsername,
+          'userBranch': reqBranch,
+          'customerData': customer,
+          'reason': reasonResult,
+          'requestedAt': FieldValue.serverTimestamp(),
+          'status': 'pending',
+          'type': 'deletion',
+        });
+
+        // 2. Persist customer['pendingDeletion'] to Firestore
         try {
-          final syncHeadQuery = await FirebaseFirestore.instance
-              .collection('users')
-              .where('role', whereIn: ['sync_head', 'Sync Head'])
-              .get();
-
-          final custName = (customer['name'] ?? 'Customer').toString();
-          final reqUserBranchStr =
-              reqBranch.isNotEmpty ? '$reqUsername ($reqBranch)' : reqUsername;
-
-          for (final doc in syncHeadQuery.docs) {
-            final recipientUid = doc.id;
-            try {
-              await FirebaseFunctions.instanceFor(region: 'asia-south1')
-                  .httpsCallable('sendLeadAssignmentNotification')
-                  .call(<String, dynamic>{
-                'recipientUid': recipientUid,
-                'title': 'Customer Deletion Request',
-                'body': '$reqUserBranchStr requested deletion of customer "$custName".',
-                'notifType': 'customer_deletion_request',
-                'leadDocId': docRef.id,
-              });
-            } catch (e) {
-              debugPrint('FCM Warning: failed to send deletion notification to $recipientUid: $e');
-            }
-          }
+          await onUpdateFirestore();
         } catch (e) {
-          debugPrint('Error triggering deletion request notifications: $e');
+          debugPrint('Warning: onUpdateFirestore failed after deletion request creation: $e');
         }
-      }());
 
-      if (context.mounted) {
-        showDialog(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('Deletion Request Sent'),
-            content: const Text(
-                'Deletion request has been sent for approval to the Sync Head.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
+        // Close loading dialog
+        if (context.mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+        }
+
+        // Trigger FCM notification asynchronously without blocking UI
+        unawaited(() async {
+          try {
+            final syncHeadQuery = await FirebaseFirestore.instance
+                .collection('users')
+                .where('role', whereIn: ['sync_head', 'Sync Head'])
+                .get();
+
+            final custName = (customer['name'] ?? 'Customer').toString();
+            final reqUserBranchStr =
+                reqBranch.isNotEmpty ? '$reqUsername ($reqBranch)' : reqUsername;
+
+            for (final doc in syncHeadQuery.docs) {
+              final recipientUid = doc.id;
+              try {
+                await FirebaseFunctions.instanceFor(region: 'asia-south1')
+                    .httpsCallable('sendLeadAssignmentNotification')
+                    .call(<String, dynamic>{
+                  'recipientUid': recipientUid,
+                  'title': 'Customer Deletion Request',
+                  'body': '$reqUserBranchStr requested deletion of customer "$custName".',
+                  'notifType': 'customer_deletion_request',
+                  'leadDocId': docRef.id,
+                });
+              } catch (e) {
+                debugPrint('FCM Warning: failed to send deletion notification to $recipientUid: $e');
+              }
+            }
+          } catch (e) {
+            debugPrint('Error triggering deletion request notifications: $e');
+          }
+        }());
+
+        if (context.mounted) {
+          showDialog(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              title: const Text('Deletion Request Sent'),
+              content: const Text(
+                  'Deletion request has been sent for approval to the Sync Head.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+      } catch (e) {
+        // Rollback local status on failure
+        customer['pendingDeletion'] = false;
+
+        // Dismiss loading dialog if open
+        if (context.mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+        }
+
+        debugPrint('Error submitting customer deletion request: $e');
+        if (context.mounted) {
+          showDialog(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              title: const Text('Request Failed'),
+              content: Text(
+                  'Failed to submit deletion request: $e\nPlease check your internet connection and try again.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
       }
     }
   }

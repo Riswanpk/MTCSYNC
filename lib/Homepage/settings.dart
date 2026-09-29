@@ -5,6 +5,7 @@ import '../Misc/theme_notifier.dart';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../DME/temporary.dart';
+import '../temporary.dart';
 
 class SettingsPage extends StatelessWidget {
   final String userRole;
@@ -277,6 +278,17 @@ class SettingsPage extends StatelessWidget {
                                     label: const Text('Delete Leads Older Than 2 Months'),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.redAccent,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  ElevatedButton.icon(
+                                    onPressed: () =>
+                                        OrphanedDeletionChecker.showCheckDialog(context),
+                                    icon: const Icon(Icons.troubleshoot_rounded),
+                                    label: const Text('Check Missing Deletion Requests (Sep)'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.orange.shade800,
                                       foregroundColor: Colors.white,
                                     ),
                                   ),
