@@ -39,6 +39,7 @@ import '../DME/Complaints/User/user_complaints_list_page.dart';
 import '../DME/Complaints/User/manager_complaints_page.dart';
 import '../DME/Complaints/Admin/dme_admin_complaints_page.dart';
 import '../DME/Admin/Approvals/dme_admin_approvals_page.dart';
+import '../DME/Admin/Customer Directory/dme_customer_merge_page.dart';
 
 /// App brand colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -646,6 +647,24 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           color: primaryGreen,
           textColor: Colors.white,
           icon: Icons.fact_check_rounded,
+        ),
+      // Customer Merge button on 2nd page for dme_admin
+      if (role == 'dme_admin')
+        NeumorphicButton(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const LoadingOverlayPage(
+                  child: DmeCustomerMergePage(),
+                ),
+              ),
+            );
+          },
+          text: 'Customer Merge',
+          color: primaryBlue,
+          textColor: Colors.white,
+          icon: Icons.merge_type_rounded,
         ),
     ];
 

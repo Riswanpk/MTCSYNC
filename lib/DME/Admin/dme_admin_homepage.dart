@@ -147,24 +147,6 @@ Widget buildDmeAdminTiles(BuildContext context) {
       textColor: Colors.white,
       icon: Icons.assignment_ind_rounded,
     ),
-
-    // 7. Customer Merge
-    NeumorphicButton(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const LoadingOverlayPage(
-              child: DmeCustomerMergePage(),
-            ),
-          ),
-        );
-      },
-      text: 'Customer Merge',
-      color: primaryGreen,
-      textColor: Colors.white,
-      icon: Icons.merge_type_rounded,
-    ),
   ];
 
   return Column(
@@ -190,14 +172,6 @@ Widget buildDmeAdminTiles(BuildContext context) {
           Expanded(child: buttons[4]),
           const SizedBox(width: 16),
           Expanded(child: buttons[5]),
-        ],
-      ),
-      const SizedBox(height: 16),
-      Row(
-        children: [
-          Expanded(child: buttons[6]),
-          const SizedBox(width: 16),
-          const Expanded(child: SizedBox()),
         ],
       ),
     ],
