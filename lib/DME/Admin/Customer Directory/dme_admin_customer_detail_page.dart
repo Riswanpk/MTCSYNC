@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../Misc/dme_constants.dart';
 import '../../Misc/dme_config.dart';
+import 'dme_customer_merge_page.dart';
 
 class DmeAdminCustomerDetailPage extends StatefulWidget {
   final Map<String, dynamic> customer;
@@ -121,6 +122,20 @@ class _DmeAdminCustomerDetailPageState extends State<DmeAdminCustomerDetailPage>
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.merge_type_rounded),
+            tooltip: 'Merge Customer',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => DmeCustomerMergePage(initialCustomer1: _customer),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

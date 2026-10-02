@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../Misc/dme_constants.dart';
 import '../../Misc/dme_config.dart';
 import 'dme_admin_customer_detail_page.dart';
+import 'dme_customer_merge_page.dart';
 
 class DmeAdminCustomersPage extends StatefulWidget {
   final List<int>? userAssignedBranches;
@@ -227,6 +228,18 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
         backgroundColor: const Color(0xFF005BAC),
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.merge_type_rounded),
+            tooltip: 'Customer Merge',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const DmeCustomerMergePage(),
+                ),
+              );
+            },
+          ),
           if (_searchQuery.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.refresh_rounded),

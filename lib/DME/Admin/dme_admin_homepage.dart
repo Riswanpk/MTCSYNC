@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dme_user_management_page.dart';
 import 'Customer Directory/dme_admin_customers_page.dart';
+import 'Customer Directory/dme_customer_merge_page.dart';
 import 'Dashboard/dme_admin_dashboard_page.dart';
 import 'Reminder/dme_admin_reminders_page.dart';
 import 'Reminder/dme_admin_reminder_assign_page.dart';
@@ -147,6 +148,23 @@ Widget buildDmeAdminTiles(BuildContext context) {
       icon: Icons.assignment_ind_rounded,
     ),
 
+    // 7. Customer Merge
+    NeumorphicButton(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const LoadingOverlayPage(
+              child: DmeCustomerMergePage(),
+            ),
+          ),
+        );
+      },
+      text: 'Customer Merge',
+      color: primaryGreen,
+      textColor: Colors.white,
+      icon: Icons.merge_type_rounded,
+    ),
   ];
 
   return Column(
@@ -172,6 +190,14 @@ Widget buildDmeAdminTiles(BuildContext context) {
           Expanded(child: buttons[4]),
           const SizedBox(width: 16),
           Expanded(child: buttons[5]),
+        ],
+      ),
+      const SizedBox(height: 16),
+      Row(
+        children: [
+          Expanded(child: buttons[6]),
+          const SizedBox(width: 16),
+          const Expanded(child: SizedBox()),
         ],
       ),
     ],
