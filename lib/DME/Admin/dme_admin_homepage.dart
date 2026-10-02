@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dme_user_management_page.dart';
 import 'Customer Directory/dme_admin_customers_page.dart';
-import 'Customer Directory/dme_customer_merge_page.dart';
 import 'Dashboard/dme_admin_dashboard_page.dart';
 import 'Reminder/dme_admin_reminders_page.dart';
 import 'Reminder/dme_admin_reminder_assign_page.dart';
