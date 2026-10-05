@@ -273,9 +273,15 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           }
         }
 
-        for (final doc in results[0].docs) distributeDoc(doc, inProgressByUid);
-        for (final doc in results[1].docs) distributeDoc(doc, saleByUid);
-        for (final doc in results[2].docs) distributeDoc(doc, cancelledByUid);
+        for (final doc in results[0].docs) {
+          distributeDoc(doc, inProgressByUid);
+        }
+        for (final doc in results[1].docs) {
+          distributeDoc(doc, saleByUid);
+        }
+        for (final doc in results[2].docs) {
+          distributeDoc(doc, cancelledByUid);
+        }
       }));
 
       // ── 3. Build stats list ───────────────────────────────────────────
