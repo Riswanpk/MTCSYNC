@@ -131,7 +131,7 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
     var status = await Permission.phone.request();
     if (!status.isGranted) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(content: Text('Phone permission denied')),
         );
       }
@@ -158,7 +158,7 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
         _needRefresh = true;
         await _refreshData();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             const SnackBar(
               content: Text('Call detected! Lead marked as Called.'),
               backgroundColor: Color(0xFF4CAF50),
@@ -167,7 +167,7 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
         }
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             const SnackBar(
               content: Text('No call detected for today.'),
               backgroundColor: Colors.orange,
@@ -179,7 +179,7 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
       if (mounted) Navigator.of(context).pop();
       debugPrint('Error scanning lead call log: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error scanning call log: $e'), backgroundColor: Colors.red),
         );
       }
@@ -236,7 +236,7 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
 
   Future<void> _requestDeletion() async {
     if (_data['pendingDeletion'] == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Deletion request is already pending approval.'),
           backgroundColor: Colors.orange,
@@ -349,7 +349,7 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
       if (!mounted) return;
       Navigator.of(context).pop();
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Deletion request submitted for SME approval.'),
           backgroundColor: Colors.green,
@@ -361,7 +361,7 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
       if (mounted) Navigator.of(context).pop();
       debugPrint('Error requesting lead deletion: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
               content: Text('Error requesting deletion: $e'),
               backgroundColor: Colors.red),
@@ -374,7 +374,7 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
     final phone = _data['phone'] ?? '';
     if (phone.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             const SnackBar(content: Text('No phone number available')));
       }
       return;
@@ -382,7 +382,7 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
     var status = await Permission.phone.request();
     if (!status.isGranted) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             const SnackBar(content: Text('Phone permission denied')));
       }
       return;
@@ -392,7 +392,7 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             const SnackBar(content: Text('Could not launch dialer')));
       }
     }
@@ -431,7 +431,7 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
           .doc(widget.doc.id)
           .update(updateMap);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
           content: Text('Lead promoted successfully!'),
           backgroundColor: Color(0xFF4CAF50)));
       Navigator.of(context).popUntil((route) => route.isFirst);
@@ -451,7 +451,7 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
       'screened_at': FieldValue.serverTimestamp(),
     });
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
           content: Text('Lead rejected'), backgroundColor: Color(0xFFF44336)));
       Navigator.of(context).popUntil((route) => route.isFirst);
     }
@@ -581,7 +581,7 @@ class _SmeLeadDetailPageState extends State<SmeLeadDetailPage> {
       onPopInvokedWithResult: (didPop, result) {
         if (mustAct && !didPop) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
               const SnackBar(
                   content: Text(
                       'Please select Promote or Reject for the called lead.'),

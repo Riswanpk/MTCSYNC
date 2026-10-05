@@ -40,8 +40,8 @@ Future<void> updateCallStatusInFirestore({
     }
   } catch (e) {
     debugPrint('Failed to update callMade in Firestore: $e');
-    if (mounted && context != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    if (context != null && context.mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
           content: Text('Failed to update call status in Firestore: $e'),
           backgroundColor: Colors.red,

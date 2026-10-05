@@ -115,7 +115,7 @@ class _SyncHeadAllLeadsPageState extends State<SyncHeadAllLeadsPage> {
       setState(() {
         _loadingLeads = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(content: Text('Error loading leads: $e')),
       );
     }
@@ -175,7 +175,7 @@ class _SyncHeadAllLeadsPageState extends State<SyncHeadAllLeadsPage> {
     );
 
     if (picked != null) {
-      setState(() => _selectedDateRange = picked);
+      if (mounted) setState(() => _selectedDateRange = picked);
       _fetchLeads();
     }
   }

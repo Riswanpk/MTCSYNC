@@ -88,7 +88,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
       debugPrint('Error loading complaint: $e');
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error loading complaint: $e'), backgroundColor: Colors.red),
         );
       }
@@ -100,7 +100,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
     if (_complaint == null) return;
     final phone = _complaint!.customerPhone.trim();
     if (phone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('No phone number available for this customer.')),
       );
       return;
@@ -119,7 +119,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
     } catch (e) {
       debugPrint('Error launching dialer: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Could not open dialer: $e')),
         );
       }
@@ -130,14 +130,14 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
   Future<void> _submitActionTaken() async {
     final remarks = _actionRemarksController.text.trim();
     if (remarks.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please enter remarks detailing the action taken.')),
       );
       return;
     }
 
     if (_isUploadingAudio) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please wait for the audio to finish uploading.')),
       );
       return;
@@ -163,7 +163,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
       _actionAudioUrl = null;
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('Action submitted successfully! Notification sent to DME.'),
             backgroundColor: Colors.green,
@@ -174,7 +174,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
     } catch (e) {
       debugPrint('Error submitting action: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Failed to submit action: $e'), backgroundColor: Colors.red),
         );
       }
@@ -216,7 +216,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
           ElevatedButton(
             onPressed: () {
               if (remarksController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(ctx).showSnackBar(
+                ScaffoldMessenger.maybeOf(ctx)?.showSnackBar(
                   const SnackBar(content: Text('Please enter resolution remarks.')),
                 );
                 return;
@@ -233,7 +233,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
     if (confirm != true) return;
 
     final remarks = remarksController.text.trim();
-    setState(() => _isSubmitting = true);
+    if (mounted) setState(() => _isSubmitting = true);
     try {
       final isUnreg = widget.isUnregistered || (_complaint?.isUnregistered ?? false);
       await DmeComplaintsService.instance.markResolved(
@@ -248,14 +248,14 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(content: Text('Complaint marked as Resolved ✓'), backgroundColor: Colors.green),
         );
         await _loadComplaintData();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
@@ -296,7 +296,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
           ElevatedButton(
             onPressed: () {
               if (remarksController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(ctx).showSnackBar(
+                ScaffoldMessenger.maybeOf(ctx)?.showSnackBar(
                   const SnackBar(content: Text('Please enter remarks.')),
                 );
                 return;
@@ -313,7 +313,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
     if (proceed != true) return;
 
     final remarks = remarksController.text.trim();
-    setState(() => _isSubmitting = true);
+    if (mounted) setState(() => _isSubmitting = true);
 
     try {
       final isUnreg = widget.isUnregistered || (_complaint?.isUnregistered ?? false);
@@ -328,7 +328,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('Complaint marked Not Resolved and sent back to assigned user.'),
             backgroundColor: Colors.orange,
@@ -338,7 +338,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
@@ -369,7 +369,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
 
     if (confirm != true) return;
 
-    setState(() => _isSubmitting = true);
+    if (mounted) setState(() => _isSubmitting = true);
     try {
       final isUnreg = widget.isUnregistered || (_complaint?.isUnregistered ?? false);
       await DmeComplaintsService.instance.escalateComplaint(
@@ -385,7 +385,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('Complaint successfully escalated to you!'),
             backgroundColor: Colors.green,
@@ -395,7 +395,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Failed to escalate: $e'), backgroundColor: Colors.red),
         );
       }
@@ -431,7 +431,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
 
     if (confirmed != true) return;
 
-    setState(() => _isSubmitting = true);
+    if (mounted) setState(() => _isSubmitting = true);
     try {
       final isUnreg = widget.isUnregistered || (_complaint?.isUnregistered ?? false);
       await DmeComplaintsService.instance.deleteComplaint(
@@ -439,7 +439,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
         isUnregistered: isUnreg,
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Complaint #${_complaint!.id} deleted successfully.'),
             backgroundColor: Colors.red,
@@ -450,7 +450,7 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
     } catch (e) {
       debugPrint('Error deleting complaint: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Failed to delete complaint: $e'), backgroundColor: Colors.red),
         );
       }

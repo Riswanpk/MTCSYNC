@@ -97,7 +97,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
     );
     if (pickedTime == null) return;
 
-    setState(() {
+    if (mounted) { setState(() {
       _selectedDeliveryDateTime = DateTime(
         pickedDate.year,
         pickedDate.month,
@@ -106,7 +106,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
         pickedTime.minute,
       );
       _deliveryController.text = DateFormat('dd-MM-yyyy hh:mm a').format(_selectedDeliveryDateTime!);
-    });
+    }); }
   }
 
   List<Map<String, dynamic>> _buildItemsPayload() {
@@ -126,7 +126,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
 
     final itemPayload = _buildItemsPayload();
     if (itemPayload.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Add at least one item with qty')),
       );
       return;
@@ -134,7 +134,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('User not logged in')),
       );
       return;
@@ -177,7 +177,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(content: Text('Failed to save order: $e')),
       );
     } finally {
@@ -279,11 +279,11 @@ class _OrderFormPageState extends State<OrderFormPage> {
                           );
                         },
                         onSelected: (selectedCustomer) {
-                          setState(() {
+                          if (mounted) { setState(() {
                             _nameController.text = selectedCustomer['name'] ?? '';
                             _addressController.text = selectedCustomer['address'] ?? '';
                             _phoneController.text = formatIndianPhone(selectedCustomer['phone'] ?? '');
-                          });
+                          }); }
                         },
                       );
                     },
@@ -366,7 +366,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
                                   _phoneController.selection = TextSelection.fromPosition(TextPosition(offset: formatted.length));
                                 } else {
                                   if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Clipboard does not contain 10 digits')));
+                                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(content: Text('Clipboard does not contain 10 digits')));
                                   }
                                 }
                               }

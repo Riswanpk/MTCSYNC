@@ -44,6 +44,7 @@ class _SalesTodosForManagerTabState extends State<SalesTodosForManagerTab> {
 
     final userDoc =
         await widget.firestore.collection('users').doc(currentUid).get();
+    if (!mounted) return;
     final branch = userDoc.data()?['branch'];
     if (branch == null) {
       setState(() => _initialLoading = false);
@@ -54,6 +55,7 @@ class _SalesTodosForManagerTabState extends State<SalesTodosForManagerTab> {
         .collection('users')
         .where('branch', isEqualTo: branch)
         .get();
+    if (!mounted) return;
 
     final branchUsers = usersSnap.docs
         .where((doc) => doc.id != currentUid)
@@ -74,6 +76,7 @@ class _SalesTodosForManagerTabState extends State<SalesTodosForManagerTab> {
   }
 
   Future<void> _fetchTodos() async {
+    if (!mounted) return;
     if (_branchUsers.isEmpty) {
       setState(() => _todos = []);
       return;
@@ -100,6 +103,7 @@ class _SalesTodosForManagerTabState extends State<SalesTodosForManagerTab> {
         .where('timestamp', isLessThan: Timestamp.fromDate(windowEnd))
         .orderBy('timestamp', descending: true)
         .get();
+    if (!mounted) return;
 
     setState(() {
       _todos = snap.docs;

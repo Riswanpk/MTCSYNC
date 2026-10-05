@@ -104,13 +104,13 @@ class _AssignTaskTabState extends State<AssignTaskTab> {
     final taskName = _taskNameController.text.trim();
     final taskDescription = _taskController.text.trim();
     if (taskName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please enter a task name')),
       );
       return;
     }
     if (taskDescription.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please enter a task description')),
       );
       return;
@@ -124,14 +124,14 @@ class _AssignTaskTabState extends State<AssignTaskTab> {
       }).toList();
 
       if (targetUsers.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(content: Text('No users found for selected role(s)')),
         );
         return;
       }
     } else {
       if (_selectedUser == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
               content: Text('Please select a role option or a recipient user')),
         );
@@ -201,7 +201,7 @@ class _AssignTaskTabState extends State<AssignTaskTab> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text(targetUsers.length > 1
                 ? 'Tasks assigned successfully to ${targetUsers.length} users!'
@@ -223,7 +223,7 @@ class _AssignTaskTabState extends State<AssignTaskTab> {
     } catch (e) {
       debugPrint('Error assigning task: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
@@ -584,7 +584,7 @@ class _AssignTaskTabState extends State<AssignTaskTab> {
               GestureDetector(
                 onTap: _selectedBranch == null
                     ? () {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                           const SnackBar(
                               content: Text('Please select a branch first')),
                         );

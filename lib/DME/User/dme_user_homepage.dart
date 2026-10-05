@@ -100,7 +100,7 @@ Widget buildDmeUserTiles(BuildContext context, {int? complaintCount}) {
     // 5. Leads
     NeumorphicButton(
       onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('Leads module coming soon'),
             duration: Duration(seconds: 1),

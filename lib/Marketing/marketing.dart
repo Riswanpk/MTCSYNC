@@ -69,29 +69,29 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
               child: const Text('Start New'),
               onPressed: () async {
                 await _clearAllDrafts();
-                Navigator.of(context).pop();
-                setState(() {
+                if (mounted) { Navigator.of(context).pop(); }
+                if (mounted) { setState(() {
                   _draftChecked = true;
-                });
+                }); }
               },
             ),
             ElevatedButton(
               child: const Text('Load Draft'),
               onPressed: () {
                 Navigator.of(context).pop();
-                setState(() {
+                if (mounted) { setState(() {
                   _selectedForm = draftFormType!;
                   _draftChecked = true;
-                });
+                }); }
               },
             ),
           ],
         ),
       );
     } else {
-      setState(() {
+      if (mounted) { setState(() {
         _draftChecked = true;
-      });
+      }); }
     }
   }
 
@@ -115,9 +115,9 @@ class _MarketingFormPageState extends State<MarketingFormPage> {
       await _clearAllDrafts();
     }
 
-    setState(() {
+    if (mounted) { setState(() {
       _selectedForm = newFormType;
-    });
+    }); }
   }
 
 

@@ -151,7 +151,7 @@ class _ManagerComplaintsPageState extends State<ManagerComplaintsPage> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('Complaint successfully escalated to you!'),
             backgroundColor: Colors.green,
@@ -162,7 +162,7 @@ class _ManagerComplaintsPageState extends State<ManagerComplaintsPage> {
     } catch (e) {
       debugPrint('Error escalating: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Failed to escalate: $e'), backgroundColor: Colors.red),
         );
       }

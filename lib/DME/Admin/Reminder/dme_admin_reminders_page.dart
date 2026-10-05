@@ -299,7 +299,7 @@ class _DmeAdminRemindersPageState extends State<DmeAdminRemindersPage> {
       debugPrint('Error fetching reminders in admin page: $e');
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error loading reminders: $e'), backgroundColor: Colors.red),
         );
       }
@@ -416,10 +416,10 @@ class _DmeAdminRemindersPageState extends State<DmeAdminRemindersPage> {
     );
 
     if (picked != null) {
-      setState(() {
+      if (mounted) { setState(() {
         _customDateRange = picked;
         _dateFilterOption = 'custom';
-      });
+      }); }
       _fetchReminders();
     }
   }

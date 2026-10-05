@@ -40,10 +40,10 @@ class _SyncHeadReportTodoPageState extends State<SyncHeadReportTodoPage> {
     final branches = allBranches
         .where((b) => b.toLowerCase() != 'admin')
         .toList();
-    setState(() {
+    if (mounted) { setState(() {
       _branches = ['All Branches', ...branches];
       _branchesLoading = false;
-    });
+    }); }
   }
 
   Future<void> _pickDateRange() async {
@@ -73,9 +73,9 @@ class _SyncHeadReportTodoPageState extends State<SyncHeadReportTodoPage> {
         59,
         59,
       );
-      setState(() {
+      if (mounted) { setState(() {
         _selectedRange = DateTimeRange(start: picked.start, end: endOfDay);
-      });
+      }); }
     }
   }
 
@@ -83,7 +83,7 @@ class _SyncHeadReportTodoPageState extends State<SyncHeadReportTodoPage> {
 
   Future<void> _generateReport() async {
     if (_selectedRange == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please select a date range.')),
       );
       return;

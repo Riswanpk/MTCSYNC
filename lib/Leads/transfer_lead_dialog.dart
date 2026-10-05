@@ -55,21 +55,21 @@ class _TransferLeadDialogState extends State<TransferLeadDialog> {
         }
       }
 
-      setState(() {
+      if (mounted) { setState(() {
         _branches = branchesSet.toList()..sort();
         _selectedBranch = widget.currentBranch;
         _isLoading = false;
-      });
+      }); }
 
       // Load users for current branch
       if (mounted) {
         await _loadUsersForBranch(widget.currentBranch);
       }
     } catch (e) {
-      setState(() {
+      if (mounted) { setState(() {
         _error = 'Error loading branches: $e';
         _isLoading = false;
-      });
+      }); }
     }
   }
 
@@ -113,7 +113,7 @@ class _TransferLeadDialogState extends State<TransferLeadDialog> {
 
   Future<void> _transferLead() async {
     if (_selectedBranch == null || _selectedUserId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please select both branch and user')),
       );
       return;
@@ -209,7 +209,7 @@ class _TransferLeadDialogState extends State<TransferLeadDialog> {
     } catch (e) {
       if (mounted) {
         setState(() => _isTransferring = false);
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Transfer failed: $e')),
         );
       }
@@ -355,13 +355,13 @@ class _TransferLeadDialogState extends State<TransferLeadDialog> {
                     );
                   }).toList(),
                   onChanged: (newUserId) {
-                    setState(() {
+                    if (mounted) { setState(() {
                       _selectedUserId = newUserId;
                       if (newUserId != null) {
                         _selectedUserName = _users
                             .firstWhere((u) => u['uid'] == newUserId)['username'];
                       }
-                    });
+                    }); }
                   },
                 ),
               ),

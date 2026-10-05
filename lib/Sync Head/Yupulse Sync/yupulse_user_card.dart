@@ -364,8 +364,8 @@ class YupulseUserCard extends StatelessWidget {
                                         callDoneCtrl.selection = TextSelection.fromPosition(
                                           TextPosition(offset: callDoneCtrl.text.length),
                                         );
-                                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                        ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+                                        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                                           SnackBar(
                                             content: Text(
                                               'Called count cannot exceed Total Target ($target)',

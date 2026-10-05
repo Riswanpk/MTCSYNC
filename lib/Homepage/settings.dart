@@ -22,7 +22,7 @@ class SettingsPage extends StatelessWidget {
       'code': code,
       'createdAt': FieldValue.serverTimestamp(),
     });
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       SnackBar(
         content: Text('Generated Registration Code: $code'),
         duration: const Duration(seconds: 5),
@@ -135,7 +135,7 @@ class SettingsPage extends StatelessWidget {
 
                           if (context.mounted) {
                             Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                               const SnackBar(
                                 content: Text('Configuration saved successfully'),
                                 backgroundColor: Colors.green,
@@ -144,7 +144,7 @@ class SettingsPage extends StatelessWidget {
                           }
                         } catch (e) {
                           if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                               SnackBar(
                                 content: Text('Error saving configuration: $e'),
                                 backgroundColor: Colors.red,

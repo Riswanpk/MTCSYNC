@@ -43,12 +43,12 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
 
   Future<void> _fetchBranches() async {
     final branches = await UserCacheService.instance.getBranches();
-    setState(() {
+    if (mounted) { setState(() {
       _branches = branches;
       // No auto-selection — user must pick a branch
       _selectedBranch = null;
       _branchesLoading = false;
-    });
+    }); }
   }
 
   Future<void> _fetchStats() async {
@@ -291,7 +291,7 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
       ),
     );
     if (picked != null) {
-      setState(() => _selectedRange = picked);
+      if (mounted) setState(() => _selectedRange = picked);
       _fetchStats();
     }
   }

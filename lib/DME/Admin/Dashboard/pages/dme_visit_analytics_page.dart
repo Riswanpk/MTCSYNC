@@ -109,17 +109,17 @@ class _DmeVisitAnalyticsPageState extends State<DmeVisitAnalyticsPage> {
     );
 
     if (picked != null) {
-      setState(() {
+      if (mounted) { setState(() {
         _startDate = picked.start;
         _endDate = picked.end;
-      });
+      }); }
       _loadAnalyticsData();
     }
   }
 
   Future<void> _loadAnalyticsData() async {
     if (_startDate == null || _endDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Please select a date range first.'),
           backgroundColor: Colors.orange,
@@ -147,7 +147,7 @@ class _DmeVisitAnalyticsPageState extends State<DmeVisitAnalyticsPage> {
       debugPrint('Error loading visit analytics: $e');
       if (!mounted) return;
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
           content: Text('Error loading analytics data: $e'),
           backgroundColor: Colors.red,

@@ -42,11 +42,11 @@ class _InstructionsPageState extends State<InstructionsPage> {
   Future<void> _loadUserRole() async {
     await UserCacheService.instance.ensureLoaded();
     final role = (UserCacheService.instance.role ?? '').toLowerCase();
-    setState(() {
+    if (mounted) { setState(() {
       _userRole = role;
       _isAdmin = role == 'admin';
       _isLoading = false;
-    });
+    }); }
   }
 
   void _openUploadDialog() {
@@ -95,13 +95,13 @@ class _InstructionsPageState extends State<InstructionsPage> {
       }
       await FirebaseFirestore.instance.collection('instruction_videos').doc(docId).delete();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(content: Text('Video deleted successfully'), backgroundColor: Colors.green),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Failed to delete video: $e'), backgroundColor: Colors.red),
         );
       }
@@ -320,33 +320,33 @@ class _UploadVideoSheetState extends State<_UploadVideoSheet> {
     );
 
     if (result != null && result.files.isNotEmpty) {
-      setState(() {
+      if (mounted) { setState(() {
         _selectedVideo = result.files.first;
         if (_titleController.text.trim().isEmpty) {
           _titleController.text = result.files.first.name.split('.').first;
         }
-      });
+      }); }
     }
   }
 
   Future<void> _uploadVideo() async {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please enter a video name/title')),
       );
       return;
     }
 
     if (_selectedVideo == null || _selectedVideo!.path == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please select a video file to upload')),
       );
       return;
     }
 
     if (_selectedRoles.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please select at least one visible role')),
       );
       return;
@@ -399,14 +399,14 @@ class _UploadVideoSheetState extends State<_UploadVideoSheet> {
 
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(content: Text('Video uploaded successfully!'), backgroundColor: Colors.green),
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isUploading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Upload failed: $e'), backgroundColor: Colors.red),
         );
       }
@@ -609,12 +609,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           );
         },
       );
-      setState(() {});
+      if (mounted) setState(() {});
     } catch (e) {
-      setState(() {
+      if (mounted) { setState(() {
         _isError = true;
         _errorMessage = e.toString();
-      });
+      }); }
     }
   }
 

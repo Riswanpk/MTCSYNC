@@ -221,7 +221,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
       canPop: !(called && remarksController.text.trim().isEmpty),
       onPopInvokedWithResult: (didPop, result) async {
         if (!didPop && called && remarksController.text.trim().isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             const SnackBar(
                 content: Text('Please enter remarks before leaving.'),
                 backgroundColor: Colors.red),
@@ -257,7 +257,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
               onPressed: () {
                 if (customer['pendingEditing'] == true ||
                     customer['pendingDeletion'] == true) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                     const SnackBar(
                       content: Text(
                           'This customer is already pending approval and cannot be edited.'),
@@ -295,7 +295,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
                 onCallPressed: () {
                   if (customer['pendingEditing'] == true ||
                       customer['pendingDeletion'] == true) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                       const SnackBar(
                         content: Text(
                             'Calling is disabled while customer is pending approval.'),
@@ -356,7 +356,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
                               setState(() {
                                 _remarksSaved = true;
                               });
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                                 const SnackBar(
                                     content: Text('Remarks saved.'),
                                     backgroundColor: Colors.green),

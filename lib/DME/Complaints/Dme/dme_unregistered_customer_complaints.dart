@@ -108,14 +108,14 @@ class _DmeUnregisteredCustomerComplaintsPageState
     if (!_formKey.currentState!.validate()) return;
 
     if (_isUploadingAudio) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please wait for audio upload to complete.')),
       );
       return;
     }
 
     if (_selectedUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please select an assigned user.')),
       );
       return;
@@ -158,7 +158,7 @@ class _DmeUnregisteredCustomerComplaintsPageState
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text(
               'Unregistered Complaint #$complaintId registered successfully and assigned to ${_selectedUser!['username']}!',
@@ -173,7 +173,7 @@ class _DmeUnregisteredCustomerComplaintsPageState
       debugPrint('Error registering unregistered complaint: $e');
       if (mounted) {
         setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Failed to register complaint: $e'),
             backgroundColor: Colors.red,

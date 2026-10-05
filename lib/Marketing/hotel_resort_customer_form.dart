@@ -180,11 +180,11 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
       MaterialPageRoute(builder: (context) => const CameraPage()),
     );
     if (result != null && result is Map && result['image'] != null) {
-      setState(() {
+      if (mounted) { setState(() {
         _imageFile = result['image'];
         locationString = result['location'];
         _photoError = false;
-      });
+      }); }
       // Start uploading immediately while user fills the rest of the form
       _uploadHelper.cancel(); // cancel any previous upload
       _uploadHelper.startUpload(_imageFile!);
@@ -356,7 +356,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
         otherPurchasesReasonInvalid;
 
     if (hasError) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please fill all required fields.')),
       );
       return;
@@ -436,14 +436,14 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
 
       _formKey.currentState?.reset();
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Form submitted successfully!')),
       );
     } catch (e) {
       debugPrint('Error submitting form: $e');
       if (!mounted) return;
       setState(() => isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Error submitting form. Please try again.')),
       );
     }
@@ -553,7 +553,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                               if (clipboardData?.text != null) {
                                 final formatted = _formatIndianPhone(clipboardData!.text!);
                                 if (formatted != '+91 ') {
-                                  setState(() {
+                                  if (mounted) { setState(() {
                                     _contactNumberController.text = formatted;
                                     _contactNumberController.selection =
                                         TextSelection.fromPosition(
@@ -561,9 +561,9 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                                     );
                                     contactNumber = formatted;
                                     _contactNumberError = false;
-                                  });
+                                  }); }
                                 } else {
-                                  ScaffoldMessenger.of(context).showSnackBar(
+                                  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                                     const SnackBar(
                                         content: Text(
                                             'Clipboard does not contain a valid 10-digit number')),
@@ -600,10 +600,10 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                           contactNumber = formatted;
                           _saveDraft();
                           if (_contactNumberError) {
-                            setState(() {
+                            if (mounted) { setState(() {
                               _contactNumberError =
                                   formatted.replaceAll(RegExp(r'\D'), '').length != 12;
-                            });
+                            }); }
                           }
                         },
                       ),

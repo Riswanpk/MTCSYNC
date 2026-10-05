@@ -87,16 +87,16 @@ class _DmeComplaintVoiceWidgetState extends State<DmeComplaintVoiceWidget> {
         final picked = result.files.first;
         if (picked.path == null) return;
 
-        setState(() {
+        if (mounted) { setState(() {
           _localFilePath = picked.path;
           _fileName = picked.name;
-        });
+        }); }
 
         await _uploadAudioFile();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error picking audio: $e'), backgroundColor: Colors.red),
         );
       }
@@ -165,7 +165,7 @@ class _DmeComplaintVoiceWidgetState extends State<DmeComplaintVoiceWidget> {
       });
       widget.onAudioChanged(_audioUrl);
       widget.onUploadStateChanged?.call(false);
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Audio recording attached successfully ✓'),
           backgroundColor: Colors.green,
@@ -175,7 +175,7 @@ class _DmeComplaintVoiceWidgetState extends State<DmeComplaintVoiceWidget> {
     } else {
       setState(() => _isUploading = false);
       widget.onUploadStateChanged?.call(false);
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Failed to upload audio. Please try again.'),
           backgroundColor: Colors.red,

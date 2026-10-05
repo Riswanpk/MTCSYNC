@@ -100,7 +100,7 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
     _isReady = false;
     _filteredLeads = [];
 
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   void _applyFilters() {
@@ -146,10 +146,10 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
       ),
     );
     if (picked != null) {
-      setState(() {
+      if (mounted) { setState(() {
         _startDate = picked.start;
         _endDate = picked.end;
-      });
+      }); }
       _fetchLeads();
     }
   }

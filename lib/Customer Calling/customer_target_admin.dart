@@ -60,10 +60,10 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
       final branches = users.map((u) => u['branch'] as String).toSet().toList();
       branches.sort(); // Sort branches in ascending order
 
-    setState(() {
+    if (mounted) { setState(() {
       _allUsers = users;
       _branches = branches;
-    });
+    }); }
   }
 
   void _filterUsersForBranch(String branch) {
@@ -254,17 +254,17 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
         });
       });
 
-      setState(() {
+      if (mounted) { setState(() {
         _success = "Customer target assigned. $newCount new customer(s) added.";
-      });
+      }); }
     } catch (e) {
-      setState(() {
+      if (mounted) { setState(() {
         _error = "Failed: $e";
-      });
+      }); }
     } finally {
-      setState(() {
+      if (mounted) { setState(() {
         _loading = false;
-      });
+      }); }
     }
   }
 

@@ -309,7 +309,7 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error loading user data: $e')),
         );
         setState(() {
@@ -327,7 +327,7 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
         .toList();
 
     if (selectedItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Please select at least one unsubmitted user to save marks.'),
           backgroundColor: Colors.orange,
@@ -606,7 +606,7 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Marks submitted for ${selectedItems.length} user(s) successfully! (Locked)'),
             backgroundColor: primaryGreen,
@@ -615,7 +615,7 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Failed to save marks: $e')),
         );
       }

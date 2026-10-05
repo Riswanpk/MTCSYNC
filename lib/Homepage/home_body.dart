@@ -1049,15 +1049,15 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     }
 
     if (branch != null) {
-      Navigator.of(context).push(
+      if (mounted) { Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => LoadingOverlayPage(
             child: LeadsPage(branch: branch!),
           ),
         ),
-      );
+      ); }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Branch not found for user')),
       );
     }
@@ -1082,15 +1082,15 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     }
 
     if (branch != null) {
-      Navigator.of(context).push(
+      if (mounted) { Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => LoadingOverlayPage(
             child: OrdersPage(branch: branch!),
           ),
         ),
-      );
+      ); }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Branch not found for user')),
       );
     }
@@ -1153,13 +1153,13 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     }
 
     if (role == 'admin' || role == 'Sync Head' || role == 'sync_head' || role == 'supersale_admin') {
-      Navigator.of(context).push(
+      if (mounted) { Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => const LoadingOverlayPage(
             child: ViewerMarketingPage(),
           ),
         ),
-      );
+      ); }
     } else if (branch != null && username != null) {
       // Save navigation state for activity recreation recovery
       await NavigationState.saveState('marketing', userData: {
@@ -1167,7 +1167,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
         'userid': userid,
         'branch': branch,
       });
-      Navigator.of(context)
+      if (mounted) { Navigator.of(context)
           .push(
         MaterialPageRoute(
           builder: (_) => LoadingOverlayPage(
@@ -1182,9 +1182,9 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           .then((_) {
         // Clear navigation state when user returns from marketing
         NavigationState.clearState();
-      });
+      }); }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('User info not found')),
       );
     }

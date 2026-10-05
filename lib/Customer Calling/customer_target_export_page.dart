@@ -65,10 +65,10 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
     final nonAdminBranches = allBranches
         .where((b) => b.trim().toLowerCase() != 'admin')
         .toList();
-    setState(() {
+    if (mounted) { setState(() {
       _branches = ['All Branches', ...nonAdminBranches];
       _selectedBranch = 'All Branches';
-    });
+    }); }
   }
 
   Future<void> _exportExcel() async {
@@ -601,13 +601,13 @@ class _CustomerTargetExportPageState extends State<CustomerTargetExportPage> {
       await Share.shareXFiles([XFile(file.path)],
           text: shareText);
     } catch (e) {
-      setState(() {
+      if (mounted) { setState(() {
         _error = 'Export failed: $e';
-      });
+      }); }
     } finally {
-      setState(() {
+      if (mounted) { setState(() {
         _loading = false;
-      });
+      }); }
     }
   }
 

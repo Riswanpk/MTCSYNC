@@ -68,7 +68,7 @@ class _CustomerIndividualExportPageState extends State<CustomerIndividualExportP
 					.toList()
 				  ..sort();
 
-			setState(() {
+			if (mounted) { setState(() {
 				_allUsers = users;
 				_branches = branches;
 				if (branches.isNotEmpty) {
@@ -76,12 +76,12 @@ class _CustomerIndividualExportPageState extends State<CustomerIndividualExportP
 					_filterUsersForBranch(branches.first);
 				}
 				_loadingUsers = false;
-			});
+			}); }
 		} catch (e) {
-			setState(() {
+			if (mounted) { setState(() {
 				_error = 'Failed to load users/branches: $e';
 				_loadingUsers = false;
-			});
+			}); }
 		}
 	}
 
@@ -113,7 +113,7 @@ class _CustomerIndividualExportPageState extends State<CustomerIndividualExportP
 					.doc(email)
 					.get();
 			if (!doc.exists || doc.data()?['customers'] == null) {
-				setState(() { _error = 'No customer list found for selected user/month.'; _loading = false; });
+				if (mounted) setState(() { _error = 'No customer list found for selected user/month.'; _loading = false; });
 				return;
 			}
 			final List<dynamic> customersRaw = doc.data()!['customers'];
@@ -163,9 +163,9 @@ class _CustomerIndividualExportPageState extends State<CustomerIndividualExportP
 			await file.writeAsBytes(bytes, flush: true);
 			await Share.shareXFiles([XFile(file.path)], text: 'Customer List $_selectedMonthYear');
 		} catch (e) {
-			setState(() { _error = 'Export failed: $e'; });
+			if (mounted) setState(() { _error = 'Export failed: $e'; });
 		} finally {
-			setState(() { _loading = false; });
+			if (mounted) setState(() { _loading = false; });
 		}
 	}
 

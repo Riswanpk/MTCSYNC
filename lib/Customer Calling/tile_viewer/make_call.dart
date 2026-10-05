@@ -32,7 +32,7 @@ Future<void> makeCall(
 ]) async {
   if (contact1.trim().isEmpty) {
     if (contact2 == null || contact2.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('No contact number available')),
       );
       return;
@@ -66,7 +66,7 @@ Future<void> makeCall(
   }
   var status = await Permission.phone.request();
   if (!status.isGranted) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       const SnackBar(content: Text('Phone permission denied')),
     );
     return;
@@ -81,7 +81,7 @@ Future<void> makeCall(
     }
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   } else {
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       const SnackBar(content: Text('Could not launch dialer')),
     );
   }

@@ -102,17 +102,17 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
     );
 
     if (picked != null) {
-      setState(() {
+      if (mounted) { setState(() {
         _startDate = picked.start;
         _endDate = picked.end;
-      });
+      }); }
       _fetchCallReportData();
     }
   }
 
   Future<void> _fetchCallReportData() async {
     if (_startDate == null || _endDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Please select a date range first.'),
           backgroundColor: Colors.orange,
@@ -124,7 +124,7 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
     final client = await DmeConfig.getClient();
     if (client == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(content: Text('Supabase is not configured.')),
         );
       }
@@ -397,7 +397,7 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
       debugPrint('Error fetching call report data: $e');
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error loading Call Report: $e'), backgroundColor: Colors.red),
         );
       }

@@ -101,11 +101,11 @@ class _ContactPickerModalState extends State<ContactPickerModal> {
       final encoded = jsonEncode(latest.map((c) => c.toJson()).toList());
       await prefs.setString('contacts_cache', encoded);
 
-      setState(() {
+      if (mounted) { setState(() {
         _contacts = latest;
         _filtered = _getFilteredContacts(_searchController.text);
         _loading = false;
-      });
+      }); }
     } catch (e) {
       // ignore errors - leave whatever we have
       if (mounted) setState(() => _loading = false);

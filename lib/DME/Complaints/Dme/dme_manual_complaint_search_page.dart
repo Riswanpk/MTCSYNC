@@ -48,10 +48,10 @@ class _DmeManualComplaintSearchPageState extends State<DmeManualComplaintSearchP
     final client = await DmeConfig.getClient();
     if (client == null) return;
 
-    setState(() {
+    if (mounted) { setState(() {
       _isLoading = true;
       _hasSearched = true;
-    });
+    }); }
 
     try {
       final res = await client
@@ -209,7 +209,7 @@ class _DmeManualComplaintSearchPageState extends State<DmeManualComplaintSearchP
                         ),
                       );
                       if (result == true && mounted) {
-                        Navigator.pop(context, true);
+                        if (mounted) { Navigator.pop(context, true); }
                       }
                     },
                   );
@@ -240,7 +240,7 @@ class _DmeManualComplaintSearchPageState extends State<DmeManualComplaintSearchP
                 ),
               );
               if (result == true && mounted) {
-                Navigator.pop(context, true);
+                if (mounted) { Navigator.pop(context, true); }
               }
             },
             icon: const Icon(Icons.person_add_alt_1_rounded, size: 20),

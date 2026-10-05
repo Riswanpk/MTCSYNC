@@ -79,10 +79,10 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
       MaterialPageRoute(builder: (context) => const CameraPage()),
     );
     if (result != null && result is Map && result['image'] != null) {
-      setState(() {
+      if (mounted) { setState(() {
         _imageFile = result['image'];
         locationString = result['location'];
-      });
+      }); }
       // Start uploading immediately while user fills the rest of the form
       _uploadHelper.cancel(); // cancel any previous upload
       _uploadHelper.startUpload(_imageFile!);
@@ -239,7 +239,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
         otherPurchasesReasonInvalid;
 
     if (hasError) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please fill all required fields.')),
       );
       // Do NOT reset the form or clear fields!
@@ -284,7 +284,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
 
       if (!mounted) return;
       setState(() => isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Form submitted successfully!')),
       );
 
@@ -322,7 +322,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
       debugPrint('Error submitting form: $e');
       if (!mounted) return;
       setState(() => isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Error submitting form. Please try again.')),
       );
     }
@@ -492,7 +492,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                                 final formatted =
                                     _formatIndianPhone(clipboardData!.text!);
                                 if (formatted != '+91 ') {
-                                  setState(() {
+                                  if (mounted) { setState(() {
                                     _phoneNoController.text = formatted;
                                     _phoneNoController.selection =
                                         TextSelection.fromPosition(
@@ -500,9 +500,9 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                                     );
                                     phoneNo = formatted;
                                     _phoneNoError = false;
-                                  });
+                                  }); }
                                 } else {
-                                  ScaffoldMessenger.of(context).showSnackBar(
+                                  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                                     const SnackBar(
                                         content: Text(
                                             'Clipboard does not contain a valid 10-digit number')),
@@ -521,7 +521,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                               TextPosition(
                                   offset: _phoneNoController.text.length),
                             );
-                            setState(() => phoneNo = '+91 ');
+                            if (mounted) setState(() => phoneNo = '+91 ');
                             return;
                           }
                           String raw =
@@ -538,7 +538,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                             );
                           }
                           _saveDraft();
-                          setState(() {
+                          if (mounted) { setState(() {
                             phoneNo = formatted;
                             if (_phoneNoError &&
                                 formatted
@@ -547,7 +547,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                                     12) {
                               _phoneNoError = false;
                             }
-                          });
+                          }); }
                         },
                       ),
                     ),
@@ -734,10 +734,10 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                           lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
                         );
                         if (picked != null) {
-                          setState(() {
+                          if (mounted) { setState(() {
                             upcomingEventDate = picked;
                             _saveDraft();
-                          });
+                          }); }
                         }
                       },
                     ),
@@ -765,9 +765,9 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                         decoration: _inputDecoration('Upcoming Big Events Details'),
                         onChanged: (v) {
                           _saveDraft();
-                          setState(() {
+                          if (mounted) { setState(() {
                             upcomingEventDetails = v;
-                          });
+                          }); }
                         },
                       ),
                     ),

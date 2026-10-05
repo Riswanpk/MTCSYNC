@@ -36,12 +36,12 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
 
   Future<void> fetchBranches() async {
     final sortedBranches = await UserCacheService.instance.getBranches();
-    setState(() {
+    if (mounted) { setState(() {
       branches = sortedBranches;
       if (branches.isNotEmpty && (selectedBranch == null || !branches.contains(selectedBranch))) {
         selectedBranch = branches.first;
       }
-    });
+    }); }
     await fetchUsernames();
   }
 
@@ -59,12 +59,12 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
         .get();
     final allUsers = snapshot.docs.map((doc) => doc['username'] as String? ?? '').toSet().toList();
     allUsers.sort();
-    setState(() {
+    if (mounted) { setState(() {
       usernames = ['All Users', ...allUsers.where((u) => u.isNotEmpty)];
       if (usernames.isNotEmpty && (selectedUsername == null || !usernames.contains(selectedUsername))) {
         selectedUsername = usernames.first;
       }
-    });
+    }); }
   }
 
   InputDecoration _dropdownDecoration(BuildContext context, String label) {
@@ -197,9 +197,9 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
                           lastDate: DateTime(now.year + 1),
                         );
                         if (picked != null) {
-                          setState(() {
+                          if (mounted) { setState(() {
                             selectedDateRange = picked;
-                          });
+                          }); }
                         }
                       },
                       child: AbsorbPointer(
@@ -227,9 +227,9 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
                       icon: const Icon(Icons.clear, size: 18),
                       tooltip: "Clear Date Range",
                       onPressed: () {
-                        setState(() {
+                        if (mounted) { setState(() {
                           selectedDateRange = null;
-                        });
+                        }); }
                       },
                     ),
                 ],
@@ -338,7 +338,7 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
 
     if (confirmed != true) return;
 
-    setState(() => _isDeletingOldForms = true);
+    if (mounted) setState(() => _isDeletingOldForms = true);
 
     try {
       final cutoff = DateTime.now().subtract(const Duration(days: 40));
@@ -367,12 +367,12 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
       }
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(content: Text('Deleted $deleted old marketing form(s).')),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(content: Text('Error deleting old forms: $e')),
       );
     } finally {

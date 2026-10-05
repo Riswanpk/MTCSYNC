@@ -59,11 +59,11 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
       }
     }
     final sorted = branches.toList()..sort();
-    setState(() {
+    if (mounted) { setState(() {
       branchOptions = ['All', ...sorted];
       selectedBranch = 'All';
       _leads = [];
-    });
+    }); }
   }
 
   Future<void> _fetchLeadsPage(
@@ -71,11 +71,11 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
       bool prevPage = false,
       bool isSearch = false}) async {
     if (_isLoading) return;
-    setState(() => _isLoading = true);
+    if (mounted) setState(() => _isLoading = true);
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
       return;
     }
 
@@ -141,10 +141,10 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
       _fetchUserNames(missingUserIds.toList());
     }
 
-    setState(() {
+    if (mounted) { setState(() {
       _leads = snapshot.docs;
       _isLoading = false;
-    });
+    }); }
   }
 
   final Map<String, String> _userNameCache = {};
@@ -357,7 +357,7 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
       try {
         await FirebaseFirestore.instance.collection('follow_ups').doc(docId).delete();
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Lead "$leadName" deleted successfully'),
             backgroundColor: Colors.redAccent,
@@ -366,7 +366,7 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
         _fetchLeadsPage();
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Failed to delete lead: $e'),
             backgroundColor: Colors.red,

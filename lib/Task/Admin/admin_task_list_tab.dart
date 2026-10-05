@@ -62,7 +62,7 @@ class _AdminTaskListTabState extends State<AdminTaskListTab> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
               content: Text('Task deleted successfully'),
               backgroundColor: Colors.green),
@@ -71,7 +71,7 @@ class _AdminTaskListTabState extends State<AdminTaskListTab> {
     } catch (e) {
       debugPrint('Error deleting task: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
               content: Text('Failed to delete task: $e'),
               backgroundColor: Colors.red),
@@ -115,7 +115,7 @@ class _AdminTaskListTabState extends State<AdminTaskListTab> {
       await batch.commit();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
               content: Text('Mass task deleted successfully'),
               backgroundColor: Colors.green),
@@ -124,7 +124,7 @@ class _AdminTaskListTabState extends State<AdminTaskListTab> {
     } catch (e) {
       debugPrint('Error deleting mass task: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
               content: Text('Failed to delete mass task: $e'),
               backgroundColor: Colors.red),

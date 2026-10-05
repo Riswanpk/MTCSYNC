@@ -368,7 +368,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
         debugPrint('Picked image file does not exist: ${pickedFile.path}');
         if (!mounted) return;
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(content: Text('Failed to access captured image. Please try again.')),
         );
         return;
@@ -391,7 +391,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
       if (!mounted) return;
 
       if (compressedImageFile == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(content: Text('Failed to process image. Please try again.')),
         );
         setState(() => _isLoading = false);
@@ -400,7 +400,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
 
       // GPS is MANDATORY - cannot proceed without location
       if (locationResult == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('❌ GPS location is required. Please enable location and try again.'),
             duration: Duration(seconds: 5),
@@ -445,7 +445,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
       debugPrint('Error processing captured file: $e');
       if (!mounted) return;
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(content: Text('Error processing photo: ${e.toString().length > 80 ? e.toString().substring(0, 80) : e}')),
       );
     }
@@ -480,7 +480,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
         if (cameraError.toString().contains('camera_access_denied') ||
             cameraError.toString().contains('PlatformException') ||
             cameraError.toString().contains('permission')) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             const SnackBar(
               content: Text('📷 Camera permission is required.\nPlease allow camera access in your device Settings.'),
               duration: Duration(seconds: 5),
@@ -488,7 +488,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
             ),
           );
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             SnackBar(
               content: Text('Camera error: ${cameraError.toString().length > 80 ? cameraError.toString().substring(0, 80) : cameraError}'),
               duration: const Duration(seconds: 4),
@@ -513,7 +513,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
       setState(() {
         _isLoading = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(content: Text('Error taking photo: ${e.toString().length > 80 ? e.toString().substring(0, 80) : e}')),
       );
     }
@@ -702,7 +702,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
                                       // Verify image still exists before processing
                                       if (!_capturedImage!.existsSync()) {
                                         if (!mounted) return;
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                                           const SnackBar(content: Text('Image file is no longer available. Please retake the photo.')),
                                         );
                                         setState(() {
@@ -734,10 +734,10 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
                                           _isUploading = false;
                                         });
                                         // Return the image and location to the previous page
-                                        Navigator.pop(context, {
+                                        if (mounted) { Navigator.pop(context, {
                                           'image': finalFile,
                                           'location': _locationString,
-                                        });
+                                        }); }
                                       } catch (e) {
                                         debugPrint('Error adding watermark: $e');
                                         if (!mounted) return;
@@ -745,13 +745,13 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
                                           _isUploading = false;
                                         });
                                         // Return image without watermark if watermarking fails
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                                           const SnackBar(content: Text('Could not add watermark, using original image')),
                                         );
-                                        Navigator.pop(context, {
+                                        if (mounted) { Navigator.pop(context, {
                                           'image': _capturedImage,
                                           'location': _locationString,
-                                        });
+                                        }); }
                                       }
                                     }
                                   },

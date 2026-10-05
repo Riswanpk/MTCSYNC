@@ -148,7 +148,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
   Future<void> _saveFollowUp() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedBranch == null || _selectedUserId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
             content: Text('Please select a branch and user to assign')),
       );
@@ -159,8 +159,7 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('User not logged in')));
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(content: Text('User not logged in')));
         return;
       }
 
@@ -224,13 +223,13 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
 
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(content: Text('Lead created and assigned successfully!')),
         );
         Navigator.of(context).pop(true); // Return true to indicate success
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(content: Text('Failed to save: $e')),
       );
     } finally {
@@ -774,13 +773,13 @@ class _SmeLeadFormState extends State<SmeLeadForm> {
                                               _deviceContactsLoading,
                                           scrollController: scrollController,
                                           onSelect: (name, phone) {
-                                            setState(() {
+                                            if (mounted) { setState(() {
                                               final digits = phone.replaceAll(RegExp(r'\D'), '');
                                               _phoneController.text = digits.length > 10 ? digits.substring(digits.length - 10) : digits;
                                               if (name.isNotEmpty) {
                                                 _nameController.text = name;
                                               }
-                                            });
+                                            }); }
                                           },
                                         );
                                       },

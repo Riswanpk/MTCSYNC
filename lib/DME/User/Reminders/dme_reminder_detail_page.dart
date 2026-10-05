@@ -206,13 +206,13 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage>
     try {
       await DmeReminderDataService.saveContactPerson(customerId: customerId, text: text);
       if (mounted && showFeedback) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(content: Text('Contact Person saved successfully!'), backgroundColor: Colors.green, duration: Duration(seconds: 2)),
         );
       }
     } catch (e) {
       if (mounted && showFeedback) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save Contact Person: $e'), backgroundColor: Colors.red));
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text('Failed to save Contact Person: $e'), backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _isSavingContactPerson = false);
@@ -227,12 +227,12 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage>
 
     if (result != null && result is Map && result['success'] == true) {
       final requestType = result['type'];
-      setState(() {
+      if (mounted) { setState(() {
         _hasPendingRequest = true;
         _pendingRequestType = requestType?.toString();
-      });
+      }); }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text(requestType == 'phone_number_change'
                 ? 'Phone change request submitted! Reminder is locked until approved by Admin.'
@@ -267,7 +267,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage>
     _callInitiatedTime = DateTime.now();
     final ok = await DmeReminderDetailHelpers.openCustomerDialer(phone);
     if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Could not launch phone dialer or phone is missing.')),
       );
     }
@@ -276,7 +276,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage>
   Future<void> _sendWhatsAppMessage() async {
     final phone = _reminder['customer_phone']?.toString();
     if (phone == null || phone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Customer phone number is missing.')));
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(content: Text('Customer phone number is missing.')));
       return;
     }
 
@@ -293,7 +293,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage>
       _reminder['call_duration'] = 0;
       _reminder['remarks'] = 'WhatsApp Follow-up (Proof uploaded)';
       _remarksController.text = 'WhatsApp Follow-up (Proof uploaded)';
-      setState(() => _callMade = true);
+      if (mounted) setState(() => _callMade = true);
       widget.onUpdated?.call();
     }
   }
@@ -414,7 +414,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage>
   Future<void> _saveAndMarkCompleted() async {
     if (!_callMade || _callDuration == null || _callDuration! <= 10) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
           content: Text(_callDuration == null || _callDuration == 0
               ? 'Cannot complete reminder: Call was not attended. Please call customer first.'
@@ -428,7 +428,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage>
     final remarks = _remarksController.text.trim();
     if (remarks.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter call remarks before saving.')));
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(content: Text('Please enter call remarks before saving.')));
       return;
     }
 
@@ -444,7 +444,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage>
 
       if (mounted) {
         setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(content: Text('Call remarks saved and reminder marked completed!'), backgroundColor: Colors.green),
         );
         widget.onUpdated?.call();
@@ -453,7 +453,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage>
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving reminder: $e'), backgroundColor: Colors.red));
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text('Error saving reminder: $e'), backgroundColor: Colors.red));
       }
     }
   }
@@ -477,7 +477,7 @@ class _DmeReminderDetailPageState extends State<DmeReminderDetailPage>
       canPop: !isCalledWithoutRemarks || _hasPendingRequest,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             const SnackBar(content: Text('Please enter remarks and tap "Save Remarks & Mark Completed" before leaving.'), backgroundColor: Colors.orange, duration: Duration(seconds: 3)),
           );
         }

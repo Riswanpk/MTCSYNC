@@ -443,7 +443,7 @@ class _HomePageState extends State<HomePage>
     final role = _userCache.role;
     final email = _userCache.email;
     if (role != 'sales' && role != 'manager' && role != 'asst_manager') {
-      setState(() => _showTodoWarning = false);
+      if (mounted) setState(() => _showTodoWarning = false);
       return;
     }
 
@@ -460,7 +460,7 @@ class _HomePageState extends State<HomePage>
         .get();
 
     _lastTodoWarningCheck = DateTime.now();
-    setState(() => _showTodoWarning = todosSnapshot.docs.isEmpty);
+    if (mounted) setState(() => _showTodoWarning = todosSnapshot.docs.isEmpty);
   }
 
   Future<void> _checkPendingTodosReminder() async {
@@ -526,7 +526,7 @@ class _HomePageState extends State<HomePage>
     if (cached != null) {
       final List<dynamic> decoded = await compute(decodeContactsJson, cached);
       _cachedContacts = decoded.map((c) => Contact.fromJson(c)).toList();
-      setState(() => _contactsLoaded = true);
+      if (mounted) setState(() => _contactsLoaded = true);
     }
 
     final contacts = await FlutterContacts.getContacts(

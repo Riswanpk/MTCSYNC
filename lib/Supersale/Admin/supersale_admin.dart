@@ -67,7 +67,7 @@ class _SupersalePageState extends State<SupersalePage> {
 
       await _firestore.collection('supersales').doc(docId).delete();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('Supersale entry deleted'),
             backgroundColor: Colors.orange,
@@ -77,7 +77,7 @@ class _SupersalePageState extends State<SupersalePage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Failed to delete entry: $e'),
             backgroundColor: Colors.red,

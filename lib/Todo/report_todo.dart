@@ -33,20 +33,20 @@ class _ReportTodoPageState extends State<ReportTodoPage> {
 
   Future<void> _fetchBranches() async {
     final branches = await UserCacheService.instance.getBranches();
-    setState(() {
+    if (mounted) { setState(() {
       _branches = branches;
-    });
+    }); }
   }
 
   Future<void> _generateReport() async {
     if (_selectedBranch == null || _startDate == null || _endDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please select a branch and date range.')),
       );
       return;
     }
     if (_startDate!.isAfter(_endDate!)) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please select a branch first.')),
       );
       return;
@@ -125,11 +125,11 @@ class _ReportTodoPageState extends State<ReportTodoPage> {
       // 5. Share the file
       await Share.shareXFiles([XFile(fileName)], text: 'To-Do Report for $_selectedBranch');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(content: Text('Failed to generate report: $e')),
       );
     } finally {
-      setState(() => _isGenerating = false);
+      if (mounted) setState(() => _isGenerating = false);
     }
   }
 

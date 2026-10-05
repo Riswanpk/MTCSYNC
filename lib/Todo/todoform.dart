@@ -98,7 +98,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
     if (data == null) return;
     if (data['status'] == 'done') {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(content: Text('Completed tasks cannot be edited.')),
         );
         Navigator.pop(context);
@@ -130,7 +130,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
 
     if (title.isEmpty || desc.isEmpty) {
       setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please fill all required fields')),
       );
       return;
@@ -139,7 +139,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
     // 🔴 Make reminder mandatory
     if (_selectedReminderDate == null || _selectedReminderTime == null) {
       setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please select a reminder date & time')),
       );
       return;
@@ -149,7 +149,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('User not logged in')),
       );
       return;
@@ -280,7 +280,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
     } catch (e) {
       debugPrint('Error saving todo: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Failed to save To-Do: $e'), backgroundColor: Colors.red),
         );
       }
@@ -328,7 +328,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
       );
 
       if (load == true) {
-        setState(() {
+        if (mounted) { setState(() {
           _titleController.text = draftData['title'] ?? '';
           _descController.text = draftData['description'] ?? '';
 
@@ -338,7 +338,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
           if (draftData['reminder_hour'] != null && draftData['reminder_minute'] != null) {
             _selectedReminderTime = TimeOfDay(hour: draftData['reminder_hour'], minute: draftData['reminder_minute']);
           }
-        });
+        }); }
       }
     }
   }
@@ -457,7 +457,7 @@ class _TodoFormPageState extends State<TodoFormPage> {
                       );
                       _reminderController.text =
                           "${formatted.year}-${formatted.month.toString().padLeft(2, '0')}-${formatted.day.toString().padLeft(2, '0')} ${pickedTime.format(context)}";
-                      setState(() {});
+                      if (mounted) setState(() {});
                       _saveDraft();
                     }
                   }

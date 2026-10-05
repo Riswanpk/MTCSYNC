@@ -53,6 +53,7 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
 
     if (widget.users.isNotEmpty && widget.branch != null &&
         userRole != 'admin' && userRole != 'Sync Head' && userRole != 'sync_head') {
+      if (!mounted) return;
       setState(() {
         _selectedBranch = widget.branch;
         _usersForBranch = List<Map<String, dynamic>>.from(widget.users)
@@ -69,6 +70,7 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
 
     if ((userRole == 'manager' || userRole == 'asst_manager') && userBranch != null) {
       await _fetchUsersForBranch(userBranch);
+      if (!mounted) return;
       setState(() {
         _selectedBranch = userBranch;
         _branches = [userBranch ?? ''];
@@ -79,6 +81,7 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
       final preselect = (widget.branch != null && branches.contains(widget.branch))
           ? widget.branch
           : (branches.isNotEmpty ? branches.first : null);
+      if (!mounted) return;
       setState(() {
         _branches = branches;
         if (_branches.isNotEmpty && _selectedBranch == null) {
@@ -92,6 +95,7 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
 
   Future<void> _fetchUsersForBranch(String? branch) async {
     if (branch == null) {
+      if (!mounted) return;
       setState(() {
         _usersForBranch = [];
         _selectedUser = null;
@@ -116,6 +120,7 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
         .toList()
       ..sort((a, b) => a['username'].toString().toLowerCase().compareTo(b['username'].toString().toLowerCase())); // Sort usernames alphabetically
 
+    if (!mounted) return;
     setState(() {
       _usersForBranch = users;
       _selectedUser = users.isNotEmpty ? users.first : null;
@@ -337,9 +342,9 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
 
                           onChanged: (val) async {
                             await _fetchUsersForBranch(val);
-                            setState(() {
+                            if (mounted) { setState(() {
                               _selectedBranch = val;
-                            });
+                            }); }
                           },
                         ),
                       ),
@@ -391,10 +396,10 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
                         },
 
                         onChanged: (val) {
-                          setState(() {
+                          if (mounted) { setState(() {
                             _selectedUser = val;
                             _cachedReport = null;
-                          });
+                          }); }
                         },
                       ),
                     ),

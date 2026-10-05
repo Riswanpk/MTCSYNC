@@ -218,10 +218,10 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
       // Analyze and Build Customer List and detect duplicates & database conflicts
       await _analyzeCustomerList();
     } catch (e) {
-      setState(() {
+      if (mounted) { setState(() {
         _isParsing = false;
         _statusMessage = 'Error parsing file: $e';
-      });
+      }); }
       _showSnackBar('Parsing error: $e', isError: true);
     }
   }
@@ -474,10 +474,10 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
         await _showConflictsDialog();
       }
     } catch (e) {
-      setState(() {
+      if (mounted) { setState(() {
         _isParsing = false;
         _statusMessage = 'Could not verify database status: $e';
-      });
+      }); }
     }
   }
 
@@ -827,7 +827,7 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
   }
 
   void _showSnackBar(String msg, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       SnackBar(
         content: Text(msg),
         backgroundColor: isError ? Colors.red[700] : Colors.green[700],

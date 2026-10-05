@@ -70,7 +70,7 @@ class OrderCard extends StatelessWidget {
     });
     onStatusChanged?.call();
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Order marked as Completed')),
       );
     }
@@ -105,7 +105,7 @@ class OrderCard extends StatelessWidget {
     }
 
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Order deleted')),
       );
     }

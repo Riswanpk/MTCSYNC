@@ -440,9 +440,9 @@ class _EditMarketingFormPageState extends State<EditMarketingFormPage> {
     );
 
     if (picked != null) {
-      setState(() {
+      if (mounted) { setState(() {
         controllers[key]!.text = DateFormat('dd MMM yyyy').format(picked);
-      });
+      }); }
     }
   }
 

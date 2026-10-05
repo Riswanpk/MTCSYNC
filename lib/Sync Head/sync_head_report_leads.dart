@@ -45,10 +45,10 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
     final branches = allBranches
         .where((b) => b.toLowerCase() != 'admin')
         .toList();
-    setState(() {
+    if (mounted) { setState(() {
       _branches = ['All Branches', ...branches];
       _branchesLoading = false;
-    });
+    }); }
   }
 
   Future<void> _pickDateRange() async {
@@ -68,7 +68,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
       ),
     );
     if (picked != null) {
-      setState(() => _selectedRange = picked);
+      if (mounted) setState(() => _selectedRange = picked);
     }
   }
 
@@ -113,7 +113,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
   Future<void> _generateReport() async {
     final isInterval = _statusFilter == 'Created in this Interval';
     if (_selectedBranch == null || (isInterval && _selectedRange == null)) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
             content: Text(isInterval
                 ? 'Please select a branch and date range.'

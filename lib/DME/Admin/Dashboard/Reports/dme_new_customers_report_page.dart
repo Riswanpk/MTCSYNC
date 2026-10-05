@@ -141,17 +141,17 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
     );
 
     if (picked != null) {
-      setState(() {
+      if (mounted) { setState(() {
         _startDate = picked.start;
         _endDate = picked.end;
-      });
+      }); }
       _fetchReportData();
     }
   }
 
   Future<void> _fetchReportData() async {
     if (_startDate == null || _endDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Please select a date range first.'),
           backgroundColor: Colors.orange,
@@ -163,7 +163,7 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
     final client = await DmeConfig.getClient();
     if (client == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(content: Text('Supabase is not configured.')),
         );
       }
@@ -362,7 +362,7 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
       debugPrint('Error fetching new customer report: $e');
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error loading report: $e'), backgroundColor: Colors.red),
         );
       }
@@ -371,7 +371,7 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
 
   Future<void> _generateAndShareExcel() async {
     if (_reportItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('No report data available to export.')),
       );
       return;
@@ -530,7 +530,7 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
       debugPrint('Error generating Excel: $e');
       if (mounted) {
         setState(() => _isExporting = false);
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Failed to generate Excel: $e'), backgroundColor: Colors.red),
         );
       }

@@ -80,7 +80,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Error loading user data: $e'),
             backgroundColor: Colors.red,
@@ -119,7 +119,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('User updated successfully'),
             backgroundColor: Colors.green,
@@ -130,7 +130,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Error saving changes: $e'),
             backgroundColor: Colors.red,
@@ -234,7 +234,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
               : () async {
                   await Clipboard.setData(ClipboardData(text: email));
                   if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                     const SnackBar(
                       content: Text('Email copied to clipboard'),
                       duration: Duration(seconds: 2),

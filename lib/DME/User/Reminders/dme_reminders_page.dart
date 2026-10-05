@@ -245,7 +245,7 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
 
   void _openReminderDetail(Map<String, dynamic> reminder) async {
     if (reminder['is_phone_change_pending'] == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text(
             'This reminder is locked because a phone number change request is pending admin approval.',

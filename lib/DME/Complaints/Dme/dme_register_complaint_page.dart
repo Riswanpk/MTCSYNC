@@ -178,14 +178,14 @@ class _DmeRegisterComplaintPageState extends State<DmeRegisterComplaintPage> {
     if (!_formKey.currentState!.validate()) return;
 
     if (_selectedUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please select a user to assign the complaint to.')),
       );
       return;
     }
 
     if (_isUploadingAudio) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please wait for the audio to finish uploading.')),
       );
       return;
@@ -226,7 +226,7 @@ class _DmeRegisterComplaintPageState extends State<DmeRegisterComplaintPage> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Complaint #$complaintId registered successfully and assigned to ${_selectedUser!['username']}!'),
             backgroundColor: Colors.green,
@@ -239,7 +239,7 @@ class _DmeRegisterComplaintPageState extends State<DmeRegisterComplaintPage> {
       debugPrint('Error submitting complaint: $e');
       if (mounted) {
         setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Failed to register complaint: $e'), backgroundColor: Colors.red),
         );
       }

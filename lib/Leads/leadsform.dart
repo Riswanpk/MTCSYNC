@@ -104,7 +104,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User not logged in')));
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(content: Text('User not logged in')));
         }
         return;
       }
@@ -216,7 +216,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
       if (widget.source == 'SME' || widget.source == 'CC') {
         if (mounted) Navigator.pop(context, true);
       } else {
-        Navigator.pop(context);
+        if (mounted) { Navigator.pop(context); }
         // After saving, navigate to LeadsPage
         if (mounted) {
           Navigator.of(context).pushReplacement(
@@ -229,7 +229,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
     } catch (e) {
       // Handle error, show snackbar, etc.
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Failed to save: $e')),
         );
       }
@@ -280,7 +280,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
       );
 
       if (load == true) {
-        setState(() {
+        if (mounted) { setState(() {
           _nameController.text = draftData['name'] ?? '';
           _addressController.text = draftData['address'] ?? '';
           _phoneController.text = draftData['phone'] ?? '+91 ';
@@ -291,7 +291,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
           if (draftData['reminder_hour'] != null && draftData['reminder_minute'] != null) {
             _selectedReminderTime = TimeOfDay(hour: draftData['reminder_hour'], minute: draftData['reminder_minute']);
           }
-        });
+        }); }
       }
     }
   }
@@ -305,11 +305,11 @@ class _FollowUpFormState extends State<FollowUpForm> {
         .get();
     if (snap.docs.isNotEmpty) {
       final data = snap.docs.first.data();
-      setState(() {
+      if (mounted) { setState(() {
         _nameController.text = data['name'] ?? '';
         _addressController.text = data['address'] ?? '';
         // You can add more fields if needed
-      });
+      }); }
     }
   }
 
@@ -389,7 +389,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
       }
       if (!status.isGranted) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
               content: Text('Contact permission denied')));
         }
         return;
@@ -701,7 +701,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                           _phoneController.selection = TextSelection.fromPosition(TextPosition(offset: formatted.length));
                                         } else {
                                           if (mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Clipboard does not contain 10 digits')));
+                                            ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(content: Text('Clipboard does not contain 10 digits')));
                                           }
                                         }
                                       }
@@ -719,7 +719,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                         final granted = await FlutterContacts.requestPermission();
                                         if (!granted) {
                                           if (mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
+                                            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                                               const SnackBar(content: Text('Contact permission denied')),
                                             );
                                           }
@@ -756,7 +756,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                                       }
                                                     } else {
                                                       if (mounted) {
-                                                        ScaffoldMessenger.of(context).showSnackBar(
+                                                        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                                                           const SnackBar(content: Text('Contact does not contain a valid 10-digit phone number')),
                                                         );
                                                       }

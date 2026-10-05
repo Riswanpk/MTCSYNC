@@ -363,7 +363,7 @@ class _TodoPageState extends State<TodoPage>
       debugPrint('Error creating todo: $e');
       debugPrint('$stack');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error: $e')),
         );
       }
@@ -380,7 +380,7 @@ class _TodoPageState extends State<TodoPage>
     if (currentStatus == 'done') {
       // Completed tasks cannot be reverted back to pending
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(content: Text('Completed tasks cannot be changed.')),
         );
       }
@@ -429,7 +429,7 @@ class _TodoPageState extends State<TodoPage>
     final doc = await _firestore.collection('todo').doc(docId).get();
     if (doc.exists && doc.data()?['status'] == 'done') {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(content: Text('Completed tasks cannot be deleted.')),
         );
       }

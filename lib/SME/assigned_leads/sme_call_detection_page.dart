@@ -68,7 +68,7 @@ class _SmeCallDetectionPageState extends State<SmeCallDetectionPage>
   Future<void> _initiateCall() async {
     if (widget.phone.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             const SnackBar(content: Text('No phone number available')));
       }
       return;
@@ -76,22 +76,22 @@ class _SmeCallDetectionPageState extends State<SmeCallDetectionPage>
     var status = await Permission.phone.request();
     if (!status.isGranted) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             const SnackBar(content: Text('Phone permission denied')));
       }
       return;
     }
     final uri = Uri(scheme: 'tel', path: widget.phone);
     if (await canLaunchUrl(uri)) {
-      setState(() {
+      if (mounted) { setState(() {
         _state = DetectionState.detecting;
         _callStartTime = DateTime.now();
-      });
+      }); }
       await _saveCallState();
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             const SnackBar(content: Text('Could not launch dialer')));
       }
     }

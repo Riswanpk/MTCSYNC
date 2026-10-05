@@ -41,8 +41,8 @@ Future<void> updateRemarksInFirestore({
     }
   } catch (e) {
     debugPrint('Failed to update remarks in Firestore: $e');
-    if (mounted && context != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    if (context != null && context.mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
           content: Text('Failed to save remarks: $e'),
           backgroundColor: Colors.red,

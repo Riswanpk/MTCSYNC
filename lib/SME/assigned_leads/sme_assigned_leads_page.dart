@@ -66,7 +66,7 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
 
   Future<void> _scanCallLogAndShowMatches() async {
     if (_leads.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
             content: Text('No leads to check.'),
             backgroundColor: Colors.orange),
@@ -77,7 +77,7 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
     var status = await Permission.phone.request();
     if (!status.isGranted) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(content: Text('Phone permission denied')),
         );
       }
@@ -110,7 +110,7 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
 
       if (matchedLeads.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             const SnackBar(
               content: Text('No new calls detected for today.'),
               backgroundColor: Colors.orange,
@@ -137,7 +137,7 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
       if (mounted) Navigator.of(context).pop();
       debugPrint('Error scanning call log: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
               content: Text('Error scanning call log: $e'),
               backgroundColor: Colors.red),
@@ -151,11 +151,11 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
     if (uid == null) return;
     final cache = UserCacheService.instance;
     await cache.ensureLoaded();
-    setState(() {
+    if (mounted) { setState(() {
       _currentUid = uid;
       _currentRole = cache.role;
       _currentBranch = cache.branch;
-    });
+    }); }
     _fetchLeadsPage();
   }
 

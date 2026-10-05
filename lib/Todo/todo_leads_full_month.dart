@@ -30,6 +30,7 @@ class _TodoLeadsFullMonthPageState extends State<TodoLeadsFullMonthPage> {
       firstDate: DateTime(2023, 1, 1),
       lastDate: DateTime.now(),
     );
+    if (!mounted) return;
     if (picked != null) {
       setState(() {
         _selectedDate = picked;
@@ -174,7 +175,7 @@ class _TodoLeadsFullMonthPageState extends State<TodoLeadsFullMonthPage> {
     final file = File('${dir.path}/leads_todos_${reportDate.year}_${reportDate.month}_${reportDate.day}.xlsx');
     await file.writeAsBytes(bytes, flush: true);
 
-    setState(() => _loading = false);
+    if (mounted) setState(() => _loading = false);
 
     await Share.shareXFiles([XFile(file.path)], text: 'Leads & Todo Report');
   }

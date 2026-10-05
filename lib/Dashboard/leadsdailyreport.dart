@@ -159,12 +159,12 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
 
     await send(message, smtpServer);
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       SnackBar(content: Text('Daily report sent to crmmalabar@gmail.com')),
     );
   } catch (e, stack) {
     debugPrint('Daily report error: $e\n$stack');
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       SnackBar(content: Text('Failed to send daily report: $e')),
     );
   }

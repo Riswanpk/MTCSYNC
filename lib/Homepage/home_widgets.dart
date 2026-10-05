@@ -241,7 +241,7 @@ Future<void> showLoadingDialog(BuildContext context) async {
     },
   );
   await Future.delayed(const Duration(milliseconds: 200));
-  Navigator.of(context, rootNavigator: true).pop();
+  if (context.mounted) { Navigator.of(context, rootNavigator: true).pop(); }
 }
 
 /// Dialog widget displaying a rotating logo.

@@ -256,7 +256,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
         controller.selection = TextSelection.fromPosition(
             TextPosition(offset: controller.text.length));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
             content: Text('Clipboard does not contain 10 digits')));
       }
     }
@@ -447,11 +447,11 @@ class _ContactPickerModalState extends State<_ContactPickerModal> {
       final encoded = jsonEncode(latest.map((c) => c.toJson()).toList());
       await prefs.setString('contacts_cache', encoded);
 
-      setState(() {
+      if (mounted) { setState(() {
         _contacts = latest;
         _filtered = _getFilteredContacts(_searchController.text);
         _loading = false;
-      });
+      }); }
     } catch (e) {
       if (mounted) setState(() => _loading = false);
     }

@@ -282,15 +282,21 @@ class _CustomerCallingRemarksPendingPageState
                                               customer: customer,
                                               onStatusChanged:
                                                   (remarks) async {
-                                                setState(() {
+                                                if (mounted) {
+                                                  setState(() {
+                                                    customer['remarks'] = remarks;
+                                                  });
+                                                } else {
                                                   customer['remarks'] = remarks;
-                                                });
+                                                }
                                                 await _updateFirestore();
                                               },
                                             ),
                                           ),
                                         ).then((_) {
-                                          _fetchPendingRemarks();
+                                          if (mounted) {
+                                            _fetchPendingRemarks();
+                                          }
                                         });
                                       },
                                     ),

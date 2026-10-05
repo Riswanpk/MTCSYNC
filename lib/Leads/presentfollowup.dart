@@ -115,18 +115,18 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
     try {
       final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
       if (doc.exists) {
-        setState(() {
+        if (mounted) { setState(() {
           _originalUserName = doc.data()?['username'] ?? doc.data()?['email'] ?? uid;
-        });
+        }); }
       } else {
-        setState(() {
+        if (mounted) { setState(() {
           _originalUserName = uid;
-        });
+        }); }
       }
     } catch (e) {
-      setState(() {
+      if (mounted) { setState(() {
         _originalUserName = uid;
-      });
+      }); }
     }
   }
 
@@ -134,18 +134,18 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
     try {
       final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
       if (doc.exists) {
-        setState(() {
+        if (mounted) { setState(() {
           _transferredByName = doc.data()?['username'] ?? doc.data()?['email'] ?? uid;
-        });
+        }); }
       } else {
-        setState(() {
+        if (mounted) { setState(() {
           _transferredByName = uid;
-        });
+        }); }
       }
     } catch (e) {
-      setState(() {
+      if (mounted) { setState(() {
         _transferredByName = uid;
-      });
+      }); }
     }
   }
 
@@ -168,7 +168,7 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
     );
 
     if (pickedTime != null) {
-      setState(() {
+      if (mounted) { setState(() {
         _selectedDate = DateTime(
           pickedDate.year,
           pickedDate.month,
@@ -177,7 +177,7 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
           pickedTime.minute,
         );
         _reminderController.text = DateFormat('dd-MM-yyyy hh:mm a').format(_selectedDate!);
-      });
+      }); }
     }
   }
 
@@ -190,7 +190,7 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
       await launchUrl(launchUri);
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Could not launch dialer for $phoneNumber')),
         );
       }
@@ -316,18 +316,18 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
         );
       }
 
-      setState(() {
+      if (mounted) { setState(() {
         _isEditing = false;
         _data = updatedData;
-      });
+      }); }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(content: Text('Lead updated successfully!')),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Failed to update: $e')),
         );
       }
@@ -746,10 +746,10 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
                                   .collection('follow_ups')
                                   .doc(widget.docId)
                                   .update(updateMap);
-                              setState(() {
+                              if (mounted) { setState(() {
                                 _data?['status'] = newStatus;
-                              });
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              }); }
+                              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                                 SnackBar(content: Text('Status updated to $newStatus')),
                               );
                             }
@@ -830,7 +830,7 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
       setState(() {
         _data = null; // Clear data to trigger FutureBuilder refresh
       });
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Lead transferred successfully!')),
       );
     }

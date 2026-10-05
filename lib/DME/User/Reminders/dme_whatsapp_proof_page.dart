@@ -55,13 +55,13 @@ class _DmeWhatsAppProofPageState extends State<DmeWhatsAppProofPage> {
         format: CompressFormat.jpeg,
       );
 
-      setState(() {
+      if (mounted) { setState(() {
         _compressedBytes = compressed;
-      });
+      }); }
     } catch (e) {
       debugPrint('Error picking/compressing image: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error selecting image: $e'), backgroundColor: Colors.red),
         );
       }
@@ -72,14 +72,14 @@ class _DmeWhatsAppProofPageState extends State<DmeWhatsAppProofPage> {
     final client = await DmeConfig.getClient();
     if (!mounted) return;
     if (client == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Supabase is not configured.')),
       );
       return;
     }
 
     if (_compressedBytes == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please select or capture a WhatsApp proof screenshot.')),
       );
       return;
@@ -87,7 +87,7 @@ class _DmeWhatsAppProofPageState extends State<DmeWhatsAppProofPage> {
 
     final remarks = _remarksController.text.trim();
     if (remarks.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please enter remarks for this WhatsApp message.')),
       );
       return;
@@ -176,10 +176,10 @@ class _DmeWhatsAppProofPageState extends State<DmeWhatsAppProofPage> {
         statDate: statDate,
       );
 
-      setState(() => _isUploading = false);
+      if (mounted) setState(() => _isUploading = false);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('WhatsApp proof uploaded and reminder marked completed!'),
             backgroundColor: Colors.green,
@@ -192,7 +192,7 @@ class _DmeWhatsAppProofPageState extends State<DmeWhatsAppProofPage> {
       debugPrint('Error uploading WhatsApp proof: $e');
       setState(() => _isUploading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Upload failed: $e'), backgroundColor: Colors.red),
         );
       }

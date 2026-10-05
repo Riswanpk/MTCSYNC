@@ -147,7 +147,7 @@ class _TransferCallListPageState extends State<TransferCallListPage> {
         setState(() {
           _loadingCustomers = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Failed to load customers: $e'),
             backgroundColor: Colors.red,
@@ -181,7 +181,7 @@ class _TransferCallListPageState extends State<TransferCallListPage> {
 
   Future<void> _executeTransfer() async {
     if (_selectedSourceUser == null || _selectedDestUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Please select both Source User and Destination User.'),
           backgroundColor: Colors.red,
@@ -196,7 +196,7 @@ class _TransferCallListPageState extends State<TransferCallListPage> {
     final destName = (_selectedDestUser!['username'] ?? destEmail).toString();
 
     if (sourceEmail == destEmail) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Source and Destination user cannot be the same.'),
           backgroundColor: Colors.red,
@@ -206,7 +206,7 @@ class _TransferCallListPageState extends State<TransferCallListPage> {
     }
 
     if (_selectedCustomerIndices.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Please select at least one customer to transfer.'),
           backgroundColor: Colors.red,
@@ -230,9 +230,9 @@ class _TransferCallListPageState extends State<TransferCallListPage> {
 
     if (confirmed != true) return;
 
-    setState(() {
+    if (mounted) { setState(() {
       _isTransferring = true;
-    });
+    }); }
 
     final result = await TransferCallListService.executeTransfer(
       sourceEmail: sourceEmail,
@@ -249,7 +249,7 @@ class _TransferCallListPageState extends State<TransferCallListPage> {
     });
 
     if (result.success) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
           content: Row(
             children: [
@@ -272,7 +272,7 @@ class _TransferCallListPageState extends State<TransferCallListPage> {
       // Refresh customers for source user
       _fetchSourceCustomers();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
           content: Text('Transfer failed: ${result.errorMessage}'),
           backgroundColor: Colors.red,

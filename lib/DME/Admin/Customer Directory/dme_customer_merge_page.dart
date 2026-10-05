@@ -263,7 +263,7 @@ class _DmeCustomerMergePageState extends State<DmeCustomerMergePage> {
 
   void _confirmAndExecuteMerge() {
     if (_cust1 == null || _cust2 == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Please select two customers to merge.'),
           backgroundColor: Colors.orange,
@@ -279,7 +279,7 @@ class _DmeCustomerMergePageState extends State<DmeCustomerMergePage> {
     final sourceId = int.tryParse(sourceCust['id']?.toString() ?? '');
 
     if (targetId == null || sourceId == null || targetId == sourceId) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Invalid customer selection for merge.'),
           backgroundColor: Colors.red,
@@ -292,7 +292,7 @@ class _DmeCustomerMergePageState extends State<DmeCustomerMergePage> {
     final resolvedPhone = _getResolvedPhone();
 
     if (resolvedName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Customer name cannot be empty.'),
           backgroundColor: Colors.red,
@@ -302,7 +302,7 @@ class _DmeCustomerMergePageState extends State<DmeCustomerMergePage> {
     }
 
     if (resolvedPhone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Customer phone cannot be empty.'),
           backgroundColor: Colors.red,

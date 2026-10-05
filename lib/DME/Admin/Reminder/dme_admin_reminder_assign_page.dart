@@ -393,7 +393,7 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
     }
 
     if (totalRemindersToAssign == 0 && branchPayload.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('No pending reminders to assign or all assigned users are marked absent.'),
           backgroundColor: Colors.orange,
@@ -570,7 +570,7 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
 
       await _loadAll();
 
-      setState(() => _isExecuting = false);
+      if (mounted) setState(() => _isExecuting = false);
 
       if (mounted) {
         showModalBottomSheet(
@@ -705,7 +705,7 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
       debugPrint('Error auto dividing reminders: $e');
       setState(() => _isExecuting = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
@@ -763,7 +763,7 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
 
     if (confirmed != true) return;
 
-    setState(() => _isExecuting = true);
+    if (mounted) setState(() => _isExecuting = true);
 
     try {
       final adminEmail = FirebaseAuth.instance.currentUser?.email ?? 'admin';
@@ -773,16 +773,16 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
         adminEmail: adminEmail,
       );
 
-      setState(() {
+      if (mounted) { setState(() {
         _assignedUserBreakdown = {};
-      });
+      }); }
 
       await _loadAll();
 
-      setState(() => _isExecuting = false);
+      if (mounted) setState(() => _isExecuting = false);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text(
               'Successfully unassigned $unassignedCount pending reminder(s). You can now adjust attendance and re-assign.',
@@ -795,7 +795,7 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
       debugPrint('Error undoing assignment: $e');
       setState(() => _isExecuting = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error undoing assignment: $e'), backgroundColor: Colors.red),
         );
       }

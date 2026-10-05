@@ -54,9 +54,9 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
   Future<void> _fetchUserRoleAndData() async {
     final cache = UserCacheService.instance;
     await cache.ensureLoaded();
-    setState(() {
+    if (mounted) { setState(() {
       _userRole = cache.role;
-    });
+    }); }
     _fetchUsersAndBranches();
   }
 
@@ -77,7 +77,7 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
       if (autoBranch != null) {
         filteredUsers = users.where((u) => u['branch'] == autoBranch).toList();
       }
-      setState(() {
+      if (mounted) { setState(() {
         _allUsers = users;
         _branches = branches;
         if (autoBranch != null) {
@@ -85,12 +85,12 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
           _users = filteredUsers;
         }
         _loading = false;
-      });
+      }); }
     } catch (e) {
-      setState(() {
+      if (mounted) { setState(() {
         _error = "Failed to fetch users/branches: $e";
         _loading = false;
-      });
+      }); }
     }
   }
 
@@ -196,12 +196,12 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
         batch.delete(ref);
       }
       await batch.commit();
-      setState(() {
+      if (mounted) { setState(() {
         _customers = null;
         _loading = false;
-      });
+      }); }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('All customer data deleted for $userName.'),
             backgroundColor: Colors.red.shade700,

@@ -68,18 +68,18 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
         };
       }).toList();
 
-      setState(() {
+      if (mounted) { setState(() {
         _supersaleList = list;
         if (list.isNotEmpty) {
           _selectedDocId = list.first['id'] as String;
         }
         _isLoadingItems = false;
-      });
+      }); }
     } catch (e) {
       debugPrint('Error loading supersale items: $e');
-      setState(() {
+      if (mounted) { setState(() {
         _isLoadingItems = false;
-      });
+      }); }
     }
   }
 
@@ -94,7 +94,7 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
           isSummary: _monthlyReportMode == 'Summary',
         );
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             SnackBar(
               content: Text('Monthly $_monthlyReportMode Report generated successfully! Opening...'),
               backgroundColor: Colors.green,
@@ -104,7 +104,7 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
       } catch (e) {
         debugPrint('Error generating monthly report: \$e');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             SnackBar(
               content: Text('Failed to generate monthly report: \$e'),
               backgroundColor: Colors.red,
@@ -118,7 +118,7 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
     }
 
     if (_selectedDocId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Please select a supersale first'),
           backgroundColor: Colors.orange,
@@ -171,7 +171,7 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('$_selectedReportType generated successfully! Opening...'),
             backgroundColor: Colors.green,
@@ -181,7 +181,7 @@ class _SupersaleAdminReportPageState extends State<SupersaleAdminReportPage> {
     } catch (e) {
       debugPrint('Error generating report: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Failed to generate report: $e'),
             backgroundColor: Colors.red,

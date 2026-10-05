@@ -258,7 +258,7 @@ class TodoListItem extends StatelessWidget {
 
 
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                     const SnackBar(content: Text('Reminder postponed and scheduled!')),
                   );
                 }

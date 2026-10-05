@@ -184,7 +184,7 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
       debugPrint('Error loading change requests: $e');
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Failed to load requests: $e'),
             backgroundColor: Colors.red,
@@ -254,7 +254,7 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
     final reminderId = int.tryParse(request['reminder_id']?.toString() ?? '');
 
     if (customerId == null || (!isPhoneChange && newValue.isEmpty)) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Invalid request data.'), backgroundColor: Colors.red),
       );
       return;
@@ -699,7 +699,7 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
       ));
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text(
               isCallCompletion
@@ -718,7 +718,7 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
     } catch (e) {
       debugPrint('Error approving request: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error approving request: $e'), backgroundColor: Colors.red),
         );
       }
@@ -820,7 +820,7 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
       ));
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('Request marked as rejected.'),
             backgroundColor: Colors.orange,
@@ -831,7 +831,7 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
     } catch (e) {
       debugPrint('Error rejecting request: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error rejecting request: $e'), backgroundColor: Colors.red),
         );
       }

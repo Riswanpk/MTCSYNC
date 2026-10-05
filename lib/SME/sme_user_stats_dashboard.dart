@@ -117,10 +117,10 @@ class _SmeUserStatsDashboardState extends State<SmeUserStatsDashboard> {
       lastDate: DateTime.now(),
     );
     if (picked != null) {
-      setState(() {
+      if (mounted) { setState(() {
         _startDate = picked.start;
         _endDate = picked.end;
-      });
+      }); }
       _fetchStats();
     }
   }
@@ -412,14 +412,14 @@ class _UserLeadsDetailPageState extends State<_UserLeadsDetailPage> {
         .orderBy('created_at', descending: true)
         .get();
 
-    setState(() {
+    if (mounted) { setState(() {
       _leads = snapshot.docs.map((doc) {
         final data = doc.data();
         data['docId'] = doc.id;
         return data;
       }).toList();
       _isLoading = false;
-    });
+    }); }
   }
 
   @override

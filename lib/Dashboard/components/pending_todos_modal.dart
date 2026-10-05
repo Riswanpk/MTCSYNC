@@ -27,7 +27,9 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
 
   Future<void> _init() async {
     await _fetchBranches();
+    if (!mounted) return;
     await _fetchUsersAndTodos();
+    if (!mounted) return;
     setState(() {
       _loading = false;
     });
@@ -35,6 +37,7 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
 
   Future<void> _fetchBranches() async {
     final branches = await UserCacheService.instance.getBranches();
+    if (!mounted) return;
     setState(() {
       _branches = branches;
       if (_branches.isNotEmpty && _selectedBranch == null) {
@@ -80,6 +83,7 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
       pendingCounts[email] = todos.where((t) => t['email'] == email).length;
     }
 
+    if (!mounted) return;
     setState(() {
       _users = users;
       _pendingCounts = pendingCounts;
@@ -198,9 +202,9 @@ class _PendingTodosModalState extends State<PendingTodosModal> {
                                   _loading = true;
                                 });
                                 await _fetchUsersAndTodos();
-                                setState(() {
+                                if (mounted) { setState(() {
                                   _loading = false;
-                                });
+                                }); }
                               },
                               hint: Text(
                                 "Select Branch",

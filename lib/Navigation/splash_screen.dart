@@ -134,7 +134,7 @@ class _SplashScreenState extends State<SplashScreen> {
     if (user == null) {
       await NavigationState.clearState(); // Clear any pending state for logged out users
       initialNotificationAction = null;
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => const LoginPage()));
+      if (mounted) { Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => const LoginPage())); }
     } else {
       // Check for pending navigation state (activity recreation recovery)
       final pendingState = await NavigationState.getState();
@@ -145,9 +145,9 @@ class _SplashScreenState extends State<SplashScreen> {
             userData['userid'] != null && 
             userData['branch'] != null) {
           // Restore user to marketing form
-          await Navigator.of(context).pushReplacement(
+          if (mounted) { await Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (_) => const HomePage()),
-          );
+          ); }
           isAppReady = true;
           // Then push marketing on top (with slight delay to ensure home is loaded)
           Future.delayed(const Duration(milliseconds: 100), () {
@@ -171,7 +171,7 @@ class _SplashScreenState extends State<SplashScreen> {
         }
       }
       
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => const HomePage()));
+      if (mounted) { Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => const HomePage())); }
       isAppReady = true;
 
       // Handle initial notification action if app was opened from a notification

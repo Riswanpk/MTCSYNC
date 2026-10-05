@@ -69,12 +69,12 @@ class _SyncHeadTodosPageState extends State<SyncHeadTodosPage> {
 
   Future<void> _fetchBranches() async {
     final branches = await UserCacheService.instance.getBranches();
-    setState(() {
+    if (mounted) { setState(() {
       _branches = branches;
       // No auto-selection — user must pick a branch
       _selectedBranch = null;
       _branchesLoading = false;
-    });
+    }); }
   }
 
   Future<void> _fetchTodos() async {
@@ -142,10 +142,10 @@ class _SyncHeadTodosPageState extends State<SyncHeadTodosPage> {
           .compareTo(b['username'] as String);
     });
 
-    setState(() {
+    if (mounted) { setState(() {
       _userTodos = userTodos;
       _loading = false;
-    });
+    }); }
   }
 
   Future<void> _pickDate() async {
@@ -166,7 +166,7 @@ class _SyncHeadTodosPageState extends State<SyncHeadTodosPage> {
       ),
     );
     if (picked != null) {
-      setState(() => _selectedDate = picked);
+      if (mounted) setState(() => _selectedDate = picked);
       _fetchTodos();
     }
   }

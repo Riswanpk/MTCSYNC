@@ -81,7 +81,7 @@ class _DmeAdminComplaintsPageState extends State<DmeAdminComplaintsPage> {
 
   Future<void> _searchComplaints() async {
     if (_selectedBranch == null || _selectedBranch!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please select a branch first.')),
       );
       return;
@@ -111,7 +111,7 @@ class _DmeAdminComplaintsPageState extends State<DmeAdminComplaintsPage> {
       debugPrint('Error searching admin complaints: $e');
       if (mounted) {
         setState(() => _isLoadingComplaints = false);
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }

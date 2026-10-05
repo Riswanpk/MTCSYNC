@@ -81,7 +81,7 @@ class _DmeComplaintsListPageState extends State<DmeComplaintsListPage> with Sing
     try {
       await DmeComplaintsService.instance.deleteComplaint(c.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Complaint #${c.id} deleted successfully.'),
             backgroundColor: Colors.red,
@@ -92,7 +92,7 @@ class _DmeComplaintsListPageState extends State<DmeComplaintsListPage> with Sing
     } catch (e) {
       debugPrint('Error deleting complaint: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Failed to delete complaint: $e'),
             backgroundColor: Colors.red,

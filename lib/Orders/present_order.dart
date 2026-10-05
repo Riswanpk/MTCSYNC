@@ -153,7 +153,7 @@ class _PresentOrderPageState extends State<PresentOrderPage> {
     );
     if (pickedTime == null) return;
 
-    setState(() {
+    if (mounted) { setState(() {
       _selectedDeliveryDate = DateTime(
         pickedDate.year,
         pickedDate.month,
@@ -162,7 +162,7 @@ class _PresentOrderPageState extends State<PresentOrderPage> {
         pickedTime.minute,
       );
       _deliveryController.text = DateFormat('dd-MM-yyyy hh:mm a').format(_selectedDeliveryDate!);
-    });
+    }); }
   }
 
   Future<void> _markCompleted() async {
@@ -177,7 +177,7 @@ class _PresentOrderPageState extends State<PresentOrderPage> {
       _status = 'Completed';
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       const SnackBar(content: Text('Order marked as Completed')),
     );
   }
@@ -187,7 +187,7 @@ class _PresentOrderPageState extends State<PresentOrderPage> {
 
     final itemsPayload = _buildItemsPayload();
     if (itemsPayload.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Add at least one item with qty')),
       );
       return;
@@ -220,12 +220,12 @@ class _PresentOrderPageState extends State<PresentOrderPage> {
         _data = {...?_data, ...updateData};
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Order updated successfully')),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(content: Text('Failed to update order: $e')),
       );
     } finally {

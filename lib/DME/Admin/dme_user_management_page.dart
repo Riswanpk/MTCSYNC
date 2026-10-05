@@ -102,14 +102,14 @@ class _DmeUserManagementPageState extends State<DmeUserManagementPage> {
         });
       }
 
-      setState(() {
+      if (mounted) { setState(() {
         _dmeUsers = users;
         _isLoading = false;
-      });
+      }); }
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error loading users: $e'), backgroundColor: Colors.red),
         );
       }
@@ -282,7 +282,7 @@ class _DmeUserManagementPageState extends State<DmeUserManagementPage> {
 
       if (mounted) {
         if (supabaseError != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             SnackBar(
               content: Text('Updated Firestore, but Supabase error: $supabaseError'),
               backgroundColor: Colors.orange[800],
@@ -290,7 +290,7 @@ class _DmeUserManagementPageState extends State<DmeUserManagementPage> {
             ),
           );
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             SnackBar(
               content: Text('Saved and synced branch assignments for $username in Supabase'),
               backgroundColor: Colors.green,
@@ -301,9 +301,9 @@ class _DmeUserManagementPageState extends State<DmeUserManagementPage> {
 
       await _loadDmeUsers();
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Failed to save: $e'), backgroundColor: Colors.red),
         );
       }

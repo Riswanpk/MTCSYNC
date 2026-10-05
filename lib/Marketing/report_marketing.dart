@@ -53,10 +53,10 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> with SingleTi
 
   Future<void> _fetchBranches() async {
     final cachedBranches = await UserCacheService.instance.getBranches();
-    setState(() {
+    if (mounted) { setState(() {
       branches = ['Select All', ...cachedBranches];
       selectedBranch = branches.first;
-    });
+    }); }
   }
 
   Future<List<Map<String, dynamic>>> _fetchReportData() async {
@@ -247,10 +247,10 @@ class _ReportMarketingPageState extends State<ReportMarketingPage> with SingleTi
     _progressController.value = 0;
     final data = await _fetchReportData();
     final file = await _generateSyncfusionExcel(data);
-    setState(() {
+    if (mounted) { setState(() {
       isLoading = false;
       progress = 0.0;
-    });
+    }); }
     await Share.shareXFiles([XFile(file.path)], text: "Marketing Report");
   }
   // --- End Syncfusion Excel Report Generation ---

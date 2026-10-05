@@ -92,7 +92,7 @@ class _UserTaskPageState extends State<UserTaskPage> {
     }
 
     if (pickedFile != null) {
-      setState(() {
+      if (mounted) { setState(() {
         if (!_taskAttachments.containsKey(docId)) {
           _taskAttachments[docId] = [];
         }
@@ -100,7 +100,7 @@ class _UserTaskPageState extends State<UserTaskPage> {
           'file': File(pickedFile!.path),
           'type': type,
         });
-      });
+      }); }
     }
   }
 
@@ -129,9 +129,9 @@ class _UserTaskPageState extends State<UserTaskPage> {
 
     if (confirm != true) return;
 
-    setState(() {
+    if (mounted) { setState(() {
       _isUploadingMap[docId] = true;
-    });
+    }); }
 
     try {
       final currentUser = _auth.currentUser;
@@ -216,7 +216,7 @@ class _UserTaskPageState extends State<UserTaskPage> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('Task marked as completed successfully!'),
             backgroundColor: Colors.green,
@@ -229,7 +229,7 @@ class _UserTaskPageState extends State<UserTaskPage> {
     } catch (e) {
       debugPrint('Error completing task: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Failed to complete task: $e'), backgroundColor: Colors.red),
         );
       }

@@ -56,6 +56,7 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
     } else {
       _selectedBranch = _userBranch;
     }
+    if (!mounted) return;
     setState(() {
       _loading = false;
     });
@@ -71,6 +72,7 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
       firstDate: DateTime(2023, 1, 1),
       lastDate: DateTime(maxDate.year, maxDate.month, maxDate.day),
     );
+    if (!mounted) return;
     if (picked != null) {
       setState(() {
         _selectedDate = picked;

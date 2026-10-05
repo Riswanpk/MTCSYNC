@@ -45,10 +45,10 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
   Future<void> _loadUsers() async {
     setState(() => _isLoading = true);
     final snapshot = await FirebaseFirestore.instance.collection('users').get();
-    setState(() {
+    if (mounted) { setState(() {
       _userDocs = snapshot.docs;
       _isLoading = false;
-    });
+    }); }
   }
 
   @override
@@ -62,7 +62,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         .collection('users')
         .doc(uid)
         .update({'role': newRole});
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       SnackBar(
         content: Text('Role updated to $newRole'),
         backgroundColor: Colors.green,
@@ -110,7 +110,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
 
       // Prevent deleting yourself
       if (currentUser.uid == uid) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('You cannot delete yourself.'),
             backgroundColor: Colors.orange,
@@ -145,7 +145,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
 
       if (result.data['success'] == true) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             const SnackBar(
               content: Text('User deleted successfully.'),
               backgroundColor: Colors.green,
@@ -186,7 +186,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text(errorMessage),
             backgroundColor: Colors.red,
@@ -203,7 +203,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Error: ${e.toString()}'),
             backgroundColor: Colors.red,
@@ -473,7 +473,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
     if (currentUser == null) {
       // Not logged in, redirect to login page
       Future.microtask(() {
-        Navigator.of(context).pushReplacementNamed('/login');
+        if (mounted) { Navigator.of(context).pushReplacementNamed('/login'); }
       });
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),

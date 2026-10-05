@@ -208,9 +208,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                   onPressed: () async {
                     final email = emailController.text.trim();
                     if (email.isEmpty) {
-                      setState(() {
+                      if (mounted) { setState(() {
                         dialogError = 'Please enter your email';
-                      });
+                      }); }
                       return;
                     }
                     try {
@@ -218,7 +218,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           .sendPasswordResetEmail(email: email);
                       if (!context.mounted) return;
                       Navigator.of(context).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                         const SnackBar(
                             content: Text('Password reset email sent!')),
                       );

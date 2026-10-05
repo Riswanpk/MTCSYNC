@@ -554,7 +554,7 @@ class _DmeAdminReminderDetailPageState extends State<DmeAdminReminderDetailPage>
     final client = await DmeConfig.getClient();
     if (client == null) return;
 
-    setState(() => _isSavingEdit = true);
+    if (mounted) setState(() => _isSavingEdit = true);
 
     try {
       final formattedDate = DateFormat('yyyy-MM-dd').format(newReminderDate);
@@ -595,7 +595,7 @@ class _DmeAdminReminderDetailPageState extends State<DmeAdminReminderDetailPage>
         }
       }
 
-      setState(() {
+      if (mounted) { setState(() {
         _reminder['status'] = updatePayload['status'];
         _reminder['remarks'] = updatePayload['remarks'];
         _reminder['reminder_date'] = updatePayload['reminder_date'];
@@ -603,10 +603,10 @@ class _DmeAdminReminderDetailPageState extends State<DmeAdminReminderDetailPage>
         if (callDuration != null) _reminder['call_duration'] = callDuration;
         if (updatePayload.containsKey('called_by')) _reminder['called_by'] = updatePayload['called_by'];
         _isSavingEdit = false;
-      });
+      }); }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('Reminder updated successfully!'),
             backgroundColor: Colors.green,
@@ -621,7 +621,7 @@ class _DmeAdminReminderDetailPageState extends State<DmeAdminReminderDetailPage>
       debugPrint('Error saving reminder changes: $e');
       if (mounted) {
         setState(() => _isSavingEdit = false);
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error updating reminder: $e'), backgroundColor: Colors.red),
         );
       }

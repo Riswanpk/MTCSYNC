@@ -31,7 +31,7 @@ class DmeReminderAppBar extends StatelessWidget implements PreferredSizeWidget {
         icon: const Icon(Icons.arrow_back),
         onPressed: () {
           if (isCalledWithoutRemarks && !hasPendingRequest) {
-            ScaffoldMessenger.of(context).showSnackBar(
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
               const SnackBar(
                 content: Text('Please enter remarks and tap "Save Remarks & Mark Completed" before leaving.'),
                 backgroundColor: Colors.orange,

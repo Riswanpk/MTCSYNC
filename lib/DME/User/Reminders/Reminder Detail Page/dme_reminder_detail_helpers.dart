@@ -206,7 +206,7 @@ class DmeReminderDetailHelpers {
     required int duration,
     required int todayCallAttempts,
   }) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       SnackBar(
         content: Text(isAttended
             ? 'Call attended ($duration sec)! Remarks & Contact Person unlocked.'

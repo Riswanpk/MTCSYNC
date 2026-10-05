@@ -137,7 +137,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
     } catch (e) {
       debugPrint('Error loading form data: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -215,7 +215,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
     if (!_formKey.currentState!.validate()) return;
 
     if (!_isEditMode && _selectedPosting == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('No active Supersale item selected')),
       );
       return;
@@ -298,7 +298,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
         }
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             const SnackBar(
               content: Text('Entry updated successfully'),
               backgroundColor: Colors.green,
@@ -348,7 +348,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
         }
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             SnackBar(
               content: Text(
                 _isSpotSale
@@ -363,7 +363,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Failed to save entry: $e'),
             backgroundColor: Colors.red,
@@ -893,7 +893,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
               );
 
               if (pickedTime != null) {
-                setState(() {
+                if (mounted) { setState(() {
                   _deliveryReminderDateTime = DateTime(
                     pickedDate.year,
                     pickedDate.month,
@@ -901,7 +901,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
                     pickedTime.hour,
                     pickedTime.minute,
                   );
-                });
+                }); }
               }
             }
           },
@@ -943,9 +943,9 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
                   IconButton(
                     icon: const Icon(Icons.clear_rounded, size: 20, color: Colors.grey),
                     onPressed: () {
-                      setState(() {
+                      if (mounted) { setState(() {
                         _deliveryReminderDateTime = null;
-                      });
+                      }); }
                     },
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),

@@ -253,7 +253,7 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
     final presentUsers = _jblUsers.where((u) => _userPresence[u['uid'] as String] ?? true).toList();
 
     if (presentUsers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('All JBL users are marked absent. Toggle at least 1 user present.'),
           backgroundColor: Colors.orange,
@@ -263,7 +263,7 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
     }
 
     if (_jblPendingCount == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('No pending reminders for JBL branch to assign.'),
           backgroundColor: Colors.orange,
@@ -482,8 +482,8 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
       }
 
       if (allPending.isEmpty) {
-        setState(() => _isExecuting = false);
-        ScaffoldMessenger.of(context).showSnackBar(
+        if (mounted) setState(() => _isExecuting = false);
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(content: Text('No JBL pending reminders found.')),
         );
         return;
@@ -644,10 +644,10 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
 
       await _loadAll();
 
-      setState(() => _isExecuting = false);
+      if (mounted) setState(() => _isExecuting = false);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text(
               'Successfully assigned ${allPending.length} JBL reminders across ${presentUsers.length} user(s).',
@@ -660,7 +660,7 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
       debugPrint('Error assigning JBL: $e');
       setState(() => _isExecuting = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
@@ -740,10 +740,10 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
 
       await _loadAll();
 
-      setState(() => _isExecuting = false);
+      if (mounted) setState(() => _isExecuting = false);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Successfully unassigned $unassignedCount JBL reminder(s). Other branches were unaffected.'),
             backgroundColor: Colors.green[700],
@@ -754,7 +754,7 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
       debugPrint('Error undoing JBL assignment: $e');
       setState(() => _isExecuting = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error undoing: $e'), backgroundColor: Colors.red),
         );
       }

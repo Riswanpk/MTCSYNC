@@ -10,7 +10,7 @@ Future<void> editCustomerDialog({
   required Function(Map<String, dynamic> updatedFields) onUpdated,
 }) async {
   if (customer['pendingEditing'] == true || customer['pendingDeletion'] == true) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       const SnackBar(
         content: Text('This customer is already pending approval and cannot be edited.'),
         backgroundColor: Colors.orange,

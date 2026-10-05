@@ -56,14 +56,14 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
     try {
       final cache = UserCacheService.instance;
       await cache.ensureLoaded();
-      setState(() {
+      if (mounted) { setState(() {
         _userBranch = cache.branch;
         _userEmail = cache.email ?? _auth.currentUser?.email;
-      });
+      }); }
     } catch (e) {
       debugPrint('Error loading user branch: $e');
     } finally {
-      setState(() => _isLoadingBranch = false);
+      if (mounted) setState(() => _isLoadingBranch = false);
     }
   }
 

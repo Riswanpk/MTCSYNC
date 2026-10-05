@@ -74,14 +74,14 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
       await cache.ensureLoaded();
       final branches = await cache.getBranches();
       if (branches.isNotEmpty) {
-        setState(() {
+        if (mounted) { setState(() {
           _allBranches = branches;
-        });
+        }); }
       }
     } catch (e) {
       debugPrint('Error loading branches, using fallback: $e');
     } finally {
-      setState(() => _isLoadingBranches = false);
+      if (mounted) setState(() => _isLoadingBranches = false);
     }
   }
 
@@ -113,11 +113,11 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
     );
 
     if (picked != null) {
-      setState(() {
+      if (mounted) { setState(() {
         _bookingRange = picked;
         _bookingStartTime ??= const TimeOfDay(hour: 0, minute: 0);
         _bookingEndTime ??= const TimeOfDay(hour: 23, minute: 59);
-      });
+      }); }
 
       if (mounted) {
         final TimeOfDay? start = await showTimePicker(
@@ -126,9 +126,9 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
           helpText: 'SELECT BOOKING START TIME',
         );
         if (start != null) {
-          setState(() {
+          if (mounted) { setState(() {
             _bookingStartTime = start;
-          });
+          }); }
         }
       }
 
@@ -139,9 +139,9 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
           helpText: 'SELECT BOOKING END TIME',
         );
         if (end != null) {
-          setState(() {
+          if (mounted) { setState(() {
             _bookingEndTime = end;
-          });
+          }); }
         }
       }
     }
@@ -154,9 +154,9 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
       helpText: 'SELECT BOOKING START TIME',
     );
     if (picked != null) {
-      setState(() {
+      if (mounted) { setState(() {
         _bookingStartTime = picked;
-      });
+      }); }
     }
   }
 
@@ -167,9 +167,9 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
       helpText: 'SELECT BOOKING END TIME',
     );
     if (picked != null) {
-      setState(() {
+      if (mounted) { setState(() {
         _bookingEndTime = picked;
-      });
+      }); }
     }
   }
 
@@ -198,10 +198,10 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
     );
 
     if (picked != null) {
-      setState(() {
+      if (mounted) { setState(() {
         _deliveryEndDate = picked;
         _deliveryEndTime ??= const TimeOfDay(hour: 23, minute: 59);
-      });
+      }); }
 
       if (mounted) {
         final TimeOfDay? time = await showTimePicker(
@@ -210,9 +210,9 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
           helpText: 'SELECT DELIVERY END TIME',
         );
         if (time != null) {
-          setState(() {
+          if (mounted) { setState(() {
             _deliveryEndTime = time;
-          });
+          }); }
         }
       }
     }
@@ -225,9 +225,9 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
       helpText: 'SELECT DELIVERY END TIME',
     );
     if (picked != null) {
-      setState(() {
+      if (mounted) { setState(() {
         _deliveryEndTime = picked;
-      });
+      }); }
     }
   }
 
@@ -244,21 +244,21 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
     if (!_formKey.currentState!.validate()) return;
 
     if (_bookingRange == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please select Booking Interval Range')),
       );
       return;
     }
 
     if (_selectedBranches.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please select at least one branch')),
       );
       return;
     }
 
     if (_deliveryEndDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please select Delivery End Date')),
       );
       return;
@@ -376,7 +376,7 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text(widget.docId == null ? 'Supersale created successfully' : 'Supersale updated successfully'),
             backgroundColor: Colors.green,
@@ -386,7 +386,7 @@ class _SupersaleFormPageState extends State<SupersaleFormPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Failed to save: $e'),
             backgroundColor: Colors.red,

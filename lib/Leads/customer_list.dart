@@ -100,11 +100,11 @@ class _CustomerListPageState extends State<CustomerListPage> {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      setState(() {
+      if (mounted) { setState(() {
         userBranch = userDoc.data()?['branch'];
         userRole = userDoc.data()?['role'];
         userId = user.uid;
-      });
+      }); }
       _loadCustomers();
     }
   }
@@ -202,7 +202,7 @@ class _CustomerListPageState extends State<CustomerListPage> {
                             .collection('customer')
                             .doc(doc.id)
                             .delete();
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                           const SnackBar(content: Text('Customer deleted')),
                         );
                       }

@@ -91,7 +91,7 @@ class _DmeRaiseRequestPageState extends State<DmeRaiseRequestPage> {
     final client = await DmeConfig.getClient();
     if (client == null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Unable to connect to database. Please check connection.'),
           backgroundColor: Colors.red,
@@ -123,7 +123,7 @@ class _DmeRaiseRequestPageState extends State<DmeRaiseRequestPage> {
       final editData = editState?.getData();
 
       if (editData == null || !editData.hasChanges) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('Please modify at least one detail (Name, Customer Type, or Category) to submit request.'),
             backgroundColor: Colors.orange,
@@ -221,7 +221,7 @@ class _DmeRaiseRequestPageState extends State<DmeRaiseRequestPage> {
     } catch (e) {
       if (mounted) {
         setState(() => _isSubmitting = false);
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Failed to submit request: $e'),
             backgroundColor: Colors.red,

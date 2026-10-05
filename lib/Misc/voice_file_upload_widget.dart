@@ -76,16 +76,16 @@ class _VoiceFileUploadWidgetState extends State<VoiceFileUploadWidget> {
 
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.first;
-        setState(() {
+        if (mounted) { setState(() {
           _selectedFilePath = file.path;
           _fileName = file.name;
-        });
+        }); }
         // Auto-upload immediately after selection
         await _uploadFile();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error picking file: $e')),
         );
       }
@@ -94,7 +94,7 @@ class _VoiceFileUploadWidgetState extends State<VoiceFileUploadWidget> {
 
   Future<void> _uploadFile() async {
     if (_selectedFilePath == null || _selectedFilePath!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please select a voice file first')),
       );
       return;
@@ -129,16 +129,16 @@ class _VoiceFileUploadWidgetState extends State<VoiceFileUploadWidget> {
 
       final downloadUrl = await ref.getDownloadURL();
 
-      setState(() {
+      if (mounted) { setState(() {
         _uploadedFileUrl = downloadUrl;
         _selectedFilePath = null;
         _fileName = null;
-      });
+      }); }
 
       widget.onFileUploaded(downloadUrl);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('Voice file uploaded successfully ✓'),
             backgroundColor: Colors.green,
@@ -147,7 +147,7 @@ class _VoiceFileUploadWidgetState extends State<VoiceFileUploadWidget> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error uploading file: $e')),
         );
       }
@@ -168,7 +168,7 @@ class _VoiceFileUploadWidgetState extends State<VoiceFileUploadWidget> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Error playing audio: $e')),
         );
       }

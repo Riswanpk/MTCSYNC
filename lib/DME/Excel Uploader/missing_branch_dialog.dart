@@ -215,7 +215,7 @@ class _MissingBranchDialogState extends State<MissingBranchDialog> {
           onPressed: () {
             final unassigned = widget.missingBranches.where((m) => m.selectedBranchId == null).toList();
             if (unassigned.isNotEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
+              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                 SnackBar(
                   content: Text('Please select a branch for all ${unassigned.length} transaction(s).'),
                   backgroundColor: Colors.red,

@@ -90,10 +90,10 @@ class _RegisterPageState extends State<RegisterPage>
       final currentCode = codeSnap.data()?['code'];
 
       if (_codeController.text.trim() != currentCode) {
-        setState(() {
+        if (mounted) { setState(() {
           _errorMessage = "Invalid registration code.";
           _isLoading = false;
-        });
+        }); }
         return;
       }
 

@@ -321,7 +321,7 @@ class _CustomerCallingDuplicatesPageState
   Future<void> _resolveDuplicate(DuplicateGroup group) async {
     final selectedEntryId = group.selectedEntryId;
     if (selectedEntryId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Please select an entry to keep.'),
           backgroundColor: Colors.orange,
@@ -364,9 +364,9 @@ class _CustomerCallingDuplicatesPageState
 
     if (confirmed != true) return;
 
-    setState(() {
+    if (mounted) { setState(() {
       _resolvingPhones.add(group.phone);
-    });
+    }); }
 
     try {
       final monthYear = _selectedMonthYear!;
@@ -451,7 +451,7 @@ class _CustomerCallingDuplicatesPageState
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text(
               'Successfully resolved duplicate for ${group.phone}. Assigned to ${selectedEntry.username}.',
@@ -466,7 +466,7 @@ class _CustomerCallingDuplicatesPageState
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Failed to resolve duplicate: $e'),
             backgroundColor: Colors.red,

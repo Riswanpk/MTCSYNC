@@ -306,7 +306,7 @@ class _LeadsPageState extends State<LeadsPage> {
         _isLoading = false;
         _leads = [];
       });
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
           content: Text('Error loading leads: ${e.toString()}'),
           backgroundColor: Colors.red,

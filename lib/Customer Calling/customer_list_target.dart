@@ -122,15 +122,15 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
 
           await usersRef.doc(_docId).set({'customers': newData});
 
-          setState(() {
+          if (mounted) { setState(() {
             _customers = newData;
             _loading = false;
-          });
+          }); }
           _firestoreConfirmed = true;
           await _saveToLocalCache();
 
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
               const SnackBar(
                 content: Text('Customer list initialized from previous month'),
                 backgroundColor: Colors.blue,
@@ -446,20 +446,20 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                       suffixIcon: IconButton(
                         icon: const Icon(Icons.clear),
                         onPressed: () {
-                          setState(() {
+                          if (mounted) { setState(() {
                             _searchText = '';
                             _searchController.clear();
                             _showSearchBar = false;
-                          });
+                          }); }
                         },
                       ),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                       contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 8),
                     ),
                     onChanged: (val) {
-                      setState(() {
+                      if (mounted) { setState(() {
                         _searchText = val;
-                      });
+                      }); }
                     },
                   ),
                 ),
@@ -481,13 +481,13 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                       tooltip: 'Search',
                       color: isDark ? Colors.white : Colors.black,
                       onPressed: () {
-                        setState(() {
+                        if (mounted) { setState(() {
                           _showSearchBar = !_showSearchBar;
                           if (!_showSearchBar) {
                             _searchText = '';
                             _searchController.clear();
                           }
-                        });
+                        }); }
                       },
                     ),
                     TextButton.icon(
@@ -612,7 +612,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
 
                           void openViewer() {
                             if (isPendingDeletion) {
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                                 const SnackBar(
                                   content: Text('This customer is pending deletion approval.'),
                                   backgroundColor: Colors.orange,
@@ -621,7 +621,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                               return;
                             }
                             if (isPendingEditing) {
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                                 const SnackBar(
                                   content: Text('This customer is pending editing approval.'),
                                   backgroundColor: Colors.orange,

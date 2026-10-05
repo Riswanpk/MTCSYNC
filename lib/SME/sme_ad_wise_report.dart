@@ -124,7 +124,7 @@ class _SmeAdWiseReportPageState extends State<SmeAdWiseReportPage> {
                 initialDateRange: _selectedDateRange,
               );
               if (picked != null) {
-                setState(() => _selectedDateRange = picked);
+                if (mounted) setState(() => _selectedDateRange = picked);
               }
             },
           ),
@@ -169,9 +169,9 @@ class _SmeAdWiseReportPageState extends State<SmeAdWiseReportPage> {
                         );
                       }).toList(),
                       onChanged: (val) {
-                        setState(() {
+                        if (mounted) { setState(() {
                           _selectedAdFilter = val;
-                        });
+                        }); }
                       },
                     );
                   },

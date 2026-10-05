@@ -146,7 +146,7 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
       debugPrint('Error loading customers directory: $e');
       if (!mounted) return;
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(content: Text('Error loading customers: $e'), backgroundColor: Colors.red),
       );
     }

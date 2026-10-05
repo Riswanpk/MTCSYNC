@@ -109,8 +109,8 @@ Future<bool> checkIfCallWasMade({
         mounted: mounted,
       );
       onCallDetected();
-      if (mounted && context != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      if (context != null && context.mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('Call detected! Please add remarks.'),
             backgroundColor: Colors.green,
@@ -186,11 +186,11 @@ Future<bool> checkForAnyRecentCall({
       await updateCallStatusInFirestore(
         customer: customer,
         context: context,
-        mounted: mounted,
+        mounted: context != null && context.mounted,
       );
       onCallDetected();
-      if (mounted && context != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      if (context != null && context.mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('Call detected! Please add remarks.'),
             backgroundColor: Colors.green,
@@ -214,14 +214,16 @@ Future<void> reloadCallStatus({
   required Function() onCallDetected,
 }) async {
   if (called) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Call already marked.'), backgroundColor: Colors.green),
-    );
+    if (context.mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text('Call already marked.'), backgroundColor: Colors.green),
+      );
+    }
     return;
   }
   if (!await _ensurePermissions()) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    if (context.mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('Call Log permission is required to detect calls.'),
           backgroundColor: Colors.red,
@@ -269,11 +271,11 @@ Future<void> reloadCallStatus({
       await updateCallStatusInFirestore(
         customer: customer,
         context: context,
-        mounted: mounted,
+        mounted: context.mounted,
       );
       onCallDetected();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      if (context.mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('Call detected! Please add remarks.'),
             backgroundColor: Colors.green,
@@ -282,8 +284,8 @@ Future<void> reloadCallStatus({
         );
       }
     } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      if (context.mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(
             content: Text('No outgoing call (>15s) found today.'),
             backgroundColor: Colors.orange,
@@ -293,8 +295,8 @@ Future<void> reloadCallStatus({
     }
   } catch (e) {
     debugPrint('Error reloading call status: $e');
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    if (context.mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(content: Text('Error checking call log: $e'), backgroundColor: Colors.red),
       );
     }

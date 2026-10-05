@@ -71,7 +71,7 @@ class _SmeReportPageState extends State<SmeReportPage> {
 
   Future<void> _generateReport() async {
     if (_selectedBranch == null || _selectedRange == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Please select a branch and date range.')),
       );
       return;

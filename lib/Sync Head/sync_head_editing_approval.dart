@@ -173,7 +173,7 @@ class SyncHeadEditingApprovalService {
     } catch (e) {
       debugPrint('Error submitting customer edit request: $e');
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text('Failed to submit edit request: $e'),
             backgroundColor: Colors.red,

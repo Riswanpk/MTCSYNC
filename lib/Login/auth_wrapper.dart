@@ -94,7 +94,7 @@ bool handleFirebaseAuthError(BuildContext context, dynamic error) {
 
 void _showAuthErrorAndRedirect(BuildContext context) {
   // Show a message and redirect to login
-  ScaffoldMessenger.of(context).showSnackBar(
+  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
     const SnackBar(
       content: Text('Session expired. Please log in again.'),
       duration: Duration(seconds: 2),

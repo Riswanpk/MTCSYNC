@@ -124,10 +124,10 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
       MaterialPageRoute(builder: (context) => const CameraPage()),
     );
     if (result != null && result is Map && result['image'] != null) {
-      setState(() {
+      if (mounted) { setState(() {
         _imageFile = result['image'];
         locationString = result['location'];
-      });
+      }); }
       // Start uploading immediately while user fills the rest of the form
       _uploadHelper.cancel(); // cancel any previous upload
       _uploadHelper.startUpload(_imageFile!);
@@ -333,7 +333,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
 
       _formKey.currentState?.reset();
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Form submitted successfully!')),
       );
     } catch (e) {
@@ -343,7 +343,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
         isLoading = false;
         _uploadProgress = 0.0;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Error submitting form. Please try again.')),
       );
     }
@@ -453,15 +453,15 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                               if (clipboardData?.text != null) {
                                 final formatted = _formatIndianPhone(clipboardData!.text!);
                                 if (formatted != '+91 ') {
-                                  setState(() {
+                                  if (mounted) { setState(() {
                                     _phoneNoController.text = formatted;
                                     _phoneNoController.selection =
                                         TextSelection.fromPosition(
                                       TextPosition(offset: formatted.length),
                                     );
-                                  });
+                                  }); }
                                 } else {
-                                  ScaffoldMessenger.of(context).showSnackBar(
+                                  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                                     const SnackBar(
                                         content: Text('Clipboard does not contain a valid 10-digit number')),
                                   );

@@ -217,9 +217,9 @@ class _DmeExcelUploadReportPageState extends State<DmeExcelUploadReportPage> wit
     );
 
     if (picked != null) {
-      setState(() {
+      if (mounted) { setState(() {
         _selectedDate = picked;
-      });
+      }); }
     }
   }
 
@@ -235,7 +235,7 @@ class _DmeExcelUploadReportPageState extends State<DmeExcelUploadReportPage> wit
   Future<void> _exportTab1ToExcel() async {
     final items = _todayUploads;
     if (items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('No upload records for today to export.')),
       );
       return;
@@ -307,7 +307,7 @@ class _DmeExcelUploadReportPageState extends State<DmeExcelUploadReportPage> wit
       final file = File(filePath);
       await file.writeAsBytes(bytes, flush: true);
 
-      setState(() => _isExporting = false);
+      if (mounted) setState(() => _isExporting = false);
 
       await Share.shareXFiles(
         [XFile(filePath)],
@@ -315,9 +315,9 @@ class _DmeExcelUploadReportPageState extends State<DmeExcelUploadReportPage> wit
       );
     } catch (e) {
       debugPrint('Error generating today upload report: $e');
-      setState(() => _isExporting = false);
+      if (mounted) setState(() => _isExporting = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Export error: $e'), backgroundColor: Colors.red),
         );
       }
@@ -327,7 +327,7 @@ class _DmeExcelUploadReportPageState extends State<DmeExcelUploadReportPage> wit
   Future<void> _exportTab2ToExcel() async {
     final statuses = _branchStatuses;
     if (statuses.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('No branch data to export.')),
       );
       return;
@@ -412,7 +412,7 @@ class _DmeExcelUploadReportPageState extends State<DmeExcelUploadReportPage> wit
       final file = File(filePath);
       await file.writeAsBytes(bytes, flush: true);
 
-      setState(() => _isExporting = false);
+      if (mounted) setState(() => _isExporting = false);
 
       await Share.shareXFiles(
         [XFile(filePath)],
@@ -420,9 +420,9 @@ class _DmeExcelUploadReportPageState extends State<DmeExcelUploadReportPage> wit
       );
     } catch (e) {
       debugPrint('Error generating Excel upload report: $e');
-      setState(() => _isExporting = false);
+      if (mounted) setState(() => _isExporting = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('Export error: $e'), backgroundColor: Colors.red),
         );
       }
@@ -506,7 +506,7 @@ class _DmeExcelUploadReportPageState extends State<DmeExcelUploadReportPage> wit
                     tooltip: 'Copy Hash',
                     onPressed: () {
                       Clipboard.setData(ClipboardData(text: item.fileHash));
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                         const SnackBar(content: Text('File hash copied to clipboard')),
                       );
                     },

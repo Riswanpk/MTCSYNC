@@ -143,7 +143,7 @@ class _MissingPhoneDialogState extends State<MissingPhoneDialog> {
                 .where((m) => ExcelParsingService.cleanPhoneNumber(m.phoneController.text.trim()).isEmpty)
                 .toList();
             if (unfilled.isNotEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
+              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                 SnackBar(
                   content: Text('Please fill in phone numbers for all ${unfilled.length} customer(s).'),
                   backgroundColor: Colors.red,

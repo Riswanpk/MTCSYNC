@@ -253,7 +253,7 @@ class LeadCard extends StatelessWidget {
                   .update(updateData);
               onStatusChanged?.call();
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
+                ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                   const SnackBar(content: Text('Marked as Sale')),
                 );
               }
@@ -284,7 +284,7 @@ class LeadCard extends StatelessWidget {
               });
               onStatusChanged?.call();
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
+                ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                   const SnackBar(content: Text('Marked as Cancelled')),
                 );
               }
