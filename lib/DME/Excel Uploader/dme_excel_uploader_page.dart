@@ -827,6 +827,7 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
   }
 
   void _showSnackBar(String msg, {bool isError = false}) {
+    if (!mounted) return;
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       SnackBar(
         content: Text(msg),
@@ -836,6 +837,7 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
   }
 
   void _showConfigDialog() {
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -854,6 +856,7 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
   }
 
   void _showSummaryDialog(int success, int errors) {
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
