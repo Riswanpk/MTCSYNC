@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../Navigation/user_cache_service.dart';
 import 'supersale_user_form.dart';
@@ -11,6 +12,23 @@ import '../../Misc/notification_permission_service.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
+
+class TenDigitPhoneInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) {
+      return newValue;
+    }
+    final formatted = _SupersaleUserMainPageState.extract10Digits(newValue.text);
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+}
 
 class SupersaleUserMainPage extends StatefulWidget {
   const SupersaleUserMainPage({super.key});
@@ -204,6 +222,16 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
       return 'N/A';
     }
     return DateFormat('dd/MM/yyyy').format(dt.toLocal());
+  }
+
+  /// Extracts digits, strips leading 91 country code if present, and takes up to 10 digits from left to right
+  static String extract10Digits(String input) {
+    String digits = input.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith('91') && digits.length > 10) {
+      digits = digits.substring(2);
+    }
+    if (digits.length <= 10) return digits;
+    return digits.substring(0, 10);
   }
 
   Set<String> _scheduledDocIds = {};
@@ -664,6 +692,9 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
         final Timestamp? bookingStart = data['bookingStart'] as Timestamp?;
         final Timestamp? bookingEnd = data['bookingEnd'] as Timestamp?;
         final Timestamp? deliveryEnd = data['deliveryEnd'] as Timestamp?;
+        final dynamic bookedAt = data['created_at'];
+        final dynamic deliveredAt = data['deliveredAt'];
+        final bool isSpot = data['isSpotSale'] == true || data['saleType'] == 'spot_sale';
 
         final bool isActionAllowed = bookingStart != null &&
             bookingEnd != null &&
@@ -856,15 +887,22 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
                               TextFormField(
                                 controller: phoneController,
                                 keyboardType: TextInputType.phone,
+                                inputFormatters: [
+                                  TenDigitPhoneInputFormatter(),
+                                ],
                                 decoration: const InputDecoration(
                                   labelText: 'Billed Phone',
-                                  hintText: 'Enter phone number',
+                                  hintText: 'Enter 10-digit phone number',
                                   prefixIcon: Icon(Icons.phone_rounded, size: 20),
                                   border: OutlineInputBorder(),
                                 ),
                                 validator: (value) {
                                   if (value == null || value.trim().isEmpty) {
                                     return 'Please enter phone number';
+                                  }
+                                  final digits = value.replaceAll(RegExp(r'\D'), '');
+                                  if (digits.length != 10) {
+                                    return 'Please enter exactly 10 digits';
                                   }
                                   return null;
                                 },
@@ -983,7 +1021,7 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
               if (confirmed == true) {
                 try {
                   final int deliveredQty = int.tryParse(quantityController.text.trim()) ?? quantity;
-                  final String billedPhoneText = phoneController.text.trim();
+                  final String billedPhoneText = extract10Digits(phoneController.text.trim());
 
                   if (deliveredQty >= quantity) {
                     // Full delivery
@@ -1146,22 +1184,24 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                'Booking ${_formatSimpleDate(bookingEnd)}',
+                                'Booked ${_formatSimpleDate(bookedAt)}',
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: isDark ? Colors.white60 : Colors.black87,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Delivery ${_formatSimpleDate(deliveryEnd)}',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: isDark ? Colors.white60 : Colors.black87,
-                                  fontWeight: FontWeight.bold,
+                              if (!isSpot && isDelivered && deliveredAt != null) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Delivered ${_formatSimpleDate(deliveredAt)}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isDark ? Colors.white60 : Colors.black87,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
-                              ),
+                              ],
                               const SizedBox(height: 4),
                               Row(
                                 mainAxisSize: MainAxisSize.min,
