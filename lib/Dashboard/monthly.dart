@@ -252,261 +252,227 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    // Define your colors here for consistency
-    const Color selectedGreen = Color.fromARGB(255, 97, 175, 34);
-    const Color listBlue = Colors.blue;
+    const Color primaryBlue = Color(0xFF005BAC);
+    const Color primaryGreen = Color(0xFF8CC63F);
 
     if (!_isInitialized) {
       return Scaffold(
-        backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
-        body: Center(
-          child: CircularProgressIndicator(
-            color: isDark ? Colors.white : const Color(0xFF6C5CE7),
-          ),
+        backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF8FAFC),
+        body: const Center(
+          child: CircularProgressIndicator(color: primaryBlue),
         ),
       );
     }
 
     return Scaffold(
-        backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF6F7FB),
+        backgroundColor: isDark ? const Color(0xFF181A20) : const Color(0xFFF8FAFC),
         appBar: AppBar(
           elevation: 0,
-          backgroundColor: const Color.fromARGB(255, 6, 91, 160),
-          title: Container(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-            decoration: BoxDecoration(
-              color: const Color.fromARGB(255, 6, 91, 160),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Text(
-              'Monthly Report',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 22,
-              ),
+          backgroundColor: primaryBlue,
+          foregroundColor: Colors.white,
+          title: const Text(
+            'Monthly Report',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+              letterSpacing: 0.2,
             ),
           ),
-          centerTitle: true,
+          centerTitle: false,
         ),
         body: Column(
           children: [
-            // Compact Filter Section
-            Padding(
-              padding: const EdgeInsets.all(12),
+            // Filter Header Container
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF232730) : Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
               child: Row(
                 children: [
-                  // -------------------------
-                  // 1. BRANCH DROPDOWN
-                  // -------------------------
-                  if ((_userRole == 'admin' || _userRole == 'Sync Head' || _userRole == 'sync_head') && _branches.isNotEmpty)
+                  // 1. BRANCH DROPDOWN (if admin/sync_head)
+                  if ((_userRole == 'admin' || _userRole == 'Sync Head' || _userRole == 'sync_head') && _branches.isNotEmpty) ...[
                     Flexible(
-                      flex: 2,
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          isExpanded: true,
-                          value: _selectedBranch,
-                          icon: const Icon(Icons.keyboard_arrow_down, size: 18, color: Colors.black),
-                          dropdownColor: Colors.white,
-                          
-                          // 1. ITEMS (The Open Menu -> BLUE)
-                          items: _branches.map((b) => DropdownMenuItem(
-                                value: b,
-                                child: Text(
-                                  b,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    color: listBlue, // Blue inside list
-                                    fontWeight: FontWeight.bold,
+                      flex: 3,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF2D323F) : const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isDark ? Colors.white12 : Colors.grey.shade300,
+                            width: 0.8,
+                          ),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            isExpanded: true,
+                            value: _selectedBranch,
+                            icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Colors.grey),
+                            dropdownColor: isDark ? const Color(0xFF232730) : Colors.white,
+                            items: _branches.map((b) => DropdownMenuItem(
+                                  value: b,
+                                  child: Text(
+                                    b,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      color: isDark ? Colors.white : const Color(0xFF1E293B),
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
-                                ),
-                              )).toList(),
-                          
-                          // 2. SELECTED (The Closed Button -> GREEN)
-                          selectedItemBuilder: (BuildContext context) {
-                            return _branches.map((String value) {
-                              return Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  value,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    color: selectedGreen, // Green when selected
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              );
-                            }).toList();
-                          },
+                                )).toList(),
+                            onChanged: (val) async {
+                              await _fetchUsersForBranch(val);
+                              if (mounted) {
+                                setState(() {
+                                  _selectedBranch = val;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
 
-                          onChanged: (val) async {
-                            await _fetchUsersForBranch(val);
-                            if (mounted) { setState(() {
-                              _selectedBranch = val;
-                            }); }
+                  // 2. USER DROPDOWN
+                  Flexible(
+                    flex: 4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF2D323F) : const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isDark ? Colors.white12 : Colors.grey.shade300,
+                          width: 0.8,
+                        ),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<Map<String, dynamic>>(
+                          isExpanded: true,
+                          value: _selectedUser,
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Colors.grey),
+                          dropdownColor: isDark ? const Color(0xFF232730) : Colors.white,
+                          items: _usersForBranch.map((u) => DropdownMenuItem(
+                                  value: u,
+                                  child: Text(
+                                    u['username'] ?? '',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      color: isDark ? Colors.white : const Color(0xFF1E293B),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                )).toList(),
+                          onChanged: (val) {
+                            if (mounted) {
+                              setState(() {
+                                _selectedUser = val;
+                                _cachedReport = null;
+                              });
+                            }
+                          },
+                          hint: Text(
+                            "User",
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+
+                  // 3. MONTH DROPDOWN
+                  Flexible(
+                    flex: 2,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF2D323F) : const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isDark ? Colors.white12 : Colors.grey.shade300,
+                          width: 0.8,
+                        ),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int>(
+                          isExpanded: true,
+                          value: _selectedMonth,
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Colors.grey),
+                          dropdownColor: isDark ? const Color(0xFF232730) : Colors.white,
+                          items: List.generate(12, (i) => i + 1).map((m) => DropdownMenuItem(
+                                  value: m,
+                                  child: Text(
+                                    _getMonthShort(m),
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      color: isDark ? Colors.white : const Color(0xFF1E293B),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                )).toList(),
+                          onChanged: (val) {
+                            setState(() {
+                              _selectedMonth = val!;
+                              _cachedReport = null;
+                            });
                           },
                         ),
                       ),
                     ),
-                  
-                  if (!((_userRole == 'admin' || _userRole == 'Sync Head' || _userRole == 'sync_head') && _branches.isNotEmpty)) const SizedBox.shrink(),
-                  const SizedBox(width: 6),
-
-                  // -------------------------
-                  // 2. USER DROPDOWN
-                  // -------------------------
-                  Flexible(
-                    flex: 3,
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<Map<String, dynamic>>(
-                        isExpanded: true,
-                        value: _selectedUser,
-                        icon: const Icon(Icons.keyboard_arrow_down, size: 18, color: Colors.black),
-                        dropdownColor: Colors.white,
-                        
-                        // 1. ITEMS (The Open Menu -> BLUE)
-                        items: _usersForBranch.map((u) => DropdownMenuItem(
-                                value: u,
-                                child: Text(
-                                  u['username'],
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    color: listBlue, // Blue inside list
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              )).toList(),
-
-                        // 2. SELECTED (The Closed Button -> GREEN)
-                        selectedItemBuilder: (BuildContext context) {
-                          return _usersForBranch.map((Map<String, dynamic> value) {
-                            return Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                value['username'],
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: selectedGreen, // Green when selected
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            );
-                          }).toList();
-                        },
-
-                        onChanged: (val) {
-                          if (mounted) { setState(() {
-                            _selectedUser = val;
-                            _cachedReport = null;
-                          }); }
-                        },
-                      ),
-                    ),
                   ),
                   const SizedBox(width: 6),
 
-                  // -------------------------
-                  // 3. MONTH DROPDOWN
-                  // -------------------------
-                  Flexible(
-                    flex: 2,
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<int>(
-                        isExpanded: true,
-                        value: _selectedMonth,
-                        icon: const Icon(Icons.keyboard_arrow_down, size: 18, color: Colors.black),
-                        dropdownColor: Colors.white,
-
-                        // 1. ITEMS (The Open Menu -> BLUE)
-                        items: List.generate(12, (i) => i + 1).map((m) => DropdownMenuItem(
-                                value: m,
-                                child: Text(
-                                  _getMonthShort(m),
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    color: listBlue, // Blue inside list
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              )).toList(),
-
-                        // 2. SELECTED (The Closed Button -> GREEN)
-                        selectedItemBuilder: (BuildContext context) {
-                          return List.generate(12, (i) => i + 1).map((int value) {
-                            return Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                _getMonthShort(value),
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: selectedGreen, // Green when selected
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            );
-                          }).toList();
-                        },
-
-                        onChanged: (val) {
-                          setState(() {
-                            _selectedMonth = val!;
-                            _cachedReport = null;
-                          });
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-
-                  // -------------------------
                   // 4. YEAR DROPDOWN
-                  // -------------------------
                   Flexible(
                     flex: 2,
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<int>(
-                        isExpanded: true,
-                        value: _selectedYear,
-                        icon: const Icon(Icons.keyboard_arrow_down, size: 18, color: Colors.black),
-                        dropdownColor: Colors.white,
-
-                        // 1. ITEMS (The Open Menu -> BLUE)
-                        items: List.generate(5, (i) => DateTime.now().year - i).map((y) => DropdownMenuItem(
-                                value: y,
-                                child: Text(
-                                  '$y',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    color: listBlue, // Blue inside list
-                                    fontWeight: FontWeight.bold,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF2D323F) : const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isDark ? Colors.white12 : Colors.grey.shade300,
+                          width: 0.8,
+                        ),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int>(
+                          isExpanded: true,
+                          value: _selectedYear,
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Colors.grey),
+                          dropdownColor: isDark ? const Color(0xFF232730) : Colors.white,
+                          items: List.generate(5, (i) => DateTime.now().year - i).map((y) => DropdownMenuItem(
+                                  value: y,
+                                  child: Text(
+                                    '$y',
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      color: isDark ? Colors.white : const Color(0xFF1E293B),
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
-                                ),
-                              )).toList(),
-
-                        // 2. SELECTED (The Closed Button -> GREEN)
-                        selectedItemBuilder: (BuildContext context) {
-                          return List.generate(5, (i) => DateTime.now().year - i).map((int value) {
-                            return Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                '$value',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: selectedGreen, // Green when selected
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            );
-                          }).toList();
-                        },
-
-                        onChanged: (val) {
-                          setState(() {
-                            _selectedYear = val!;
-                            _cachedReport = null;
-                          });
-                        },
+                                )).toList(),
+                          onChanged: (val) {
+                            setState(() {
+                              _selectedYear = val!;
+                              _cachedReport = null;
+                            });
+                          },
+                        ),
                       ),
                     ),
                   ),
@@ -521,60 +487,213 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
                       future: _generateUserMonthlyReport(),
                       builder: (context, snap) {
                         if (snap.connectionState == ConnectionState.waiting) {
-                          return Center(
-                            child: CircularProgressIndicator(
-                              color: isDark ? Colors.white : const Color(0xFF6C5CE7),
-                            ),
+                          return const Center(
+                            child: CircularProgressIndicator(color: primaryBlue),
                           );
                         }
                         if (snap.hasError) {
-                          return Center(child: Text('Error: ${snap.error}'));
+                          return Center(
+                            child: Text(
+                              'Error: ${snap.error}',
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          );
                         }
                         final data = snap.data ?? [];
                         if (data.isEmpty) {
-                          return const Center(child: Text('No data for this month.'));
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.event_busy_rounded, size: 48, color: Colors.grey.shade400),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'No data recorded for this month.',
+                                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                                ),
+                              ],
+                            ),
+                          );
                         }
-                        return Scrollbar(
-                          thumbVisibility: true,
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.vertical,
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: SizedBox(
-                                width: MediaQuery.of(context).size.width,
+
+                        final int totalDays = data.length;
+                        final int todoDays = data.where((d) => d['todo'] == true).length;
+                        final int leadDays = data.where((d) => d['lead'] == true).length;
+
+                        return ListView(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          children: [
+                            // Monthly Metrics Card
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              margin: const EdgeInsets.only(bottom: 12),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF004987), primaryBlue],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(14),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: primaryBlue.withOpacity(0.18),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                children: [
+                                  _buildMonthlyStat('Days Active', '$totalDays', Colors.white70, Colors.white),
+                                  Container(width: 1, height: 26, color: Colors.white24),
+                                  _buildMonthlyStat('Todo Done', '$todoDays', const Color(0xFF93C5FD), Colors.white),
+                                  Container(width: 1, height: 26, color: Colors.white24),
+                                  _buildMonthlyStat('Leads Logged', '$leadDays', const Color(0xFF86EFAC), Colors.white),
+                                ],
+                              ),
+                            ),
+
+                            // Data Table Card
+                            Container(
+                              decoration: BoxDecoration(
+                                color: isDark ? const Color(0xFF232730) : Colors.white,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: isDark ? Colors.white12 : Colors.grey.shade200,
+                                  width: 1,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.02),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
                                 child: DataTable(
-                                  columnSpacing: MediaQuery.of(context).size.width / 8,
+                                  headingRowColor: WidgetStateProperty.all(
+                                    isDark ? const Color(0xFF2D323F) : const Color(0xFFF1F5F9),
+                                  ),
+                                  headingTextStyle: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    color: isDark ? Colors.white : const Color(0xFF1E293B),
+                                  ),
+                                  dataTextStyle: TextStyle(
+                                    fontSize: 13,
+                                    color: isDark ? Colors.white70 : const Color(0xFF334155),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  horizontalMargin: 18,
+                                  columnSpacing: 24,
                                   columns: const [
-                                    DataColumn(label: Text('Date', style: TextStyle(color: selectedGreen, fontWeight: FontWeight.bold))),
-                                    DataColumn(label: Text('Todo', style: TextStyle(color: selectedGreen, fontWeight: FontWeight.bold))),
-                                    DataColumn(label: Text('Lead', style: TextStyle(color: selectedGreen, fontWeight: FontWeight.bold))),
+                                    DataColumn(label: Text('Date')),
+                                    DataColumn(label: Text('Todo')),
+                                    DataColumn(label: Text('Lead')),
                                   ],
                                   rows: data.map((item) {
-                                    return DataRow(cells: [
-                                      DataCell(Text(item['date'])),
-                                      DataCell(Icon(
-                                        item['todo'] ? Icons.check_circle : Icons.cancel,
-                                        color: item['todo'] ? Colors.blue : Colors.red,
-                                        size: 20,
-                                      )),
-                                      DataCell(Icon(
-                                        item['lead'] ? Icons.check_circle : Icons.cancel,
-                                        color: item['lead'] ? Colors.green : Colors.red,
-                                        size: 20,
-                                      )),
-                                    ]);
+                                    final bool todo = item['todo'] == true;
+                                    final bool lead = item['lead'] == true;
+                                    return DataRow(
+                                      cells: [
+                                        DataCell(Text(item['date'] ?? '')),
+                                        DataCell(
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                todo ? Icons.check_circle_rounded : Icons.schedule_rounded,
+                                                color: todo ? const Color(0xFF059669) : const Color(0xFFDC2626),
+                                                size: 18,
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                todo ? 'Done' : 'Missed',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: todo ? const Color(0xFF059669) : const Color(0xFFDC2626),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        DataCell(
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                lead ? Icons.check_circle_rounded : Icons.cancel_outlined,
+                                                color: lead ? primaryGreen : Colors.grey.shade400,
+                                                size: 18,
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                lead ? 'Logged' : 'None',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: lead ? const Color(0xFF4D7C0F) : Colors.grey.shade500,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    );
                                   }).toList(),
                                 ),
                               ),
                             ),
-                          )
-                          );
-                        },
-                      )
-                  : const Center(child: Text('Select a user to view report')),
+                          ],
+                        );
+                      },
+                    )
+                  : Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.person_search_rounded, size: 52, color: Colors.grey.shade400),
+                          const SizedBox(height: 10),
+                          Text(
+                            'Select a user to view their monthly report',
+                            style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ),
             ),
           ],
         ));
+  }
+
+  Widget _buildMonthlyStat(String label, String value, Color labelColor, Color valColor) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            color: valColor,
+          ),
+        ),
+        const SizedBox(height: 1),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: labelColor,
+          ),
+        ),
+      ],
+    );
   }
 
   String _getMonthShort(int month) {
