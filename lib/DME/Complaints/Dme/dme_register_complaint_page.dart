@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:mtcsync/DME/Misc/dme_constants.dart';
 import '../services/dme_complaints_service.dart';
 import '../widgets/dme_complaint_voice_widget.dart';
+import '../widgets/dme_complaint_type_selector.dart';
 
 class DmeRegisterComplaintPage extends StatefulWidget {
   final Map<String, dynamic>? reminder;
@@ -25,6 +26,9 @@ class DmeRegisterComplaintPage extends StatefulWidget {
 class _DmeRegisterComplaintPageState extends State<DmeRegisterComplaintPage> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _descriptionController = TextEditingController();
+
+  String? _selectedComplaintType;
+  bool _showTypeValidationError = false;
 
   String _customerName = '';
   String _customerPhone = '';
@@ -175,6 +179,14 @@ class _DmeRegisterComplaintPageState extends State<DmeRegisterComplaintPage> {
   }
 
   Future<void> _submitComplaint() async {
+    if (_selectedComplaintType == null) {
+      setState(() => _showTypeValidationError = true);
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text('Please select a complaint type (Product or Service).')),
+      );
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
 
     if (_selectedUser == null) {
@@ -223,6 +235,7 @@ class _DmeRegisterComplaintPageState extends State<DmeRegisterComplaintPage> {
         assignedToEmail: _selectedUser!['email'],
         assignedToRole: _selectedUser!['role'],
         initialAudioUrl: _selectedAudioUrl,
+        complaintType: _selectedComplaintType,
       );
 
       if (mounted) {
@@ -342,100 +355,147 @@ class _DmeRegisterComplaintPageState extends State<DmeRegisterComplaintPage> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
-
-              // 2. Purchase History Collapsible Card
+              // 2. Complaint Type Selection Card (Product / Service)
               Card(
-                elevation: 1,
+                elevation: 2,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                child: Theme(
-                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                  child: ExpansionTile(
-                    leading: const Icon(Icons.history_rounded, color: Color(0xFF005BAC)),
-                    title: const Text(
-                      'Purchase History',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                    ),
-                    subtitle: Text(
-                      _isLoadingSales
-                          ? 'Loading history...'
-                          : '${_salesHistory.length} previous purchase(s)',
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    children: [
-                      if (_isLoadingSales)
-                        const Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                        )
-                      else if (_salesHistory.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: Text('No previous purchase records found.', style: TextStyle(color: Colors.grey)),
-                        )
-                      else
-                        ListView.separated(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          itemCount: _salesHistory.length,
-                          separatorBuilder: (context, i) => const Divider(height: 1),
-                          itemBuilder: (context, i) {
-                            final sale = _salesHistory[i];
-                            final dateStr = _formatDate(sale['date']);
-                            final branch = sale['purchased_branch']?.toString() ?? 'N/A';
-                            final salesman = sale['salesman']?.toString() ?? 'N/A';
-
-                            // Extract products
-                            String productsStr = '';
-                            final dt = sale['dme_sales_detail'];
-                            if (dt is List && dt.isNotEmpty) {
-                              final pList = dt.first['products'];
-                              if (pList != null) productsStr = pList.toString();
-                            }
-
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        'Date: $dateStr',
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                      ),
-                                      Text(
-                                        'Branch: $branch',
-                                        style: const TextStyle(fontSize: 12, color: Colors.grey),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Salesman: $salesman',
-                                    style: const TextStyle(fontSize: 12, color: Colors.black54),
-                                  ),
-                                  if (productsStr.isNotEmpty) ...[
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Products: $productsStr',
-                                      style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black87),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                    ],
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: DmeComplaintTypeSelector(
+                    selectedType: _selectedComplaintType,
+                    showError: _showTypeValidationError && _selectedComplaintType == null,
+                    onTypeSelected: (type) {
+                      setState(() {
+                        _selectedComplaintType = type;
+                        _showTypeValidationError = false;
+                      });
+                    },
                   ),
                 ),
               ),
               const SizedBox(height: 16),
 
-              // 3. User Assignment Section
+              if (_selectedComplaintType == null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF16253B).withValues(alpha: 0.5) : Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isDark ? Colors.white12 : Colors.grey.shade300,
+                      style: BorderStyle.solid,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.touch_app_rounded, size: 36, color: Colors.grey.shade400),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Select Product or Service above to proceed with the complaint form',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w500,
+                          color: isDark ? Colors.white60 : Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else ...[
+                // 3. Purchase History Collapsible Card
+                Card(
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: Theme(
+                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                    child: ExpansionTile(
+                      leading: const Icon(Icons.history_rounded, color: Color(0xFF005BAC)),
+                      title: const Text(
+                        'Purchase History',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                      subtitle: Text(
+                        _isLoadingSales
+                            ? 'Loading history...'
+                            : '${_salesHistory.length} previous purchase(s)',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      children: [
+                        if (_isLoadingSales)
+                          const Padding(
+                            padding: EdgeInsets.all(16.0),
+                            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                          )
+                        else if (_salesHistory.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.all(16.0),
+                            child: Text('No previous purchase records found.', style: TextStyle(color: Colors.grey)),
+                          )
+                        else
+                          ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            itemCount: _salesHistory.length,
+                            separatorBuilder: (context, i) => const Divider(height: 1),
+                            itemBuilder: (context, i) {
+                              final sale = _salesHistory[i];
+                              final dateStr = _formatDate(sale['date']);
+                              final branch = sale['purchased_branch']?.toString() ?? 'N/A';
+                              final salesman = sale['salesman']?.toString() ?? 'N/A';
+
+                              // Extract products
+                              String productsStr = '';
+                              final dt = sale['dme_sales_detail'];
+                              if (dt is List && dt.isNotEmpty) {
+                                final pList = dt.first['products'];
+                                if (pList != null) productsStr = pList.toString();
+                              }
+
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'Date: $dateStr',
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                        ),
+                                        Text(
+                                          'Branch: $branch',
+                                          style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Salesman: $salesman',
+                                      style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                    ),
+                                    if (productsStr.isNotEmpty) ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Products: $productsStr',
+                                        style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black87),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 4. User Assignment Section
               Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -626,6 +686,7 @@ class _DmeRegisterComplaintPageState extends State<DmeRegisterComplaintPage> {
                 ),
               ),
               const SizedBox(height: 24),
+              ],
             ],
           ),
         ),

@@ -4,9 +4,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mtcsync/DME/Misc/dme_constants.dart';
 import '../services/dme_complaints_service.dart';
 import '../widgets/dme_complaint_voice_widget.dart';
+import '../widgets/dme_complaint_type_selector.dart';
 
 /// Page to create complaints for customers not registered in the database.
-/// Manually captures customer name, phone, address (optional), branch, and assigns a user.
+/// Manually captures customer name, phone, address, branch, and assigns a user.
 /// Stored in 'dme_unregistered_customer_complaints' without polluting 'dme_customers'.
 class DmeUnregisteredCustomerComplaintsPage extends StatefulWidget {
   const DmeUnregisteredCustomerComplaintsPage({super.key});
@@ -19,6 +20,9 @@ class DmeUnregisteredCustomerComplaintsPage extends StatefulWidget {
 class _DmeUnregisteredCustomerComplaintsPageState
     extends State<DmeUnregisteredCustomerComplaintsPage> {
   final _formKey = GlobalKey<FormState>();
+
+  String? _selectedComplaintType;
+  bool _showTypeValidationError = false;
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
@@ -105,6 +109,14 @@ class _DmeUnregisteredCustomerComplaintsPageState
   }
 
   Future<void> _registerUnregisteredComplaint() async {
+    if (_selectedComplaintType == null) {
+      setState(() => _showTypeValidationError = true);
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text('Please select a complaint type (Product or Service).')),
+      );
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
 
     if (_isUploadingAudio) {
@@ -155,6 +167,7 @@ class _DmeUnregisteredCustomerComplaintsPageState
         assignedToEmail: _selectedUser!['email'],
         assignedToRole: _selectedUser!['role'],
         initialAudioUrl: _selectedAudioUrl,
+        complaintType: _selectedComplaintType,
       );
 
       if (mounted) {
@@ -229,12 +242,59 @@ class _DmeUnregisteredCustomerComplaintsPageState
               ),
               const SizedBox(height: 16),
 
-              // 1. Customer Details Card
+              // Complaint Type Selection Card (Product / Service)
               Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
+                  child: DmeComplaintTypeSelector(
+                    selectedType: _selectedComplaintType,
+                    showError: _showTypeValidationError && _selectedComplaintType == null,
+                    onTypeSelected: (type) {
+                      setState(() {
+                        _selectedComplaintType = type;
+                        _showTypeValidationError = false;
+                      });
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              if (_selectedComplaintType == null)
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF16253B).withValues(alpha: 0.5) : Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isDark ? Colors.white12 : Colors.grey.shade300,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.touch_app_rounded, size: 36, color: Colors.grey.shade400),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Select Product or Service above to proceed with the complaint form',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w500,
+                          color: isDark ? Colors.white60 : Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else ...[
+                // 1. Customer Details Card
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -523,6 +583,7 @@ class _DmeUnregisteredCustomerComplaintsPageState
                 ),
               ),
               const SizedBox(height: 32),
+              ],
             ],
           ),
         ),

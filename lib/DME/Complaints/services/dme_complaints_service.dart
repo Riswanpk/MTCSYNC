@@ -53,6 +53,7 @@ class DmeComplaintsService {
     String? assignedToEmail,
     String? assignedToRole,
     String? initialAudioUrl,
+    String? complaintType,
   }) async {
     final client = await DmeConfig.getClient();
     if (client == null) throw Exception('Supabase is not configured.');
@@ -79,6 +80,7 @@ class DmeComplaintsService {
     if (assignedToEmail != null) insertMap['assigned_to_email'] = assignedToEmail;
     if (assignedToRole != null) insertMap['assigned_to_role'] = assignedToRole;
     if (initialAudioUrl != null && initialAudioUrl.isNotEmpty) insertMap['initial_audio_url'] = initialAudioUrl;
+    if (complaintType != null && complaintType.isNotEmpty) insertMap['complaint_type'] = complaintType;
 
     // 1. Insert into dme_complaints
     final res = await client.from('dme_complaints').insert(insertMap).select('id').single();
@@ -151,6 +153,7 @@ class DmeComplaintsService {
     String? assignedToEmail,
     String? assignedToRole,
     String? initialAudioUrl,
+    String? complaintType,
   }) async {
     final client = await DmeConfig.getClient();
     if (client == null) throw Exception('Supabase is not configured.');
@@ -175,6 +178,7 @@ class DmeComplaintsService {
     if (assignedToEmail != null) insertMap['assigned_to_email'] = assignedToEmail;
     if (assignedToRole != null) insertMap['assigned_to_role'] = assignedToRole;
     if (initialAudioUrl != null && initialAudioUrl.isNotEmpty) insertMap['initial_audio_url'] = initialAudioUrl;
+    if (complaintType != null && complaintType.isNotEmpty) insertMap['complaint_type'] = complaintType;
 
     // 1. Insert into dme_unregistered_customer_complaints
     final res = await client.from('dme_unregistered_customer_complaints').insert(insertMap).select('id').single();

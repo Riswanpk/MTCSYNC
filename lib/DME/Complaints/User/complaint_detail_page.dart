@@ -700,6 +700,48 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
                                 ),
                               ),
                             ],
+                            if (c.complaintType != null && c.complaintType!.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: c.complaintType?.toLowerCase() == 'product'
+                                      ? const Color(0xFF005BAC).withValues(alpha: 0.12)
+                                      : const Color(0xFF8CC63F).withValues(alpha: 0.18),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: c.complaintType?.toLowerCase() == 'product'
+                                        ? const Color(0xFF005BAC).withValues(alpha: 0.4)
+                                        : const Color(0xFF8CC63F).withValues(alpha: 0.6),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      c.complaintType?.toLowerCase() == 'product'
+                                          ? Icons.inventory_2_outlined
+                                          : Icons.miscellaneous_services_outlined,
+                                      size: 11,
+                                      color: c.complaintType?.toLowerCase() == 'product'
+                                          ? const Color(0xFF005BAC)
+                                          : const Color(0xFF5D8C1F),
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      c.complaintType!,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: c.complaintType?.toLowerCase() == 'product'
+                                            ? const Color(0xFF005BAC)
+                                            : const Color(0xFF5D8C1F),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ],

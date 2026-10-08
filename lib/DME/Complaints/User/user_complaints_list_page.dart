@@ -197,6 +197,33 @@ class _UserComplaintsListPageState extends State<UserComplaintsListPage> with Si
                                 ),
                               ),
                             ],
+                            if (c.complaintType != null && c.complaintType!.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: c.complaintType?.toLowerCase() == 'product'
+                                      ? const Color(0xFF005BAC).withValues(alpha: 0.12)
+                                      : const Color(0xFF8CC63F).withValues(alpha: 0.18),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: c.complaintType?.toLowerCase() == 'product'
+                                        ? const Color(0xFF005BAC).withValues(alpha: 0.4)
+                                        : const Color(0xFF8CC63F).withValues(alpha: 0.6),
+                                  ),
+                                ),
+                                child: Text(
+                                  c.complaintType!,
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: c.complaintType?.toLowerCase() == 'product'
+                                        ? const Color(0xFF005BAC)
+                                        : const Color(0xFF5D8C1F),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                         Container(

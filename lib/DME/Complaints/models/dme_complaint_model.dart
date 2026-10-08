@@ -33,6 +33,7 @@ class DmeComplaint {
   final String? formerAssignedToEmail;
   final String? escalatedByUid;
   final DateTime? escalatedAt;
+  final String? complaintType; // 'Product' or 'Service'
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -68,6 +69,7 @@ class DmeComplaint {
     this.formerAssignedToEmail,
     this.escalatedByUid,
     this.escalatedAt,
+    this.complaintType,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -105,6 +107,7 @@ class DmeComplaint {
       formerAssignedToEmail: map['former_assigned_to_email']?.toString(),
       escalatedByUid: map['escalated_by_uid']?.toString(),
       escalatedAt: map['escalated_at'] != null ? DateTime.tryParse(map['escalated_at'].toString()) : null,
+      complaintType: map['complaint_type']?.toString(),
       createdAt: map['created_at'] != null ? DateTime.tryParse(map['created_at'].toString()) ?? DateTime.now() : DateTime.now(),
       updatedAt: map['updated_at'] != null ? DateTime.tryParse(map['updated_at'].toString()) ?? DateTime.now() : DateTime.now(),
     );
@@ -132,6 +135,7 @@ class DmeComplaint {
     if (assignedToEmail != null) map['assigned_to_email'] = assignedToEmail;
     if (assignedToRole != null) map['assigned_to_role'] = assignedToRole;
     if (initialAudioUrl != null && initialAudioUrl!.isNotEmpty) map['initial_audio_url'] = initialAudioUrl;
+    if (complaintType != null && complaintType!.isNotEmpty) map['complaint_type'] = complaintType;
     return map;
   }
 }
