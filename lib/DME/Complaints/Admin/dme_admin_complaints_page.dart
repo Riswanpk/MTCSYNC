@@ -178,7 +178,8 @@ class _DmeAdminComplaintsPageState extends State<DmeAdminComplaintsPage> {
                     Expanded(
                       child: DropdownButtonFormField<String>(
                         value: _selectedBranch,
-                        hint: const Text('Select Branch'),
+                        isExpanded: true,
+                        hint: const Text('Select Branch', overflow: TextOverflow.ellipsis),
                         decoration: InputDecoration(
                           filled: true,
                           fillColor: isDark ? const Color(0xFF16253B) : const Color(0xFFF3F4F6),
@@ -191,7 +192,7 @@ class _DmeAdminComplaintsPageState extends State<DmeAdminComplaintsPage> {
                         items: branchOptions.map((b) {
                           return DropdownMenuItem<String>(
                             value: b,
-                            child: Text(b),
+                            child: Text(b, overflow: TextOverflow.ellipsis),
                           );
                         }).toList(),
                         onChanged: _onBranchChanged,
@@ -203,7 +204,11 @@ class _DmeAdminComplaintsPageState extends State<DmeAdminComplaintsPage> {
                     Expanded(
                       child: DropdownButtonFormField<String>(
                         value: _selectedUserUid,
-                        hint: Text(_isLoadingUsers ? 'Loading...' : 'Select User'),
+                        isExpanded: true,
+                        hint: Text(
+                          _isLoadingUsers ? 'Loading...' : 'Select User',
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         decoration: InputDecoration(
                           filled: true,
                           fillColor: isDark ? const Color(0xFF16253B) : const Color(0xFFF3F4F6),
@@ -216,7 +221,7 @@ class _DmeAdminComplaintsPageState extends State<DmeAdminComplaintsPage> {
                         items: [
                           const DropdownMenuItem<String>(
                             value: 'All',
-                            child: Text('All Users'),
+                            child: Text('All Users', overflow: TextOverflow.ellipsis),
                           ),
                           ..._usersForBranch.map((u) {
                             return DropdownMenuItem<String>(
