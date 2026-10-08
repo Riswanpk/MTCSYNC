@@ -683,6 +683,7 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
 
         final customerName = data['customerName'] ?? 'No Customer Name';
         final phone = data['phone'] ?? 'No Phone';
+        final description = data['description']?.toString() ?? '';
         final quantity = data['quantity'] ?? 0;
         final rate = data['rate'] ?? 0.0;
         final advance = data['advance'] ?? 0.0;
@@ -1174,7 +1175,8 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
                           Expanded(
                             child: Text(
                               item,
-                              style: textTheme.titleMedium?.copyWith(
+                              style: (textTheme.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(
+                                fontSize: ((textTheme.titleMedium?.fontSize ?? 16) + 2),
                                 fontWeight: FontWeight.bold,
                                 color: isDark ? Colors.white : Colors.black87,
                               ),
@@ -1264,18 +1266,40 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
                           ),
                         ],
                       ),
+                      if (description.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.notes_rounded, size: 16, color: Colors.grey[400]),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                description,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontStyle: FontStyle.italic,
+                                  color: isDark ? Colors.white60 : Colors.black54,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 12),
                       // Customer Info
                       Row(
                         children: [
                           Icon(Icons.person_rounded, size: 16, color: Colors.grey[400]),
                           const SizedBox(width: 8),
-                          Text(
-                            'Customer: $customerName',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: isDark ? Colors.white70 : Colors.black87,
+                          Expanded(
+                            child: Text(
+                              customerName,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white : Colors.black87,
+                              ),
                             ),
                           ),
                         ],
@@ -1286,10 +1310,11 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
                           Icon(Icons.phone_rounded, size: 16, color: Colors.grey[400]),
                           const SizedBox(width: 8),
                           Text(
-                            'Phone: $phone',
+                            phone,
                             style: TextStyle(
                               fontSize: 13,
-                              color: isDark ? Colors.white70 : Colors.black87,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.black87,
                             ),
                           ),
                         ],
