@@ -9,6 +9,7 @@ import '../Navigation/user_cache_service.dart';
 import 'components/leads_filter_header.dart';
 import 'components/leads_pagination_footer.dart';
 import 'components/auto_reschedule_service.dart';
+import 'components/leads_calendar_view.dart';
 
 class LeadsPage extends StatefulWidget {
   final String branch;
@@ -28,6 +29,7 @@ class _LeadsPageState extends State<LeadsPage> {
   bool _isSearching = false;
   List<Map<String, dynamic>> availableUsers = [];
   final ValueNotifier<bool> _isHovering = ValueNotifier(false);
+  bool _showCalendar = false;
   
   final List<String> statusOptions = [
     'All',
@@ -363,6 +365,9 @@ class _LeadsPageState extends State<LeadsPage> {
         }
         final userData = userSnapshot.data!;
         final role = userData['role'] ?? 'sales';
+        final canUseCalendar =
+            role == 'sales' || role == 'manager' || role == 'asst_manager';
+        final showCalendar = canUseCalendar && _showCalendar;
 
         return Scaffold(
           appBar: AppBar(
@@ -453,6 +458,7 @@ class _LeadsPageState extends State<LeadsPage> {
               ),
               Column(
                 children: [
+                  if (canUseCalendar) _buildViewSwitch(),
                   LeadsFilterHeader(
                     role: role,
                     selectedBranch: selectedBranch,
@@ -527,6 +533,16 @@ class _LeadsPageState extends State<LeadsPage> {
                       _fetchLeadsPage();
                     },
                   ),
+                  if (showCalendar)
+                    Expanded(
+                      child: LeadsCalendarView(
+                        branch: selectedBranch ?? userData['branch'],
+                        userId: selectedUser,
+                        priority: selectedPriority,
+                        source: selectedSource,
+                      ),
+                    )
+                  else ...[
                   Expanded(
                     child: RefreshIndicator(
                       onRefresh: _handleRefresh,
@@ -588,6 +604,7 @@ class _LeadsPageState extends State<LeadsPage> {
                     onPreviousPressed: () => _fetchLeadsPage(prevPage: true),
                     onNextPressed: () => _fetchLeadsPage(nextPage: true),
                   ),
+                  ],
                 ],
               ),
             ],
@@ -627,6 +644,56 @@ class _LeadsPageState extends State<LeadsPage> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildViewSwitch() {
+    const blue = Color(0xFF005BAC);
+    Widget tab(String label, IconData icon, bool calendar) {
+      final selected = _showCalendar == calendar;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => setState(() => _showCalendar = calendar),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            decoration: BoxDecoration(
+              color: selected ? blue : Colors.transparent,
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 18, color: selected ? Colors.white : blue),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: selected ? Colors.white : blue,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: blue.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: blue.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          tab('List', Icons.view_list_rounded, false),
+          tab('Calendar', Icons.calendar_month_rounded, true),
+        ],
+      ),
     );
   }
 }
