@@ -49,7 +49,7 @@ exports.deleteUserFromAuth = onCall(async (request) => {
 
 const dailyTodoReport = require("./sendDailyTodoReport");
 exports.sendDailyTodoReport = dailyTodoReport.sendDailyTodoReport;
-exports.triggerDailyTodoReport = onCall({ invoker: "public" }, async (request) => {
+exports.triggerDailyTodoReport = onCall({ invoker: "public", secrets: [dailyTodoReport.gmailAppPassword] }, async (request) => {
   const force = request.data?.force ?? true;
   const targetEmail = request.data?.targetEmail ?? null;
   return await dailyTodoReport.generateAndSendDailyTodoReport({ force, targetEmail });

@@ -1,4 +1,5 @@
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
 const moment = require("moment-timezone");
@@ -8,6 +9,10 @@ const ExcelJS = require("exceljs");
 if (!admin.apps.length) {
   admin.initializeApp();
 }
+
+// Gmail app password is stored in Secret Manager:
+//   firebase functions:secrets:set GMAIL_APP_PASSWORD
+const gmailAppPassword = defineSecret("GMAIL_APP_PASSWORD");
 
 async function generateAndSendDailyTodoReport({ force = false, targetEmail = null } = {}) {
   const now = moment().tz("Asia/Kolkata");
@@ -95,6 +100,8 @@ async function generateAndSendDailyTodoReport({ force = false, targetEmail = nul
 
       // Fetch todos created in the interval
       const todosByUser = {};
+      // Users with a todo in the window (same matching as the in-app dashboard)
+      const todoUserIdsForDashboard = new Set();
       
       // Get all todos in the time window
       const todosSnap = await admin.firestore()
@@ -115,6 +122,18 @@ async function generateAndSendDailyTodoReport({ force = false, targetEmail = nul
           userId = usernameToUserId[name];
         }
 
+        // Extra fallback used by the dashboard: created_by holding a username
+        let dashboardUserId = userId;
+        if (!dashboardUserId || !userMap[dashboardUserId]) {
+          const createdBy = data.created_by ? String(data.created_by).trim().toLowerCase() : null;
+          if (createdBy && usernameToUserId[createdBy]) {
+            dashboardUserId = usernameToUserId[createdBy];
+          }
+        }
+        if (dashboardUserId && userMap[dashboardUserId]) {
+          todoUserIdsForDashboard.add(dashboardUserId);
+        }
+
         if (userId && userMap[userId]) {
           const branch = userMap[userId].branch || "Unknown";
           if (branchUserStatus[branch] && branchUserStatus[branch][userId]) {
@@ -132,6 +151,14 @@ async function generateAndSendDailyTodoReport({ force = false, targetEmail = nul
             assigned_by_name: data.assigned_by_name || null,
           });
         }
+      });
+
+      // Persist summary so the app dashboard can read 1 doc instead of re-querying todos
+      await admin.firestore().collection("daily_reports").doc(end.format("YYYY-MM-DD")).set({
+        todo_user_ids: Array.from(todoUserIdsForDashboard),
+        window_start: admin.firestore.Timestamp.fromDate(start.toDate()),
+        window_end: admin.firestore.Timestamp.fromDate(end.toDate()),
+        generated_at: admin.firestore.FieldValue.serverTimestamp(),
       });
 
       // Generate Excel
@@ -229,7 +256,7 @@ async function generateAndSendDailyTodoReport({ force = false, targetEmail = nul
         service: "gmail",
         auth: {
           user: "crmmalabar@gmail.com",
-          pass: "rhmo laoh qara qrnd", // Use Gmail App Password
+          pass: gmailAppPassword.value(),
         },
       });
 
@@ -267,6 +294,7 @@ exports.sendDailyTodoReport = onSchedule(
     schedule: "1 12 * * *",
     timeZone: "Asia/Kolkata",
     region: "asia-south1",
+    secrets: [gmailAppPassword],
   },
   async (event) => {
     return await generateAndSendDailyTodoReport();
@@ -275,4 +303,5 @@ exports.sendDailyTodoReport = onSchedule(
 
 // Manual / Test Trigger
 exports.generateAndSendDailyTodoReport = generateAndSendDailyTodoReport;
+exports.gmailAppPassword = gmailAppPassword;
 

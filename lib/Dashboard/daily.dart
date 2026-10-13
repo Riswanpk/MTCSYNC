@@ -44,6 +44,12 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
   String? _userBranch;
   bool _loading = true;
 
+  // Per (branch, date) memoized results so rebuilds / re-selecting a date
+  // never re-query Firestore. Live (not-yet-finished) windows expire quickly.
+  final Map<String, Future<Map<String, List<Map<String, dynamic>>>>> _futureCache = {};
+  final Map<String, DateTime> _futureCachedAt = {};
+  static const _liveWindowTtl = Duration(minutes: 2);
+
   @override
   void initState() {
     super.initState();
@@ -102,30 +108,74 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
     }
   }
 
+
+  DateTime _windowEndFor(DateTime date) {
+    final ist = _istLocation;
+    return tz.TZDateTime(ist, date.year, date.month, date.day, 12);
+  }
+
+  /// Returns a memoized future for the current branch + date.
+  Future<Map<String, List<Map<String, dynamic>>>> _dashboardFuture() {
+    final d = _selectedDate;
+    final key = '${_selectedBranch ?? ''}|${d.year}-${d.month}-${d.day}';
+    final cached = _futureCache[key];
+    if (cached != null) {
+      final isLive = _windowEndFor(d).isAfter(tz.TZDateTime.now(_istLocation));
+      final age = DateTime.now().difference(_futureCachedAt[key] ?? DateTime.now());
+      if (!isLive || age < _liveWindowTtl) return cached;
+    }
+    final f = _fetchBranchDashboardData();
+    _futureCache[key] = f;
+    _futureCachedAt[key] = DateTime.now();
+    f.catchError((_) {
+      _futureCache.remove(key);
+      return <String, List<Map<String, dynamic>>>{};
+    });
+    return f;
+  }
+
+  /// Reads the summary written by the sendDailyTodoReport function for a
+  /// finished window. Returns null when unavailable (caller falls back to live query).
+  Future<Set<String>?> _loadStoredTodoUserIds(DateTime windowEnd) async {
+    final nowIST = tz.TZDateTime.now(_istLocation);
+    // Function runs at 12:01 PM IST; only trust the stored doc after that.
+    if (!nowIST.isAfter(windowEnd.add(const Duration(minutes: 5)))) return null;
+    try {
+      final key =
+          '${windowEnd.year}-${windowEnd.month.toString().padLeft(2, '0')}-${windowEnd.day.toString().padLeft(2, '0')}';
+      final doc = await FirebaseFirestore.instance.collection('daily_reports').doc(key).get();
+      if (!doc.exists) return null;
+      final ids = doc.data()?['todo_user_ids'];
+      if (ids is! List) return null;
+      return ids.map((e) => e.toString()).toSet();
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<Map<String, List<Map<String, dynamic>>>> _fetchBranchDashboardData() async {
     if (_selectedBranch == null) {
       return {'sales': [], 'asst_manager': [], 'manager': [], 'other': []};
     }
 
-    // 1. Fetch branch users from Firestore
-    final usersSnapshot = await FirebaseFirestore.instance
-        .collection('users')
-        .where('branch', isEqualTo: _selectedBranch)
-        .get();
-
-    final branchUsers = usersSnapshot.docs.map((doc) {
-      final data = doc.data();
+    // 1. Branch users + global lookups from the shared cached users list
+    // (replaces a separate `users WHERE branch ==` query).
+    final allCachedUsers = await UserCacheService.instance.getAllUsers();
+    final branchUsers = allCachedUsers
+        .where((u) => (u['branch'] ?? '').toString() == _selectedBranch)
+        .map((u) {
+      final role = (u['role'] ?? '').toString().toLowerCase().trim();
       return <String, dynamic>{
-        'uid': doc.id,
-        'username': (data['username'] ?? '').toString(),
-        'email': (data['email'] ?? '').toString(),
-        'role': (data['role'] ?? 'sales').toString().toLowerCase().trim(),
-        'branch': (data['branch'] ?? _selectedBranch).toString(),
+        'uid': u['uid'],
+        'username': (u['username'] ?? '').toString(),
+        'email': (u['email'] ?? '').toString(),
+        'role': role.isEmpty ? 'sales' : role,
+        'branch': (u['branch'] ?? _selectedBranch).toString(),
       };
     }).toList();
 
     // 2. Build email and username lookups across all users to match sendDailyTodoReport.js exactly
-    final allCachedUsers = await UserCacheService.instance.getAllUsers();
+
     final userMap = <String, Map<String, dynamic>>{};
     final emailToUserId = <String, String>{};
     final usernameToUserId = <String, String>{};
@@ -176,48 +226,52 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
     }
     final windowEnd = tz.TZDateTime(ist, todayIST.year, todayIST.month, todayIST.day, 12);
 
-    // 4. Fetch todos created in the window (leads checking completely removed)
-    final todosSnap = await FirebaseFirestore.instance
-        .collection('todo')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(windowStart))
-        .where('timestamp', isLessThan: Timestamp.fromDate(windowEnd))
-        .get();
-
-    // 5. Match todos to users using identical logic as sendDailyTodoReport.js
+    // 4. Finished windows: read the stored summary (1 doc). Otherwise query live.
     final userIdsWithTodo = <String>{};
+    final stored = await _loadStoredTodoUserIds(windowEnd);
+    if (stored != null) {
+      userIdsWithTodo.addAll(stored.where(userMap.containsKey));
+    } else {
+      final todosSnap = await FirebaseFirestore.instance
+          .collection('todo')
+          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(windowStart))
+          .where('timestamp', isLessThan: Timestamp.fromDate(windowEnd))
+          .get();
 
-    for (final doc in todosSnap.docs) {
-      final data = doc.data();
-      String? userId = data['created_by']?.toString() ??
-          data['userId']?.toString() ??
-          data['user_id']?.toString();
+      // 5. Match todos to users using identical logic as sendDailyTodoReport.js
+      for (final doc in todosSnap.docs) {
+        final data = doc.data();
+        String? userId = data['created_by']?.toString() ??
+            data['userId']?.toString() ??
+            data['user_id']?.toString();
 
-      if ((userId == null || !userMap.containsKey(userId)) && data['email'] != null) {
-        final email = data['email'].toString().trim().toLowerCase();
-        if (emailToUserId.containsKey(email)) {
-          userId = emailToUserId[email];
-        }
-      }
-
-      if (userId == null || !userMap.containsKey(userId)) {
-        final rawName = data['username'] ?? data['user_name'] ?? data['created_by_name'];
-        if (rawName != null) {
-          final name = rawName.toString().trim().toLowerCase();
-          if (usernameToUserId.containsKey(name)) {
-            userId = usernameToUserId[name];
+        if ((userId == null || !userMap.containsKey(userId)) && data['email'] != null) {
+          final email = data['email'].toString().trim().toLowerCase();
+          if (emailToUserId.containsKey(email)) {
+            userId = emailToUserId[email];
           }
         }
-      }
 
-      if (userId == null || !userMap.containsKey(userId)) {
-        final createdBy = data['created_by']?.toString().trim().toLowerCase();
-        if (createdBy != null && usernameToUserId.containsKey(createdBy)) {
-          userId = usernameToUserId[createdBy];
+        if (userId == null || !userMap.containsKey(userId)) {
+          final rawName = data['username'] ?? data['user_name'] ?? data['created_by_name'];
+          if (rawName != null) {
+            final name = rawName.toString().trim().toLowerCase();
+            if (usernameToUserId.containsKey(name)) {
+              userId = usernameToUserId[name];
+            }
+          }
         }
-      }
 
-      if (userId != null && userMap.containsKey(userId)) {
-        userIdsWithTodo.add(userId);
+        if (userId == null || !userMap.containsKey(userId)) {
+          final createdBy = data['created_by']?.toString().trim().toLowerCase();
+          if (createdBy != null && usernameToUserId.containsKey(createdBy)) {
+            userId = usernameToUserId[createdBy];
+          }
+        }
+
+        if (userId != null && userMap.containsKey(userId)) {
+          userIdsWithTodo.add(userId);
+        }
       }
     }
 
@@ -672,7 +726,7 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
           // Main User List Section
           Expanded(
             child: FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
-              future: _fetchBranchDashboardData(),
+              future: _dashboardFuture(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
