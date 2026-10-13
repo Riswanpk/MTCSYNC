@@ -3,32 +3,17 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
 import '../../Navigation/user_cache_service.dart';
+import 'supersale_booking_card.dart';
+import 'supersale_notification_service.dart';
+import 'supersale_user_dialogs.dart';
 import 'supersale_user_form.dart';
-import 'package:awesome_notifications/awesome_notifications.dart';
-import '../../Misc/notification_permission_service.dart';
+
+// Re-export phone utils for any legacy or external consumers
+export 'supersale_phone_utils.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
-
-class TenDigitPhoneInputFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    if (newValue.text.isEmpty) {
-      return newValue;
-    }
-    final formatted = _SupersaleUserMainPageState.extract10Digits(newValue.text);
-    return TextEditingValue(
-      text: formatted,
-      selection: TextSelection.collapsed(offset: formatted.length),
-    );
-  }
-}
 
 class SupersaleUserMainPage extends StatefulWidget {
   const SupersaleUserMainPage({super.key});
@@ -74,10 +59,12 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
     try {
       final cache = UserCacheService.instance;
       await cache.ensureLoaded();
-      if (mounted) { setState(() {
-        _userBranch = cache.branch;
-        _userEmail = cache.email ?? _auth.currentUser?.email;
-      }); }
+      if (mounted) {
+        setState(() {
+          _userBranch = cache.branch;
+          _userEmail = cache.email ?? _auth.currentUser?.email;
+        });
+      }
     } catch (e) {
       debugPrint('Error loading user branch: $e');
     } finally {
@@ -211,169 +198,6 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
     }
   }
 
-  String _formatSimpleDate(dynamic dateField) {
-    if (dateField == null) return 'N/A';
-    DateTime dt;
-    if (dateField is Timestamp) {
-      dt = dateField.toDate();
-    } else if (dateField is String) {
-      dt = DateTime.tryParse(dateField) ?? DateTime.now();
-    } else {
-      return 'N/A';
-    }
-    return DateFormat('dd/MM/yyyy').format(dt.toLocal());
-  }
-
-  /// Extracts digits, strips leading 91 country code if present, and takes up to 10 digits from left to right
-  static String extract10Digits(String input) {
-    String digits = input.replaceAll(RegExp(r'\D'), '');
-    if (digits.startsWith('91') && digits.length > 10) {
-      digits = digits.substring(2);
-    }
-    if (digits.length <= 10) return digits;
-    return digits.substring(0, 10);
-  }
-
-  Set<String> _scheduledDocIds = {};
-
-  Future<void> _syncScheduledNotifications(List<QueryDocumentSnapshot> postings) async {
-    final role = UserCacheService.instance.role ?? '';
-    final isTargetRole = ['sales', 'manager', 'asst_manager'].contains(role);
-    if (!isTargetRole || _userBranch == null) return;
-
-    final now = DateTime.now();
-    final activeDocIds = postings.map((d) => d.id).toSet();
-
-    // Cancel notifications for deleted supersales
-    final deletedDocIds = _scheduledDocIds.difference(activeDocIds);
-    for (final deletedId in deletedDocIds) {
-      final openNotifId = ('${deletedId}_open').hashCode & 0x7FFFFFFF;
-      final preCloseNotifId = ('${deletedId}_preclose').hashCode & 0x7FFFFFFF;
-      final closedNotifId = ('${deletedId}_closed').hashCode & 0x7FFFFFFF;
-      await AwesomeNotifications().cancel(openNotifId);
-      await AwesomeNotifications().cancel(preCloseNotifId);
-      await AwesomeNotifications().cancel(closedNotifId);
-    }
-    _scheduledDocIds = activeDocIds;
-
-    for (final doc in postings) {
-      final data = doc.data() as Map<String, dynamic>;
-      final List<dynamic> branches = data['branches'] ?? [];
-      final isEligible = branches.contains(_userBranch) || branches.contains('all');
-      if (!isEligible) {
-        final openNotifId = ('${doc.id}_open').hashCode & 0x7FFFFFFF;
-        final preCloseNotifId = ('${doc.id}_preclose').hashCode & 0x7FFFFFFF;
-        final closedNotifId = ('${doc.id}_closed').hashCode & 0x7FFFFFFF;
-        await AwesomeNotifications().cancel(openNotifId);
-        await AwesomeNotifications().cancel(preCloseNotifId);
-        await AwesomeNotifications().cancel(closedNotifId);
-        continue;
-      }
-
-      final itemName = data['item'] ?? 'Supersale';
-      final Timestamp? startTs = data['bookingStart'];
-      final Timestamp? endTs = data['bookingEnd'];
-      if (startTs == null || endTs == null) continue;
-
-      final startDt = startTs.toDate();
-      final endDt = endTs.toDate();
-      final preCloseDt = endDt.subtract(const Duration(minutes: 30));
-
-      final openNotifId = ('${doc.id}_open').hashCode & 0x7FFFFFFF;
-      final preCloseNotifId = ('${doc.id}_preclose').hashCode & 0x7FFFFFFF;
-      final closedNotifId = ('${doc.id}_closed').hashCode & 0x7FFFFFFF;
-
-      // Schedule Open notification if bookingStart is in the future
-      if (startDt.isAfter(now)) {
-        final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
-        await NotificationPermissionService.instance.safeCreateNotification(
-          content: NotificationContent(
-            id: openNotifId,
-            channelKey: 'supersale_open_channel',
-            title: 'Booking Opened',
-            body: 'Supersale booking for "$itemName" is now open for your branch.',
-            notificationLayout: NotificationLayout.Default,
-            payload: {
-              'type': 'supersale',
-              'subType': 'booking_open',
-              'docId': doc.id,
-            },
-          ),
-          schedule: NotificationCalendar(
-            year: startDt.year,
-            month: startDt.month,
-            day: startDt.day,
-            hour: startDt.hour,
-            minute: startDt.minute,
-            second: startDt.second,
-            timeZone: tz,
-            preciseAlarm: true,
-            allowWhileIdle: true,
-          ),
-        );
-      }
-
-      // Schedule 30-min Reminder before closing notification if preCloseDt is in the future
-      if (preCloseDt.isAfter(now)) {
-        final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
-        await NotificationPermissionService.instance.safeCreateNotification(
-          content: NotificationContent(
-            id: preCloseNotifId,
-            channelKey: 'supersale_open_channel',
-            title: 'Supersale Closing Soon!',
-            body: 'Supersale booking for "$itemName" will close in 30 minutes!',
-            notificationLayout: NotificationLayout.Default,
-            payload: {
-              'type': 'supersale',
-              'subType': 'booking_preclose',
-              'docId': doc.id,
-            },
-          ),
-          schedule: NotificationCalendar(
-            year: preCloseDt.year,
-            month: preCloseDt.month,
-            day: preCloseDt.day,
-            hour: preCloseDt.hour,
-            minute: preCloseDt.minute,
-            second: preCloseDt.second,
-            timeZone: tz,
-            preciseAlarm: true,
-            allowWhileIdle: true,
-          ),
-        );
-      }
-
-      // Schedule Closed notification if bookingEnd is in the future
-      if (endDt.isAfter(now)) {
-        final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
-        await NotificationPermissionService.instance.safeCreateNotification(
-          content: NotificationContent(
-            id: closedNotifId,
-            channelKey: 'supersale_closed_channel',
-            title: 'Booking Closed',
-            body: 'Supersale booking for "$itemName" has been closed.',
-            notificationLayout: NotificationLayout.Default,
-            payload: {
-              'type': 'supersale',
-              'subType': 'booking_closed',
-              'docId': doc.id,
-            },
-          ),
-          schedule: NotificationCalendar(
-            year: endDt.year,
-            month: endDt.month,
-            day: endDt.day,
-            hour: endDt.hour,
-            minute: endDt.minute,
-            second: endDt.second,
-            timeZone: tz,
-            preciseAlarm: true,
-            allowWhileIdle: true,
-          ),
-        );
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -418,7 +242,7 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
         if (_lastPostingsSignature != postingsSignature) {
           _lastPostingsSignature = postingsSignature;
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            _syncScheduledNotifications(postings);
+            SupersaleNotificationService.instance.syncScheduledNotifications(postings, _userBranch);
           });
         }
 
@@ -509,7 +333,7 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
             floatingActionButton: FloatingActionButton.extended(
               onPressed: isBookingOpen
                   ? () async {
-                      final saleType = await _showSaleTypeDialog(context);
+                      final saleType = await SupersaleDialogs.showSaleTypeDialog(context);
                       if (saleType != null && context.mounted) {
                         Navigator.push(
                           context,
@@ -528,100 +352,6 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
               label: const Text('Add Booking', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
-        );
-      },
-    );
-  }
-
-  Future<String?> _showSaleTypeDialog(BuildContext context) async {
-    String selectedType = 'booking';
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return showDialog<String>(
-      context: context,
-      builder: (BuildContext ctx) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: Text(
-                'Select Sale Type',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  RadioListTile<String>(
-                    title: Text(
-                      'Booking',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                    subtitle: Text(
-                      'Standard booking (Default)',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.white60 : Colors.black54,
-                      ),
-                    ),
-                    value: 'booking',
-                    groupValue: selectedType,
-                    activeColor: primaryBlue,
-                    onChanged: (val) {
-                      if (val != null) {
-                        setDialogState(() => selectedType = val);
-                      }
-                    },
-                  ),
-                  RadioListTile<String>(
-                    title: Text(
-                      'Spot-sale',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                    subtitle: Text(
-                      'Directly delivered, advance disabled & same day delivery date',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.white60 : Colors.black54,
-                      ),
-                    ),
-                    value: 'spot_sale',
-                    groupValue: selectedType,
-                    activeColor: primaryBlue,
-                    onChanged: (val) {
-                      if (val != null) {
-                        setDialogState(() => selectedType = val);
-                      }
-                    },
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, null),
-                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx, selectedType),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryBlue,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: const Text('Continue'),
-                ),
-              ],
-            );
-          },
         );
       },
     );
@@ -677,745 +407,151 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
       itemCount: entries.length,
       itemBuilder: (context, index) {
         final doc = entries[index];
-        final data = doc.data() as Map<String, dynamic>;
-        final docId = doc.id;
-        final item = doc.reference.parent.id;
-
-        final customerName = data['customerName'] ?? 'No Customer Name';
-        final phone = data['phone'] ?? 'No Phone';
-        final description = data['description']?.toString() ?? '';
-        final quantity = data['quantity'] ?? 0;
-        final rate = data['rate'] ?? 0.0;
-        final advance = data['advance'] ?? 0.0;
-        final status = data['status'] ?? 'pending';
-        final billedPhone = data['billedPhone'];
-
-        final Timestamp? bookingStart = data['bookingStart'] as Timestamp?;
-        final Timestamp? bookingEnd = data['bookingEnd'] as Timestamp?;
-        final Timestamp? deliveryEnd = data['deliveryEnd'] as Timestamp?;
-        final dynamic bookedAt = data['created_at'];
-        final dynamic deliveredAt = data['deliveredAt'];
-        final bool isSpot = data['isSpotSale'] == true || data['saleType'] == 'spot_sale';
-
-        final bool isActionAllowed = bookingStart != null &&
-            bookingEnd != null &&
-            now.isAfter(bookingStart.toDate()) &&
-            now.isBefore(bookingEnd.toDate());
-        final bool isCancelAllowed = bookingStart != null &&
-            deliveryEnd != null &&
-            now.isAfter(bookingStart.toDate()) &&
-            now.isBefore(deliveryEnd.toDate());
-        final bool isDelivered = status == 'delivered';
-
-        return Dismissible(
-          key: Key(docId),
-          direction: isDelivered ? DismissDirection.none : DismissDirection.horizontal,
-          background: Container(
-            alignment: Alignment.centerLeft,
-            padding: const EdgeInsets.only(left: 20),
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              color: Colors.green,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.check_circle_rounded, color: Colors.white, size: 28),
-                SizedBox(width: 8),
-                Text(
-                  'Delivered',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-                ),
-              ],
-            ),
-          ),
-          secondaryBackground: Container(
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: 20),
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              color: Colors.orangeAccent,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Text(
-                  'Cancel',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-                ),
-                SizedBox(width: 8),
-                Icon(Icons.cancel_rounded, color: Colors.white, size: 28),
-              ],
-            ),
-          ),
-          onDismissed: (direction) {},
-          confirmDismiss: (direction) async {
-            if (direction == DismissDirection.endToStart) {
-              // Swipe to Cancel booking (allowed during booking and delivery period)
-              if (!isCancelAllowed) {
-                ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                  const SnackBar(
-                    content: Text('Delivery period has ended. You cannot cancel this entry.'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                return false;
-              }
-
-              final cancelController = TextEditingController();
-              final formKey = GlobalKey<FormState>();
-
-              final confirmed = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Cancel Booking'),
-                  content: Form(
-                    key: formKey,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Enter the cancellation reason (mandatory):'),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: cancelController,
-                          decoration: const InputDecoration(
-                            labelText: 'Cancellation Reason',
-                            hintText: 'Enter reason',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Please enter cancellation reason';
-                            }
-                            return null;
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('Keep Booking'),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        if (formKey.currentState!.validate()) {
-                          Navigator.pop(context, true);
-                        }
-                      },
-                      child: const Text('Cancel Booking', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ),
-              );
-
-              if (confirmed == true) {
-                await _cancelBooking(doc.reference, cancelController.text.trim());
-              }
-              return false; // Slides back, will be removed from lists dynamically by status filters
-            } else {
-              // Mark as Delivered (Left-to-right swipe)
-              final phoneController = TextEditingController();
-              final quantityController = TextEditingController(text: '$quantity');
-              final formKey = GlobalKey<FormState>();
-              DateTime? nextReminderDate = (data['deliveryReminder'] is Timestamp)
-                  ? (data['deliveryReminder'] as Timestamp).toDate()
-                  : null;
-
-              final confirmed = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => StatefulBuilder(
-                  builder: (context, setDialogState) {
-                    final int currentDeliveredQty = int.tryParse(quantityController.text.trim()) ?? quantity;
-                    final bool isPartial = quantity > 1 && currentDeliveredQty < quantity;
-
-                    return AlertDialog(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      title: const Text('Confirm Delivery', style: TextStyle(fontWeight: FontWeight.bold)),
-                      content: Form(
-                        key: formKey,
-                        child: SingleChildScrollView(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Customer: $customerName',
-                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                              ),
-                              Text(
-                                'Item: $item (Total Booked: $quantity)',
-                                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                              ),
-                              const SizedBox(height: 16),
-                              if (quantity > 1) ...[
-                                TextFormField(
-                                  controller: quantityController,
-                                  keyboardType: TextInputType.number,
-                                  decoration: InputDecoration(
-                                    labelText: 'Delivering Quantity (Max $quantity)',
-                                    hintText: 'Enter quantity delivered now',
-                                    prefixIcon: const Icon(Icons.inventory_2_rounded, size: 20),
-                                    border: const OutlineInputBorder(),
-                                    helperText: isPartial
-                                        ? 'Partial Delivery: ${quantity - currentDeliveredQty} will remain pending'
-                                        : 'Full Delivery: all $quantity units delivered',
-                                    helperStyle: TextStyle(
-                                      color: isPartial ? Colors.orange[800] : Colors.green[800],
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  onChanged: (val) => setDialogState(() {}),
-                                  validator: (value) {
-                                    if (value == null || value.trim().isEmpty) {
-                                      return 'Please enter quantity';
-                                    }
-                                    final val = int.tryParse(value.trim());
-                                    if (val == null || val <= 0) {
-                                      return 'Quantity must be greater than 0';
-                                    }
-                                    if (val > quantity) {
-                                      return 'Cannot deliver more than $quantity';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                                const SizedBox(height: 14),
-                              ],
-                              TextFormField(
-                                controller: phoneController,
-                                keyboardType: TextInputType.phone,
-                                inputFormatters: [
-                                  TenDigitPhoneInputFormatter(),
-                                ],
-                                decoration: const InputDecoration(
-                                  labelText: 'Billed Phone',
-                                  hintText: 'Enter 10-digit phone number',
-                                  prefixIcon: Icon(Icons.phone_rounded, size: 20),
-                                  border: OutlineInputBorder(),
-                                ),
-                                validator: (value) {
-                                  if (value == null || value.trim().isEmpty) {
-                                    return 'Please enter phone number';
-                                  }
-                                  final digits = value.replaceAll(RegExp(r'\D'), '');
-                                  if (digits.length != 10) {
-                                    return 'Please enter exactly 10 digits';
-                                  }
-                                  return null;
-                                },
-                              ),
-                              if (isPartial) ...[
-                                const SizedBox(height: 16),
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.orange.withValues(alpha: 0.08),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Row(
-                                        children: [
-                                          Icon(Icons.calendar_today_rounded, size: 16, color: Colors.orange),
-                                          SizedBox(width: 6),
-                                          Text(
-                                            'Next Delivery / Reminder Date',
-                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.orange),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      InkWell(
-                                        onTap: () async {
-                                          final pickedDate = await showDatePicker(
-                                            context: context,
-                                            initialDate: nextReminderDate ?? DateTime.now().add(const Duration(days: 2)),
-                                            firstDate: DateTime.now(),
-                                            lastDate: DateTime.now().add(const Duration(days: 365)),
-                                          );
-                                          if (pickedDate != null && context.mounted) {
-                                            final pickedTime = await showTimePicker(
-                                              context: context,
-                                              initialTime: nextReminderDate != null
-                                                  ? TimeOfDay.fromDateTime(nextReminderDate!)
-                                                  : const TimeOfDay(hour: 10, minute: 0),
-                                            );
-                                            setDialogState(() {
-                                              nextReminderDate = DateTime(
-                                                pickedDate.year,
-                                                pickedDate.month,
-                                                pickedDate.day,
-                                                pickedTime?.hour ?? 10,
-                                                pickedTime?.minute ?? 0,
-                                              );
-                                            });
-                                          }
-                                        },
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                          decoration: BoxDecoration(
-                                            color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                                            borderRadius: BorderRadius.circular(8),
-                                            border: Border.all(color: Colors.grey[300]!),
-                                          ),
-                                          child: Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Text(
-                                                nextReminderDate != null
-                                                    ? DateFormat('dd MMM yyyy, hh:mm a').format(nextReminderDate!)
-                                                    : 'Select Next Delivery Date',
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: nextReminderDate != null
-                                                      ? (isDark ? Colors.white : Colors.black87)
-                                                      : Colors.grey,
-                                                ),
-                                              ),
-                                              const Icon(Icons.edit_calendar_rounded, size: 16, color: primaryBlue),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: const Text('Cancel'),
-                        ),
-                        ElevatedButton(
-                          onPressed: () {
-                            if (formKey.currentState!.validate()) {
-                              Navigator.pop(ctx, true);
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: primaryGreen,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          child: Text(
-                            isPartial ? 'Deliver ($currentDeliveredQty)' : 'Deliver All',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              );
-
-              if (confirmed == true) {
-                try {
-                  final int deliveredQty = int.tryParse(quantityController.text.trim()) ?? quantity;
-                  final String billedPhoneText = extract10Digits(phoneController.text.trim());
-
-                  if (deliveredQty >= quantity) {
-                    // Full delivery
-                    await doc.reference.update({
-                      'status': 'delivered',
-                      'billedPhone': billedPhoneText,
-                      'deliveredAt': FieldValue.serverTimestamp(),
-                    });
-                    if (mounted) {
-                      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                        const SnackBar(
-                          content: Text('Booking marked as Delivered successfully'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    }
-                  } else {
-                    // Partial delivery: Split booking
-                    final int remainingQty = quantity - deliveredQty;
-                    final double originalAdvance = (data['advance'] ?? 0.0).toDouble();
-                    final double unitAdvance = quantity > 0 ? (originalAdvance / quantity) : 0.0;
-                    final double deliveredAdvance = unitAdvance * deliveredQty;
-                    final double remainingAdvance = originalAdvance - deliveredAdvance;
-
-                    // 1. Create child record for delivered portion
-                    final deliveredData = Map<String, dynamic>.from(data);
-                    deliveredData['quantity'] = deliveredQty;
-                    deliveredData['advance'] = deliveredAdvance;
-                    deliveredData['status'] = 'delivered';
-                    deliveredData['billedPhone'] = billedPhoneText;
-                    deliveredData['deliveredAt'] = FieldValue.serverTimestamp();
-                    deliveredData['parentBookingId'] = doc.id;
-                    deliveredData['isPartialSplit'] = true;
-
-                    await doc.reference.parent.add(deliveredData);
-
-                    // 2. Update parent booking with remaining quantity
-                    final Map<String, dynamic> updateRemainingData = {
-                      'quantity': remainingQty,
-                      'advance': remainingAdvance,
-                      'status': 'pending',
-                      'hasPartialDelivery': true,
-                    };
-                    if (nextReminderDate != null) {
-                      updateRemainingData['deliveryReminder'] = Timestamp.fromDate(nextReminderDate!);
-                    }
-
-                    await doc.reference.update(updateRemainingData);
-
-                    // 3. Reschedule reminder notification if next date was selected
-                    if (nextReminderDate != null && nextReminderDate!.isAfter(DateTime.now())) {
-                      final notifId = doc.id.hashCode & 0x7FFFFFFF;
-                      final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
-                      await NotificationPermissionService.instance.safeCreateNotification(
-                        content: NotificationContent(
-                          id: notifId,
-                          channelKey: 'delivery_reminder_channel',
-                          title: 'Remaining Delivery Reminder',
-                          body: 'Reminder: $remainingQty remaining units for customer $customerName ($item)',
-                          notificationLayout: NotificationLayout.Default,
-                          customSound: 'resource://raw/delivery_reminder',
-                          payload: {
-                            'type': 'supersale_delivery_reminder',
-                            'docId': doc.id,
-                            'branch': _userBranch ?? '',
-                            'item': item,
-                          },
-                        ),
-                        schedule: NotificationCalendar(
-                          year: nextReminderDate!.year,
-                          month: nextReminderDate!.month,
-                          day: nextReminderDate!.day,
-                          hour: nextReminderDate!.hour,
-                          minute: nextReminderDate!.minute,
-                          second: 0,
-                          millisecond: 0,
-                          timeZone: tz,
-                          repeats: false,
-                        ),
-                      );
-                    }
-
-                    if (mounted) {
-                      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                        SnackBar(
-                          content: Text('Delivered $deliveredQty units. $remainingQty units remain pending.'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    }
-                  }
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                      SnackBar(content: Text('Failed to process delivery: $e'), backgroundColor: Colors.red),
-                    );
-                  }
-                }
-              }
-              return false; // Slides back, will shift to Delivered / update pending dynamically
-            }
+        return SupersaleBookingCard(
+          doc: doc,
+          isBookingOpen: isBookingOpen,
+          isDark: isDark,
+          textTheme: textTheme,
+          now: now,
+          userBranch: _userBranch,
+          onConfirmDismiss: (direction) async {
+            return await _handleDismiss(doc, direction, now);
           },
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E293B) : Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isDark ? Colors.white12 : Colors.grey[200]!,
-                width: 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () {
-                  // Edit Booking (only allowed during booking interval)
-                  if (!isActionAllowed) {
-                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                      const SnackBar(
-                        content: Text('Booking period has ended. You cannot edit this entry.'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  } else {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => SupersaleUserFormPage(bookingDoc: doc),
-                      ),
-                    );
-                  }
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              item,
-                              style: (textTheme.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(
-                                fontSize: ((textTheme.titleMedium?.fontSize ?? 16) + 2),
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? Colors.white : Colors.black87,
-                              ),
-                            ),
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                'Booked ${_formatSimpleDate(bookedAt)}',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: isDark ? Colors.white60 : Colors.black87,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              if (!isSpot && isDelivered && deliveredAt != null) ...[
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Delivered ${_formatSimpleDate(deliveredAt)}',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: isDark ? Colors.white60 : Colors.black87,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 4),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (data['isPartialSplit'] == true) ...[
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                      margin: const EdgeInsets.only(right: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.blue.withValues(alpha: 0.15),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: const Text(
-                                        'Part Split',
-                                        style: TextStyle(
-                                          color: Colors.blue,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 9,
-                                        ),
-                                      ),
-                                    ),
-                                  ] else if (data['hasPartialDelivery'] == true && status != 'delivered') ...[
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                      margin: const EdgeInsets.only(right: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.purple.withValues(alpha: 0.15),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: const Text(
-                                        'Part Remaining',
-                                        style: TextStyle(
-                                          color: Colors.purple,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 9,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: status == 'delivered'
-                                          ? Colors.green.withValues(alpha: 0.15)
-                                          : Colors.orange.withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      status == 'delivered' ? 'Delivered' : 'Pending',
-                                      style: TextStyle(
-                                        color: status == 'delivered' ? Colors.green : Colors.orange,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 10,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      if (description.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(Icons.notes_rounded, size: 16, color: Colors.grey[400]),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                description,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontStyle: FontStyle.italic,
-                                  color: isDark ? Colors.white60 : Colors.black54,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                      const SizedBox(height: 12),
-                      // Customer Info
-                      Row(
-                        children: [
-                          Icon(Icons.person_rounded, size: 16, color: Colors.grey[400]),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              customerName,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? Colors.white : Colors.black87,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Icon(Icons.phone_rounded, size: 16, color: Colors.grey[400]),
-                          const SizedBox(width: 8),
-                          Text(
-                            phone,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.white : Colors.black87,
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (status == 'delivered' && billedPhone != null) ...[
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Icon(Icons.receipt_rounded, size: 16, color: primaryGreen),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Billed Phone: $billedPhone',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? Colors.greenAccent : Colors.green[800],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                      const SizedBox(height: 12),
-                      const Divider(height: 1, thickness: 0.5),
-                      const SizedBox(height: 10),
-                      // Booking details
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Quantity',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: isDark ? Colors.white38 : Colors.black45,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '$quantity',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: isDark ? Colors.white70 : Colors.black87,
-                                ),
-                              ),
-                            ],
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Rate',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: isDark ? Colors.white38 : Colors.black45,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '₹$rate',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: isDark ? Colors.white70 : Colors.black87,
-                                ),
-                              ),
-                            ],
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Advance',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: isDark ? Colors.white38 : Colors.black45,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '₹$advance',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: primaryGreen,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
         );
       },
     );
+  }
+
+  Future<bool> _handleDismiss(
+    QueryDocumentSnapshot doc,
+    DismissDirection direction,
+    DateTime now,
+  ) async {
+    final data = doc.data() as Map<String, dynamic>;
+    final item = doc.reference.parent.id;
+    final customerName = data['customerName'] ?? 'No Customer Name';
+    final quantity = data['quantity'] ?? 0;
+
+    final Timestamp? bookingStart = data['bookingStart'] as Timestamp?;
+    final Timestamp? deliveryEnd = data['deliveryEnd'] as Timestamp?;
+    final bool isCancelAllowed = bookingStart != null &&
+        deliveryEnd != null &&
+        now.isAfter(bookingStart.toDate()) &&
+        now.isBefore(deliveryEnd.toDate());
+
+    if (direction == DismissDirection.endToStart) {
+      // Swipe to Cancel booking (allowed during booking and delivery period)
+      if (!isCancelAllowed) {
+        if (mounted) {
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            const SnackBar(
+              content: Text('Delivery period has ended. You cannot cancel this entry.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return false;
+      }
+
+      final reason = await SupersaleDialogs.showCancelBookingDialog(context);
+      if (reason != null && reason.isNotEmpty) {
+        await _cancelBooking(doc.reference, reason);
+      }
+      return false; // Slides back, will be removed dynamically
+    } else {
+      // Mark as Delivered (Left-to-right swipe)
+      final result = await SupersaleDialogs.showConfirmDeliveryDialog(
+        context: context,
+        customerName: customerName,
+        item: item,
+        quantity: quantity,
+        initialDeliveryReminder: data['deliveryReminder'],
+      );
+
+      if (result != null) {
+        try {
+          final int deliveredQty = result.deliveredQty;
+          final String billedPhoneText = result.billedPhone;
+          final DateTime? nextReminderDate = result.nextReminderDate;
+
+          if (deliveredQty >= quantity) {
+            // Full delivery
+            await doc.reference.update({
+              'status': 'delivered',
+              'billedPhone': billedPhoneText,
+              'deliveredAt': FieldValue.serverTimestamp(),
+            });
+            if (mounted) {
+              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                const SnackBar(
+                  content: Text('Booking marked as Delivered successfully'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
+          } else {
+            // Partial delivery: Split booking
+            final int remainingQty = quantity - deliveredQty;
+            final double originalAdvance = (data['advance'] ?? 0.0).toDouble();
+            final double unitAdvance = quantity > 0 ? (originalAdvance / quantity) : 0.0;
+            final double deliveredAdvance = unitAdvance * deliveredQty;
+            final double remainingAdvance = originalAdvance - deliveredAdvance;
+
+            // 1. Create child record for delivered portion
+            final deliveredData = Map<String, dynamic>.from(data);
+            deliveredData['quantity'] = deliveredQty;
+            deliveredData['advance'] = deliveredAdvance;
+            deliveredData['status'] = 'delivered';
+            deliveredData['billedPhone'] = billedPhoneText;
+            deliveredData['deliveredAt'] = FieldValue.serverTimestamp();
+            deliveredData['parentBookingId'] = doc.id;
+            deliveredData['isPartialSplit'] = true;
+
+            await doc.reference.parent.add(deliveredData);
+
+            // 2. Update parent booking with remaining quantity
+            final Map<String, dynamic> updateRemainingData = {
+              'quantity': remainingQty,
+              'advance': remainingAdvance,
+              'status': 'pending',
+              'hasPartialDelivery': true,
+            };
+            if (nextReminderDate != null) {
+              updateRemainingData['deliveryReminder'] = Timestamp.fromDate(nextReminderDate);
+            }
+
+            await doc.reference.update(updateRemainingData);
+
+            // 3. Reschedule reminder notification if next date was selected
+            if (nextReminderDate != null) {
+              await SupersaleNotificationService.instance.scheduleRemainingDeliveryReminder(
+                docId: doc.id,
+                item: item,
+                customerName: customerName,
+                remainingQty: remainingQty,
+                userBranch: _userBranch,
+                nextReminderDate: nextReminderDate,
+              );
+            }
+
+            if (mounted) {
+              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                SnackBar(
+                  content: Text('Delivered $deliveredQty units. $remainingQty units remain pending.'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+              SnackBar(content: Text('Failed to process delivery: $e'), backgroundColor: Colors.red),
+            );
+          }
+        }
+      }
+      return false; // Slides back, will shift to Delivered / update pending dynamically
+    }
   }
 }

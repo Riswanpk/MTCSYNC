@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import '../../Misc/notification_permission_service.dart';
 import '../../Navigation/user_cache_service.dart';
+import 'supersale_phone_utils.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -72,13 +73,8 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
         final data = widget.bookingDoc!.data() as Map<String, dynamic>;
         _isSpotSale = data['isSpotSale'] == true || data['saleType'] == 'spot_sale';
         _customerController.text = data['customerName'] ?? '';
-        final String rawPhone = (data['phone'] ?? '').toString().replaceAll(RegExp(r'\D'), '');
-        final String digitsOnly = rawPhone.startsWith('91') && rawPhone.length > 10
-            ? rawPhone.substring(2)
-            : rawPhone;
-        _phoneController.text = digitsOnly.length > 5
-            ? '+91 ${digitsOnly.substring(0, 5)} ${digitsOnly.substring(5)}'
-            : '+91 $digitsOnly';
+        final String rawPhone = (data['phone'] ?? '').toString();
+        _phoneController.text = SupersalePhoneUtils.extract10Digits(rawPhone);
         _quantityController.text = (data['quantity'] ?? '').toString();
         _rateController.text = (data['rate'] ?? '').toString();
         _descriptionController.text = data['description'] ?? '';
@@ -103,7 +99,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
           _deliveryReminderDateTime = (data['deliveryReminder'] as Timestamp).toDate();
         }
       } else {
-        _phoneController.text = '+91 ';
+        _phoneController.text = '';
         if (_isSpotSale) {
           _advanceController.text = '0';
         }
@@ -239,14 +235,17 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
             : int.tryParse(data['quantity'].toString()) ?? 0;
         final int newQuantity = int.parse(_quantityController.text.trim());
 
+        final String phoneDigits = SupersalePhoneUtils.extract10Digits(_phoneController.text.trim());
+
         // Edit Mode: update existing document fields
         final updateData = <String, dynamic>{
           'customerName': _customerController.text.trim(),
-          'phone': _phoneController.text.trim(),
+          'phone': phoneDigits,
           'quantity': newQuantity,
           'rate': double.parse(_rateController.text.trim()),
           'advance': advanceValue,
           'description': _descriptionController.text.trim(),
+          if (_isSpotSale) 'billedPhone': phoneDigits,
         };
 
         if (!_isSpotSale && _deliveryReminderDateTime != null) {
@@ -311,13 +310,15 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
         final cache = UserCacheService.instance;
         await cache.ensureLoaded();
 
+        final String phoneDigits = SupersalePhoneUtils.extract10Digits(_phoneController.text.trim());
+
         final newEntry = <String, dynamic>{
           'bookingStart': _bookingStart,
           'bookingEnd': _bookingEnd,
           'deliveryStart': _isSpotSale ? _bookingStart : _deliveryStart,
           'deliveryEnd': _isSpotSale ? _bookingEnd : _deliveryEnd,
           'customerName': _customerController.text.trim(),
-          'phone': _phoneController.text.trim(),
+          'phone': phoneDigits,
           'quantity': int.parse(_quantityController.text.trim()),
           'rate': double.parse(_rateController.text.trim()),
           'advance': advanceValue,
@@ -330,7 +331,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
           'status': _isSpotSale ? 'delivered' : 'pending',
           'isSpotSale': _isSpotSale,
           'saleType': _isSpotSale ? 'spot_sale' : 'booking',
-          if (_isSpotSale) 'billedPhone': _phoneController.text.trim(),
+          if (_isSpotSale) 'billedPhone': phoneDigits,
           if (!_isSpotSale && _deliveryReminderDateTime != null)
             'deliveryReminder': Timestamp.fromDate(_deliveryReminderDateTime!),
         };
@@ -682,43 +683,26 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
                     TextFormField(
                       controller: _phoneController,
                       keyboardType: TextInputType.phone,
+                      inputFormatters: [
+                        TenDigitPhoneInputFormatter(),
+                      ],
                       style: TextStyle(color: isDark ? Colors.white : Colors.black87),
                       decoration: _buildInputDecoration(
                         isDark,
                         _isSpotSale ? 'Enter 10-digit billed phone number' : 'Enter 10-digit phone number',
                       ).copyWith(
+                        prefixIcon: const Icon(Icons.phone_rounded, size: 20),
                         counterText: '',
                       ),
                       validator: (value) {
-                        if (value == null || value.isEmpty || !value.startsWith('+91 ')) {
-                          return 'Phone must start with +91';
+                        if (value == null || value.trim().isEmpty) {
+                          return _isSpotSale ? 'Please enter billed phone number' : 'Please enter phone number';
                         }
-                        final digits = value.replaceAll(RegExp(r'\D'), '');
-                        if (digits.length != 12) {
-                          return 'Enter valid 10-digit number after +91';
+                        final digits = SupersalePhoneUtils.extract10Digits(value);
+                        if (digits.length != 10) {
+                          return 'Please enter exactly 10 digits';
                         }
                         return null;
-                      },
-                      onChanged: (val) {
-                        if (!val.startsWith('+91 ')) {
-                          _phoneController.text = '+91 ';
-                          _phoneController.selection = TextSelection.fromPosition(
-                            TextPosition(offset: _phoneController.text.length),
-                          );
-                          return;
-                        }
-
-                        String raw = val.replaceAll('+91 ', '').replaceAll(' ', '');
-                        if (raw.length > 10) raw = raw.substring(0, 10);
-                        final formatted = raw.length > 5
-                            ? '+91 ${raw.substring(0, 5)} ${raw.substring(5)}'
-                            : '+91 $raw';
-                        if (_phoneController.text != formatted) {
-                          _phoneController.text = formatted;
-                          _phoneController.selection = TextSelection.fromPosition(
-                            TextPosition(offset: formatted.length),
-                          );
-                        }
                       },
                     ),
                     const SizedBox(height: 20),
