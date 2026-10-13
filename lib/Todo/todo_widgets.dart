@@ -2,6 +2,7 @@ import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:intl/intl.dart';
 import 'package:mtcsync/Misc/notification_permission_service.dart';
 import 'task_detail_widgets.dart';
 
@@ -42,6 +43,18 @@ class TodoListItem extends StatelessWidget {
     } else if (reminderData is String) {
       reminderDateTime = DateTime.tryParse(reminderData);
     }
+    DateTime? cardDateTime = reminderDateTime;
+    if (cardDateTime == null) {
+      final timestampData = data['timestamp'];
+      if (timestampData is Timestamp) {
+        cardDateTime = timestampData.toDate();
+      } else if (timestampData is String) {
+        cardDateTime = DateTime.tryParse(timestampData);
+      }
+    }
+    final dateStr = cardDateTime != null
+        ? DateFormat('dd/MM/yy').format(cardDateTime.toLocal())
+        : '';
     final timeStr = reminderDateTime != null
         ? TimeOfDay.fromDateTime(reminderDateTime.toLocal()).format(context)
         : 'No reminder';
@@ -108,18 +121,36 @@ class TodoListItem extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: data['status'] == 'done'
-                              ? Theme.of(context).disabledColor
-                              : Theme.of(context).textTheme.bodyLarge?.color,
-                          decoration: data['status'] == 'done'
-                              ? TextDecoration.lineThrough
-                              : null,
-                        ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: data['status'] == 'done'
+                                    ? Theme.of(context).disabledColor
+                                    : Theme.of(context).textTheme.bodyLarge?.color,
+                                decoration: data['status'] == 'done'
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                              ),
+                            ),
+                          ),
+                          if (dateStr.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              dateStr,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: Theme.of(context).hintColor,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 8),
                       Row(
