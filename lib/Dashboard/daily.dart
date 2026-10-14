@@ -134,12 +134,10 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
     return f;
   }
 
-  /// Reads the summary written by the sendDailyTodoReport function for a
-  /// finished window. Returns null when unavailable (caller falls back to live query).
+  /// Reads the summary from the `daily_reports` collection for the selected date.
+  /// If the document does not exist in `daily_reports`, returns null so caller falls back
+  /// to checking manually in the `todo` collection.
   Future<Set<String>?> _loadStoredTodoUserIds(DateTime windowEnd) async {
-    final nowIST = tz.TZDateTime.now(_istLocation);
-    // Function runs at 12:01 PM IST; only trust the stored doc after that.
-    if (!nowIST.isAfter(windowEnd.add(const Duration(minutes: 5)))) return null;
     try {
       final key =
           '${windowEnd.year}-${windowEnd.month.toString().padLeft(2, '0')}-${windowEnd.day.toString().padLeft(2, '0')}';
