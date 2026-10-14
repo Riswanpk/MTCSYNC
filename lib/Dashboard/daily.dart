@@ -18,7 +18,7 @@ class DailyDashboardPage extends StatefulWidget {
 }
 
 class _DailyDashboardPageState extends State<DailyDashboardPage> {
-  DateTime _selectedDate = _getDefaultDashboardDateIST();
+  DateTime? _selectedDate;
   static final _istLocation = _initIST();
 
   static tz.Location _initIST() {
@@ -63,7 +63,7 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
     _userBranch = userDoc['branch'];
     if (_role == 'admin' || _role == 'Sync Head' || _role == 'sync_head') {
       _branches = await UserCacheService.instance.getBranches();
-      _selectedBranch = _branches.isNotEmpty ? _branches.first : null;
+      _selectedBranch = null; // Do not pre-fill branch
     } else {
       _selectedBranch = _userBranch;
     }
@@ -80,7 +80,9 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
     if (maxDate.weekday == DateTime.sunday) {
       maxDate = maxDate.add(const Duration(days: 1));
     }
-    final initial = _selectedDate.weekday == DateTime.sunday ? defaultDate : _selectedDate;
+    final initial = (_selectedDate != null && _selectedDate!.weekday != DateTime.sunday)
+        ? _selectedDate!
+        : defaultDate;
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
@@ -116,7 +118,15 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
 
   /// Returns a memoized future for the current branch + date.
   Future<Map<String, List<Map<String, dynamic>>>> _dashboardFuture() {
-    final d = _selectedDate;
+    if (_selectedDate == null || _selectedBranch == null) {
+      return Future.value(<String, List<Map<String, dynamic>>>{
+        'sales': [],
+        'asst_manager': [],
+        'manager': [],
+        'other': [],
+      });
+    }
+    final d = _selectedDate!;
     final key = '${_selectedBranch ?? ''}|${d.year}-${d.month}-${d.day}';
     final cached = _futureCache[key];
     if (cached != null) {
@@ -152,9 +162,10 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
   }
 
   Future<Map<String, List<Map<String, dynamic>>>> _fetchBranchDashboardData() async {
-    if (_selectedBranch == null) {
+    if (_selectedBranch == null || _selectedDate == null) {
       return {'sales': [], 'asst_manager': [], 'manager': [], 'other': []};
     }
+    final selectedDate = _selectedDate!;
 
     // 1. Branch users + global lookups from the shared cached users list
     // (replaces a separate `users WHERE branch ==` query).
@@ -211,7 +222,7 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
 
     // 3. Time interval matching sendDailyTodoReport.js in IST
     final ist = _istLocation;
-    final todayIST = tz.TZDateTime(ist, _selectedDate.year, _selectedDate.month, _selectedDate.day);
+    final todayIST = tz.TZDateTime(ist, selectedDate.year, selectedDate.month, selectedDate.day);
     DateTime windowStart;
     if (todayIST.weekday == DateTime.monday) {
       // Monday interval is Saturday 12 PM to Monday 12 PM
@@ -657,11 +668,13 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  "${_selectedDate.day.toString().padLeft(2, '0')}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.year}",
-                                  style: const TextStyle(
+                                  _selectedDate != null
+                                      ? "${_selectedDate!.day.toString().padLeft(2, '0')}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.year}"
+                                      : "Select Date",
+                                  style: TextStyle(
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.w600,
-                                    color: Color(0xFF1E293B),
+                                    color: _selectedDate != null ? const Color(0xFF1E293B) : Colors.grey,
                                   ),
                                 ),
                               ),
@@ -723,7 +736,25 @@ class _DailyDashboardPageState extends State<DailyDashboardPage> {
 
           // Main User List Section
           Expanded(
-            child: FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
+            child: (_selectedDate == null || _selectedBranch == null)
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.filter_alt_outlined, size: 48, color: Colors.grey.shade400),
+                        const SizedBox(height: 10),
+                        Text(
+                          _selectedDate == null && _selectedBranch == null
+                              ? 'Select a date and branch to view report'
+                              : _selectedDate == null
+                                  ? 'Select a date to view report'
+                                  : 'Select a branch to view report',
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  )
+                : FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
               future: _dashboardFuture(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
