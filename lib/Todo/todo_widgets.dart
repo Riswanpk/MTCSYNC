@@ -248,7 +248,6 @@ class TodoListItem extends StatelessWidget {
                     .doc(doc.id)
                     .update({
                   'reminder': newReminder.toIso8601String(),
-                  'reminder_sent': false,
                 });
 
                 // Reschedule local notification on phone

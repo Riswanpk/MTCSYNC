@@ -355,7 +355,7 @@ class _TodoPageState extends State<TodoPage>
         'email': _userEmail,
         'timestamp': now,
         'status': 'pending',
-        'userId': _auth.currentUser?.uid,
+        'created_by': _auth.currentUser?.uid,
       });
 
       _todoController.clear();

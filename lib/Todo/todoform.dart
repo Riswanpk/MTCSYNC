@@ -174,15 +174,11 @@ class _TodoFormPageState extends State<TodoFormPage> {
         // Update existing todo
         await FirebaseFirestore.instance.collection('todo').doc(widget.docId!).update({
           'title': title,
-          'userId': user.uid,
           'description': desc,
           'reminder': scheduledDate.toIso8601String(),
-          'reminder_sent': false,
           'email': email,
           'created_by': createdBy,
         });
-
-
 
         await _clearDraft();
 
@@ -233,7 +229,6 @@ class _TodoFormPageState extends State<TodoFormPage> {
         'email': email,
         'created_by': createdBy,
         'reminder': scheduledDate.toIso8601String(),
-        'reminder_sent': false,
       });
 
 
