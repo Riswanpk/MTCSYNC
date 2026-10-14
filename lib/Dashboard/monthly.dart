@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
 import '../Navigation/user_cache_service.dart';
 
@@ -29,103 +28,147 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
   List<Map<String, dynamic>>? _cachedReport;
   String? _cacheKey;
 
+  bool _isRefreshing = false;
+
   @override
   void initState() {
     super.initState();
     _initDropdowns();
   }
 
-  Future<void> _initDropdowns() async {
-    final user = FirebaseAuth.instance.currentUser;
-    String? userRole;
-    String? userBranch;
-    
-    if (user != null) {
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      userRole = userDoc['role'];
-      userBranch = userDoc['branch'];
-      _currentUserRole = userRole;
-      _userRole = userRole;
-    }
+  Future<void> _initDropdowns({bool forceRefresh = false}) async {
+    final cache = UserCacheService.instance;
+    await cache.ensureLoaded();
+    final userRole = cache.role;
+    final userBranch = cache.branch;
+    _currentUserRole = userRole;
+    _userRole = userRole;
 
-    if (widget.users.isNotEmpty && widget.branch != null &&
-        userRole != 'admin' && userRole != 'Sync Head' && userRole != 'sync_head') {
+    // Fetch branches and users from cache (or force refresh if requested)
+    final allBranches = await cache.getBranches(forceRefresh: forceRefresh);
+    final branches = List<String>.from(allBranches)
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+    final isManager = (userRole == 'manager' || userRole == 'asst_manager');
+    final isAdminLike = (userRole == 'admin' || userRole == 'Sync Head' || userRole == 'sync_head');
+
+    if (isManager && userBranch != null && userBranch.isNotEmpty) {
+      final users = await _getUsersForBranchFromCache(userBranch, forceRefresh: forceRefresh);
       if (!mounted) return;
       setState(() {
-        _selectedBranch = widget.branch;
-        _usersForBranch = List<Map<String, dynamic>>.from(widget.users)
-          ..sort((a, b) => a['username'].toString().toLowerCase().compareTo(b['username'].toString().toLowerCase()));
-        _selectedUser = _usersForBranch.isNotEmpty ? _usersForBranch.first : null;
-        _branches = [widget.branch!];
+        _branches = [userBranch];
+        _selectedBranch = userBranch; // For manager, branch is restricted to their own branch
+        _usersForBranch = users;
+        _selectedUser = null; // Do not auto-select salesman
         _isInitialized = true;
       });
       return;
     }
 
-    final allBranches = await UserCacheService.instance.getBranches();
-    final branches = List<String>.from(allBranches)..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-
-    if ((userRole == 'manager' || userRole == 'asst_manager') && userBranch != null) {
-      await _fetchUsersForBranch(userBranch);
+    if (!isAdminLike && widget.branch != null && widget.branch!.isNotEmpty) {
+      final users = await _getUsersForBranchFromCache(widget.branch!, forceRefresh: forceRefresh);
       if (!mounted) return;
       setState(() {
-        _selectedBranch = userBranch;
-        _branches = [userBranch ?? ''];
+        _branches = [widget.branch!];
+        _selectedBranch = widget.branch;
+        _usersForBranch = users;
+        _selectedUser = null; // Do not auto-select salesman
         _isInitialized = true;
       });
-    } else {
-      // admin / sync_head: pre-select widget.branch if provided
-      final preselect = (widget.branch != null && branches.contains(widget.branch))
-          ? widget.branch
-          : (branches.isNotEmpty ? branches.first : null);
-      if (!mounted) return;
-      setState(() {
-        _branches = branches;
-        if (_branches.isNotEmpty && _selectedBranch == null) {
-          _selectedBranch = preselect;
-        }
-        _isInitialized = true;
-      });
-      await _fetchUsersForBranch(_selectedBranch);
+      return;
     }
+
+    // Admin / sync_head or unrestricted role: do not auto-select branch or salesman
+    if (!mounted) return;
+    setState(() {
+      _branches = branches;
+      _selectedBranch = null; // Do not auto-select branch
+      _usersForBranch = [];
+      _selectedUser = null; // Do not auto-select salesman
+      _isInitialized = true;
+    });
   }
 
-  Future<void> _fetchUsersForBranch(String? branch) async {
-    if (branch == null) {
+  Future<List<Map<String, dynamic>>> _getUsersForBranchFromCache(String branch, {bool forceRefresh = false}) async {
+    final allUsers = await UserCacheService.instance.getAllUsers(forceRefresh: forceRefresh);
+    final filtered = allUsers
+        .where((u) =>
+            u['branch'] == branch &&
+            u['role'] != 'admin')
+        .toList()
+      ..sort((a, b) => a['username'].toString().toLowerCase().compareTo(b['username'].toString().toLowerCase()));
+    return filtered;
+  }
+
+  Future<void> _fetchUsersForBranch(String? branch, {bool forceRefresh = false}) async {
+    if (branch == null || branch.isEmpty) {
       if (!mounted) return;
       setState(() {
         _usersForBranch = [];
         _selectedUser = null;
+        _cachedReport = null;
       });
       return;
     }
-    
-    final usersSnapshot = await FirebaseFirestore.instance
-        .collection('users')
-        .where('branch', isEqualTo: branch)
-        .where('role', isNotEqualTo: 'admin')
-        .get();
 
-    final users = usersSnapshot.docs
-        .map((doc) => {
-              'uid': doc.id,
-              'username': doc['username'] ?? '',
-              'role': doc['role'] ?? '',
-              'email': doc['email'] ?? '',
-              'branch': doc['branch'] ?? '',
-            })
-        .toList()
-      ..sort((a, b) => a['username'].toString().toLowerCase().compareTo(b['username'].toString().toLowerCase())); // Sort usernames alphabetically
+    final users = await _getUsersForBranchFromCache(branch, forceRefresh: forceRefresh);
 
     if (!mounted) return;
     setState(() {
       _usersForBranch = users;
-      _selectedUser = users.isNotEmpty ? users.first : null;
-      _cachedReport = null; // Clear cache when user changes
+      // Keep selected user if still valid for this branch, otherwise null (do not auto-select)
+      if (_selectedUser != null && !users.any((u) => u['uid'] == _selectedUser!['uid'])) {
+        _selectedUser = null;
+      }
+      _cachedReport = null;
     });
+  }
+
+  Future<void> _onRefreshPressed() async {
+    if (_isRefreshing) return;
+    setState(() {
+      _isRefreshing = true;
+    });
+    try {
+      await UserCacheService.instance.refreshAllUsers();
+      if (_selectedBranch != null) {
+        await _fetchUsersForBranch(_selectedBranch, forceRefresh: true);
+      } else {
+        final allBranches = await UserCacheService.instance.getBranches();
+        if (mounted) {
+          setState(() {
+            _branches = List<String>.from(allBranches)
+              ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+          });
+        }
+      }
+      if (_selectedUser != null) {
+        // Invalidate cached report as well so it fetches fresh data
+        setState(() {
+          _cachedReport = null;
+        });
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Refreshed data from database'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to refresh: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRefreshing = false;
+        });
+      }
+    }
   }
 
   String _getCacheKey() {
@@ -280,6 +323,22 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
             ),
           ),
           centerTitle: false,
+          actions: [
+            IconButton(
+              icon: _isRefreshing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.refresh_rounded),
+              tooltip: 'Reload from database',
+              onPressed: _isRefreshing ? null : _onRefreshPressed,
+            ),
+          ],
         ),
         body: Column(
           children: [
@@ -316,6 +375,10 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
                           child: DropdownButton<String>(
                             isExpanded: true,
                             value: _selectedBranch,
+                            hint: Text(
+                              "Branch",
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                            ),
                             icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Colors.grey),
                             dropdownColor: isDark ? const Color(0xFF232730) : Colors.white,
                             items: _branches.map((b) => DropdownMenuItem(
@@ -331,12 +394,11 @@ class _MonthlyReportPageState extends State<MonthlyReportPage> {
                                   ),
                                 )).toList(),
                             onChanged: (val) async {
+                              if (val == _selectedBranch) return;
+                              setState(() {
+                                _selectedBranch = val;
+                              });
                               await _fetchUsersForBranch(val);
-                              if (mounted) {
-                                setState(() {
-                                  _selectedBranch = val;
-                                });
-                              }
                             },
                           ),
                         ),
