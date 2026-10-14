@@ -34,6 +34,8 @@ class _DashboardPageState extends State<DashboardPage>
   late AnimationController _animController;
   late Animation<double> _fadeIn;
 
+  Future<Map<String, int>>? _countsFuture;
+
   @override
   void initState() {
     super.initState();
@@ -70,9 +72,17 @@ class _DashboardPageState extends State<DashboardPage>
         .doc(currentUser.uid)
         .get();
     if (!mounted) return;
+    final userData = userSnapshot.data();
+    final role = userData?['role'] ?? 'sales';
+    final branch = userData?['branch'] ?? '';
+
     setState(() {
-      _userData = userSnapshot.data();
+      _userData = userData;
       _loadingUser = false;
+      // Only fetch counts once when entering from homepage
+      _countsFuture = fetchDashboardCounts(
+        branch: (role == 'manager' || role == 'asst_manager') ? branch : null,
+      );
     });
     if (mounted) _animController.forward();
   }
@@ -153,7 +163,7 @@ class _DashboardPageState extends State<DashboardPage>
 
                     // ── Stat Cards ──
                     FutureBuilder<Map<String, int>>(
-                      future: fetchDashboardCounts(branch: (role == 'manager' || role == 'asst_manager') ? branch : null),
+                      future: _countsFuture,
                       builder: (context, snapshot) {
                         if (!snapshot.hasData) {
                           return const SizedBox(
@@ -194,61 +204,27 @@ class _DashboardPageState extends State<DashboardPage>
                             Icons.calendar_month_rounded,
                             1,
                             () async {
-                              if ((role == 'manager' || role == 'asst_manager') && branch.isNotEmpty) {
-                                final usersSnapshot = await FirebaseFirestore
-                                    .instance
-                                    .collection('users')
-                                    .where('branch', isEqualTo: branch)
-                                    .where('role', isNotEqualTo: 'admin')
-                                    .get();
-                                final users = usersSnapshot.docs
-                                    .map((doc) => {
-                                          'uid': doc.id,
-                                          'username': doc['username'] ?? '',
-                                          'role': doc['role'] ?? '',
-                                          'email': doc['email'] ?? '',
-                                          'branch': doc['branch'] ?? '',
-                                        })
+                              // Pre-fetch branch/users from cache or DB only on click
+                              List<Map<String, dynamic>> users = [];
+                              final targetBranch = (role == 'manager' || role == 'asst_manager')
+                                  ? branch
+                                  : null;
+
+                              if (targetBranch != null && targetBranch.isNotEmpty) {
+                                final allUsers = await UserCacheService.instance.getAllUsers();
+                                users = allUsers
+                                    .where((u) => u['branch'] == targetBranch && u['role'] != 'admin')
                                     .toList();
-                                if (context.mounted) {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => MonthlyReportPage(
-                                          branch: branch, users: users),
-                                    ),
-                                  );
-                                }
-                              } else if (isAdminLike) {
-                                final usersSnapshot = await FirebaseFirestore
-                                    .instance
-                                    .collection('users')
-                                    .where('role', isNotEqualTo: 'admin')
-                                    .get();
-                                final users = usersSnapshot.docs
-                                    .map((doc) => {
-                                          'uid': doc.id,
-                                          'username': doc['username'] ?? '',
-                                          'role': doc['role'] ?? '',
-                                          'email': doc['email'] ?? '',
-                                          'branch': doc['branch'] ?? '',
-                                        })
-                                    .toList();
-                                if (context.mounted) {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => MonthlyReportPage(
-                                          branch: null, users: users),
-                                    ),
-                                  );
-                                }
-                              } else {
+                              }
+
+                              if (context.mounted) {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) =>
-                                        const MonthlyReportPage(users: []),
+                                    builder: (_) => MonthlyReportPage(
+                                      branch: targetBranch,
+                                      users: users,
+                                    ),
                                   ),
                                 );
                               }
