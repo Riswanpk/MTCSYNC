@@ -749,145 +749,99 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
 
   Future<String?> _showOrderTypeDialog(BuildContext context) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    String selected = 'Spot Delivery';
 
     return showDialog<String>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: isDark ? const Color(0xFF0F243E) : Colors.white,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text(
-            'Select Order Type',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : Colors.black87,
-            ),
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF0F243E) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Select Order Type',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 17,
+            color: isDark ? Colors.white : Colors.black87,
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
+        ),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildDialogRadioTile(
-                title: 'Spot Delivery',
-                description: 'Immediate handover at the stall',
-                value: 'Spot Delivery',
-                groupValue: selected,
-                icon: Icons.flash_on_rounded,
-                color: const Color(0xFF00897B),
-                isDark: isDark,
-                onChanged: (val) => setDialogState(() => selected = val!),
+              Expanded(
+                child: _buildOrderTypeActionTile(
+                  context: ctx,
+                  type: 'Spot Delivery',
+                  icon: Icons.flash_on_rounded,
+                  color: const Color(0xFF00897B),
+                  isDark: isDark,
+                ),
               ),
-              const SizedBox(height: 8),
-              _buildDialogRadioTile(
-                title: 'Booking',
-                description: 'Advance booking for future dispatch',
-                value: 'Booking',
-                groupValue: selected,
-                icon: Icons.bookmark_add_rounded,
-                color: primaryBlue,
-                isDark: isDark,
-                onChanged: (val) => setDialogState(() => selected = val!),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildOrderTypeActionTile(
+                  context: ctx,
+                  type: 'Booking',
+                  icon: Icons.bookmark_add_rounded,
+                  color: primaryBlue,
+                  isDark: isDark,
+                ),
               ),
-              const SizedBox(height: 8),
-              _buildDialogRadioTile(
-                title: 'Stall Delivery',
-                description: 'Delivery directly to the customer stall',
-                value: 'Stall Delivery',
-                groupValue: selected,
-                icon: Icons.storefront_rounded,
-                color: const Color(0xFFFF6F00),
-                isDark: isDark,
-                onChanged: (val) => setDialogState(() => selected = val!),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildOrderTypeActionTile(
+                  context: ctx,
+                  type: 'Stall Delivery',
+                  icon: Icons.storefront_rounded,
+                  color: const Color(0xFFFF6F00),
+                  isDark: isDark,
+                ),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(null),
-              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(ctx).pop(selected),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryBlue,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: const Text('Continue'),
-            ),
-          ],
         ),
       ),
     );
   }
 
-  Widget _buildDialogRadioTile({
-    required String title,
-    required String description,
-    required String value,
-    required String groupValue,
+  Widget _buildOrderTypeActionTile({
+    required BuildContext context,
+    required String type,
     required IconData icon,
     required Color color,
     required bool isDark,
-    required ValueChanged<String?> onChanged,
   }) {
-    final isSelected = value == groupValue;
-
     return InkWell(
-      onTap: () => onChanged(value),
-      borderRadius: BorderRadius.circular(12),
+      onTap: () => Navigator.of(context).pop(type),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
         decoration: BoxDecoration(
-          color: isSelected
-              ? color.withValues(alpha: 0.12)
-              : (isDark
-                  ? Colors.white.withValues(alpha: 0.04)
-                  : const Color(0xFFF1F5F9)),
-          borderRadius: BorderRadius.circular(12),
+          color: color.withValues(alpha: isDark ? 0.15 : 0.08),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isSelected ? color : Colors.transparent,
-            width: 1.5,
+            color: color.withValues(alpha: 0.35),
+            width: 1.2,
           ),
         ),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             CircleAvatar(
-              radius: 16,
-              backgroundColor: color.withValues(alpha: 0.15),
-              child: Icon(icon, size: 18, color: color),
+              radius: 20,
+              backgroundColor: color.withValues(alpha: 0.2),
+              child: Icon(icon, size: 22, color: color),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  Text(
-                    description,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: isDark ? Colors.white54 : Colors.black54,
-                    ),
-                  ),
-                ],
+            const SizedBox(height: 8),
+            Text(
+              type,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                color: isDark ? Colors.white : Colors.black87,
               ),
-            ),
-            Radio<String>(
-              value: value,
-              groupValue: groupValue,
-              activeColor: color,
-              onChanged: onChanged,
             ),
           ],
         ),
