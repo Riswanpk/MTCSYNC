@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import '../Misc/firebase_storage_helper.dart';
 import '../Navigation/user_cache_service.dart';
 
 /// Data model representing an Exhibition created by an Admin.
@@ -101,6 +104,7 @@ class ExpoOrderItem {
   final double rate;
   final double gst; // percentage e.g. 18.0
   final double total; // (qty * rate) + ((qty * rate) * gst / 100)
+  final String? photoUrl; // Optional photo of the item
 
   const ExpoOrderItem({
     required this.mtcCode,
@@ -110,6 +114,7 @@ class ExpoOrderItem {
     required this.rate,
     required this.gst,
     required this.total,
+    this.photoUrl,
   });
 
   static double calculateTotal(int qty, double rate, double gst) {
@@ -127,6 +132,7 @@ class ExpoOrderItem {
       'rate': rate,
       'gst': gst,
       'total': total,
+      if (photoUrl != null && photoUrl!.isNotEmpty) 'photoUrl': photoUrl,
     };
   }
 
@@ -139,6 +145,7 @@ class ExpoOrderItem {
       rate: (map['rate'] as num?)?.toDouble() ?? 0.0,
       gst: (map['gst'] as num?)?.toDouble() ?? 0.0,
       total: (map['total'] as num?)?.toDouble() ?? 0.0,
+      photoUrl: map['photoUrl'],
     );
   }
 }
@@ -164,6 +171,8 @@ class ExpoOrder {
   final double totalAmount;
   final int totalQty;
   final String status; // 'Pending', 'Completed'
+  final String paymentMode; // 'Cash', 'Bank Transfer', 'UPI'
+  final String? paymentProofUrl; // URL of receipt uploaded to Firebase Storage
   final String createdUserId;
   final String createdUserName;
   final String createdUserBranch;
@@ -190,6 +199,8 @@ class ExpoOrder {
     required this.totalAmount,
     required this.totalQty,
     required this.status,
+    this.paymentMode = 'Cash',
+    this.paymentProofUrl,
     required this.createdUserId,
     required this.createdUserName,
     required this.createdUserBranch,
@@ -217,6 +228,9 @@ class ExpoOrder {
       'totalAmount': totalAmount,
       'totalQty': totalQty,
       'status': status,
+      'paymentMode': paymentMode,
+      if (paymentProofUrl != null && paymentProofUrl!.isNotEmpty)
+        'paymentProofUrl': paymentProofUrl,
       'createdUserId': createdUserId,
       'createdUserName': createdUserName,
       'createdUserBranch': createdUserBranch,
@@ -263,6 +277,8 @@ class ExpoOrder {
       totalAmount: (data['totalAmount'] as num?)?.toDouble() ?? 0.0,
       totalQty: (data['totalQty'] as num?)?.toInt() ?? 0,
       status: data['status'] ?? 'Pending',
+      paymentMode: data['paymentMode'] ?? 'Cash',
+      paymentProofUrl: data['paymentProofUrl'],
       createdUserId: data['createdUserId'] ?? '',
       createdUserName: data['createdUserName'] ?? '',
       createdUserBranch: data['createdUserBranch'] ?? '',
@@ -448,5 +464,68 @@ class ExpoService {
 
     branchSalesmen.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     return ['N/A', ...branchSalesmen];
+  }
+
+  /// Uploads a file (photo or proof) to Firebase Storage using storageCandidates.
+  Future<String> uploadFile(File file, String folder) async {
+    final fileName =
+        '${DateTime.now().millisecondsSinceEpoch}_${file.path.split(Platform.pathSeparator).last}';
+    Reference? ref;
+    Object? lastError;
+
+    for (final storage in FirebaseStorageHelper.storageCandidates()) {
+      final candidateRef = storage.ref().child('expo').child(folder).child(fileName);
+      try {
+        await candidateRef.putFile(
+          file,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
+        ref = candidateRef;
+        break;
+      } catch (e) {
+        lastError = e;
+        if (!FirebaseStorageHelper.isBucketNotFoundError(e)) {
+          rethrow;
+        }
+      }
+    }
+
+    if (ref == null) {
+      throw lastError ?? Exception('Failed to upload image to Firebase Storage');
+    }
+
+    return await ref.getDownloadURL();
+  }
+
+  /// Fetches Item Name and GST by MTC code from API (or Firestore fallback).
+  /// Note: The user mentioned credentials will be provided later, so this
+  /// method is prepared with an API stub/hook ready to connect.
+  Future<Map<String, dynamic>?> fetchItemDetailsByMtcCode(String mtcCode) async {
+    final cleanCode = mtcCode.trim();
+    if (cleanCode.isEmpty) return null;
+
+    try {
+      // 1. Check if item exists in Firestore catalog/items if available
+      final query = await _firestore
+          .collection('items')
+          .where('mtcCode', isEqualTo: cleanCode)
+          .limit(1)
+          .get();
+
+      if (query.docs.isNotEmpty) {
+        final data = query.docs.first.data();
+        return {
+          'itemName': data['itemName'] ?? data['name'] ?? '',
+          'gst': (data['gst'] as num?)?.toDouble() ?? 18.0,
+          'rate': (data['rate'] as num?)?.toDouble(),
+          'description': data['description'] ?? '',
+        };
+      }
+    } catch (_) {
+      // Ignore and proceed to API stub
+    }
+
+    // API integration hook: Credentials to be plugged in.
+    return null;
   }
 }

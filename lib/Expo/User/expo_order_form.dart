@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../Navigation/user_cache_service.dart';
 import '../expo_service.dart';
@@ -10,10 +12,12 @@ const Color primaryGreen = Color(0xFF8CC63F);
 
 class ExpoOrderFormPage extends StatefulWidget {
   final Exhibition exhibition;
+  final String initialOrderType;
 
   const ExpoOrderFormPage({
     super.key,
     required this.exhibition,
+    this.initialOrderType = 'Spot Delivery',
   });
 
   @override
@@ -28,6 +32,9 @@ class _ItemRowData {
   final TextEditingController rateController = TextEditingController(text: '0');
   final TextEditingController gstController = TextEditingController(text: '18');
 
+  File? photoFile;
+  String? existingPhotoUrl;
+  bool isFetchingMtc = false;
   double total = 0.0;
 
   void recalculateTotal() {
@@ -49,12 +56,13 @@ class _ItemRowData {
 
 class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
   final _formKey = GlobalKey<FormState>();
+  final ImagePicker _imagePicker = ImagePicker();
 
   // Auto-fetched date (read-only)
   final DateTime _orderDate = DateTime.now();
 
-  // Order Type: 'Spot Delivery', 'Booking', 'Stall Delivery'
-  String _selectedOrderType = 'Spot Delivery';
+  // Order Type selected from dialog or preset
+  late String _selectedOrderType;
 
   // Customer Details Controllers
   final TextEditingController _shopNameController = TextEditingController();
@@ -65,12 +73,17 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       TextEditingController(text: 'Kerala');
   final TextEditingController _phoneController = TextEditingController();
 
-  // Preferred Branch & Preferred Salesman
+  // Preferred Branch & Preferred Salesman (Do not auto-select branch)
   List<String> _allBranches = [];
   String? _selectedPreferredBranch;
   List<String> _salesmenForBranch = ['N/A'];
   String _selectedSalesman = 'N/A';
   bool _isLoadingBranches = true;
+
+  // Payment Selection: Cash, Bank Transfer, UPI
+  String _selectedPaymentMode = 'Cash';
+  File? _paymentProofFile;
+  String? _existingPaymentProofUrl;
 
   // Item Details
   final List<_ItemRowData> _items = [];
@@ -79,9 +92,9 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
   @override
   void initState() {
     super.initState();
-    // Initialize with 1 item row
+    _selectedOrderType = widget.initialOrderType;
     _addItemRow();
-    _loadBranchesAndUser();
+    _loadBranches();
   }
 
   @override
@@ -114,29 +127,18 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     });
   }
 
-  Future<void> _loadBranchesAndUser() async {
+  Future<void> _loadBranches() async {
     try {
       final cache = UserCacheService.instance;
       await cache.ensureLoaded();
       final branches = await cache.getBranches();
 
-      final userBranch = cache.branch ?? '';
-      String? defaultBranch;
-      if (userBranch.isNotEmpty && branches.contains(userBranch)) {
-        defaultBranch = userBranch;
-      } else if (branches.isNotEmpty) {
-        defaultBranch = branches.first;
-      }
-
       if (mounted) {
         setState(() {
           _allBranches = branches;
-          _selectedPreferredBranch = defaultBranch;
+          // As explicitly requested: Do not auto select any branch in preferred branch
+          _selectedPreferredBranch = null;
         });
-      }
-
-      if (defaultBranch != null) {
-        await _onBranchChanged(defaultBranch);
       }
     } catch (e) {
       debugPrint('Error loading branches: $e');
@@ -159,6 +161,160 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         _selectedSalesman = 'N/A';
       });
     }
+  }
+
+  // --- MTC Code Automatic Lookup ---
+  Future<void> _onMtcCodeSubmitted(_ItemRowData item) async {
+    final code = item.mtcCodeController.text.trim();
+    if (code.isEmpty) return;
+
+    setState(() => item.isFetchingMtc = true);
+    try {
+      final details =
+          await ExpoService.instance.fetchItemDetailsByMtcCode(code);
+      if (details != null && mounted) {
+        setState(() {
+          if (details['itemName'] != null &&
+              details['itemName'].toString().isNotEmpty) {
+            item.itemNameController.text = details['itemName'].toString();
+          }
+          if (details['gst'] != null) {
+            item.gstController.text = details['gst'].toString();
+          }
+          if (details['rate'] != null && details['rate'] > 0) {
+            item.rateController.text = details['rate'].toString();
+          }
+          if (details['description'] != null &&
+              details['description'].toString().isNotEmpty) {
+            item.descriptionController.text =
+                details['description'].toString();
+          }
+          item.recalculateTotal();
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching MTC code details: $e');
+    } finally {
+      if (mounted) setState(() => item.isFetchingMtc = false);
+    }
+  }
+
+  // --- Image Pickers for Item & Payment Proof ---
+  Future<void> _pickImageForItem(_ItemRowData item) async {
+    final ImageSource? source = await _showImageSourceDialog(
+      title: 'Item Photo',
+      subtitle: 'Take a photo or choose from gallery',
+    );
+    if (source == null) return;
+
+    try {
+      final XFile? picked = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 80,
+      );
+      if (picked != null && mounted) {
+        setState(() {
+          item.photoFile = File(picked.path);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error picking item image: $e');
+    }
+  }
+
+  Future<void> _pickPaymentProof() async {
+    final ImageSource? source = await _showImageSourceDialog(
+      title: 'Payment Proof',
+      subtitle: 'Upload receipt from gallery or take photo now',
+    );
+    if (source == null) return;
+
+    try {
+      final XFile? picked = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 80,
+      );
+      if (picked != null && mounted) {
+        setState(() {
+          _paymentProofFile = File(picked.path);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error picking payment proof: $e');
+    }
+  }
+
+  Future<ImageSource?> _showImageSourceDialog({
+    required String title,
+    required String subtitle,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      backgroundColor: isDark ? const Color(0xFF0F243E) : Colors.white,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 17,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.white60 : Colors.black54,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: primaryBlue.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.camera_alt_rounded, color: primaryBlue),
+                ),
+                title: const Text('Take Photo Now',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () => Navigator.of(ctx).pop(ImageSource.camera),
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: primaryGreen.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child:
+                      const Icon(Icons.photo_library_rounded, color: primaryGreen),
+                ),
+                title: const Text('Choose from Gallery',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () => Navigator.of(ctx).pop(ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   double get _subtotal {
@@ -216,7 +372,10 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       final qty = int.tryParse(it.qtyController.text.trim()) ?? 0;
       if (qty <= 0) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Please enter a valid quantity (>0) for Item #${i + 1}')),
+          SnackBar(
+            content:
+                Text('Please enter a valid quantity (>0) for Item #${i + 1}'),
+          ),
         );
         return;
       }
@@ -229,22 +388,44 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       final cache = UserCacheService.instance;
       await cache.ensureLoaded();
 
-      final List<ExpoOrderItem> orderItems = _items.map((it) {
+      // 1. Upload payment proof if provided
+      String? paymentProofUrl = _existingPaymentProofUrl;
+      if (_paymentProofFile != null) {
+        paymentProofUrl = await ExpoService.instance.uploadFile(
+          _paymentProofFile!,
+          'payment_proofs',
+        );
+      }
+
+      // 2. Upload item photos if provided and build items list
+      final List<ExpoOrderItem> orderItems = [];
+      for (final it in _items) {
         final qty = int.tryParse(it.qtyController.text.trim()) ?? 0;
         final rate = double.tryParse(it.rateController.text.trim()) ?? 0.0;
         final gst = double.tryParse(it.gstController.text.trim()) ?? 0.0;
         final total = ExpoOrderItem.calculateTotal(qty, rate, gst);
 
-        return ExpoOrderItem(
-          mtcCode: it.mtcCodeController.text.trim(),
-          itemName: it.itemNameController.text.trim(),
-          description: it.descriptionController.text.trim(),
-          qty: qty,
-          rate: rate,
-          gst: gst,
-          total: total,
+        String? itemPhotoUrl = it.existingPhotoUrl;
+        if (it.photoFile != null) {
+          itemPhotoUrl = await ExpoService.instance.uploadFile(
+            it.photoFile!,
+            'item_photos',
+          );
+        }
+
+        orderItems.add(
+          ExpoOrderItem(
+            mtcCode: it.mtcCodeController.text.trim(),
+            itemName: it.itemNameController.text.trim(),
+            description: it.descriptionController.text.trim(),
+            qty: qty,
+            rate: rate,
+            gst: gst,
+            total: total,
+            photoUrl: itemPhotoUrl,
+          ),
         );
-      }).toList();
+      }
 
       final newOrder = ExpoOrder(
         id: '',
@@ -266,6 +447,8 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         totalAmount: _grandTotal,
         totalQty: _totalQty,
         status: 'Pending',
+        paymentMode: _selectedPaymentMode,
+        paymentProofUrl: paymentProofUrl,
         createdUserId: user?.uid ?? '',
         createdUserName: cache.username ?? user?.displayName ?? 'Sales User',
         createdUserBranch: cache.branch ?? '',
@@ -301,7 +484,8 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         DateFormat('dd MMM yyyy, hh:mm a').format(_orderDate);
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A1628) : const Color(0xFFF7F9FC),
+      backgroundColor:
+          isDark ? const Color(0xFF0A1628) : const Color(0xFFF7F9FC),
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -311,7 +495,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
             ),
             Text(
-              widget.exhibition.name,
+              '${widget.exhibition.name}  •  $_selectedOrderType',
               style: const TextStyle(fontSize: 12, color: Colors.white70),
             ),
           ],
@@ -327,7 +511,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 1. Read-only Auto-fetched Date on Top
+              // 1. Read-only Auto-fetched Date & Order Type on Top
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -370,17 +554,17 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                     const Spacer(),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
+                          horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: primaryBlue.withValues(alpha: 0.15),
+                        color: primaryBlue,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Text(
-                        'Read Only',
-                        style: TextStyle(
-                          fontSize: 10,
+                      child: Text(
+                        _selectedOrderType,
+                        style: const TextStyle(
+                          fontSize: 11,
                           fontWeight: FontWeight.bold,
-                          color: primaryBlue,
+                          color: Colors.white,
                         ),
                       ),
                     ),
@@ -389,42 +573,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
               ),
               const SizedBox(height: 16),
 
-              // 2. Order Type Selection (3 types: Spot Delivery, Booking, Stall Delivery)
-              _buildCard(
-                isDark: isDark,
-                title: 'Order Type',
-                icon: Icons.local_shipping_rounded,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _buildOrderTypeChip(
-                        type: 'Spot Delivery',
-                        color: const Color(0xFF00897B),
-                        icon: Icons.flash_on_rounded,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _buildOrderTypeChip(
-                        type: 'Booking',
-                        color: primaryBlue,
-                        icon: Icons.bookmark_add_rounded,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _buildOrderTypeChip(
-                        type: 'Stall Delivery',
-                        color: const Color(0xFFFF6F00),
-                        icon: Icons.storefront_rounded,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // 3. Customer Details Section
+              // 2. Customer Details Section
               _buildCard(
                 isDark: isDark,
                 title: 'Customer Details',
@@ -535,7 +684,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                     ),
                     const SizedBox(height: 12),
 
-                    // Preferred Branch (Dropdown)
+                    // Preferred Branch (Dropdown - Not auto-selected)
                     DropdownButtonFormField<String>(
                       value: _selectedPreferredBranch,
                       items: _allBranches.map((b) {
@@ -582,7 +731,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
               ),
               const SizedBox(height: 16),
 
-              // 4. Item Details Section (list of rows, initially 1 row, + add after each item)
+              // 3. Item Details Section (list of rows, photo button on each item, MTC auto lookup)
               _buildCard(
                 isDark: isDark,
                 title: 'Item Details',
@@ -590,7 +739,8 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                 child: Column(
                   children: [
                     for (int i = 0; i < _items.length; i++)
-                      _buildItemRowCard(index: i, item: _items[i], isDark: isDark),
+                      _buildItemRowCard(
+                          index: i, item: _items[i], isDark: isDark),
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
                       onPressed: _addItemRow,
@@ -612,6 +762,142 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                             horizontal: 20, vertical: 12),
                       ),
                     ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // 4. Payment Mode Selection (Cash, Bank Transfer, UPI)
+              _buildCard(
+                isDark: isDark,
+                title: 'Payment Mode',
+                icon: Icons.payment_rounded,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildPaymentOptionChip(
+                            mode: 'Cash',
+                            icon: Icons.money_rounded,
+                            isDark: isDark,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _buildPaymentOptionChip(
+                            mode: 'Bank Transfer',
+                            icon: Icons.account_balance_rounded,
+                            isDark: isDark,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _buildPaymentOptionChip(
+                            mode: 'UPI',
+                            icon: Icons.qr_code_2_rounded,
+                            isDark: isDark,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // If Bank or UPI selected: show option to upload picture from gallery or take photo now
+                    if (_selectedPaymentMode == 'Bank Transfer' ||
+                        _selectedPaymentMode == 'UPI') ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.04)
+                              : const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: primaryBlue.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.receipt_long_rounded,
+                                    color: primaryBlue, size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '$_selectedPaymentMode Receipt / Proof',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            if (_paymentProofFile != null) ...[
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.file(
+                                  _paymentProofFile!,
+                                  height: 140,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  TextButton.icon(
+                                    onPressed: _pickPaymentProof,
+                                    icon: const Icon(Icons.refresh_rounded,
+                                        size: 16),
+                                    label: const Text('Change Photo'),
+                                  ),
+                                  TextButton.icon(
+                                    onPressed: () {
+                                      setState(
+                                          () => _paymentProofFile = null);
+                                    },
+                                    icon: const Icon(
+                                        Icons.delete_outline_rounded,
+                                        color: Colors.redAccent,
+                                        size: 16),
+                                    label: const Text('Remove',
+                                        style: TextStyle(
+                                            color: Colors.redAccent)),
+                                  ),
+                                ],
+                              ),
+                            ] else ...[
+                              OutlinedButton.icon(
+                                onPressed: _pickPaymentProof,
+                                icon: const Icon(Icons.add_a_photo_rounded,
+                                    color: primaryBlue),
+                                label: Text(
+                                  'Upload $_selectedPaymentMode Receipt',
+                                  style: const TextStyle(
+                                    color: primaryBlue,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: primaryBlue),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 12, horizontal: 16),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -740,55 +1026,49 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     );
   }
 
-  Widget _buildOrderTypeChip({
-    required String type,
-    required Color color,
+  Widget _buildPaymentOptionChip({
+    required String mode,
     required IconData icon,
+    required bool isDark,
   }) {
-    final isSelected = _selectedOrderType == type;
+    final isSelected = _selectedPaymentMode == mode;
 
     return InkWell(
-      onTap: () => setState(() => _selectedOrderType = type),
+      onTap: () => setState(() => _selectedPaymentMode = mode),
       borderRadius: BorderRadius.circular(12),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
         decoration: BoxDecoration(
           color: isSelected
-              ? color
-              : color.withValues(alpha: 0.08),
+              ? primaryBlue
+              : (isDark
+                  ? Colors.white.withValues(alpha: 0.05)
+                  : const Color(0xFFF1F5F9)),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? color : color.withValues(alpha: 0.3),
-            width: isSelected ? 2 : 1,
+            color: isSelected ? primaryBlue : Colors.transparent,
+            width: 1.5,
           ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.3),
-                    blurRadius: 6,
-                    offset: const Offset(0, 3),
-                  ),
-                ]
-              : null,
         ),
         child: Column(
           children: [
             Icon(
               icon,
-              size: 20,
-              color: isSelected ? Colors.white : color,
+              size: 22,
+              color: isSelected ? Colors.white : primaryBlue,
             ),
             const SizedBox(height: 4),
             Text(
-              type,
+              mode,
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
-                color: isSelected ? Colors.white : color,
+                color: isSelected
+                    ? Colors.white
+                    : (isDark ? Colors.white70 : Colors.black87),
               ),
             ),
           ],
@@ -817,7 +1097,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row Header: Item # and Delete Button
+          // Row Header: Item #, Photo status, and Delete Button
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -837,16 +1117,71 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                   ),
                 ),
               ),
-              if (_items.length > 1)
-                IconButton(
-                  icon: const Icon(Icons.delete_outline_rounded,
-                      color: Colors.redAccent, size: 20),
-                  onPressed: () => _removeItemRow(index),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
+              Row(
+                children: [
+                  // Button to take photo for each item (not mandatory)
+                  TextButton.icon(
+                    onPressed: () => _pickImageForItem(item),
+                    icon: Icon(
+                      item.photoFile != null
+                          ? Icons.check_circle_rounded
+                          : Icons.add_a_photo_outlined,
+                      size: 16,
+                      color: item.photoFile != null
+                          ? primaryGreen
+                          : primaryBlue,
+                    ),
+                    label: Text(
+                      item.photoFile != null ? 'Photo Added' : 'Add Photo',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: item.photoFile != null
+                            ? primaryGreen
+                            : primaryBlue,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      minimumSize: const Size(50, 30),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                  if (_items.length > 1)
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded,
+                          color: Colors.redAccent, size: 20),
+                      onPressed: () => _removeItemRow(index),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                ],
+              ),
             ],
           ),
+          if (item.photoFile != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: Image.file(
+                    item.photoFile!,
+                    height: 50,
+                    width: 50,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () => setState(() => item.photoFile = null),
+                  child: const Text('Remove Photo',
+                      style: TextStyle(color: Colors.redAccent, fontSize: 11)),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 10),
 
           // MTC Code & Item Name
@@ -856,11 +1191,28 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                 flex: 2,
                 child: TextFormField(
                   controller: item.mtcCodeController,
+                  textInputAction: TextInputAction.next,
+                  onFieldSubmitted: (_) => _onMtcCodeSubmitted(item),
                   decoration: _inputDecoration(
                     label: 'MTC CODE',
                     hint: 'Code',
                     isDark: isDark,
                     dense: true,
+                    suffixIcon: item.isFetchingMtc
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: Padding(
+                              padding: EdgeInsets.all(8),
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : IconButton(
+                            icon: const Icon(Icons.search_rounded,
+                                size: 18, color: primaryBlue),
+                            tooltip: 'Lookup Item Details',
+                            onPressed: () => _onMtcCodeSubmitted(item),
+                          ),
                   ),
                 ),
               ),
@@ -1041,13 +1393,16 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     required String label,
     required String hint,
     IconData? icon,
+    Widget? suffixIcon,
     required bool isDark,
     bool dense = false,
   }) {
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      prefixIcon: icon != null ? Icon(icon, color: primaryBlue, size: 20) : null,
+      prefixIcon:
+          icon != null ? Icon(icon, color: primaryBlue, size: 20) : null,
+      suffixIcon: suffixIcon,
       filled: true,
       fillColor: isDark
           ? Colors.white.withValues(alpha: 0.05)

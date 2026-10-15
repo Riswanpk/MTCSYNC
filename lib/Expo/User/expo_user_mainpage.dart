@@ -158,6 +158,53 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                   '${order.createdUserName} (${order.createdUserBranch})',
                   isDark,
                 ),
+                _buildDialogInfoRow(
+                  'Payment Mode',
+                  order.paymentMode,
+                  isDark,
+                ),
+                if (order.paymentProofUrl != null &&
+                    order.paymentProofUrl!.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  InkWell(
+                    onTap: () {
+                      _showImagePreviewDialog(
+                        context,
+                        order.paymentProofUrl!,
+                        '${order.paymentMode} Proof',
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: primaryBlue.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: primaryBlue.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.receipt_long_rounded,
+                              color: primaryBlue, size: 20),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'View Payment Receipt',
+                            style: TextStyle(
+                              color: primaryBlue,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const Spacer(),
+                          const Icon(Icons.open_in_new_rounded,
+                              color: primaryBlue, size: 16),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 const Divider(),
                 const SizedBox(height: 8),
@@ -228,6 +275,33 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                             color: isDark ? Colors.white70 : Colors.black87,
                           ),
                         ),
+                        if (it.photoUrl != null && it.photoUrl!.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          InkWell(
+                            onTap: () {
+                              _showImagePreviewDialog(
+                                context,
+                                it.photoUrl!,
+                                it.itemName,
+                              );
+                            },
+                            child: Row(
+                              children: [
+                                const Icon(Icons.photo_camera_rounded,
+                                    size: 14, color: primaryBlue),
+                                const SizedBox(width: 4),
+                                const Text(
+                                  'View Item Photo',
+                                  style: TextStyle(
+                                    color: primaryBlue,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   );
@@ -586,14 +660,18 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
             floatingActionButtonLocation:
                 FloatingActionButtonLocation.centerFloat,
             floatingActionButton: FloatingActionButton.extended(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => ExpoOrderFormPage(
-                      exhibition: currentEx,
+              onPressed: () async {
+                final chosenType = await _showOrderTypeDialog(context);
+                if (chosenType != null && context.mounted) {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ExpoOrderFormPage(
+                        exhibition: currentEx,
+                        initialOrderType: chosenType,
+                      ),
                     ),
-                  ),
-                );
+                  );
+                }
               },
               backgroundColor: primaryBlue,
               foregroundColor: Colors.white,
@@ -606,6 +684,214 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
           ),
         );
       },
+    );
+  }
+
+  void _showImagePreviewDialog(
+      BuildContext context, String imageUrl, String title) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AppBar(
+              title: Text(title, style: const TextStyle(fontSize: 16)),
+              backgroundColor: primaryBlue,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              automaticallyImplyLeading: false,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => Navigator.of(ctx).pop(),
+                ),
+              ],
+            ),
+            Container(
+              constraints: const BoxConstraints(maxHeight: 400),
+              child: Image.network(
+                imageUrl,
+                fit: BoxFit.contain,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return const SizedBox(
+                    height: 200,
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return const SizedBox(
+                    height: 200,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.broken_image_rounded,
+                              size: 48, color: Colors.grey),
+                          SizedBox(height: 8),
+                          Text('Failed to load image'),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<String?> _showOrderTypeDialog(BuildContext context) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    String selected = 'Spot Delivery';
+
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF0F243E) : Colors.white,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            'Select Order Type',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : Colors.black87,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDialogRadioTile(
+                title: 'Spot Delivery',
+                description: 'Immediate handover at the stall',
+                value: 'Spot Delivery',
+                groupValue: selected,
+                icon: Icons.flash_on_rounded,
+                color: const Color(0xFF00897B),
+                isDark: isDark,
+                onChanged: (val) => setDialogState(() => selected = val!),
+              ),
+              const SizedBox(height: 8),
+              _buildDialogRadioTile(
+                title: 'Booking',
+                description: 'Advance booking for future dispatch',
+                value: 'Booking',
+                groupValue: selected,
+                icon: Icons.bookmark_add_rounded,
+                color: primaryBlue,
+                isDark: isDark,
+                onChanged: (val) => setDialogState(() => selected = val!),
+              ),
+              const SizedBox(height: 8),
+              _buildDialogRadioTile(
+                title: 'Stall Delivery',
+                description: 'Delivery directly to the customer stall',
+                value: 'Stall Delivery',
+                groupValue: selected,
+                icon: Icons.storefront_rounded,
+                color: const Color(0xFFFF6F00),
+                isDark: isDark,
+                onChanged: (val) => setDialogState(() => selected = val!),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(null),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(selected),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryBlue,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text('Continue'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDialogRadioTile({
+    required String title,
+    required String description,
+    required String value,
+    required String groupValue,
+    required IconData icon,
+    required Color color,
+    required bool isDark,
+    required ValueChanged<String?> onChanged,
+  }) {
+    final isSelected = value == groupValue;
+
+    return InkWell(
+      onTap: () => onChanged(value),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? color.withValues(alpha: 0.12)
+              : (isDark
+                  ? Colors.white.withValues(alpha: 0.04)
+                  : const Color(0xFFF1F5F9)),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? color : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: color.withValues(alpha: 0.15),
+              child: Icon(icon, size: 18, color: color),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? Colors.white54 : Colors.black54,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Radio<String>(
+              value: value,
+              groupValue: groupValue,
+              activeColor: color,
+              onChanged: onChanged,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
