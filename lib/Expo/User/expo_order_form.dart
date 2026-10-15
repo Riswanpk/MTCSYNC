@@ -2,8 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../Navigation/user_cache_service.dart';
 import '../expo_service.dart';
 
@@ -230,6 +232,34 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
   }
 
   // --- Image Pickers for Item & Payment Proof ---
+  Future<File> _compressImageFile(File file) async {
+    try {
+      final Directory tempDir = await getTemporaryDirectory();
+      final String targetPath =
+          '${tempDir.path}/compressed_${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+      final XFile? compressedXFile =
+          await FlutterImageCompress.compressAndGetFile(
+        file.absolute.path,
+        targetPath,
+        quality: 55, // Optimized balance of quality and small file size (< 100-150KB)
+        minWidth: 800,
+        minHeight: 800,
+        format: CompressFormat.jpeg,
+      );
+
+      if (compressedXFile != null) {
+        final compressedFile = File(compressedXFile.path);
+        if (compressedFile.existsSync()) {
+          return compressedFile;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error compressing image: $e');
+    }
+    return file;
+  }
+
   Future<void> _pickImageForItem(_ItemRowData item) async {
     final ImageSource? source = await _showImageSourceDialog(
       title: 'Item Photo',
@@ -240,14 +270,17 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     try {
       final XFile? picked = await _imagePicker.pickImage(
         source: source,
-        maxWidth: 1200,
-        maxHeight: 1200,
-        imageQuality: 80,
+        maxWidth: 900,
+        maxHeight: 900,
+        imageQuality: 60,
       );
       if (picked != null && mounted) {
-        setState(() {
-          item.photoFile = File(picked.path);
-        });
+        final compressed = await _compressImageFile(File(picked.path));
+        if (mounted) {
+          setState(() {
+            item.photoFile = compressed;
+          });
+        }
       }
     } catch (e) {
       debugPrint('Error picking item image: $e');
@@ -264,14 +297,17 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     try {
       final XFile? picked = await _imagePicker.pickImage(
         source: source,
-        maxWidth: 1200,
-        maxHeight: 1200,
-        imageQuality: 80,
+        maxWidth: 900,
+        maxHeight: 900,
+        imageQuality: 60,
       );
       if (picked != null && mounted) {
-        setState(() {
-          _paymentProofFile = File(picked.path);
-        });
+        final compressed = await _compressImageFile(File(picked.path));
+        if (mounted) {
+          setState(() {
+            _paymentProofFile = compressed;
+          });
+        }
       }
     } catch (e) {
       debugPrint('Error picking payment proof: $e');
@@ -418,30 +454,36 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       final cache = UserCacheService.instance;
       await cache.ensureLoaded();
 
-      // 1. Upload payment proof if provided
-      String? paymentProofUrl = _existingPaymentProofUrl;
-      if (_paymentProofFile != null) {
-        paymentProofUrl = await ExpoService.instance.uploadFile(
-          _paymentProofFile!,
-          'payment_proofs',
-        );
-      }
+      // 1. Upload payment proof concurrently if provided
+      final Future<String?> paymentProofFuture = (_paymentProofFile != null)
+          ? ExpoService.instance.uploadFile(_paymentProofFile!, 'payment_proofs')
+          : Future.value(_existingPaymentProofUrl);
 
-      // 2. Upload item photos if provided and build items list
+      // 2. Upload item photos concurrently if provided
+      final List<Future<String?>> itemPhotoFutures = _items.map((it) {
+        if (it.photoFile != null) {
+          return ExpoService.instance.uploadFile(it.photoFile!, 'item_photos');
+        }
+        return Future.value(it.existingPhotoUrl);
+      }).toList();
+
+      // Wait for all uploads simultaneously
+      final uploadResults = await Future.wait([
+        paymentProofFuture,
+        ...itemPhotoFutures,
+      ]);
+
+      final paymentProofUrl = uploadResults[0];
+      final itemPhotoUrls = uploadResults.sublist(1);
+
+      // 3. Build items list
       final List<ExpoOrderItem> orderItems = [];
-      for (final it in _items) {
+      for (int i = 0; i < _items.length; i++) {
+        final it = _items[i];
         final qty = int.tryParse(it.qtyController.text.trim()) ?? 0;
         final rate = double.tryParse(it.rateController.text.trim()) ?? 0.0;
         final gst = double.tryParse(it.gstController.text.trim()) ?? 0.0;
         final total = ExpoOrderItem.calculateTotal(qty, rate, gst);
-
-        String? itemPhotoUrl = it.existingPhotoUrl;
-        if (it.photoFile != null) {
-          itemPhotoUrl = await ExpoService.instance.uploadFile(
-            it.photoFile!,
-            'item_photos',
-          );
-        }
 
         orderItems.add(
           ExpoOrderItem(
@@ -452,7 +494,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
             rate: rate,
             gst: gst,
             total: total,
-            photoUrl: itemPhotoUrl,
+            photoUrl: itemPhotoUrls[i],
           ),
         );
       }
