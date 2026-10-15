@@ -621,7 +621,9 @@ class _HomePageState extends State<HomePage>
                 _role != 'core_team' &&
                 _role != 'sme' &&
                 _role != 'dme_admin' &&
-                _role != 'dme_user')
+                _role != 'dme_user' &&
+                _role != 'expo_user' &&
+                _role != 'expo_acc')
               Positioned(
                 bottom: _showTodoWarning ? 54 : 16,
                 left: 0,

@@ -27,7 +27,9 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
     'dme_admin',
     'dme_user',
     'supersale_admin',
-    'core_team'
+    'core_team',
+    'expo_user',
+    'expo_acc',
   ];
   String? _currentUserId;
   String _searchQuery = '';
@@ -62,13 +64,21 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         .collection('users')
         .doc(uid)
         .update({'role': newRole});
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(
-        content: Text('Role updated to $newRole'),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 2),
-      ),
-    );
+
+    await UserCacheService.instance.refreshAllUsers();
+    if (uid == FirebaseAuth.instance.currentUser?.uid) {
+      await UserCacheService.instance.refresh();
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text('Role updated to ${_formatRoleName(newRole)}'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
     _loadUsers(); // Refresh UI
   }
 
@@ -144,6 +154,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
       if (mounted) Navigator.of(context).pop();
 
       if (result.data['success'] == true) {
+        await UserCacheService.instance.refreshAllUsers();
         if (mounted) {
           ScaffoldMessenger.maybeOf(context)?.showSnackBar(
             const SnackBar(
@@ -152,7 +163,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
               duration: Duration(seconds: 2),
             ),
           );
-          setState(() {});
+          _loadUsers();
         }
       }
     } on FirebaseFunctionsException catch (e) {
@@ -414,6 +425,10 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         return Icons.work_outline;
       case 'supersale_admin':
         return Icons.star_border;
+      case 'expo_user':
+        return Icons.storefront_rounded;
+      case 'expo_acc':
+        return Icons.verified_user_rounded;
       default:
         return Icons.person;
     }
@@ -439,6 +454,10 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         return Colors.purple;
       case 'supersale_admin':
         return Colors.amber.shade700;
+      case 'expo_user':
+        return const Color(0xFF005BAC);
+      case 'expo_acc':
+        return const Color(0xFF7C3AED);
       default:
         return Colors.green;
     }
@@ -460,6 +479,10 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         return 'Supersale Admin';
       case 'sme':
         return 'SME';
+      case 'expo_user':
+        return 'Expo User';
+      case 'expo_acc':
+        return 'Expo Accounts';
       default:
         return role.isNotEmpty
             ? role[0].toUpperCase() + role.substring(1)
