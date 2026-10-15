@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -404,6 +405,77 @@ class ExpoService {
 
   Future<void> createOrder(ExpoOrder order) async {
     await _ordersRef.add(order.toMap());
+    await saveCustomerToExpoCustomers(order);
+  }
+
+  /// Stores customer details in expo_customers/{exhibitionName}/{phoneNumber}
+  /// with all customer details (no item details) for auto-fill suggestions.
+  Future<void> saveCustomerToExpoCustomers(ExpoOrder order) async {
+    final cleanPhone = order.phone.trim();
+    final exhibitionName = order.exhibitionName.trim();
+    if (cleanPhone.isEmpty || exhibitionName.isEmpty) return;
+
+    try {
+      final customerData = {
+        'shopName': order.shopName.trim(),
+        'customerName': order.customerName.trim(),
+        'place': order.place.trim(),
+        'district': order.district.trim(),
+        'state': order.state.trim(),
+        'phone': cleanPhone,
+        'preferredBranch': order.preferredBranch.trim(),
+        'preferredSalesman': order.preferredSalesman.trim(),
+        'exhibitionId': order.exhibitionId,
+        'exhibitionName': exhibitionName,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      };
+
+      await _firestore
+          .collection('expo_customers')
+          .doc(exhibitionName)
+          .collection('customers')
+          .doc(cleanPhone)
+          .set(customerData, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Error saving customer to expo_customers: $e');
+    }
+  }
+
+  /// Searches customers in expo_customers/{exhibitionName} by shopName
+  Future<List<Map<String, dynamic>>> searchExpoCustomers({
+    required String exhibitionName,
+    required String query,
+  }) async {
+    final cleanQuery = query.trim().toLowerCase();
+    final cleanExhibition = exhibitionName.trim();
+    if (cleanQuery.isEmpty || cleanExhibition.isEmpty) return [];
+
+    try {
+      final snapshot = await _firestore
+          .collection('expo_customers')
+          .doc(cleanExhibition)
+          .collection('customers')
+          .get();
+
+      final matches = <Map<String, dynamic>>[];
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final shopName = (data['shopName'] ?? '').toString().toLowerCase();
+        final customerName =
+            (data['customerName'] ?? '').toString().toLowerCase();
+        final phone = (data['phone'] ?? '').toString();
+
+        if (shopName.contains(cleanQuery) ||
+            customerName.contains(cleanQuery) ||
+            phone.contains(cleanQuery)) {
+          matches.add(data);
+        }
+      }
+      return matches;
+    } catch (e) {
+      debugPrint('Error searching expo_customers: $e');
+      return [];
+    }
   }
 
   Future<void> updateOrderStatus(String orderId, String newStatus) async {

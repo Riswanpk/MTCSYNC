@@ -73,6 +73,8 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       TextEditingController(text: 'Kerala');
   final TextEditingController _phoneController = TextEditingController();
 
+  final FocusNode _shopFocusNode = FocusNode();
+
   // Preferred Branch & Preferred Salesman (Do not auto-select branch)
   List<String> _allBranches = [];
   String? _selectedPreferredBranch;
@@ -105,10 +107,38 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     _districtController.dispose();
     _stateController.dispose();
     _phoneController.dispose();
+    _shopFocusNode.dispose();
     for (final item in _items) {
       item.dispose();
     }
     super.dispose();
+  }
+
+  void _autofillCustomer(Map<String, dynamic> customer) async {
+    setState(() {
+      _shopNameController.text = customer['shopName'] ?? '';
+      _customerNameController.text = customer['customerName'] ?? '';
+      _placeController.text = customer['place'] ?? '';
+      _districtController.text = customer['district'] ?? '';
+      if ((customer['state'] ?? '').toString().isNotEmpty) {
+        _stateController.text = customer['state'];
+      }
+      _phoneController.text = customer['phone'] ?? '';
+    });
+
+    final branch = (customer['preferredBranch'] ?? '').toString().trim();
+    if (branch.isNotEmpty) {
+      await _onBranchChanged(branch);
+      final salesman =
+          (customer['preferredSalesman'] ?? '').toString().trim();
+      if (salesman.isNotEmpty && mounted) {
+        setState(() {
+          if (_salesmenForBranch.contains(salesman)) {
+            _selectedSalesman = salesman;
+          }
+        });
+      }
+    }
   }
 
   void _addItemRow() {
@@ -580,21 +610,131 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                 icon: Icons.person_pin_rounded,
                 child: Column(
                   children: [
-                    // Shop Name
-                    TextFormField(
-                      controller: _shopNameController,
-                      validator: (val) {
-                        if (val == null || val.trim().isEmpty) {
-                          return 'Please enter shop name';
+                    // Shop Name (with Autocomplete from expo_customers)
+                    RawAutocomplete<Map<String, dynamic>>(
+                      textEditingController: _shopNameController,
+                      focusNode: _shopFocusNode,
+                      optionsBuilder: (TextEditingValue textEditingValue) async {
+                        final query = textEditingValue.text.trim();
+                        if (query.isEmpty) {
+                          return const Iterable<Map<String, dynamic>>.empty();
                         }
-                        return null;
+                        return await ExpoService.instance.searchExpoCustomers(
+                          exhibitionName: widget.exhibition.name,
+                          query: query,
+                        );
                       },
-                      decoration: _inputDecoration(
-                        label: 'Shop Name',
-                        hint: 'Enter shop name',
-                        icon: Icons.store_rounded,
-                        isDark: isDark,
-                      ),
+                      displayStringForOption: (option) =>
+                          option['shopName'] ?? '',
+                      onSelected: (option) => _autofillCustomer(option),
+                      fieldViewBuilder: (context, controller, focusNode,
+                          onFieldSubmitted) {
+                        return TextFormField(
+                          controller: controller,
+                          focusNode: focusNode,
+                          validator: (val) {
+                            if (val == null || val.trim().isEmpty) {
+                              return 'Please enter shop name';
+                            }
+                            return null;
+                          },
+                          decoration: _inputDecoration(
+                            label: 'Shop Name',
+                            hint: 'Type shop name to search/auto-fill...',
+                            icon: Icons.store_rounded,
+                            isDark: isDark,
+                          ),
+                        );
+                      },
+                      optionsViewBuilder: (context, onSelected, options) {
+                        return Align(
+                          alignment: Alignment.topLeft,
+                          child: Material(
+                            elevation: 4,
+                            borderRadius: BorderRadius.circular(12),
+                            color: isDark
+                                ? const Color(0xFF1E293B)
+                                : Colors.white,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                maxHeight: 240,
+                                maxWidth: 360,
+                              ),
+                              child: ListView.separated(
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 6, horizontal: 4),
+                                shrinkWrap: true,
+                                itemCount: options.length,
+                                separatorBuilder: (_, __) =>
+                                    const Divider(height: 1),
+                                itemBuilder: (context, index) {
+                                  final option = options.elementAt(index);
+                                  final shop = option['shopName'] ?? '';
+                                  final cust = option['customerName'] ?? '';
+                                  final phone = option['phone'] ?? '';
+                                  final place = option['place'] ?? '';
+
+                                  return InkWell(
+                                    onTap: () => onSelected(option),
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 8),
+                                      child: Row(
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 16,
+                                            backgroundColor: primaryBlue
+                                                .withValues(alpha: 0.15),
+                                            child: const Icon(
+                                              Icons.store_rounded,
+                                              size: 16,
+                                              color: primaryBlue,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  shop,
+                                                  style: TextStyle(
+                                                    fontWeight:
+                                                        FontWeight.bold,
+                                                    fontSize: 13,
+                                                    color: isDark
+                                                        ? Colors.white
+                                                        : Colors.black87,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  [cust, place, phone]
+                                                      .where((s) => s.isNotEmpty)
+                                                      .join(' • '),
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: isDark
+                                                        ? Colors.white60
+                                                        : Colors.black54,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const Icon(Icons.touch_app_rounded,
+                                              size: 16, color: primaryGreen),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 12),
 
