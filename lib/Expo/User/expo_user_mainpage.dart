@@ -631,7 +631,9 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
 
                       final allOrders = ordersSnapshot.data ?? [];
                       final pendingOrders = allOrders
-                          .where((o) => o.status == 'Pending')
+                          .where((o) =>
+                              o.status == 'Pending' ||
+                              o.status == 'Pending Verification')
                           .toList();
                       final completedOrders = allOrders
                           .where((o) => o.status == 'Completed')

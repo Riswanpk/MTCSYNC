@@ -42,6 +42,7 @@ import '../DME/Admin/Approvals/dme_admin_approvals_page.dart';
 import '../DME/Admin/Customer Directory/dme_customer_merge_page.dart';
 import '../Expo/Admin/expo_admin_page.dart';
 import '../Expo/User/expo_user_mainpage.dart';
+import '../Expo/Accounts/expo_accounts_page.dart';
 
 /// App brand colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -435,6 +436,14 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           ),
         ),
       );
+    } else if (role == 'expo_acc') {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const LoadingOverlayPage(
+            child: ExpoAccountsPage(),
+          ),
+        ),
+      );
     } else {
       Navigator.of(context).push(
         MaterialPageRoute(
@@ -450,6 +459,9 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   Widget build(BuildContext context) {
     final role = widget.role;
 
+    if (role == 'expo_user' || role == 'expo_acc') {
+      return _buildExpoRoleTiles(context, role ?? '');
+    }
     if (role == 'supersale_admin') {
       return _buildSupersaleAdminTiles(context);
     }
@@ -514,6 +526,20 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(mainAxisSize: MainAxisSize.min, children: rows),
     );
+  }
+
+  Widget _buildExpoRoleTiles(BuildContext context, String role) {
+    final isAcc = role == 'expo_acc';
+    final List<Widget> buttons = [
+      NeumorphicButton(
+        onTap: () => _navigateToExpo(context),
+        text: 'Expo',
+        color: isAcc ? const Color(0xFF7C3AED) : primaryBlue, // Distinct purple for expo_acc, primaryBlue for expo_user
+        textColor: Colors.white,
+        icon: isAcc ? Icons.verified_user_rounded : Icons.storefront_rounded,
+      ),
+    ];
+    return _buildButtonGrid(buttons);
   }
 
   Widget _buildCoreTeamTiles(BuildContext context) {

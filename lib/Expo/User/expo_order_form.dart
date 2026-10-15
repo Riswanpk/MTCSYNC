@@ -476,7 +476,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         totalGst: _totalGst,
         totalAmount: _grandTotal,
         totalQty: _totalQty,
-        status: 'Pending',
+        status: 'Pending Verification',
         paymentMode: _selectedPaymentMode,
         paymentProofUrl: paymentProofUrl,
         createdUserId: user?.uid ?? '',
