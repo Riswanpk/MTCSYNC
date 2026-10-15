@@ -40,6 +40,8 @@ import '../DME/Complaints/User/manager_complaints_page.dart';
 import '../DME/Complaints/Admin/dme_admin_complaints_page.dart';
 import '../DME/Admin/Approvals/dme_admin_approvals_page.dart';
 import '../DME/Admin/Customer Directory/dme_customer_merge_page.dart';
+import '../Expo/Admin/expo_admin_page.dart';
+import '../Expo/User/expo_user_mainpage.dart';
 
 /// App brand colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -423,6 +425,27 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     }
   }
 
+  Future<void> _navigateToExpo(BuildContext context) async {
+    final role = widget.role;
+    if (role == 'admin') {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const LoadingOverlayPage(
+            child: ExpoAdminPage(),
+          ),
+        ),
+      );
+    } else {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const LoadingOverlayPage(
+            child: ExpoUserMainPage(),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final role = widget.role;
@@ -620,15 +643,31 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           textColor: Colors.white,
           icon: Icons.dashboard_rounded,
         ),
+      if (role == 'admin' || role == 'sales')
+        NeumorphicButton(
+          onTap: () => _navigateToExpo(context),
+          text: 'Expo',
+          color: primaryBlue,
+          textColor: Colors.white,
+          icon: Icons.storefront_rounded,
+        ),
       // Complaints button in 2nd page for sales, managers and asst.managers
       if (role == 'sales' || role == 'manager' || role == 'asst_manager' || role == 'admin')
         NeumorphicButton(
           onTap: () => _navigateToComplaints(context),
           text: 'Complaints',
-          color: (role == 'sales') ? primaryBlue : primaryGreen,
+          color: primaryGreen,
           textColor: Colors.white,
           icon: Icons.feedback_rounded,
           badgeCount: widget.complaintCount > 0 ? widget.complaintCount : null,
+        ),
+      if (role == 'manager' || role == 'asst_manager')
+        NeumorphicButton(
+          onTap: () => _navigateToExpo(context),
+          text: 'Expo',
+          color: primaryBlue,
+          textColor: Colors.white,
+          icon: Icons.storefront_rounded,
         ),
       // Approvals button on 2nd page for dme_admin
       if (role == 'dme_admin')
