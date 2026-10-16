@@ -75,6 +75,9 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       TextEditingController(text: 'Kerala');
   final TextEditingController _phoneController = TextEditingController();
 
+  // Booking Delivery Date
+  DateTime? _deliveryDate;
+
   final FocusNode _shopFocusNode = FocusNode();
 
   // Preferred Branch & Preferred Salesman (Do not auto-select branch)
@@ -521,6 +524,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         status: 'Pending Verification',
         paymentMode: _selectedPaymentMode,
         paymentProofUrl: paymentProofUrl,
+        deliveryDate: _selectedOrderType == 'Booking' ? _deliveryDate : null,
         createdUserId: user?.uid ?? '',
         createdUserName: cache.username ?? user?.displayName ?? 'Sales User',
         createdUserBranch: cache.branch ?? '',
@@ -643,6 +647,74 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                   ],
                 ),
               ),
+              if (_selectedOrderType == 'Booking') ...[
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _deliveryDate ??
+                          DateTime.now().add(const Duration(days: 3)),
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (picked != null) {
+                      setState(() => _deliveryDate = picked);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF0F243E)
+                          : primaryGreen.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: primaryGreen.withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.local_shipping_rounded,
+                            color: primaryGreen, size: 22),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Delivery Date',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.white60 : Colors.black54,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _deliveryDate != null
+                                  ? DateFormat('dd MMM yyyy')
+                                      .format(_deliveryDate!)
+                                  : 'Select Delivery Date',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: _deliveryDate != null
+                                    ? (isDark ? Colors.white : Colors.black87)
+                                    : primaryGreen,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Spacer(),
+                        const Icon(Icons.calendar_month_rounded,
+                            color: primaryGreen, size: 20),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
 
               // 2. Customer Details Section

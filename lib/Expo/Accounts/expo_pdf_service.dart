@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
@@ -8,258 +9,277 @@ import 'package:share_plus/share_plus.dart';
 
 import '../expo_service.dart';
 
-/// Helper service for generating and exporting PDF for Expo orders.
-/// The layout and details can be expanded as needed.
+/// Helper service for generating dynamic PDF for Expo orders matching the
+/// custom layout template with dynamic item list count, table borders, and totals.
 class ExpoPdfService {
   ExpoPdfService._();
   static final ExpoPdfService instance = ExpoPdfService._();
 
-  /// Generates a PDF invoice/summary for the given order, writes it to a temporary file,
-  /// and opens the system share/print sheet.
+  // Primary brand palette matching reference template
+  static const PdfColor colorNavy = PdfColor.fromInt(0xFF0F3E7A); // Top header dark navy blue
+  static const PdfColor colorLimeGreen = PdfColor.fromInt(0xFF689F38); // Olive green label background
+  static const PdfColor colorNavyAccent = PdfColor.fromInt(0xFF0D47A1); // Blue badge / Table header
+  static const PdfColor colorBorderGrey = PdfColor.fromInt(0xFFB0BEC5); // Border grey
+  static const PdfColor colorRowAlt = PdfColor.fromInt(0xFFF8FAFC); // Table alternate row
+
+  /// Generates a dynamic PDF based on the custom template and order data,
+  /// saves to temporary storage, and triggers the share/print sheet.
   Future<void> exportOrderPdf(ExpoOrder order) async {
     try {
       final pdf = pw.Document();
-      final dateFormatted = DateFormat('dd/MM/yyyy hh:mm a').format(order.orderDate);
+      final dateFormatted = DateFormat('dd/MM/yyyy').format(order.orderDate);
+      final deliveryDateFormatted = order.deliveryDate != null
+          ? DateFormat('dd/MM/yyyy').format(order.deliveryDate!)
+          : (order.orderType == 'Booking' ? 'To be confirmed' : 'Immediate');
       final currencyFormat = NumberFormat.currency(symbol: 'Rs. ', decimalDigits: 2);
+
+      // Try loading company logo if present
+      pw.MemoryImage? logoImage;
+      try {
+        final logoBytes = await rootBundle.load('assets/images/logo.png');
+        logoImage = pw.MemoryImage(logoBytes.buffer.asUint8List());
+      } catch (_) {}
 
       pdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.all(32),
+          margin: const pw.EdgeInsets.symmetric(horizontal: 24, vertical: 24),
           header: (pw.Context context) {
-            return pw.Container(
-              padding: const pw.EdgeInsets.only(bottom: 12),
-              decoration: const pw.BoxDecoration(
-                border: pw.Border(
-                  bottom: pw.BorderSide(color: PdfColors.grey300, width: 1.5),
+            return pw.Column(
+              children: [
+                // 1. Top Header Banner: MALABAR TRADING COMPANY
+                pw.Container(
+                  width: double.infinity,
+                  padding: const pw.EdgeInsets.symmetric(vertical: 8),
+                  decoration: const pw.BoxDecoration(
+                    color: colorNavy,
+                    borderRadius: pw.BorderRadius.all(pw.Radius.circular(4)),
+                  ),
+                  alignment: pw.Alignment.center,
+                  child: pw.Text(
+                    'MALABAR TRADING COMPANY',
+                    style: pw.TextStyle(
+                      color: PdfColors.white,
+                      fontSize: 18,
+                      fontWeight: pw.FontWeight.bold,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
                 ),
-              ),
-              child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        'EXHIBITION ORDER',
-                        style: pw.TextStyle(
-                          fontSize: 20,
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColor.fromInt(0xFF1E3A8A),
-                        ),
-                      ),
-                      pw.SizedBox(height: 4),
-                      pw.Text(
-                        order.exhibitionName,
-                        style: pw.TextStyle(
-                          fontSize: 13,
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColor.fromInt(0xFF10B981),
-                        ),
-                      ),
-                    ],
-                  ),
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.end,
-                    children: [
-                      pw.Container(
-                        padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: pw.BoxDecoration(
-                          color: PdfColor.fromInt(0xFFEEF2F6),
-                          borderRadius: pw.BorderRadius.circular(4),
-                        ),
-                        child: pw.Text(
-                          order.orderType.toUpperCase(),
-                          style: pw.TextStyle(
-                            fontSize: 10,
-                            fontWeight: pw.FontWeight.bold,
-                            color: PdfColor.fromInt(0xFF1E3A8A),
-                          ),
-                        ),
-                      ),
-                      pw.SizedBox(height: 4),
-                      pw.Text(
-                        'Date: $dateFormatted',
-                        style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
-                      ),
-                      pw.Text(
-                        'Status: ${order.status.toUpperCase()}',
-                        style: pw.TextStyle(
-                          fontSize: 10,
-                          fontWeight: pw.FontWeight.bold,
-                          color: order.status == 'Completed'
-                              ? PdfColor.fromInt(0xFF10B981)
-                              : PdfColor.fromInt(0xFFF59E0B),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                pw.SizedBox(height: 12),
+              ],
             );
           },
           build: (pw.Context context) {
             return [
-              pw.SizedBox(height: 16),
-              // Customer & Order Info Section
+              // 2. Customer Details & Right-Side Box (Logo / Date / Sales Rep)
               pw.Row(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  // Customer Details
+                  // Left Column: Customer Form Fields
                   pw.Expanded(
-                    flex: 1,
-                    child: pw.Container(
-                      padding: const pw.EdgeInsets.all(12),
-                      decoration: pw.BoxDecoration(
-                        color: PdfColor.fromInt(0xFFF8FAFC),
-                        borderRadius: pw.BorderRadius.circular(6),
-                        border: pw.Border.all(color: PdfColors.grey300),
-                      ),
-                      child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Text(
-                            'CUSTOMER DETAILS',
-                            style: pw.TextStyle(
-                              fontSize: 10,
-                              fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.grey700,
-                            ),
-                          ),
-                          pw.SizedBox(height: 6),
-                          pw.Text(
-                            order.shopName,
-                            style: pw.TextStyle(
-                              fontSize: 13,
-                              fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.black,
-                            ),
-                          ),
-                          if (order.customerName.isNotEmpty) ...[
-                            pw.SizedBox(height: 2),
-                            pw.Text('Contact: ${order.customerName}',
-                                style: const pw.TextStyle(fontSize: 10)),
-                          ],
-                          if (order.phone.isNotEmpty) ...[
-                            pw.SizedBox(height: 2),
-                            pw.Text('Phone: ${order.phone}',
-                                style: const pw.TextStyle(fontSize: 10)),
-                          ],
-                          if (order.place.isNotEmpty || order.district.isNotEmpty) ...[
-                            pw.SizedBox(height: 2),
-                            pw.Text(
-                              'Place: ${[order.place, order.district, order.state].where((e) => e.isNotEmpty).join(", ")}',
-                              style: const pw.TextStyle(fontSize: 10),
-                            ),
-                          ],
-                        ],
-                      ),
+                    flex: 6,
+                    child: pw.Column(
+                      children: [
+                        _buildTemplateField('Shop Name', order.shopName, colorLimeGreen),
+                        pw.SizedBox(height: 4),
+                        _buildTemplateField('Customer Name', order.customerName, colorLimeGreen),
+                        pw.SizedBox(height: 4),
+                        _buildTemplateField('Phone No.', order.phone, colorLimeGreen),
+                        pw.SizedBox(height: 4),
+                        _buildTemplateField('Place', order.place, colorLimeGreen),
+                        pw.SizedBox(height: 4),
+                        _buildTemplateField('District', order.district, colorLimeGreen),
+                        pw.SizedBox(height: 4),
+                        _buildTemplateField('State', order.state, colorLimeGreen),
+                        pw.SizedBox(height: 4),
+                        _buildTemplateField('Delivery Type', order.orderType, colorNavyAccent),
+                      ],
                     ),
                   ),
-                  pw.SizedBox(width: 16),
-                  // Order / Sales Info
+                  pw.SizedBox(width: 14),
+
+                  // Right Column: Company/Exhibition Box + Date + Sales Rep
                   pw.Expanded(
-                    flex: 1,
-                    child: pw.Container(
-                      padding: const pw.EdgeInsets.all(12),
-                      decoration: pw.BoxDecoration(
-                        color: PdfColor.fromInt(0xFFF8FAFC),
-                        borderRadius: pw.BorderRadius.circular(6),
-                        border: pw.Border.all(color: PdfColors.grey300),
-                      ),
-                      child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Text(
-                            'ORDER INFORMATION',
-                            style: pw.TextStyle(
-                              fontSize: 10,
-                              fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.grey700,
-                            ),
+                    flex: 4,
+                    child: pw.Column(
+                      children: [
+                        // Top Right Box (Logo / Exhibition Info)
+                        pw.Container(
+                          height: 110,
+                          width: double.infinity,
+                          padding: const pw.EdgeInsets.all(8),
+                          decoration: pw.BoxDecoration(
+                            border: pw.Border.all(color: colorBorderGrey, width: 1.2),
+                            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3)),
                           ),
-                          pw.SizedBox(height: 6),
-                          _buildPdfInfoRow('Branch', order.preferredBranch),
-                          _buildPdfInfoRow('Salesman', order.preferredSalesman),
-                          _buildPdfInfoRow('Payment Mode', order.paymentMode),
-                          _buildPdfInfoRow('Booked By', order.createdUserName),
-                          if (order.createdUserBranch.isNotEmpty)
-                            _buildPdfInfoRow('User Branch', order.createdUserBranch),
-                        ],
-                      ),
+                          alignment: pw.Alignment.center,
+                          child: logoImage != null
+                              ? pw.Column(
+                                  mainAxisAlignment: pw.MainAxisAlignment.center,
+                                  children: [
+                                    pw.Image(logoImage, height: 48, fit: pw.BoxFit.contain),
+                                    pw.SizedBox(height: 4),
+                                    pw.Text(
+                                      order.exhibitionName,
+                                      maxLines: 2,
+                                      textAlign: pw.TextAlign.center,
+                                      style: pw.TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: pw.FontWeight.bold,
+                                        color: colorNavy,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : pw.Text(
+                                  order.exhibitionName,
+                                  textAlign: pw.TextAlign.center,
+                                  style: pw.TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: pw.FontWeight.bold,
+                                    color: colorNavy,
+                                  ),
+                                ),
+                        ),
+                        pw.SizedBox(height: 8),
+
+                        // Date Field
+                        _buildTemplateField('Date', dateFormatted, colorLimeGreen),
+                        pw.SizedBox(height: 4),
+
+                        // Sales Rep Field
+                        _buildTemplateField(
+                          'Sales Rep.',
+                          order.preferredSalesman != 'N/A'
+                              ? order.preferredSalesman
+                              : order.createdUserName,
+                          colorLimeGreen,
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-              pw.SizedBox(height: 20),
+              pw.SizedBox(height: 8),
 
-              // Items Table
-              pw.Text(
-                'ITEMS',
-                style: pw.TextStyle(
-                  fontSize: 12,
-                  fontWeight: pw.FontWeight.bold,
-                  color: PdfColors.black,
+              // 3. Branch & Delivery Date Row
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: colorBorderGrey, width: 1),
+                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3)),
+                  color: PdfColor.fromInt(0xFFFAFAFA),
+                ),
+                child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.RichText(
+                      text: pw.TextSpan(
+                        children: [
+                          pw.TextSpan(
+                            text: 'Branch: ',
+                            style: pw.TextStyle(
+                              fontSize: 10,
+                              fontWeight: pw.FontWeight.bold,
+                              color: colorNavy,
+                            ),
+                          ),
+                          pw.TextSpan(
+                            text: order.preferredBranch,
+                            style: pw.TextStyle(
+                              fontSize: 10,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.black,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    pw.RichText(
+                      text: pw.TextSpan(
+                        children: [
+                          pw.TextSpan(
+                            text: 'Delivery Date: ',
+                            style: pw.TextStyle(
+                              fontSize: 10,
+                              fontWeight: pw.FontWeight.bold,
+                              color: colorNavy,
+                            ),
+                          ),
+                          pw.TextSpan(
+                            text: deliveryDateFormatted,
+                            style: pw.TextStyle(
+                              fontSize: 10,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.black,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
               pw.SizedBox(height: 8),
 
+              // 4. Dynamic Items Table matching template column structure:
+              // S.No. | Code | Item Description | Qty | Rate | GST | Total
               pw.Table(
-                border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.8),
-                columnWidths: {
-                  0: const pw.FlexColumnWidth(0.8), // Sl No
-                  1: const pw.FlexColumnWidth(1.4), // MTC Code
-                  2: const pw.FlexColumnWidth(3.5), // Item Name & Desc
-                  3: const pw.FlexColumnWidth(0.9), // Qty
-                  4: const pw.FlexColumnWidth(1.4), // Rate
-                  5: const pw.FlexColumnWidth(1.0), // GST %
-                  6: const pw.FlexColumnWidth(1.6), // Total
+                border: pw.TableBorder.all(color: colorBorderGrey, width: 0.8),
+                columnWidths: const {
+                  0: pw.FlexColumnWidth(0.8), // S.No.
+                  1: pw.FlexColumnWidth(1.4), // Code
+                  2: pw.FlexColumnWidth(3.8), // Item Description
+                  3: pw.FlexColumnWidth(1.0), // Qty
+                  4: pw.FlexColumnWidth(1.4), // Rate
+                  5: pw.FlexColumnWidth(1.0), // GST
+                  6: pw.FlexColumnWidth(1.6), // Total
                 },
                 children: [
-                  // Table Header
+                  // Table Header: Deep Blue background with white text
                   pw.TableRow(
-                    decoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFF1E3A8A)),
+                    decoration: const pw.BoxDecoration(color: colorNavyAccent),
                     children: [
-                      _buildTableHeaderCell('#'),
-                      _buildTableHeaderCell('MTC Code'),
-                      _buildTableHeaderCell('Item Name'),
-                      _buildTableHeaderCell('Qty', align: pw.TextAlign.center),
-                      _buildTableHeaderCell('Rate', align: pw.TextAlign.right),
-                      _buildTableHeaderCell('GST', align: pw.TextAlign.center),
-                      _buildTableHeaderCell('Total', align: pw.TextAlign.right),
+                      _buildHeaderCell('S.No.', align: pw.TextAlign.center),
+                      _buildHeaderCell('Code'),
+                      _buildHeaderCell('Item Description'),
+                      _buildHeaderCell('Qty', align: pw.TextAlign.center),
+                      _buildHeaderCell('Rate', align: pw.TextAlign.right),
+                      _buildHeaderCell('GST', align: pw.TextAlign.center),
+                      _buildHeaderCell('Total', align: pw.TextAlign.right),
                     ],
                   ),
-                  // Table Rows
+                  // Dynamic Items Rows
                   ...order.items.asMap().entries.map((entry) {
                     final idx = entry.key + 1;
                     final it = entry.value;
                     final isEven = idx % 2 == 0;
                     return pw.TableRow(
                       decoration: pw.BoxDecoration(
-                        color: isEven ? const PdfColor.fromInt(0xFFF9FAFB) : PdfColors.white,
+                        color: isEven ? colorRowAlt : PdfColors.white,
                       ),
                       children: [
-                        _buildTableCell('$idx', align: pw.TextAlign.center),
-                        _buildTableCell(it.mtcCode.isNotEmpty ? it.mtcCode : '-'),
+                        _buildDataCell('$idx', align: pw.TextAlign.center),
+                        _buildDataCell(it.mtcCode.isNotEmpty ? it.mtcCode : '-'),
                         pw.Padding(
-                          padding: const pw.EdgeInsets.all(6),
+                          padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
                           child: pw.Column(
                             crossAxisAlignment: pw.CrossAxisAlignment.start,
                             children: [
                               pw.Text(
                                 it.itemName,
                                 style: pw.TextStyle(
-                                  fontSize: 9,
+                                  fontSize: 8.5,
                                   fontWeight: pw.FontWeight.bold,
                                 ),
                               ),
                               if (it.description.isNotEmpty) ...[
-                                pw.SizedBox(height: 2),
+                                pw.SizedBox(height: 1),
                                 pw.Text(
                                   it.description,
                                   style: const pw.TextStyle(
-                                    fontSize: 8,
+                                    fontSize: 7.5,
                                     color: PdfColors.grey700,
                                   ),
                                 ),
@@ -267,111 +287,131 @@ class ExpoPdfService {
                             ],
                           ),
                         ),
-                        _buildTableCell('${it.qty}', align: pw.TextAlign.center),
-                        _buildTableCell(it.rate.toStringAsFixed(2), align: pw.TextAlign.right),
-                        _buildTableCell('${it.gst.toStringAsFixed(0)}%',
-                            align: pw.TextAlign.center),
-                        _buildTableCell(it.total.toStringAsFixed(2), align: pw.TextAlign.right),
+                        _buildDataCell('${it.qty}', align: pw.TextAlign.center),
+                        _buildDataCell(it.rate.toStringAsFixed(2), align: pw.TextAlign.right),
+                        _buildDataCell('${it.gst.toStringAsFixed(0)}%', align: pw.TextAlign.center),
+                        _buildDataCell(it.total.toStringAsFixed(2), align: pw.TextAlign.right),
                       ],
                     );
                   }),
+                  // Optional minimum fill rows to give the clean invoice structure if items are few
+                  if (order.items.length < 5)
+                    ...List.generate(5 - order.items.length, (_) {
+                      return pw.TableRow(
+                        children: List.generate(7, (i) {
+                          return pw.Container(height: 18);
+                        }),
+                      );
+                    }),
                 ],
               ),
-              pw.SizedBox(height: 16),
+              pw.SizedBox(height: 8),
 
-              // Summary Section
+              // 5. Bottom Section: Notes & Customer Signature on Left, Totals on Right
               pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.end,
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Container(
-                    width: 240,
-                    padding: const pw.EdgeInsets.all(12),
-                    decoration: pw.BoxDecoration(
-                      color: PdfColor.fromInt(0xFFF8FAFC),
-                      borderRadius: pw.BorderRadius.circular(6),
-                      border: pw.Border.all(color: PdfColors.grey300),
-                    ),
+                  // Left Column: Notes & Customer Signature
+                  pw.Expanded(
+                    flex: 5,
                     child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        _buildPdfSummaryRow('Total Items / Qty:',
-                            '${order.items.length} items (${order.totalQty} pcs)'),
-                        _buildPdfSummaryRow('Subtotal:', currencyFormat.format(order.subtotal)),
-                        _buildPdfSummaryRow('Total GST:', currencyFormat.format(order.totalGst)),
-                        pw.Divider(color: PdfColors.grey400, thickness: 1),
-                        pw.Row(
-                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                          children: [
-                            pw.Text(
-                              'Grand Total:',
-                              style: pw.TextStyle(
-                                fontSize: 12,
-                                fontWeight: pw.FontWeight.bold,
-                                color: PdfColors.black,
-                              ),
-                            ),
-                            pw.Text(
-                              currencyFormat.format(order.totalAmount),
-                              style: pw.TextStyle(
-                                fontSize: 13,
-                                fontWeight: pw.FontWeight.bold,
-                                color: PdfColor.fromInt(0xFF10B981),
-                              ),
-                            ),
-                          ],
+                        // Notes area
+                        pw.Text(
+                          'Notes: Payment Mode - ${order.paymentMode}${order.deliveryDate != null ? " • Expected Delivery: $deliveryDateFormatted" : ""}',
+                          style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey800),
+                        ),
+                        pw.SizedBox(height: 4),
+                        pw.Text(
+                          'Booked by: ${order.createdUserName} (${order.createdUserBranch.isNotEmpty ? order.createdUserBranch : order.preferredBranch})',
+                          style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+                        ),
+                        pw.SizedBox(height: 16),
+
+                        // Customer Signature Box
+                        pw.Container(
+                          width: 140,
+                          height: 44,
+                          decoration: pw.BoxDecoration(
+                            border: pw.Border.all(color: colorBorderGrey, width: 1),
+                            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)),
+                          ),
+                          alignment: pw.Alignment.bottomCenter,
+                          padding: const pw.EdgeInsets.only(bottom: 2),
+                          child: pw.Text(
+                            '',
+                            style: const pw.TextStyle(fontSize: 8),
+                          ),
+                        ),
+                        pw.SizedBox(height: 3),
+                        pw.Text(
+                          'Customer Signature',
+                          style: pw.TextStyle(
+                            fontSize: 8.5,
+                            fontWeight: pw.FontWeight.bold,
+                            color: colorNavy,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  pw.SizedBox(width: 16),
+
+                  // Right Column: Totals Table matching reference template
+                  // Total Amount | Amt. Received | Total Paid | Advance | Balance Amount
+                  pw.Expanded(
+                    flex: 5,
+                    child: pw.Table(
+                      border: pw.TableBorder.all(color: colorBorderGrey, width: 0.8),
+                      columnWidths: const {
+                        0: pw.FlexColumnWidth(1.2),
+                        1: pw.FlexColumnWidth(1.0),
+                      },
+                      children: [
+                        _buildTotalRow('Total Amount', currencyFormat.format(order.totalAmount)),
+                        _buildTotalRow('Amt. Received', currencyFormat.format(order.totalAmount)),
+                        _buildTotalRow('Total Paid', currencyFormat.format(order.totalAmount)),
+                        _buildTotalRow('Advance', currencyFormat.format(0.0)),
+                        _buildTotalRow(
+                          'Balance Amount',
+                          currencyFormat.format(0.0),
+                          isBold: true,
                         ),
                       ],
                     ),
                   ),
                 ],
               ),
-              pw.SizedBox(height: 24),
-
-              // Notes / Verification Info
-              pw.Container(
-                width: double.infinity,
-                padding: const pw.EdgeInsets.all(10),
-                decoration: pw.BoxDecoration(
-                  color: PdfColor.fromInt(0xFFF1F5F9),
-                  borderRadius: pw.BorderRadius.circular(4),
+            ];
+          },
+          footer: (pw.Context context) {
+            return pw.Column(
+              children: [
+                pw.SizedBox(height: 12),
+                pw.Container(
+                  height: 4,
+                  width: double.infinity,
+                  decoration: const pw.BoxDecoration(
+                    color: colorLimeGreen,
+                    borderRadius: pw.BorderRadius.all(pw.Radius.circular(2)),
+                  ),
                 ),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                pw.SizedBox(height: 4),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
                     pw.Text(
-                      'Payment Method: ${order.paymentMode}',
-                      style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+                      'Page ${context.pageNumber} of ${context.pagesCount}',
+                      style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
                     ),
                     pw.Text(
-                      'Note: This is an auto-generated order summary for the exhibition.',
+                      'Generated on: ${DateFormat("dd/MM/yyyy hh:mm a").format(DateTime.now())}',
                       style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
                     ),
                   ],
                 ),
-              ),
-            ];
-          },
-          footer: (pw.Context context) {
-            return pw.Container(
-              margin: const pw.EdgeInsets.only(top: 16),
-              padding: const pw.EdgeInsets.only(top: 8),
-              decoration: const pw.BoxDecoration(
-                border: pw.Border(
-                  top: pw.BorderSide(color: PdfColors.grey300, width: 0.8),
-                ),
-              ),
-              child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'Page ${context.pageNumber} of ${context.pagesCount}',
-                    style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
-                  ),
-                  pw.Text(
-                    'MTCSYNC Exhibition Module',
-                    style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
-                  ),
-                ],
-              ),
+              ],
             );
           },
         ),
@@ -394,71 +434,112 @@ class ExpoPdfService {
     }
   }
 
-  static pw.Widget _buildTableHeaderCell(String text, {pw.TextAlign align = pw.TextAlign.left}) {
+  /// Builds a template field with colored label badge on left and boxed value container on right
+  static pw.Widget _buildTemplateField(String label, String value, PdfColor labelColor) {
+    return pw.Row(
+      children: [
+        // Label Box
+        pw.Container(
+          width: 82,
+          height: 19,
+          padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          decoration: pw.BoxDecoration(
+            color: labelColor,
+            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)),
+          ),
+          alignment: pw.Alignment.centerLeft,
+          child: pw.Text(
+            label,
+            style: pw.TextStyle(
+              color: PdfColors.white,
+              fontSize: 8.5,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+        ),
+        pw.SizedBox(width: 4),
+        // Value Box
+        pw.Expanded(
+          child: pw.Container(
+            height: 19,
+            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: colorBorderGrey, width: 0.8),
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)),
+              color: PdfColors.white,
+            ),
+            alignment: pw.Alignment.centerLeft,
+            child: pw.Text(
+              value.isNotEmpty ? value : '-',
+              maxLines: 1,
+              style: pw.TextStyle(
+                fontSize: 8.5,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.black,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  static pw.Widget _buildHeaderCell(String text, {pw.TextAlign align = pw.TextAlign.left}) {
     return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
       child: pw.Text(
         text,
         textAlign: align,
         style: pw.TextStyle(
           color: PdfColors.white,
-          fontSize: 9,
+          fontSize: 8.5,
           fontWeight: pw.FontWeight.bold,
         ),
       ),
     );
   }
 
-  static pw.Widget _buildTableCell(String text, {pw.TextAlign align = pw.TextAlign.left}) {
+  static pw.Widget _buildDataCell(String text, {pw.TextAlign align = pw.TextAlign.left}) {
     return pw.Padding(
-      padding: const pw.EdgeInsets.all(6),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
       child: pw.Text(
         text,
         textAlign: align,
-        style: const pw.TextStyle(fontSize: 9),
+        style: const pw.TextStyle(fontSize: 8),
       ),
     );
   }
 
-  static pw.Widget _buildPdfInfoRow(String label, String value) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.only(bottom: 2),
-      child: pw.Row(
-        children: [
-          pw.SizedBox(
-            width: 75,
-            child: pw.Text(
-              '$label:',
-              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
-            ),
-          ),
-          pw.Expanded(
-            child: pw.Text(
-              value.isNotEmpty ? value : '-',
-              style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
-            ),
-          ),
-        ],
+  static pw.TableRow _buildTotalRow(String label, String value, {bool isBold = false}) {
+    return pw.TableRow(
+      decoration: pw.BoxDecoration(
+        color: isBold ? PdfColor.fromInt(0xFFEEF2F6) : PdfColors.white,
       ),
-    );
-  }
-
-  static pw.Widget _buildPdfSummaryRow(String label, String value) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.only(bottom: 3),
-      child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        children: [
-          pw.Text(
+      children: [
+        pw.Padding(
+          padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: pw.Text(
             label,
-            style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+            style: pw.TextStyle(
+              fontSize: 8.5,
+              fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal,
+              color: isBold ? colorNavy : PdfColors.black,
+            ),
           ),
-          pw.Text(
+        ),
+        pw.Padding(
+          padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: pw.Text(
             value,
-            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+            textAlign: pw.TextAlign.right,
+            style: pw.TextStyle(
+              fontSize: 8.5,
+              fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal,
+              color: isBold ? colorNavy : PdfColors.black,
+            ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

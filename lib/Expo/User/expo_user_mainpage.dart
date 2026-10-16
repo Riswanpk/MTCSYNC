@@ -138,6 +138,12 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                   _formatDate(order.orderDate),
                   isDark,
                 ),
+                if (order.deliveryDate != null)
+                  _buildDialogInfoRow(
+                    'Delivery Date',
+                    DateFormat('dd MMM yyyy').format(order.deliveryDate!),
+                    isDark,
+                  ),
                 if (order.phone.isNotEmpty)
                   _buildDialogInfoRow('Phone', order.phone, isDark),
                 if (order.place.isNotEmpty || order.district.isNotEmpty)

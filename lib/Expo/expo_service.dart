@@ -174,6 +174,7 @@ class ExpoOrder {
   final String status; // 'Pending', 'Completed'
   final String paymentMode; // 'Cash', 'Bank Transfer', 'UPI'
   final String? paymentProofUrl; // URL of receipt uploaded to Firebase Storage
+  final DateTime? deliveryDate; // Delivery date for booking orders
   final String createdUserId;
   final String createdUserName;
   final String createdUserBranch;
@@ -202,6 +203,7 @@ class ExpoOrder {
     required this.status,
     this.paymentMode = 'Cash',
     this.paymentProofUrl,
+    this.deliveryDate,
     required this.createdUserId,
     required this.createdUserName,
     required this.createdUserBranch,
@@ -232,6 +234,8 @@ class ExpoOrder {
       'paymentMode': paymentMode,
       if (paymentProofUrl != null && paymentProofUrl!.isNotEmpty)
         'paymentProofUrl': paymentProofUrl,
+      'deliveryDate':
+          deliveryDate != null ? Timestamp.fromDate(deliveryDate!) : null,
       'createdUserId': createdUserId,
       'createdUserName': createdUserName,
       'createdUserBranch': createdUserBranch,
@@ -280,6 +284,9 @@ class ExpoOrder {
       status: data['status'] ?? 'Pending',
       paymentMode: data['paymentMode'] ?? 'Cash',
       paymentProofUrl: data['paymentProofUrl'],
+      deliveryDate: data['deliveryDate'] != null
+          ? parseTimestamp(data['deliveryDate'])
+          : null,
       createdUserId: data['createdUserId'] ?? '',
       createdUserName: data['createdUserName'] ?? '',
       createdUserBranch: data['createdUserBranch'] ?? '',

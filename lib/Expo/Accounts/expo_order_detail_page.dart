@@ -375,6 +375,12 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                       _buildDetailRow('State', order.state, isDark),
                     _buildDetailRow('Preferred Branch', order.preferredBranch, isDark),
                     _buildDetailRow('Salesman', order.preferredSalesman, isDark),
+                    if (order.deliveryDate != null)
+                      _buildDetailRow(
+                        'Delivery Date',
+                        DateFormat('dd MMM yyyy').format(order.deliveryDate!),
+                        isDark,
+                      ),
                     _buildDetailRow('Created By',
                         '${order.createdUserName} (${order.createdUserBranch})', isDark),
                     _buildDetailRow('Payment Mode', order.paymentMode, isDark),
