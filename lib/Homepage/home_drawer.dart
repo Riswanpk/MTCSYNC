@@ -8,6 +8,7 @@ import '../Navigation/user_cache_service.dart';
 import 'manageusers.dart';
 import '../Instructions/instructions.dart';
 import '../Misc/theme_notifier.dart';
+import '../Sync Head/sync_head_deleted_customer_list.dart';
 
 /// Builds the drawer widget for the home page.
 class HomeDrawer extends StatelessWidget {
@@ -32,6 +33,8 @@ class HomeDrawer extends StatelessWidget {
           _buildSettingsTile(context),
           if (role == 'admin' || role == 'sync_head' || role == 'Sync Head')
             _buildManageUsersTile(context),
+          if (role == 'admin' || role == 'sync_head' || role == 'Sync Head')
+            _buildDeletedUserListsTile(context),
 
           _buildInstructionsTile(context),
           _buildLogoutTile(context),
@@ -170,6 +173,24 @@ class HomeDrawer extends StatelessWidget {
           context,
           MaterialPageRoute(
               builder: (context) => ManageUsersPage(userRole: role ?? 'admin')),
+        );
+      },
+    );
+  }
+
+  Widget _buildDeletedUserListsTile(BuildContext context) {
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: const Icon(Icons.person_off_rounded, color: Colors.orange),
+      title: const Text('Deleted User Lists'),
+      onTap: () {
+        Navigator.pop(context);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const SyncHeadDeletedCustomerListPage(),
+          ),
         );
       },
     );
