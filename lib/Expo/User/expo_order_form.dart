@@ -30,9 +30,9 @@ class _ItemRowData {
   final TextEditingController mtcCodeController = TextEditingController();
   final TextEditingController itemNameController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
-  final TextEditingController qtyController = TextEditingController(text: '1');
-  final TextEditingController rateController = TextEditingController(text: '0');
-  final TextEditingController gstController = TextEditingController(text: '18');
+  final TextEditingController qtyController = TextEditingController();
+  final TextEditingController rateController = TextEditingController();
+  final TextEditingController gstController = TextEditingController();
 
   File? photoFile;
   String? existingPhotoUrl;
@@ -783,7 +783,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'Stall Delivery: Customer will pick up from the stall during the exhibition. If not picked up before the exhibition ends, it will convert to a normal booking for branch delivery.',
+                          'Stall Delivery: Customer will pick up from the stall during the exhibition. If not delivered within the exhibition period, it will remain pending as Stall Delivery for reporting.',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
@@ -1829,7 +1829,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                   },
                   decoration: _inputDecoration(
                     label: 'QTY',
-                    hint: '1',
+                    hint: 'Enter qty',
                     isDark: isDark,
                     dense: true,
                   ),
@@ -1848,7 +1848,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                   },
                   decoration: _inputDecoration(
                     label: 'RATE (₹)',
-                    hint: '0',
+                    hint: 'Enter rate',
                     isDark: isDark,
                     dense: true,
                   ),
@@ -1867,7 +1867,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                   },
                   decoration: _inputDecoration(
                     label: 'GST (%)',
-                    hint: '18',
+                    hint: 'Enter GST',
                     isDark: isDark,
                     dense: true,
                   ),

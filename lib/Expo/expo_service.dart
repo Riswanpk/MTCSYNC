@@ -602,41 +602,6 @@ class ExpoService {
     });
   }
 
-  /// Converts an unpicked stall delivery order into a normal booking for branch delivery.
-  Future<void> convertStallDeliveryToBooking(String orderId) async {
-    await _ordersRef.doc(orderId).update({
-      'orderType': 'Booking',
-      'isConvertedToBooking': true,
-      'stallPickupStatus': 'Converted to Booking',
-    });
-  }
-
-  /// Automatically converts any Stall Delivery orders that were not picked up by the time
-  /// the exhibition ends to normal Booking orders.
-  Future<void> autoConvertExpiredStallDeliveries(Exhibition exhibition) async {
-    if (!exhibition.isEnded) return;
-    try {
-      final snapshot = await _ordersRef
-          .where('exhibitionId', isEqualTo: exhibition.id)
-          .where('orderType', isEqualTo: 'Stall Delivery')
-          .get();
-
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-        final status = data['status'] ?? '';
-        final pickupStatus = data['stallPickupStatus'] ?? '';
-        if (status != 'Completed' && pickupStatus != 'Picked Up') {
-          await doc.reference.update({
-            'orderType': 'Booking',
-            'isConvertedToBooking': true,
-            'stallPickupStatus': 'Converted to Booking',
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint('Error auto-converting expired stall deliveries: $e');
-    }
-  }
 
   Future<void> deleteOrder(String orderId) async {
     await _ordersRef.doc(orderId).delete();

@@ -155,58 +155,6 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
     }
   }
 
-  Future<void> _convertToBooking() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Convert to Normal Booking'),
-        content: Text(
-          'Convert order for "${_currentOrder.shopName}" to a Normal Booking? Preferred branch (${_currentOrder.preferredBranch}) will fulfill delivery.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryBlue,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Convert to Booking'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    try {
-      await ExpoService.instance.convertStallDeliveryToBooking(_currentOrder.id);
-      setState(() {
-        _currentOrder = _currentOrder.copyWith(
-          orderType: 'Booking',
-          isConvertedToBooking: true,
-          stallPickupStatus: 'Converted to Booking',
-        );
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Order converted to Normal Booking!'),
-            backgroundColor: primaryBlue,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.redAccent),
-        );
-      }
-    }
-  }
 
   Future<void> _exportPdf() async {
     setState(() => _isExportingPdf = true);
@@ -497,8 +445,6 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                       ),
                     if (order.stallPickupStatus != null && order.stallPickupStatus!.isNotEmpty)
                       _buildDetailRow('Stall Status', order.stallPickupStatus!, isDark),
-                    if (order.isConvertedToBooking)
-                      _buildDetailRow('Notice', 'Converted from Stall Delivery to Normal Booking', isDark),
                     _buildDetailRow('Created By',
                         '${order.createdUserName} (${order.createdUserBranch})', isDark),
                     _buildDetailRow('Payment Mode', order.paymentMode, isDark),
@@ -968,8 +914,7 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                 ),
               ],
               if (order.orderType == 'Stall Delivery' &&
-                  order.stallPickupStatus != 'Picked Up' &&
-                  !order.isConvertedToBooking) ...[
+                  order.stallPickupStatus != 'Picked Up') ...[
                 const SizedBox(width: 10),
                 IconButton(
                   tooltip: 'Mark Picked Up at Stall',
@@ -979,15 +924,6 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                   ),
                   onPressed: _markStallPickup,
                   icon: const Icon(Icons.storefront_rounded),
-                ),
-                IconButton(
-                  tooltip: 'Convert to Normal Booking',
-                  style: IconButton.styleFrom(
-                    backgroundColor: primaryBlue.withValues(alpha: 0.15),
-                    foregroundColor: primaryBlue,
-                  ),
-                  onPressed: _convertToBooking,
-                  icon: const Icon(Icons.transform_rounded),
                 ),
               ],
             ],

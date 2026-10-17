@@ -157,12 +157,6 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                     order.stallPickupStatus!,
                     isDark,
                   ),
-                if (order.isConvertedToBooking)
-                  _buildDialogInfoRow(
-                    'Notice',
-                    'Converted from Stall Delivery to Normal Booking',
-                    isDark,
-                  ),
                 if (order.phone.isNotEmpty)
                   _buildDialogInfoRow('Phone', order.phone, isDark),
                 if (order.place.isNotEmpty || order.district.isNotEmpty)
@@ -594,9 +588,6 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
         }
 
         final currentEx = _selectedExhibition!;
-        if (currentEx.isEnded) {
-          ExpoService.instance.autoConvertExpiredStallDeliveries(currentEx);
-        }
 
         return DefaultTabController(
           length: 2,
