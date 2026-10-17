@@ -171,10 +171,15 @@ class ExpoOrder {
   final double totalGst;
   final double totalAmount;
   final int totalQty;
-  final String status; // 'Pending', 'Completed'
+  final double advanceAmount; // Advance paid (for booking / stall delivery)
+  final double balanceAmount; // Remaining balance due
+  final String status; // 'Pending Verification', 'Completed'
   final String paymentMode; // 'Cash', 'Bank Transfer', 'UPI'
   final String? paymentProofUrl; // URL of receipt uploaded to Firebase Storage
   final DateTime? deliveryDate; // Delivery date for booking orders
+  final DateTime? stallPickupDate; // Expected pickup date during exhibition for Stall Delivery
+  final bool isConvertedToBooking; // True if stall delivery wasn't picked up and got converted to booking
+  final String? stallPickupStatus; // 'Pending Pickup', 'Picked Up', 'Converted to Booking'
   final String createdUserId;
   final String createdUserName;
   final String createdUserBranch;
@@ -200,10 +205,15 @@ class ExpoOrder {
     required this.totalGst,
     required this.totalAmount,
     required this.totalQty,
+    this.advanceAmount = 0.0,
+    this.balanceAmount = 0.0,
     required this.status,
     this.paymentMode = 'Cash',
     this.paymentProofUrl,
     this.deliveryDate,
+    this.stallPickupDate,
+    this.isConvertedToBooking = false,
+    this.stallPickupStatus,
     required this.createdUserId,
     required this.createdUserName,
     required this.createdUserBranch,
@@ -230,12 +240,19 @@ class ExpoOrder {
       'totalGst': totalGst,
       'totalAmount': totalAmount,
       'totalQty': totalQty,
+      'advanceAmount': advanceAmount,
+      'balanceAmount': balanceAmount,
       'status': status,
       'paymentMode': paymentMode,
       if (paymentProofUrl != null && paymentProofUrl!.isNotEmpty)
         'paymentProofUrl': paymentProofUrl,
       'deliveryDate':
           deliveryDate != null ? Timestamp.fromDate(deliveryDate!) : null,
+      if (stallPickupDate != null)
+        'stallPickupDate': Timestamp.fromDate(stallPickupDate!),
+      'isConvertedToBooking': isConvertedToBooking,
+      if (stallPickupStatus != null && stallPickupStatus!.isNotEmpty)
+        'stallPickupStatus': stallPickupStatus,
       'createdUserId': createdUserId,
       'createdUserName': createdUserName,
       'createdUserBranch': createdUserBranch,
@@ -281,12 +298,21 @@ class ExpoOrder {
       totalGst: (data['totalGst'] as num?)?.toDouble() ?? 0.0,
       totalAmount: (data['totalAmount'] as num?)?.toDouble() ?? 0.0,
       totalQty: (data['totalQty'] as num?)?.toInt() ?? 0,
+      advanceAmount: (data['advanceAmount'] as num?)?.toDouble() ?? 0.0,
+      balanceAmount: (data['balanceAmount'] as num?)?.toDouble() ??
+          (((data['totalAmount'] as num?)?.toDouble() ?? 0.0) -
+              ((data['advanceAmount'] as num?)?.toDouble() ?? 0.0)),
       status: data['status'] ?? 'Pending',
       paymentMode: data['paymentMode'] ?? 'Cash',
       paymentProofUrl: data['paymentProofUrl'],
       deliveryDate: data['deliveryDate'] != null
           ? parseTimestamp(data['deliveryDate'])
           : null,
+      stallPickupDate: data['stallPickupDate'] != null
+          ? parseTimestamp(data['stallPickupDate'])
+          : null,
+      isConvertedToBooking: data['isConvertedToBooking'] ?? false,
+      stallPickupStatus: data['stallPickupStatus'],
       createdUserId: data['createdUserId'] ?? '',
       createdUserName: data['createdUserName'] ?? '',
       createdUserBranch: data['createdUserBranch'] ?? '',
@@ -294,6 +320,76 @@ class ExpoOrder {
       completedAt: data['completedAt'] != null
           ? parseTimestamp(data['completedAt'])
           : null,
+    );
+  }
+
+  ExpoOrder copyWith({
+    String? id,
+    String? exhibitionId,
+    String? exhibitionName,
+    String? orderType,
+    DateTime? orderDate,
+    String? shopName,
+    String? customerName,
+    String? place,
+    String? district,
+    String? state,
+    String? phone,
+    String? preferredBranch,
+    String? preferredSalesman,
+    List<ExpoOrderItem>? items,
+    double? subtotal,
+    double? totalGst,
+    double? totalAmount,
+    int? totalQty,
+    double? advanceAmount,
+    double? balanceAmount,
+    String? status,
+    String? paymentMode,
+    String? paymentProofUrl,
+    DateTime? deliveryDate,
+    DateTime? stallPickupDate,
+    bool? isConvertedToBooking,
+    String? stallPickupStatus,
+    String? createdUserId,
+    String? createdUserName,
+    String? createdUserBranch,
+    DateTime? createdAt,
+    DateTime? completedAt,
+  }) {
+    return ExpoOrder(
+      id: id ?? this.id,
+      exhibitionId: exhibitionId ?? this.exhibitionId,
+      exhibitionName: exhibitionName ?? this.exhibitionName,
+      orderType: orderType ?? this.orderType,
+      orderDate: orderDate ?? this.orderDate,
+      shopName: shopName ?? this.shopName,
+      customerName: customerName ?? this.customerName,
+      place: place ?? this.place,
+      district: district ?? this.district,
+      state: state ?? this.state,
+      phone: phone ?? this.phone,
+      preferredBranch: preferredBranch ?? this.preferredBranch,
+      preferredSalesman: preferredSalesman ?? this.preferredSalesman,
+      items: items ?? this.items,
+      subtotal: subtotal ?? this.subtotal,
+      totalGst: totalGst ?? this.totalGst,
+      totalAmount: totalAmount ?? this.totalAmount,
+      totalQty: totalQty ?? this.totalQty,
+      advanceAmount: advanceAmount ?? this.advanceAmount,
+      balanceAmount: balanceAmount ?? this.balanceAmount,
+      status: status ?? this.status,
+      paymentMode: paymentMode ?? this.paymentMode,
+      paymentProofUrl: paymentProofUrl ?? this.paymentProofUrl,
+      deliveryDate: deliveryDate ?? this.deliveryDate,
+      stallPickupDate: stallPickupDate ?? this.stallPickupDate,
+      isConvertedToBooking: isConvertedToBooking ?? this.isConvertedToBooking,
+      stallPickupStatus: stallPickupStatus ?? this.stallPickupStatus,
+      createdUserId: createdUserId ?? this.createdUserId,
+      createdUserName: createdUserName ?? this.createdUserName,
+      createdUserBranch: createdUserBranch ?? this.createdUserBranch,
+      createdAt: createdAt ?? this.createdAt,
+      completedAt: completedAt ?? this.completedAt,
     );
   }
 }
@@ -495,6 +591,51 @@ class ExpoService {
       updateData['completedAt'] = null;
     }
     await _ordersRef.doc(orderId).update(updateData);
+  }
+
+  /// Marks a stall delivery order as picked up by the customer at the stall (Spot Delivery).
+  Future<void> markStallDeliveryPickedUp(String orderId) async {
+    await _ordersRef.doc(orderId).update({
+      'status': 'Completed',
+      'stallPickupStatus': 'Picked Up',
+      'completedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Converts an unpicked stall delivery order into a normal booking for branch delivery.
+  Future<void> convertStallDeliveryToBooking(String orderId) async {
+    await _ordersRef.doc(orderId).update({
+      'orderType': 'Booking',
+      'isConvertedToBooking': true,
+      'stallPickupStatus': 'Converted to Booking',
+    });
+  }
+
+  /// Automatically converts any Stall Delivery orders that were not picked up by the time
+  /// the exhibition ends to normal Booking orders.
+  Future<void> autoConvertExpiredStallDeliveries(Exhibition exhibition) async {
+    if (!exhibition.isEnded) return;
+    try {
+      final snapshot = await _ordersRef
+          .where('exhibitionId', isEqualTo: exhibition.id)
+          .where('orderType', isEqualTo: 'Stall Delivery')
+          .get();
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final status = data['status'] ?? '';
+        final pickupStatus = data['stallPickupStatus'] ?? '';
+        if (status != 'Completed' && pickupStatus != 'Picked Up') {
+          await doc.reference.update({
+            'orderType': 'Booking',
+            'isConvertedToBooking': true,
+            'stallPickupStatus': 'Converted to Booking',
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error auto-converting expired stall deliveries: $e');
+    }
   }
 
   Future<void> deleteOrder(String orderId) async {

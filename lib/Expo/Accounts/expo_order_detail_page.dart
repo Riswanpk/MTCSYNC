@@ -102,6 +102,112 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
     }
   }
 
+  Future<void> _markStallPickup() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm Stall Pickup'),
+        content: Text(
+          'Confirm that customer "${_currentOrder.shopName}" has picked up their items at the stall? This completes the order as a spot delivery.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryGreen,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Confirm Pickup'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await ExpoService.instance.markStallDeliveryPickedUp(_currentOrder.id);
+      setState(() {
+        _currentOrder = _currentOrder.copyWith(
+          status: 'Completed',
+          stallPickupStatus: 'Picked Up',
+          completedAt: DateTime.now(),
+        );
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Order marked as picked up at stall (Spot Delivery)!'),
+            backgroundColor: primaryGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
+  Future<void> _convertToBooking() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Convert to Normal Booking'),
+        content: Text(
+          'Convert order for "${_currentOrder.shopName}" to a Normal Booking? Preferred branch (${_currentOrder.preferredBranch}) will fulfill delivery.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryBlue,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Convert to Booking'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await ExpoService.instance.convertStallDeliveryToBooking(_currentOrder.id);
+      setState(() {
+        _currentOrder = _currentOrder.copyWith(
+          orderType: 'Booking',
+          isConvertedToBooking: true,
+          stallPickupStatus: 'Converted to Booking',
+        );
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Order converted to Normal Booking!'),
+            backgroundColor: primaryBlue,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
+
   Future<void> _exportPdf() async {
     setState(() => _isExportingPdf = true);
     try {
@@ -373,14 +479,26 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                       _buildDetailRow('District', order.district, isDark),
                     if (order.state.isNotEmpty)
                       _buildDetailRow('State', order.state, isDark),
-                    _buildDetailRow('Preferred Branch', order.preferredBranch, isDark),
-                    _buildDetailRow('Salesman', order.preferredSalesman, isDark),
+                    if (order.orderType != 'Spot Delivery') ...[
+                      _buildDetailRow('Preferred Branch', order.preferredBranch, isDark),
+                      _buildDetailRow('Salesman', order.preferredSalesman, isDark),
+                    ],
                     if (order.deliveryDate != null)
                       _buildDetailRow(
                         'Delivery Date',
                         DateFormat('dd MMM yyyy').format(order.deliveryDate!),
                         isDark,
                       ),
+                    if (order.stallPickupDate != null)
+                      _buildDetailRow(
+                        'Pickup Date',
+                        DateFormat('dd MMM yyyy').format(order.stallPickupDate!),
+                        isDark,
+                      ),
+                    if (order.stallPickupStatus != null && order.stallPickupStatus!.isNotEmpty)
+                      _buildDetailRow('Stall Status', order.stallPickupStatus!, isDark),
+                    if (order.isConvertedToBooking)
+                      _buildDetailRow('Notice', 'Converted from Stall Delivery to Normal Booking', isDark),
                     _buildDetailRow('Created By',
                         '${order.createdUserName} (${order.createdUserBranch})', isDark),
                     _buildDetailRow('Payment Mode', order.paymentMode, isDark),
@@ -732,6 +850,37 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                               ),
                             ],
                           ),
+                          if (order.orderType != 'Spot Delivery') ...[
+                            const Divider(height: 16),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Advance Paid:',
+                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                Text(
+                                  '₹${order.advanceAmount.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                      fontSize: 13, fontWeight: FontWeight.bold, color: primaryGreen),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Balance Due:',
+                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                Text(
+                                  '₹${order.balanceAmount.toStringAsFixed(2)}',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: order.balanceAmount > 0 ? const Color(0xFFE65100) : primaryGreen,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -816,6 +965,29 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                       ),
                     ),
                   ),
+                ),
+              ],
+              if (order.orderType == 'Stall Delivery' &&
+                  order.stallPickupStatus != 'Picked Up' &&
+                  !order.isConvertedToBooking) ...[
+                const SizedBox(width: 10),
+                IconButton(
+                  tooltip: 'Mark Picked Up at Stall',
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF6F00).withValues(alpha: 0.15),
+                    foregroundColor: const Color(0xFFFF6F00),
+                  ),
+                  onPressed: _markStallPickup,
+                  icon: const Icon(Icons.storefront_rounded),
+                ),
+                IconButton(
+                  tooltip: 'Convert to Normal Booking',
+                  style: IconButton.styleFrom(
+                    backgroundColor: primaryBlue.withValues(alpha: 0.15),
+                    foregroundColor: primaryBlue,
+                  ),
+                  onPressed: _convertToBooking,
+                  icon: const Icon(Icons.transform_rounded),
                 ),
               ],
             ],

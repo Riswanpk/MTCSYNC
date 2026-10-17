@@ -144,6 +144,25 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                     DateFormat('dd MMM yyyy').format(order.deliveryDate!),
                     isDark,
                   ),
+                if (order.stallPickupDate != null)
+                  _buildDialogInfoRow(
+                    'Pickup Date',
+                    DateFormat('dd MMM yyyy').format(order.stallPickupDate!),
+                    isDark,
+                  ),
+                if (order.stallPickupStatus != null &&
+                    order.stallPickupStatus!.isNotEmpty)
+                  _buildDialogInfoRow(
+                    'Stall Status',
+                    order.stallPickupStatus!,
+                    isDark,
+                  ),
+                if (order.isConvertedToBooking)
+                  _buildDialogInfoRow(
+                    'Notice',
+                    'Converted from Stall Delivery to Normal Booking',
+                    isDark,
+                  ),
                 if (order.phone.isNotEmpty)
                   _buildDialogInfoRow('Phone', order.phone, isDark),
                 if (order.place.isNotEmpty || order.district.isNotEmpty)
@@ -154,11 +173,12 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                         .join(', '),
                     isDark,
                   ),
-                _buildDialogInfoRow(
-                  'Branch / Salesman',
-                  '${order.preferredBranch} (${order.preferredSalesman})',
-                  isDark,
-                ),
+                if (order.orderType != 'Spot Delivery')
+                  _buildDialogInfoRow(
+                    'Branch / Salesman',
+                    '${order.preferredBranch} (${order.preferredSalesman})',
+                    isDark,
+                  ),
                 _buildDialogInfoRow(
                   'Booked By',
                   '${order.createdUserName} (${order.createdUserBranch})',
@@ -357,6 +377,38 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                     ),
                   ],
                 ),
+                if (order.orderType != 'Spot Delivery') ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Advance Paid:'),
+                      Text(
+                        '₹${order.advanceAmount.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: primaryGreen,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Balance Due:'),
+                      Text(
+                        '₹${order.balanceAmount.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: order.balanceAmount > 0
+                              ? const Color(0xFFE65100)
+                              : primaryGreen,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -366,6 +418,29 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('Close'),
           ),
+          if (order.orderType == 'Stall Delivery' &&
+              order.stallPickupStatus != 'Picked Up' &&
+              !order.isConvertedToBooking)
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.of(ctx).pop();
+                await ExpoService.instance.markStallDeliveryPickedUp(order.id);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                          'Order marked as Picked Up at Stall (Spot Delivery)!'),
+                      backgroundColor: primaryGreen,
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF6F00),
+              ),
+              child: const Text('Picked Up at Stall',
+                  style: TextStyle(color: Colors.white)),
+            ),
           ElevatedButton(
             onPressed: () async {
               Navigator.of(ctx).pop();
@@ -519,6 +594,9 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
         }
 
         final currentEx = _selectedExhibition!;
+        if (currentEx.isEnded) {
+          ExpoService.instance.autoConvertExpiredStallDeliveries(currentEx);
+        }
 
         return DefaultTabController(
           length: 2,
@@ -1019,13 +1097,16 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                               color: isDark ? Colors.white60 : Colors.black54,
                             ),
                           ),
-                          Text(
-                            'Branch: ${order.preferredBranch}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: isDark ? Colors.white38 : Colors.black45,
+                          if (order.orderType != 'Spot Delivery' &&
+                              order.preferredBranch.isNotEmpty &&
+                              order.preferredBranch != 'N/A')
+                            Text(
+                              'Branch: ${order.preferredBranch}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isDark ? Colors.white38 : Colors.black45,
+                              ),
                             ),
-                          ),
                         ],
                       ),
                       Column(

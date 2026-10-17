@@ -28,9 +28,13 @@ class ExpoPdfService {
     try {
       final pdf = pw.Document();
       final dateFormatted = DateFormat('dd/MM/yyyy').format(order.orderDate);
+      final isSpotDelivery = order.orderType == 'Spot Delivery';
+      final isStallDelivery = order.orderType == 'Stall Delivery';
       final deliveryDateFormatted = order.deliveryDate != null
           ? DateFormat('dd/MM/yyyy').format(order.deliveryDate!)
-          : (order.orderType == 'Booking' ? 'To be confirmed' : 'Immediate');
+          : (order.stallPickupDate != null
+              ? DateFormat('dd/MM/yyyy').format(order.stallPickupDate!)
+              : (order.orderType == 'Booking' ? 'To be confirmed' : 'Immediate'));
       final currencyFormat = NumberFormat.currency(symbol: 'Rs. ', decimalDigits: 2);
 
       // Try loading company logo if present
@@ -151,9 +155,11 @@ class ExpoPdfService {
                         // Sales Rep Field
                         _buildTemplateField(
                           'Sales Rep.',
-                          order.preferredSalesman != 'N/A'
-                              ? order.preferredSalesman
-                              : order.createdUserName,
+                          order.orderType == 'Spot Delivery'
+                              ? '-'
+                              : (order.preferredSalesman != 'N/A' && order.preferredSalesman.isNotEmpty
+                                  ? order.preferredSalesman
+                                  : '-'),
                           colorLimeGreen,
                         ),
                       ],
@@ -186,7 +192,11 @@ class ExpoPdfService {
                             ),
                           ),
                           pw.TextSpan(
-                            text: order.preferredBranch,
+                            text: isSpotDelivery
+                                ? '-'
+                                : (order.preferredBranch != 'N/A' && order.preferredBranch.isNotEmpty
+                                    ? order.preferredBranch
+                                    : '-'),
                             style: pw.TextStyle(
                               fontSize: 10,
                               fontWeight: pw.FontWeight.bold,
@@ -196,28 +206,31 @@ class ExpoPdfService {
                         ],
                       ),
                     ),
-                    pw.RichText(
-                      text: pw.TextSpan(
-                        children: [
-                          pw.TextSpan(
-                            text: 'Delivery Date: ',
-                            style: pw.TextStyle(
-                              fontSize: 10,
-                              fontWeight: pw.FontWeight.bold,
-                              color: colorNavy,
+                    if (!isSpotDelivery)
+                      pw.RichText(
+                        text: pw.TextSpan(
+                          children: [
+                            pw.TextSpan(
+                              text: isStallDelivery
+                                  ? 'Pickup Date: '
+                                  : 'Delivery Date: ',
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                fontWeight: pw.FontWeight.bold,
+                                color: colorNavy,
+                              ),
                             ),
-                          ),
-                          pw.TextSpan(
-                            text: deliveryDateFormatted,
-                            style: pw.TextStyle(
-                              fontSize: 10,
-                              fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.black,
+                            pw.TextSpan(
+                              text: deliveryDateFormatted,
+                              style: pw.TextStyle(
+                                fontSize: 10,
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColors.black,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -319,12 +332,12 @@ class ExpoPdfService {
                       children: [
                         // Notes area
                         pw.Text(
-                          'Notes: Payment Mode - ${order.paymentMode}${order.deliveryDate != null ? " • Expected Delivery: $deliveryDateFormatted" : ""}',
+                          'Notes: Payment Mode - ${order.paymentMode}${!isSpotDelivery && order.advanceAmount > 0 ? " • Advance Paid: ${currencyFormat.format(order.advanceAmount)}" : ""}${!isSpotDelivery && order.balanceAmount > 0 ? " • Balance Due: ${currencyFormat.format(order.balanceAmount)}" : ""}${!isSpotDelivery && order.deliveryDate != null ? " • Expected Delivery: $deliveryDateFormatted" : ""}',
                           style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey800),
                         ),
                         pw.SizedBox(height: 4),
                         pw.Text(
-                          'Booked by: ${order.createdUserName} (${order.createdUserBranch.isNotEmpty ? order.createdUserBranch : order.preferredBranch})',
+                          'Booked by: ${order.createdUserName}${order.createdUserBranch.isNotEmpty ? " (${order.createdUserBranch})" : ""}',
                           style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
                         ),
                         pw.SizedBox(height: 16),
@@ -370,12 +383,21 @@ class ExpoPdfService {
                       },
                       children: [
                         _buildTotalRow('Total Amount', currencyFormat.format(order.totalAmount)),
-                        _buildTotalRow('Amt. Received', currencyFormat.format(order.totalAmount)),
-                        _buildTotalRow('Total Paid', currencyFormat.format(order.totalAmount)),
-                        _buildTotalRow('Advance', currencyFormat.format(0.0)),
+                        _buildTotalRow(
+                          'Amt. Received',
+                          currencyFormat.format(isSpotDelivery ? order.totalAmount : order.advanceAmount),
+                        ),
+                        _buildTotalRow(
+                          'Total Paid',
+                          currencyFormat.format(isSpotDelivery ? order.totalAmount : order.advanceAmount),
+                        ),
+                        _buildTotalRow(
+                          'Advance',
+                          currencyFormat.format(isSpotDelivery ? 0.0 : order.advanceAmount),
+                        ),
                         _buildTotalRow(
                           'Balance Amount',
-                          currencyFormat.format(0.0),
+                          currencyFormat.format(isSpotDelivery ? 0.0 : order.balanceAmount),
                           isBold: true,
                         ),
                       ],
@@ -419,14 +441,18 @@ class ExpoPdfService {
 
       final bytes = await pdf.save();
       final tempDir = await getTemporaryDirectory();
-      final sanitizedShop = order.shopName.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
-      final fileName = 'Order_${sanitizedShop.isEmpty ? "Expo" : sanitizedShop}_${order.id.isNotEmpty ? order.id.substring(0, order.id.length.clamp(0, 6)) : DateTime.now().millisecondsSinceEpoch}.pdf';
+      final dateStr = DateFormat('dd-MM-yyyy').format(order.orderDate);
+      final sanitizedShop = order.shopName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '').trim();
+      final sanitizedType = order.orderType.replaceAll(RegExp(r'[\\/:*?"<>|]'), '').trim();
+      final safeShop = sanitizedShop.isNotEmpty ? sanitizedShop : 'Shop';
+      final safeType = sanitizedType.isNotEmpty ? sanitizedType : 'Order';
+      final fileName = '$safeShop $safeType $dateStr.pdf';
       final file = File('${tempDir.path}/$fileName');
       await file.writeAsBytes(bytes);
 
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'application/pdf', name: fileName)],
-        text: 'Expo Order - ${order.shopName} (${order.exhibitionName})',
+        text: '$safeShop $safeType $dateStr',
       );
     } catch (e) {
       debugPrint('Error generating/exporting PDF: $e');

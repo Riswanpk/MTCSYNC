@@ -78,6 +78,13 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
   // Booking Delivery Date
   DateTime? _deliveryDate;
 
+  // Stall Delivery Pickup Date
+  DateTime? _stallPickupDate;
+
+  // Advance & Balance (for booking / stall delivery)
+  final TextEditingController _advanceController =
+      TextEditingController(text: '0');
+
   final FocusNode _shopFocusNode = FocusNode();
 
   // Preferred Branch & Preferred Salesman (Do not auto-select branch)
@@ -112,6 +119,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     _districtController.dispose();
     _stateController.dispose();
     _phoneController.dispose();
+    _advanceController.dispose();
     _shopFocusNode.dispose();
     for (final item in _items) {
       item.dispose();
@@ -131,17 +139,19 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       _phoneController.text = customer['phone'] ?? '';
     });
 
-    final branch = (customer['preferredBranch'] ?? '').toString().trim();
-    if (branch.isNotEmpty) {
-      await _onBranchChanged(branch);
-      final salesman =
-          (customer['preferredSalesman'] ?? '').toString().trim();
-      if (salesman.isNotEmpty && mounted) {
-        setState(() {
-          if (_salesmenForBranch.contains(salesman)) {
-            _selectedSalesman = salesman;
-          }
-        });
+    if (_selectedOrderType != 'Spot Delivery') {
+      final branch = (customer['preferredBranch'] ?? '').toString().trim();
+      if (branch.isNotEmpty) {
+        await _onBranchChanged(branch);
+        final salesman =
+            (customer['preferredSalesman'] ?? '').toString().trim();
+        if (salesman.isNotEmpty && mounted) {
+          setState(() {
+            if (_salesmenForBranch.contains(salesman)) {
+              _selectedSalesman = salesman;
+            }
+          });
+        }
       }
     }
   }
@@ -409,6 +419,18 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
 
   double get _grandTotal => _subtotal + _totalGst;
 
+  double get _advanceAmount {
+    if (_selectedOrderType == 'Spot Delivery') return _grandTotal;
+    final val = double.tryParse(_advanceController.text.trim()) ?? 0.0;
+    return val.clamp(0.0, _grandTotal);
+  }
+
+  double get _balanceAmount {
+    if (_selectedOrderType == 'Spot Delivery') return 0.0;
+    final bal = _grandTotal - _advanceAmount;
+    return bal < 0 ? 0.0 : bal;
+  }
+
   int get _totalQty {
     int sum = 0;
     for (final it in _items) {
@@ -422,11 +444,23 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       return;
     }
 
-    if (_selectedPreferredBranch == null || _selectedPreferredBranch!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select preferred branch')),
-      );
-      return;
+    if (_selectedOrderType != 'Spot Delivery') {
+      if (_selectedPreferredBranch == null || _selectedPreferredBranch!.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select preferred branch')),
+        );
+        return;
+      }
+      final advanceEntered =
+          double.tryParse(_advanceController.text.trim()) ?? 0.0;
+      if (advanceEntered > _grandTotal) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Advance amount cannot exceed Grand Total'),
+          ),
+        );
+        return;
+      }
     }
 
     // Validate items
@@ -514,17 +548,32 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         district: _districtController.text.trim(),
         state: _stateController.text.trim(),
         phone: _phoneController.text.trim(),
-        preferredBranch: _selectedPreferredBranch!,
-        preferredSalesman: _selectedSalesman,
+        preferredBranch: _selectedOrderType == 'Spot Delivery'
+            ? 'N/A'
+            : (_selectedPreferredBranch ?? 'N/A'),
+        preferredSalesman: _selectedOrderType == 'Spot Delivery'
+            ? 'N/A'
+            : _selectedSalesman,
         items: orderItems,
         subtotal: _subtotal,
         totalGst: _totalGst,
         totalAmount: _grandTotal,
         totalQty: _totalQty,
+        advanceAmount: _selectedOrderType == 'Spot Delivery'
+            ? _grandTotal
+            : _advanceAmount,
+        balanceAmount:
+            _selectedOrderType == 'Spot Delivery' ? 0.0 : _balanceAmount,
         status: 'Pending Verification',
         paymentMode: _selectedPaymentMode,
         paymentProofUrl: paymentProofUrl,
         deliveryDate: _selectedOrderType == 'Booking' ? _deliveryDate : null,
+        stallPickupDate:
+            _selectedOrderType == 'Stall Delivery' ? _stallPickupDate : null,
+        isConvertedToBooking: false,
+        stallPickupStatus: _selectedOrderType == 'Stall Delivery'
+            ? 'Pending Pickup'
+            : null,
         createdUserId: user?.uid ?? '',
         createdUserName: cache.username ?? user?.displayName ?? 'Sales User',
         createdUserBranch: cache.branch ?? '',
@@ -710,6 +759,117 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                         const Spacer(),
                         const Icon(Icons.calendar_month_rounded,
                             color: primaryGreen, size: 20),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              if (_selectedOrderType == 'Stall Delivery') ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF6F00)
+                        .withValues(alpha: isDark ? 0.15 : 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFFFF6F00).withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline_rounded,
+                          color: Color(0xFFFF6F00), size: 22),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Stall Delivery: Customer will pick up from the stall during the exhibition. If not picked up before the exhibition ends, it will convert to a normal booking for branch delivery.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: isDark
+                                ? Colors.white70
+                                : const Color(0xFF8C3B00),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () async {
+                    final first = widget.exhibition.startDate;
+                    final last = widget.exhibition.endDate;
+                    final initial = _stallPickupDate ??
+                        (DateTime.now().isBefore(last)
+                            ? DateTime.now()
+                            : first);
+                    final safeInitial = initial.isBefore(first)
+                        ? first
+                        : (initial.isAfter(last) ? last : initial);
+                    final safeLast = last.isBefore(first)
+                        ? first.add(const Duration(days: 30))
+                        : last;
+
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: safeInitial,
+                      firstDate: first,
+                      lastDate: safeLast,
+                    );
+                    if (picked != null) {
+                      setState(() => _stallPickupDate = picked);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF0F243E)
+                          : const Color(0xFFFF6F00).withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFFFF6F00).withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.event_available_rounded,
+                            color: Color(0xFFFF6F00), size: 22),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Expected Pickup Date',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.white60 : Colors.black54,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _stallPickupDate != null
+                                  ? DateFormat('dd MMM yyyy')
+                                      .format(_stallPickupDate!)
+                                  : 'Select Pickup Date',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: _stallPickupDate != null
+                                    ? (isDark ? Colors.white : Colors.black87)
+                                    : const Color(0xFFFF6F00),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Spacer(),
+                        const Icon(Icons.calendar_month_rounded,
+                            color: Color(0xFFFF6F00), size: 20),
                       ],
                     ),
                   ),
@@ -936,50 +1096,51 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-
-                    // Preferred Branch (Dropdown - Not auto-selected)
-                    DropdownButtonFormField<String>(
-                      value: _selectedPreferredBranch,
-                      items: _allBranches.map((b) {
-                        return DropdownMenuItem<String>(
-                          value: b,
-                          child: Text(b),
-                        );
-                      }).toList(),
-                      onChanged: _onBranchChanged,
-                      decoration: _inputDecoration(
-                        label: 'Preferred Branch',
-                        hint: _isLoadingBranches
-                            ? 'Loading branches...'
-                            : 'Select branch',
-                        icon: Icons.business_rounded,
-                        isDark: isDark,
+                    if (_selectedOrderType != 'Spot Delivery') ...[
+                      const SizedBox(height: 12),
+                      // Preferred Branch (Dropdown - Not auto-selected)
+                      DropdownButtonFormField<String>(
+                        value: _selectedPreferredBranch,
+                        items: _allBranches.map((b) {
+                          return DropdownMenuItem<String>(
+                            value: b,
+                            child: Text(b),
+                          );
+                        }).toList(),
+                        onChanged: _onBranchChanged,
+                        decoration: _inputDecoration(
+                          label: 'Preferred Branch',
+                          hint: _isLoadingBranches
+                              ? 'Loading branches...'
+                              : 'Select branch',
+                          icon: Icons.business_rounded,
+                          isDark: isDark,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
+                      const SizedBox(height: 12),
 
-                    // Preferred Salesman (Dropdown based on branch with N/A)
-                    DropdownButtonFormField<String>(
-                      value: _selectedSalesman,
-                      items: _salesmenForBranch.map((s) {
-                        return DropdownMenuItem<String>(
-                          value: s,
-                          child: Text(s),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() => _selectedSalesman = val);
-                        }
-                      },
-                      decoration: _inputDecoration(
-                        label: 'Preferred Salesman',
-                        hint: 'Select salesman',
-                        icon: Icons.badge_rounded,
-                        isDark: isDark,
+                      // Preferred Salesman (Dropdown based on branch with N/A)
+                      DropdownButtonFormField<String>(
+                        value: _selectedSalesman,
+                        items: _salesmenForBranch.map((s) {
+                          return DropdownMenuItem<String>(
+                            value: s,
+                            child: Text(s),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _selectedSalesman = val);
+                          }
+                        },
+                        decoration: _inputDecoration(
+                          label: 'Preferred Salesman',
+                          hint: 'Select salesman',
+                          icon: Icons.badge_rounded,
+                          isDark: isDark,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -1233,6 +1394,154 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                           ),
                         ],
                       ),
+                      if (_selectedOrderType != 'Spot Delivery') ...[
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 10),
+                          child: Divider(height: 1),
+                        ),
+                        // Advance & Balance Section
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              flex: 5,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Advance Amount (₹)',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: isDark
+                                          ? Colors.white70
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  TextFormField(
+                                    controller: _advanceController,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true),
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.allow(
+                                          RegExp(r'^\d*\.?\d{0,2}')),
+                                    ],
+                                    onChanged: (_) {
+                                      setState(() {});
+                                    },
+                                    decoration: InputDecoration(
+                                      hintText: '0.00',
+                                      prefixIcon: const Icon(
+                                          Icons.payments_outlined,
+                                          size: 20),
+                                      isDense: true,
+                                      filled: true,
+                                      fillColor: isDark
+                                          ? const Color(0xFF132847)
+                                          : const Color(0xFFF1F5F9),
+                                      border: OutlineInputBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(10),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 12),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              flex: 5,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    'Balance Amount',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: isDark
+                                          ? Colors.white70
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 11),
+                                    decoration: BoxDecoration(
+                                      color: _balanceAmount > 0
+                                          ? const Color(0xFFE65100).withValues(
+                                              alpha: isDark ? 0.2 : 0.1)
+                                          : primaryGreen.withValues(
+                                              alpha: isDark ? 0.2 : 0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: _balanceAmount > 0
+                                            ? const Color(0xFFE65100)
+                                                .withValues(alpha: 0.4)
+                                            : primaryGreen
+                                                .withValues(alpha: 0.4),
+                                      ),
+                                    ),
+                                    alignment: Alignment.centerRight,
+                                    child: Text(
+                                      '₹${_balanceAmount.toStringAsFixed(2)}',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: _balanceAmount > 0
+                                            ? const Color(0xFFE65100)
+                                            : primaryGreen,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.05)
+                                : const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.info_outline_rounded,
+                                  size: 16,
+                                  color: isDark
+                                      ? Colors.white54
+                                      : Colors.black45),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  _advanceAmount > 0
+                                      ? 'Advance of ₹${_advanceAmount.toStringAsFixed(2)} paid via $_selectedPaymentMode. Balance due: ₹${_balanceAmount.toStringAsFixed(2)}.'
+                                      : 'No advance paid. Full balance due on delivery.',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    color: isDark
+                                        ? Colors.white60
+                                        : Colors.black54,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
