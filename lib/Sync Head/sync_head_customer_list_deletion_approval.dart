@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../Navigation/user_cache_service.dart';
+import '../Customer Calling/customer_list_target_service.dart';
 import 'sync_head_editing_approval.dart';
 
 const Color _primaryBlue = Color(0xFF005BAC);
@@ -354,6 +355,165 @@ class _SyncHeadCustomerListDeletionApprovalPageState
     }
   }
 
+  Future<void> _cleanOrphanedPendingFlags() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clean Orphaned Pending Records'),
+        content: const Text(
+          'This will scan customer target lists for this month and automatically clear "pending approval" on any customers that have no active pending request in the approvals list. Do you want to proceed?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: _primaryBlue),
+            child: const Text('Clean Up', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(20.0),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 16),
+                Text('Cleaning orphaned flags...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final now = DateTime.now();
+      final monthYear =
+          "${CustomerListTargetService.monthName(now.month)} ${now.year}";
+
+      // Fetch all active pending deletion requests
+      final delDocs = await FirebaseFirestore.instance
+          .collection('customer_deletion_requests')
+          .where('status', whereIn: ['pending', 'Pending'])
+          .get();
+
+      // Fetch all active pending editing requests
+      final editDocs = await FirebaseFirestore.instance
+          .collection('customer_editing_requests')
+          .where('status', whereIn: ['pending', 'Pending'])
+          .get();
+
+      final Set<String> activePendingKeys = {};
+
+      for (final doc in delDocs.docs) {
+        final data = doc.data();
+        final cData = data['customerData'] as Map<String, dynamic>? ?? {};
+        final name = (cData['name'] ?? '').toString().trim().toLowerCase();
+        final contact = (cData['contact1'] ?? cData['contact'] ?? '')
+            .toString()
+            .replaceAll(RegExp(r'\s+'), '');
+        final userDocId = (data['userDocId'] ?? '').toString().trim().toLowerCase();
+        if (name.isNotEmpty || contact.isNotEmpty) {
+          activePendingKeys.add('$userDocId|$name|$contact');
+        }
+      }
+
+      for (final doc in editDocs.docs) {
+        final data = doc.data();
+        final cData = data['customerData'] as Map<String, dynamic>? ?? {};
+        final name = (cData['name'] ?? '').toString().trim().toLowerCase();
+        final contact = (cData['contact1'] ?? cData['contact'] ?? '')
+            .toString()
+            .replaceAll(RegExp(r'\s+'), '');
+        final userDocId = (data['userDocId'] ?? '').toString().trim().toLowerCase();
+        if (name.isNotEmpty || contact.isNotEmpty) {
+          activePendingKeys.add('$userDocId|$name|$contact');
+        }
+      }
+
+      final usersRef = FirebaseFirestore.instance
+          .collection('customer_target')
+          .doc(monthYear)
+          .collection('users');
+
+      final usersSnap = await usersRef.get();
+      int cleanedCount = 0;
+
+      for (final userDoc in usersSnap.docs) {
+        final docData = userDoc.data();
+        if (docData['customers'] == null) continue;
+
+        final List<dynamic> customers = List<dynamic>.from(docData['customers']);
+        bool modified = false;
+        final userDocId = userDoc.id.toLowerCase();
+
+        for (var c in customers) {
+          if (c is! Map) continue;
+          final bool isPendingEditing = c['pendingEditing'] == true;
+          final bool isPendingDeletion = c['pendingDeletion'] == true;
+
+          if (!isPendingEditing && !isPendingDeletion) continue;
+
+          final name = (c['name'] ?? '').toString().trim().toLowerCase();
+          final contact = (c['contact1'] ?? c['contact'] ?? '')
+              .toString()
+              .replaceAll(RegExp(r'\s+'), '');
+
+          final key = '$userDocId|$name|$contact';
+          // Also match without userDocId in case userDocId differed
+          final bool hasActiveRequest = activePendingKeys.contains(key) ||
+              activePendingKeys.any((k) => k.endsWith('|$name|$contact'));
+
+          if (!hasActiveRequest) {
+            c['pendingEditing'] = false;
+            c['pendingDeletion'] = false;
+            modified = true;
+            cleanedCount++;
+          }
+        }
+
+        if (modified) {
+          await userDoc.reference.update({'customers': customers});
+        }
+      }
+
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(
+            content: Text(cleanedCount > 0
+                ? 'Successfully cleaned $cleanedCount orphaned pending records.'
+                : 'No orphaned pending records found.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(
+            content: Text('Error cleaning orphaned records: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -365,6 +525,13 @@ class _SyncHeadCustomerListDeletionApprovalPageState
           'Approvals Pending',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.cleaning_services_outlined),
+            tooltip: 'Clean Orphaned Pending Flags',
+            onPressed: _cleanOrphanedPendingFlags,
+          ),
+        ],
         backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         foregroundColor: isDark ? Colors.white : Colors.black87,
         elevation: 1,
