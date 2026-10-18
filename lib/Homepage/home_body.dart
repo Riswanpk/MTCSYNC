@@ -28,7 +28,7 @@ import '../SME/sme_dashboard.dart';
 import '../SME/sme_ads_page.dart';
 import '../SME/sme_deletion_approval.dart';
 import '../Supersale/Admin/supersale_admin.dart';
-import '../Supersale/Admin/supersale_admin_dashboard.dart';
+import '../Supersale/Admin/supersale_admin_report.dart';
 import '../Supersale/User/supersale_user_mainpage.dart';
 import '../SME/sme_assigned_leads_page.dart';
 import '../Task/task_admin.dart';
@@ -387,11 +387,11 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     }
   }
 
-  Future<void> _navigateToSupersaleDashboard(BuildContext context) async {
+  Future<void> _navigateToSupersaleReport(BuildContext context) async {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => const LoadingOverlayPage(
-          child: SupersaleAdminDashboard(),
+          child: SupersaleAdminReportPage(),
         ),
       ),
     );
@@ -591,11 +591,11 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
         icon: Icons.flash_on_rounded,
       ),
       NeumorphicButton(
-        onTap: () => _navigateToSupersaleDashboard(context),
-        text: 'Dashboard',
+        onTap: () => _navigateToSupersaleReport(context),
+        text: 'Reports',
         color: primaryGreen,
         textColor: Colors.white,
-        icon: Icons.dashboard_rounded,
+        icon: Icons.assessment_rounded,
       ),
       NeumorphicButton(
         onTap: () => _navigateToMarketing(context),
@@ -888,7 +888,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       ),
       NeumorphicButton(
         onTap: () => _navigateToDashboard(context),
-        onLongPress: () => _navigateToSupersaleDashboard(context),
+        onLongPress: () => _navigateToSupersaleReport(context),
         text: 'Dashboard',
         color: primaryBlue,
         textColor: Colors.white,
