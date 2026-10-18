@@ -34,6 +34,7 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
   int _currentPage = 1;
   final int _leadsPerPage = 15;
   final Map<int, DocumentSnapshot?> _pageStartCursors = {1: null};
+  bool _hasMore = false;
 
   String? _currentUid;
   String? _currentRole;
@@ -204,6 +205,7 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
       snapshot = await query.limit(_leadsPerPage).get();
     }
 
+    final bool hasMoreDocs = snapshot.docs.length >= _leadsPerPage;
     if (snapshot.docs.isNotEmpty && (!isSearch || _searchQuery.isEmpty)) {
       _lastDocument = snapshot.docs.last;
       _pageStartCursors[_currentPage + 1] = _lastDocument;
@@ -224,6 +226,7 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
     if (!mounted) return;
     setState(() {
       _leads = docs;
+      _hasMore = hasMoreDocs;
       _isLoading = false;
     });
     await _prefetchAssignerNames(docs);
@@ -506,8 +509,7 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
                   ),
                   _paginationButton(
                       icon: Icons.chevron_right_rounded,
-                      enabled: _lastDocument != null &&
-                          _leads.length == _leadsPerPage,
+                      enabled: _lastDocument != null && _hasMore,
                       onTap: () => _fetchLeadsPage(nextPage: true),
                       isDark: isDark),
                 ],

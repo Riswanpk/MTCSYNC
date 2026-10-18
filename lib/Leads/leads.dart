@@ -66,6 +66,7 @@ class _LeadsPageState extends State<LeadsPage> {
   int _currentPage = 1;
   final int _leadsPerPage = 15;
   final Map<int, DocumentSnapshot?> _pageStartCursors = {1: null};
+  bool _hasMore = false;
 
   late Future<Map<String, dynamic>?> _currentUserData;
 
@@ -283,6 +284,7 @@ class _LeadsPageState extends State<LeadsPage> {
         return true;
       }).toList();
 
+      final bool hasMoreDocs = snapshot.docs.length >= _leadsPerPage;
       if (snapshot.docs.isNotEmpty) {
         if (!isSearch || searchQuery.isEmpty) {
           _lastDocument = snapshot.docs.last;
@@ -297,6 +299,7 @@ class _LeadsPageState extends State<LeadsPage> {
       if (!mounted) return;
       setState(() {
         _leads = filteredDocs;
+        _hasMore = hasMoreDocs;
         _isLoading = false;
       });
 
@@ -600,7 +603,7 @@ class _LeadsPageState extends State<LeadsPage> {
                     searchQuery: searchQuery,
                     currentPage: _currentPage,
                     canGoBack: _currentPage > 1,
-                    canGoNext: _lastDocument != null && _leads.length == _leadsPerPage,
+                    canGoNext: _hasMore && _lastDocument != null,
                     onPreviousPressed: () => _fetchLeadsPage(prevPage: true),
                     onNextPressed: () => _fetchLeadsPage(nextPage: true),
                   ),
