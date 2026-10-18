@@ -280,6 +280,7 @@ class _CustomerCallingRemarksPendingPageState
                                             builder: (context) =>
                                                 SalesCustomerTileViewer(
                                               customer: customer,
+                                              docId: _docId,
                                               onStatusChanged:
                                                   (remarks) async {
                                                 if (mounted) {

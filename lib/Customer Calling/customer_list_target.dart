@@ -635,6 +635,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                               MaterialPageRoute(
                                 builder: (context) => SalesCustomerTileViewer(
                                   customer: customer,
+                                  docId: _docId,
                                   onStatusChanged: (remarks) async {
                                     if (mounted && customer.isNotEmpty) {
                                       setState(() {

@@ -130,11 +130,22 @@ class _SyncHeadCustomerListDeletionApprovalPageState
         throw Exception('Invalid request payload format');
       }
 
-      final userDocRef = FirebaseFirestore.instance
+      final usersRef = FirebaseFirestore.instance
           .collection('customer_target')
           .doc(monthYear)
-          .collection('users')
-          .doc(userDocId);
+          .collection('users');
+
+      var userDocRef = usersRef.doc(userDocId);
+      var docSnap = await userDocRef.get();
+      if (!docSnap.exists) {
+        final querySnap = await usersRef.get();
+        for (final d in querySnap.docs) {
+          if (d.id.toLowerCase() == userDocId.toLowerCase()) {
+            userDocRef = usersRef.doc(d.id);
+            break;
+          }
+        }
+      }
 
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         final snapshot = await transaction.get(userDocRef);
@@ -143,17 +154,22 @@ class _SyncHeadCustomerListDeletionApprovalPageState
           final List<dynamic> customers =
               List<dynamic>.from(docData['customers'] ?? []);
 
-          final targetName = (customerData['name'] ?? '').toString();
+          final targetName = (customerData['name'] ?? '').toString().trim().toLowerCase();
           final targetContact =
               (customerData['contact1'] ?? customerData['contact'] ?? '')
-                  .toString();
+                  .toString()
+                  .replaceAll(RegExp(r'\s+'), '');
 
           customers.removeWhere((c) {
             if (c is Map) {
-              final cName = (c['name'] ?? '').toString();
+              final cName = (c['name'] ?? '').toString().trim().toLowerCase();
               final cContact =
-                  (c['contact1'] ?? c['contact'] ?? '').toString();
-              return cName == targetName && cContact == targetContact;
+                  (c['contact1'] ?? c['contact'] ?? '').toString().replaceAll(RegExp(r'\s+'), '');
+              final cContact2 = (c['contact2'] ?? '').toString().replaceAll(RegExp(r'\s+'), '');
+
+              final isMatch = (cName == targetName && (cContact == targetContact || targetContact.isEmpty)) ||
+                  (targetContact.isNotEmpty && (cContact == targetContact || cContact2 == targetContact));
+              return isMatch;
             }
             return false;
           });
@@ -203,11 +219,22 @@ class _SyncHeadCustomerListDeletionApprovalPageState
       final customerData = data['customerData'] as Map<String, dynamic>?;
 
       if (monthYear != null && userDocId != null && customerData != null) {
-        final userDocRef = FirebaseFirestore.instance
+        final usersRef = FirebaseFirestore.instance
             .collection('customer_target')
             .doc(monthYear)
-            .collection('users')
-            .doc(userDocId);
+            .collection('users');
+
+        var userDocRef = usersRef.doc(userDocId);
+        var docSnap = await userDocRef.get();
+        if (!docSnap.exists) {
+          final querySnap = await usersRef.get();
+          for (final d in querySnap.docs) {
+            if (d.id.toLowerCase() == userDocId.toLowerCase()) {
+              userDocRef = usersRef.doc(d.id);
+              break;
+            }
+          }
+        }
 
         await FirebaseFirestore.instance.runTransaction((transaction) async {
           final snapshot = await transaction.get(userDocRef);
@@ -216,17 +243,23 @@ class _SyncHeadCustomerListDeletionApprovalPageState
             final List<dynamic> customers =
                 List<dynamic>.from(docData['customers'] ?? []);
 
-            final targetName = (customerData['name'] ?? '').toString();
+            final targetName = (customerData['name'] ?? '').toString().trim().toLowerCase();
             final targetContact =
                 (customerData['contact1'] ?? customerData['contact'] ?? '')
-                    .toString();
+                    .toString()
+                    .replaceAll(RegExp(r'\s+'), '');
 
             for (var c in customers) {
               if (c is Map) {
-                final cName = (c['name'] ?? '').toString();
+                final cName = (c['name'] ?? '').toString().trim().toLowerCase();
                 final cContact =
-                    (c['contact1'] ?? c['contact'] ?? '').toString();
-                if (cName == targetName && cContact == targetContact) {
+                    (c['contact1'] ?? c['contact'] ?? '').toString().replaceAll(RegExp(r'\s+'), '');
+                final cContact2 = (c['contact2'] ?? '').toString().replaceAll(RegExp(r'\s+'), '');
+
+                final isMatch = (cName == targetName && (cContact == targetContact || targetContact.isEmpty)) ||
+                    (targetContact.isNotEmpty && (cContact == targetContact || cContact2 == targetContact));
+
+                if (isMatch) {
                   c['pendingDeletion'] = false;
                   break;
                 }
@@ -339,13 +372,13 @@ class _SyncHeadCustomerListDeletionApprovalPageState
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('customer_deletion_requests')
-            .where('status', isEqualTo: 'pending')
+            .where('status', whereIn: ['pending', 'Pending'])
             .snapshots(),
         builder: (context, delSnapshot) {
           return StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('customer_editing_requests')
-                .where('status', isEqualTo: 'pending')
+                .where('status', whereIn: ['pending', 'Pending'])
                 .snapshots(),
             builder: (context, editSnapshot) {
               if (delSnapshot.hasError || editSnapshot.hasError) {

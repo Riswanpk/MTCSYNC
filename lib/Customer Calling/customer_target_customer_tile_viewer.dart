@@ -15,8 +15,9 @@ import 'tile_viewer/add_to_leads_button.dart';
 class SalesCustomerTileViewer extends StatefulWidget {
   final Map<String, dynamic> customer;
   final Future<void> Function(String remarks)? onStatusChanged;
+  final String? docId;
   const SalesCustomerTileViewer(
-      {super.key, required this.customer, this.onStatusChanged});
+      {super.key, required this.customer, this.onStatusChanged, this.docId});
 
   @override
   State<SalesCustomerTileViewer> createState() =>
@@ -270,6 +271,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
                   context: context,
                   customer: customer,
                   widgetCustomer: widget.customer,
+                  docId: widget.docId,
                   onUpdated: (updatedFields) {
                     setState(() {
                       customer.addAll(updatedFields);

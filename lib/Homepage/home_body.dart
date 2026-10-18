@@ -897,13 +897,13 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('customer_deletion_requests')
-            .where('status', isEqualTo: 'pending')
+            .where('status', whereIn: ['pending', 'Pending'])
             .snapshots(),
         builder: (context, delSnapshot) {
           return StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('customer_editing_requests')
-                .where('status', isEqualTo: 'pending')
+                .where('status', whereIn: ['pending', 'Pending'])
                 .snapshots(),
             builder: (context, editSnapshot) {
               final delCount = delSnapshot.data?.docs.length ?? 0;

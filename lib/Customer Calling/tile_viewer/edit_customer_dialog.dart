@@ -7,6 +7,7 @@ Future<void> editCustomerDialog({
   required BuildContext context,
   required Map<String, dynamic> customer,
   required Map<String, dynamic> widgetCustomer,
+  String? docId,
   required Function(Map<String, dynamic> updatedFields) onUpdated,
 }) async {
   if (customer['pendingEditing'] == true || customer['pendingDeletion'] == true) {
@@ -121,14 +122,14 @@ Future<void> editCustomerDialog({
               };
 
               final user = FirebaseAuth.instance.currentUser;
-              final docId = user?.email?.toLowerCase();
+              final effectiveDocId = docId ?? user?.email?.toLowerCase();
 
               final success = await SyncHeadEditingApprovalService.requestCustomerEdit(
                 context: context,
                 customer: customer,
                 updatedFields: updatedFields,
                 widgetCustomer: widgetCustomer,
-                docId: docId,
+                docId: effectiveDocId,
               );
 
               if (success) {
