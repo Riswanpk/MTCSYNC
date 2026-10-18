@@ -59,37 +59,22 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
         return;
       }
 
-      // 1. Enforce unique name (case-insensitive, trimmed) within user's own list
-      String newName = _nameCtrl.text.trim().toLowerCase();
-      bool nameExists = customers.any(
-          (c) => (c['name'] ?? '').toString().trim().toLowerCase() == newName);
-      if (nameExists) {
-        if (mounted) {
-          setState(() {
-            _error = 'A customer with this name already exists in your list.';
-            _loading = false;
-          });
-        }
-        return;
-      }
-
-      // 2. Enforce unique phone number across own list AND across all branches/users for the month
-      final allUsersSnap = await FirebaseFirestore.instance
+      // Check for phone number duplicates across ALL customer target lists for the current month
+      final usersCollectionRef = FirebaseFirestore.instance
           .collection('customer_target')
           .doc(monthYear)
-          .collection('users')
-          .get();
+          .collection('users');
 
-      // Retrieve user cache for meaningful user names in error messages
+      final allUsersSnap = await usersCollectionRef.get();
+
+      // Retrieve user cache for informative messages
       final allCachedUsers = await UserCacheService.instance.getAllUsers();
       final Map<String, Map<String, String>> userMap = {};
-      final Set<String> activeUserEmails = {};
       for (final u in allCachedUsers) {
         final email = (u['email'] as String? ?? '').toLowerCase().trim();
         final username = (u['username'] as String? ?? '').trim();
         final b = (u['branch'] as String? ?? '').trim();
         if (email.isNotEmpty) {
-          activeUserEmails.add(email);
           userMap[email] = {
             'username': username.isNotEmpty ? username : email,
             'branch': b.isNotEmpty ? b : 'Unknown',
@@ -100,10 +85,6 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
       for (final doc in allUsersSnap.docs) {
         final data = doc.data();
         final docEmail = (data['user'] ?? doc.id).toString().toLowerCase().trim();
-
-        // Skip users not present in the active users collection
-        if (!activeUserEmails.contains(docEmail)) continue;
-
         final docBranch = (data['branch'] ?? userMap[docEmail]?['branch'] ?? 'Unknown').toString().trim();
         final docUsername = userMap[docEmail]?['username'] ?? docEmail;
         final docCustomers = data['customers'] as List<dynamic>? ?? [];
@@ -125,14 +106,24 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
             final locationInfo = isSelf
                 ? 'in your own calling list'
                 : 'by $docUsername ($docBranch)';
+            final existingName = (c['name'] ?? 'Existing Customer').toString().trim();
             if (mounted) {
               setState(() {
-                _error = 'Phone number $matchedPhone is already assigned $locationInfo.';
+                _error = 'Phone number $matchedPhone is already added under "$existingName" $locationInfo.';
                 _loading = false;
               });
             }
             return;
           }
+        }
+      }
+
+      // Target current user doc (checking case-insensitively)
+      var targetDocRef = usersCollectionRef.doc(user.email!.toLowerCase());
+      for (final d in allUsersSnap.docs) {
+        if (d.id.toLowerCase() == user.email!.toLowerCase()) {
+          targetDocRef = usersCollectionRef.doc(d.id);
+          break;
         }
       }
 
@@ -145,7 +136,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
         'remarks': '',
       });
       final branch = UserCacheService.instance.branch ?? '';
-      await docRef.set({
+      await targetDocRef.set({
         'user': user.email!.toLowerCase(),
         'branch': branch,
         'customers': customers,
