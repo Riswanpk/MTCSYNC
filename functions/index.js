@@ -9,6 +9,16 @@ admin.initializeApp();
 // Set default region
 setGlobalOptions({ region: "asia-south1" });
 
+const moment = require("moment-timezone");
+
+const getMonthYear = (date) => {
+  const months = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  ];
+  return `${months[date.month()]} ${date.year()}`;
+};
+
 exports.deleteUserFromAuth = onCall(async (request) => {
   const context = request.auth;
   const data = request.data;
@@ -31,15 +41,49 @@ exports.deleteUserFromAuth = onCall(async (request) => {
   }
 
   try {
-    // Delete from Firebase Auth
+    // 1. Fetch user doc to obtain user's email before deletion
+    const userDocRef = admin.firestore().collection("users").doc(uid);
+    const userSnap = await userDocRef.get();
+    const userData = userSnap.exists ? userSnap.data() : null;
+    const userEmail = (userData?.email || "").toLowerCase().trim();
+
+    // 2. Delete from Firebase Auth
     await admin.auth().deleteUser(uid);
 
-    // Optional Firestore cleanup
-    await admin.firestore().collection("users").doc(uid).delete();
+    // 3. Delete from users collection
+    await userDocRef.delete();
+
+    // 4. Delete current month customer target list
+    const currentMonthYear = getMonthYear(moment().tz("Asia/Kolkata"));
+    const deleteCustomerTargetPromises = [];
+
+    if (userEmail) {
+      deleteCustomerTargetPromises.push(
+        admin.firestore()
+          .collection("customer_target")
+          .doc(currentMonthYear)
+          .collection("users")
+          .doc(userEmail)
+          .delete()
+      );
+    }
+    // Also delete by uid in case docId was stored as uid
+    if (uid.toLowerCase() !== userEmail) {
+      deleteCustomerTargetPromises.push(
+        admin.firestore()
+          .collection("customer_target")
+          .doc(currentMonthYear)
+          .collection("users")
+          .doc(uid)
+          .delete()
+      );
+    }
+
+    await Promise.all(deleteCustomerTargetPromises);
 
     return {
       success: true,
-      message: `User ${uid} deleted successfully.`,
+      message: `User ${uid} and current month (${currentMonthYear}) customer target list deleted successfully.`,
     };
   } catch (error) {
     console.error("Error deleting user:", error);
