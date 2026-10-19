@@ -792,7 +792,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         await file.writeAsBytes(bytes, flush: true);
 
         // --- Send email with attachment ---
-        final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
+        final smtpServer = gmail('crmmalabar@gmail.com', 'xlqv oxhd xxco lbyo');
         final allBranchesEmailText = _statusFilter == 'All' ? '' : ' — $_statusFilter';
         final reportTypeLabel = reportType == 'summary' ? '' : ' [${_reportTypeLabel(reportType)}]';
         final message = Message()
@@ -1279,7 +1279,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
       // --- Send email with attachment ---
       final singleBranchEmailText = _statusFilter == 'All' ? '' : ' — $_statusFilter';
       final reportTypeLabel2 = reportType == 'summary' ? '' : ' [${_reportTypeLabel(reportType)}]';
-      final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
+      final smtpServer = gmail('crmmalabar@gmail.com', 'xlqv oxhd xxco lbyo');
       final message = Message()
         ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
         ..recipients.addAll(['performancemtc@gmail.com'])

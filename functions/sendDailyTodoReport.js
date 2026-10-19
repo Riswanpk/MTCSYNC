@@ -1,5 +1,4 @@
 const { onSchedule } = require("firebase-functions/v2/scheduler");
-const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
 const moment = require("moment-timezone");
@@ -10,9 +9,8 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-// Gmail app password is stored in Secret Manager:
-//   firebase functions:secrets:set GMAIL_APP_PASSWORD
-const gmailAppPassword = defineSecret("GMAIL_APP_PASSWORD");
+// Gmail app password
+const GMAIL_APP_PASSWORD = "xlqv oxhd xxco lbyo";
 
 async function generateAndSendDailyTodoReport({ force = false, targetEmail = null } = {}) {
   const now = moment().tz("Asia/Kolkata");
@@ -256,7 +254,7 @@ async function generateAndSendDailyTodoReport({ force = false, targetEmail = nul
         service: "gmail",
         auth: {
           user: "crmmalabar@gmail.com",
-          pass: gmailAppPassword.value(),
+          pass: GMAIL_APP_PASSWORD,
         },
       });
 
@@ -294,7 +292,6 @@ exports.sendDailyTodoReport = onSchedule(
     schedule: "1 12 * * *",
     timeZone: "Asia/Kolkata",
     region: "asia-south1",
-    secrets: [gmailAppPassword],
   },
   async (event) => {
     return await generateAndSendDailyTodoReport();
@@ -303,5 +300,4 @@ exports.sendDailyTodoReport = onSchedule(
 
 // Manual / Test Trigger
 exports.generateAndSendDailyTodoReport = generateAndSendDailyTodoReport;
-exports.gmailAppPassword = gmailAppPassword;
 

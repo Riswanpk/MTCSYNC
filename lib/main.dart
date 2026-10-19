@@ -101,32 +101,11 @@ void main() async {
     debugPrint('Firestore settings error: $e');
   }
 
-  // CRITICAL: Initialize AwesomeNotifications BEFORE runApp() 
+  // CRITICAL: Initialize AwesomeNotifications BEFORE runApp() (bounded so it can never block startup)
   try {
-    await _initializeNotifications();
+    await _initializeNotifications().timeout(const Duration(seconds: 6));
   } catch (e) {
-    debugPrint('Notification init error: $e');
-  }
-
-  // Request AwesomeNotifications permissions (exact alarms + POST_NOTIFICATIONS)
-  try {
-    await NotificationPermissionService.instance.requestNotificationPermission();
-  } catch (e) {
-    debugPrint('Notification permission error: $e');
-  }
-
-  // Request FCM permissions & listen to foreground messages
-  try {
-    await _setupFirebaseMessaging();
-  } catch (e) {
-    debugPrint('FirebaseMessaging setup error: $e');
-  }
-
-  // Initialize SoundService for audio playback
-  try {
-    await SoundService.instance.initialize();
-  } catch (e) {
-    debugPrint('SoundService init error: $e');
+    debugPrint('Notification init error/timeout: $e');
   }
 
 
@@ -145,6 +124,32 @@ void main() async {
 
   // Deferred services init & reliability prompts (non-blocking)
   _initializeDeferredServices(prefs);
+
+  // Non-critical startup work — runs after UI is up so it can never freeze the splash
+  Future.microtask(() async {
+    try {
+      await _migrateNotificationChannels().timeout(const Duration(seconds: 10));
+    } catch (e) {
+      debugPrint('Channel migration error/timeout: $e');
+    }
+    try {
+      await NotificationPermissionService.instance
+          .requestNotificationPermission()
+          .timeout(const Duration(seconds: 30));
+    } catch (e) {
+      debugPrint('Notification permission error: $e');
+    }
+    try {
+      await _setupFirebaseMessaging().timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('FirebaseMessaging setup error: $e');
+    }
+    try {
+      await SoundService.instance.initialize().timeout(const Duration(seconds: 5));
+    } catch (e) {
+      debugPrint('SoundService init error: $e');
+    }
+  });
 }
 
 /// Setup FCM permissions and foreground listeners
@@ -429,7 +434,7 @@ Future<void> _initializeNotifications() async {
 
   for (final ch in channelsToRegister) {
     try {
-      await AwesomeNotifications().setChannel(ch);
+      await AwesomeNotifications().setChannel(ch).timeout(const Duration(seconds: 2));
     } catch (e) {
       debugPrint('Custom sound for ${ch.channelKey} unavailable ($e). Fallback to default sound.');
       try {
@@ -452,9 +457,6 @@ Future<void> _initializeNotifications() async {
     }
   }
 
-  // Run channel migration for existing scheduled notifications
-  await _migrateNotificationChannels();
-
   // Setup notification listeners - required for background handling
   AwesomeNotifications().setListeners(
     onActionReceivedMethod: NotificationController.onActionReceivedMethod,
@@ -464,7 +466,13 @@ Future<void> _initializeNotifications() async {
   );
 
   // Get initial notification action (for when app is opened from notification)
-  initialNotificationAction = await AwesomeNotifications().getInitialNotificationAction();
+  try {
+    initialNotificationAction = await AwesomeNotifications()
+        .getInitialNotificationAction()
+        .timeout(const Duration(seconds: 3));
+  } catch (e) {
+    debugPrint('getInitialNotificationAction error/timeout: $e');
+  }
 }
 
 /// Migrate old local scheduled notifications from 'reminder_channel' to 'reminder_channel_v2'

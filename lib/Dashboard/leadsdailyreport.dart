@@ -149,7 +149,7 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
     workbook.dispose();
     final file = File(filePath)..writeAsBytesSync(fileBytes);
 
-    final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
+    final smtpServer = gmail('crmmalabar@gmail.com', 'xlqv oxhd xxco lbyo');
     final message = Message()
       ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
       ..recipients.addAll(['performancemtc@gmail.com'])
