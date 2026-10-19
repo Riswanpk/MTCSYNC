@@ -805,7 +805,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         try {
           await send(message, smtpServer);
           messenger.showSnackBar(
-            const SnackBar(content: Text('Email sent to crmmalabar@gmail.com')),
+            const SnackBar(content: Text('Email sent to performancemtc@gmail.com')),
           );
         } on MailerException catch (e) {
           messenger.showSnackBar(
@@ -1290,7 +1290,7 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
       try {
         await send(message, smtpServer);
         messenger.showSnackBar(
-          const SnackBar(content: Text('Email sent to crmmalabar@gmail.com')),
+          const SnackBar(content: Text('Email sent to performancemtc@gmail.com')),
         );
       } on MailerException catch (e) {
         messenger.showSnackBar(
