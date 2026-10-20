@@ -34,11 +34,28 @@
 # call_log plugin
 -keep class sk.fourq.calllog.** { *; }
 
+# Keep Kotlin standard library & Coroutines for JNI interop (Dart JNI looks for kotlin.* classes by name)
+-keep class kotlin.** { *; }
+-keep interface kotlin.** { *; }
+-keep class kotlin.coroutines.** { *; }
+-keep interface kotlin.coroutines.** { *; }
+
+# JNI-based plugins (jnigen): Dart looks these Java/Kotlin classes up by name at runtime,
+# and these plugins ship no consumer rules, so R8 would rename/strip their methods.
+-keep class com.github.dart_lang.jni.** { *; }
+-keep class com.github.dart_lang.jni_flutter.** { *; }
+-keep class io.flutter.plugins.sharedpreferences.** {
+    *;
+}
+-keepclassmembers class io.flutter.plugins.sharedpreferences.** {
+    *;
+}
+-keep class io.flutter.plugins.pathprovider.** {
+    *;
+}
+-keepclassmembers class io.flutter.plugins.pathprovider.** {
+    *;
+}
+
 # Keep App specific classes (Application and Activities)
 -keep class com.mtc.mtcsync.** { *; }
-
-# Keep Flutter plugin callback and method channel interfaces
--keep class * implements io.flutter.plugin.common.MethodChannel$MethodCallHandler { *; }
--keep class * implements io.flutter.plugin.common.PluginRegistry$RequestPermissionsResultListener { *; }
--keep class * implements io.flutter.plugin.common.PluginRegistry$ActivityResultListener { *; }
-
