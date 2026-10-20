@@ -92,21 +92,23 @@ class _SalesTodosForManagerTabState extends State<SalesTodosForManagerTab> {
         ? _branchUsers.map((u) => u['uid'] as String).toList()
         : [_selectedUserId!];
 
-    // Firestore whereIn max = 10
-    final queryUids = uids.take(10).toList();
-
-    final snap = await widget.firestore
-        .collection('todo')
-        .where('created_by', whereIn: queryUids)
-        .where('timestamp',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(windowStart))
-        .where('timestamp', isLessThan: Timestamp.fromDate(windowEnd))
-        .orderBy('timestamp', descending: true)
-        .get();
+    final List<QueryDocumentSnapshot> allDocs = [];
+    for (int i = 0; i < uids.length; i += 30) {
+      final chunk = uids.sublist(i, i + 30 > uids.length ? uids.length : i + 30);
+      final snap = await widget.firestore
+          .collection('todo')
+          .where('created_by', whereIn: chunk)
+          .where('timestamp',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(windowStart))
+          .where('timestamp', isLessThan: Timestamp.fromDate(windowEnd))
+          .orderBy('timestamp', descending: true)
+          .get();
+      allDocs.addAll(snap.docs);
+    }
     if (!mounted) return;
 
     setState(() {
-      _todos = snap.docs;
+      _todos = allDocs;
       _fetchingTodos = false;
     });
   }

@@ -240,12 +240,7 @@ class _LeadsPageState extends State<LeadsPage> {
       QuerySnapshot snapshot;
 
       if (isSearch && searchQuery.isNotEmpty) {
-        try {
-          snapshot = await query.orderBy('created_at', descending: !sortAscending).get();
-        } catch (e) {
-          debugPrint('Leads query with orderBy failed, retrying without orderBy: $e');
-          snapshot = await query.get();
-        }
+        snapshot = await query.orderBy('created_at', descending: !sortAscending).get();
       } else {
         DocumentSnapshot? cursor;
         if (nextPage) {
@@ -263,13 +258,7 @@ class _LeadsPageState extends State<LeadsPage> {
           pageQuery = pageQuery.startAfterDocument(cursor);
         }
 
-        try {
-          snapshot = await pageQuery.limit(_leadsPerPage).get();
-        } catch (e) {
-          debugPrint('Leads page query with orderBy failed, retrying without orderBy: $e');
-          // Fallback without orderBy to handle index errors or leads without created_at
-          snapshot = await query.limit(_leadsPerPage).get();
-        }
+        snapshot = await pageQuery.limit(_leadsPerPage).get();
       }
 
       // Filter out non-promoted SME leads if 'All' sources is selected
