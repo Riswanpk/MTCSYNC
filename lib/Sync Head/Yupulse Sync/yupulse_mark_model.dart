@@ -17,6 +17,12 @@ class YupulseUserCardItem {
   final int salesLeadsCreated;
   bool useAutoTodo;
   bool useAutoCalling;
+  bool useAutoSupersale;
+  bool useAutoLeads;
+  final TextEditingController supersaleTotalController;
+  final TextEditingController supersaleTakenController;
+  final TextEditingController ccLeadsController;
+  final TextEditingController salesLeadsController;
   final TextEditingController todoController;
   final TextEditingController callTargetController;
   final TextEditingController callDoneController;
@@ -39,6 +45,12 @@ class YupulseUserCardItem {
     this.salesLeadsCreated = 0,
     required this.useAutoTodo,
     required this.useAutoCalling,
+    required this.useAutoSupersale,
+    required this.useAutoLeads,
+    required this.supersaleTotalController,
+    required this.supersaleTakenController,
+    required this.ccLeadsController,
+    required this.salesLeadsController,
     required this.todoController,
     required this.callTargetController,
     required this.callDoneController,
@@ -50,5 +62,9 @@ class YupulseUserCardItem {
     callTargetController.dispose();
     callDoneController.dispose();
     reasonController.dispose();
+    supersaleTotalController.dispose();
+    supersaleTakenController.dispose();
+    ccLeadsController.dispose();
+    salesLeadsController.dispose();
   }
 }

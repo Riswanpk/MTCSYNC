@@ -43,7 +43,10 @@ class YupulseUserCard extends StatelessWidget {
     final reasonCtrl = item.reasonController;
 
     final hasYupulseId = yupulseId.isNotEmpty;
-    final isManualOverrideActive = !useAutoTodo || !useAutoCalling;
+    final isManualOverrideActive = !useAutoTodo ||
+        !useAutoCalling ||
+        !item.useAutoSupersale ||
+        !item.useAutoLeads;
 
     final submittedBgColor = isDark ? const Color(0xFF0D2818) : const Color(0xFFF0FDF4);
     final submittedBorderColor = primaryGreen.withValues(alpha: isDark ? 0.7 : 0.5);
@@ -399,26 +402,55 @@ class YupulseUserCard extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: _statBox(
+                    child: _manualBox(
                       title: 'Supersale',
                       icon: Icons.local_offer_rounded,
+                      autoText: 'Total: ${item.supersaleTotal} | Taken: ${item.supersaleTaken}',
+                      useAuto: item.useAutoSupersale,
+                      enabled: isSelected && !isSubmitted,
+                      isSubmitted: isSubmitted,
+                      onToggle: (v) {
+                        item.useAutoSupersale = v;
+                        if (v) {
+                          item.supersaleTotalController.text = item.supersaleTotal.toString();
+                          item.supersaleTakenController.text = item.supersaleTaken.toString();
+                        }
+                        onReasonChanged();
+                      },
+                      ctrlA: item.supersaleTotalController,
                       labelA: 'Total',
-                      valueA: item.supersaleTotal,
+                      ctrlB: item.supersaleTakenController,
                       labelB: 'Taken',
-                      valueB: item.supersaleTaken,
+                      capBByA: true,
+                      context: context,
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: _statBox(
+                    child: _manualBox(
                       title: 'Leads Created',
                       icon: Icons.person_add_alt_1_rounded,
-                      labelA: 'CC',
-                      valueA: item.ccLeadsCreated,
-                      labelB: 'Sales',
-                      valueB: item.salesLeadsCreated,
+                      autoText: 'CC: ${item.ccLeadsCreated} | Sales: ${item.salesLeadsCreated}',
+                      useAuto: item.useAutoLeads,
+                      enabled: isSelected && !isSubmitted,
+                      isSubmitted: isSubmitted,
+                      onToggle: (v) {
+                        item.useAutoLeads = v;
+                        if (v) {
+                          item.ccLeadsController.text = item.ccLeadsCreated.toString();
+                          item.salesLeadsController.text = item.salesLeadsCreated.toString();
+                        }
+                        onReasonChanged();
+                      },
+                      ctrlA: item.ccLeadsController,
+                      labelA: 'CC Leads',
+                      ctrlB: item.salesLeadsController,
+                      labelB: 'Sales Leads',
+                      capBByA: false,
+                      context: context,
                     ),
                   ),
                 ],
@@ -517,54 +549,81 @@ class YupulseUserCard extends StatelessWidget {
     );
   }
 
-  Widget _statBox({
+  Widget _manualBox({
     required String title,
     required IconData icon,
+    required String autoText,
+    required bool useAuto,
+    required bool enabled,
+    required bool isSubmitted,
+    required void Function(bool useAuto) onToggle,
+    required TextEditingController ctrlA,
     required String labelA,
-    required int valueA,
+    required TextEditingController ctrlB,
     required String labelB,
-    required int valueB,
+    required bool capBByA,
+    required BuildContext context,
   }) {
-    const green = YupulseUiHelpers.primaryGreen;
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    final disabledStyle = useAuto || !enabled;
+    TextField field(TextEditingController c, String label, ValueChanged<String>? onChanged) {
+      return TextField(
+        controller: c,
+        enabled: !useAuto && enabled,
+        keyboardType: TextInputType.number,
+        onChanged: onChanged,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          color: disabledStyle
+              ? (isDark ? Colors.white38 : Colors.grey.shade500)
+              : (isDark ? Colors.white : Colors.grey.shade900),
+        ),
+        decoration: YupulseUiHelpers.inputDecoration(
+          labelText: label,
+          useAuto: disabledStyle,
+          isDark: isDark,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        ),
+      );
+    }
+
+    return YupulseUiHelpers.buildMarkSection(
+      title: title,
+      icon: icon,
+      autoPillText: autoText,
+      useAuto: useAuto,
+      isDark: isDark,
+      onCheckboxChanged: isSubmitted ? null : (v) => onToggle(v ?? true),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Icon(icon, size: 14, color: green),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  title,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? Colors.white70 : Colors.grey.shade700,
-                  ),
-                ),
-              ),
-            ],
+          Expanded(
+            child: field(ctrlA, labelA, (val) {
+              if (capBByA) {
+                final a = int.tryParse(val.trim()) ?? 0;
+                final b = int.tryParse(ctrlB.text.trim()) ?? 0;
+                if (b > a) ctrlB.text = a.toString();
+              }
+            }),
           ),
-          const SizedBox(height: 6),
-          Text(
-            '$labelA: $valueA  |  $labelB: $valueB',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : Colors.grey.shade900,
-            ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: field(ctrlB, labelB, (val) {
+              if (capBByA) {
+                final a = int.tryParse(ctrlA.text.trim()) ?? 0;
+                final b = int.tryParse(val.trim()) ?? 0;
+                if (b > a) {
+                  ctrlB.text = a.toString();
+                  ctrlB.selection = TextSelection.fromPosition(
+                    TextPosition(offset: ctrlB.text.length),
+                  );
+                }
+              }
+            }),
           ),
         ],
       ),
     );
   }
+
 }
 

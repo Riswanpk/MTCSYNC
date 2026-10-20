@@ -145,70 +145,157 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
           }
         }());
       }
-      await Future.wait(entryFetches);
+      // Pre-fetch Todo documents for the branch users with a timestamp filter.
+      final todoQueryStart = startOfMonth.subtract(const Duration(days: 2));
+      final nextMonthDate = (monthIndex == 12)
+          ? DateTime(currentYear + 1, 1, 1)
+          : DateTime(currentYear, monthIndex + 1, 1);
+      final today = DateTime.now();
+      final int lastDay = (nextMonthDate.isAfter(today)
+          ? today
+          : nextMonthDate.subtract(const Duration(days: 1))).day;
+      final todoQueryEnd = startOfMonth.add(Duration(days: lastDay + 1));
 
-      final List<YupulseUserCardItem> items = [];
+      // Collect user IDs and non-empty emails from usersSnap
+      final Set<String> userIds = {};
+      final Set<String> userEmails = {};
+      for (final doc in usersSnap.docs) {
+        userIds.add(doc.id);
+        final em = (doc.data()['email'] ?? '').toString().trim();
+        if (em.isNotEmpty) userEmails.add(em);
+      }
 
-      for (final userDoc in usersSnap.docs) {
+      // Map: userId -> Set<DateTime> and userEmail -> Set<DateTime>
+      final Map<String, Set<DateTime>> todosByUserId = {};
+      final Map<String, Set<DateTime>> todosByEmail = {};
+
+      List<List<T>> chunkList<T>(List<T> list, int size) {
+        final chunks = <List<T>>[];
+        for (var i = 0; i < list.length; i += size) {
+          chunks.add(list.sublist(i, i + size > list.length ? list.length : i + size));
+        }
+        return chunks;
+      }
+
+      final todoFetches = <Future<void>>[];
+
+      for (final chunk in chunkList(userIds.toList(), 30)) {
+        todoFetches.add(() async {
+          try {
+            final snap = await FirebaseFirestore.instance
+                .collection('todo')
+                .where('created_by', whereIn: chunk)
+                .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(todoQueryStart))
+                .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(todoQueryEnd))
+                .get();
+            for (final doc in snap.docs) {
+              final d = doc.data();
+              final creator = (d['created_by'] ?? '').toString();
+              final ts = d['timestamp'];
+              if (ts is Timestamp && creator.isNotEmpty) {
+                todosByUserId.putIfAbsent(creator, () => {}).add(ts.toDate());
+              }
+            }
+          } catch (e) {
+            try {
+              final snap = await FirebaseFirestore.instance
+                  .collection('todo')
+                  .where('created_by', whereIn: chunk)
+                  .get();
+              for (final doc in snap.docs) {
+                final d = doc.data();
+                final creator = (d['created_by'] ?? '').toString();
+                final ts = d['timestamp'];
+                if (ts is Timestamp && creator.isNotEmpty) {
+                  todosByUserId.putIfAbsent(creator, () => {}).add(ts.toDate());
+                }
+              }
+            } catch (_) {}
+          }
+        }());
+      }
+
+      for (final chunk in chunkList(userEmails.toList(), 30)) {
+        todoFetches.add(() async {
+          try {
+            final snap = await FirebaseFirestore.instance
+                .collection('todo')
+                .where('email', whereIn: chunk)
+                .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(todoQueryStart))
+                .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(todoQueryEnd))
+                .get();
+            for (final doc in snap.docs) {
+              final d = doc.data();
+              final em = (d['email'] ?? '').toString().trim();
+              final ts = d['timestamp'];
+              if (ts is Timestamp && em.isNotEmpty) {
+                todosByEmail.putIfAbsent(em, () => {}).add(ts.toDate());
+              }
+            }
+          } catch (e) {
+            try {
+              final snap = await FirebaseFirestore.instance
+                  .collection('todo')
+                  .where('email', whereIn: chunk)
+                  .get();
+              for (final doc in snap.docs) {
+                final d = doc.data();
+                final em = (d['email'] ?? '').toString().trim();
+                final ts = d['timestamp'];
+                if (ts is Timestamp && em.isNotEmpty) {
+                  todosByEmail.putIfAbsent(em, () => {}).add(ts.toDate());
+                }
+              }
+            } catch (_) {}
+          }
+        }());
+      }
+
+      await Future.wait(todoFetches);
+
+      Future<YupulseUserCardItem> buildItem(
+          QueryDocumentSnapshot<Map<String, dynamic>> userDoc) async {
         final uData = userDoc.data();
         final username = (uData['username'] ?? uData['email'] ?? 'Unknown User').toString();
         final rawYupulseId = (uData['YuPulseID'] ?? uData['yupass_id'] ?? uData['yupassId'] ?? uData['yupulse_id'] ?? '').toString().trim();
         final email = (uData['email'] ?? '').toString().toLowerCase().trim();
 
-        // Check if this user was already submitted for this month period
-        bool isAlreadySubmitted = false;
-        if (rawYupulseId.isNotEmpty) {
-          isAlreadySubmitted = await MarksFirestoreService.isUserSubmitted(
-            period: periodStr,
-            yupulseId: rawYupulseId,
-          );
-        }
+        // Start independent Firestore reads concurrently
+        final submittedFuture = rawYupulseId.isNotEmpty
+            ? MarksFirestoreService.isUserSubmitted(period: periodStr, yupulseId: rawYupulseId)
+            : Future.value(false);
+        final markDocFuture = rawYupulseId.isNotEmpty
+            ? MarksFirestoreService.getMarkData(period: periodStr, yupulseId: rawYupulseId)
+            : null;
+        // Try date-bounded query on follow_ups if composite index exists,
+        // otherwise fallback seamlessly to created_by query.
+        final leadsFuture = (() async {
+          try {
+            return await FirebaseFirestore.instance
+                .collection('follow_ups')
+                .where('created_by', isEqualTo: userDoc.id)
+                .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfMonth))
+                .where('created_at', isLessThan: Timestamp.fromDate(endOfMonth))
+                .get();
+          } catch (_) {
+            return await FirebaseFirestore.instance
+                .collection('follow_ups')
+                .where('created_by', isEqualTo: userDoc.id)
+                .get();
+          }
+        })();
+
+        final bool isAlreadySubmitted = await submittedFuture;
 
         // 1. Calculate auto Todo days done (matches monthly.dart logic)
         int autoTodoDoneCount = 0;
         try {
           final userId = userDoc.id;
-          final nextMonthDate = (monthIndex == 12)
-              ? DateTime(currentYear + 1, 1, 1)
-              : DateTime(currentYear, monthIndex + 1, 1);
-          final today = DateTime.now();
-          final int lastDay = (nextMonthDate.isAfter(today)
-              ? today
-              : nextMonthDate.subtract(const Duration(days: 1))).day;
-
           final userEmail = (userDoc.data()['email'] ?? '').toString().trim();
-          final Set<DateTime> todoDates = {};
-          final todoSnaps = await Future.wait([
-            FirebaseFirestore.instance
-                .collection('todo')
-                .where('created_by', isEqualTo: userId)
-                .get(),
-            if (userEmail.isNotEmpty)
-              FirebaseFirestore.instance
-                  .collection('todo')
-                  .where('email', isEqualTo: userEmail)
-                  .get()
-            else
-              Future.value(null),
-          ]);
-
-          final snapUid = todoSnaps[0] as QuerySnapshot<Map<String, dynamic>>;
-          final snapEmail = todoSnaps[1];
-
-          for (final dDoc in snapUid.docs) {
-            final ts = dDoc.data()['timestamp'];
-            if (ts is Timestamp) {
-              todoDates.add(ts.toDate());
-            }
-          }
-          if (snapEmail != null) {
-            for (final dDoc in snapEmail.docs) {
-              final ts = dDoc.data()['timestamp'];
-              if (ts is Timestamp) {
-                todoDates.add(ts.toDate());
-              }
-            }
-          }
+          final Set<DateTime> todoDates = {
+            ...?todosByUserId[userId],
+            if (userEmail.isNotEmpty) ...?todosByEmail[userEmail],
+          };
 
           for (int i = 0; i < lastDay; i++) {
             final date = startOfMonth.add(Duration(days: i));
@@ -277,10 +364,7 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
         int ccLeadsCreated = 0;
         int salesLeadsCreated = 0;
         try {
-          final leadsSnap = await FirebaseFirestore.instance
-              .collection('follow_ups')
-              .where('created_by', isEqualTo: userDoc.id)
-              .get();
+          final leadsSnap = await leadsFuture;
           for (final l in leadsSnap.docs) {
             final ld = l.data();
             final ts = ld['created_at'];
@@ -296,17 +380,18 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
           }
         } catch (_) {}
 
+        int? savedSsTotal;
+        int? savedSsTaken;
+        int? savedCcLeads;
+        int? savedSalesLeads;
         int? savedTodoDoneCount;
         int? savedCallTargetCount;
         int? savedCallDoneCount;
         String savedReason = '';
         bool hasSavedDoc = false;
 
-        if (rawYupulseId.isNotEmpty) {
-          final markDoc = await MarksFirestoreService.getMarkData(
-            period: periodStr,
-            yupulseId: rawYupulseId,
-          );
+        if (markDocFuture != null) {
+          final markDoc = await markDocFuture;
 
           if (markDoc.exists && markDoc.data() != null) {
             hasSavedDoc = true;
@@ -325,6 +410,10 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
             if (answers['callReason'] != null) {
               savedReason = answers['callReason'].toString();
             }
+            savedSsTotal = int.tryParse('${answers['supersaleTotal']}');
+            savedSsTaken = int.tryParse('${answers['supersaleTaken']}');
+            savedCcLeads = int.tryParse('${answers['ccLeadsCreated']}');
+            savedSalesLeads = int.tryParse('${answers['salesLeadsCreated']}');
           }
         }
 
@@ -334,6 +423,18 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
 
         bool useAutoTodo = true;
         bool useAutoCalling = true;
+        bool useAutoSupersale = true;
+        bool useAutoLeads = true;
+        if (hasSavedDoc) {
+          if ((savedSsTotal != null && savedSsTotal != supersaleTotal) ||
+              (savedSsTaken != null && savedSsTaken != supersaleTaken)) {
+            useAutoSupersale = false;
+          }
+          if ((savedCcLeads != null && savedCcLeads != ccLeadsCreated) ||
+              (savedSalesLeads != null && savedSalesLeads != salesLeadsCreated)) {
+            useAutoLeads = false;
+          }
+        }
 
         if (hasSavedDoc) {
           if (savedTodoDoneCount != null && savedTodoDoneCount != autoTodoDoneCount) {
@@ -350,7 +451,7 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
         final callDoneController = TextEditingController(text: initialCallDone.toString());
         final reasonController = TextEditingController(text: savedReason);
 
-        items.add(YupulseUserCardItem(
+        return YupulseUserCardItem(
           username: username,
           yupulseId: rawYupulseId,
           email: email,
@@ -367,12 +468,21 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
           salesLeadsCreated: salesLeadsCreated,
           useAutoTodo: useAutoTodo,
           useAutoCalling: useAutoCalling,
+          useAutoSupersale: useAutoSupersale,
+          useAutoLeads: useAutoLeads,
           todoController: todoController,
           callTargetController: callTargetController,
           callDoneController: callDoneController,
+          supersaleTotalController: TextEditingController(text: (savedSsTotal ?? supersaleTotal).toString()),
+          supersaleTakenController: TextEditingController(text: (savedSsTaken ?? supersaleTaken).toString()),
+          ccLeadsController: TextEditingController(text: (savedCcLeads ?? ccLeadsCreated).toString()),
+          salesLeadsController: TextEditingController(text: (savedSalesLeads ?? salesLeadsCreated).toString()),
           reasonController: reasonController,
-        ));
+        );
       }
+
+      // Load all users in parallel instead of one after another
+      final items = await Future.wait(usersSnap.docs.map(buildItem));
 
       if (mounted) {
         setState(() {
@@ -506,7 +616,7 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
 
     final invalidReasonUsers = <String>[];
     for (final item in selectedItems) {
-      if (!item.useAutoTodo || !item.useAutoCalling) {
+      if (!item.useAutoTodo || !item.useAutoCalling || !item.useAutoSupersale || !item.useAutoLeads) {
         final reason = item.reasonController.text.trim();
         if (reason.length < 15) {
           invalidReasonUsers.add('${item.username} (${reason.length}/15 chars)');
@@ -654,7 +764,7 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
             ? autoCallDone
             : (int.tryParse(item.callDoneController.text.trim()) ?? 0);
 
-        final callReason = (!useAutoTodo || !useAutoCalling)
+        final callReason = (!useAutoTodo || !useAutoCalling || !item.useAutoSupersale || !item.useAutoLeads)
             ? item.reasonController.text.trim()
             : '';
 
@@ -667,10 +777,10 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
           callDoneCount: callDoneCount,
           callReason: callReason,
           todoDoneCount: todoDoneCount,
-          supersaleTotal: item.supersaleTotal,
-          supersaleTaken: item.supersaleTaken,
-          ccLeadsCreated: item.ccLeadsCreated,
-          salesLeadsCreated: item.salesLeadsCreated,
+          supersaleTotal: item.useAutoSupersale ? item.supersaleTotal : (int.tryParse(item.supersaleTotalController.text.trim()) ?? 0),
+          supersaleTaken: item.useAutoSupersale ? item.supersaleTaken : (int.tryParse(item.supersaleTakenController.text.trim()) ?? 0),
+          ccLeadsCreated: item.useAutoLeads ? item.ccLeadsCreated : (int.tryParse(item.ccLeadsController.text.trim()) ?? 0),
+          salesLeadsCreated: item.useAutoLeads ? item.salesLeadsCreated : (int.tryParse(item.salesLeadsController.text.trim()) ?? 0),
         );
 
         await MarksFirestoreService.recordSubmissionLock(
