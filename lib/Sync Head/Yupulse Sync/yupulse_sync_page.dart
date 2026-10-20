@@ -108,6 +108,44 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
       final periodStr = "$currentYear-${monthIndex.toString().padLeft(2, '0')}";
 
       final startOfMonth = DateTime(currentYear, monthIndex, 1);
+      final endOfMonth = DateTime(currentYear, monthIndex + 1, 1);
+
+      // Supersale campaigns ending in the selected month (same logic as monthly report)
+      final monthEndInclusive = DateTime(currentYear, monthIndex + 1, 0, 23, 59, 59);
+      final supersalesSnap =
+          await FirebaseFirestore.instance.collection('supersales').get();
+      final List<String> branchCampaignIds = [];
+      final Map<String, List<Map<String, dynamic>>> campaignEntriesForBranch = {};
+      final List<Future<void>> entryFetches = [];
+      for (final sDoc in supersalesSnap.docs) {
+        final sd = sDoc.data();
+        final dEnd = sd['deliveryEnd'];
+        if (dEnd == null) continue;
+        final DateTime deliveryEnd = dEnd is Timestamp
+            ? dEnd.toDate()
+            : DateTime.tryParse(dEnd.toString()) ?? DateTime(2000);
+        if (deliveryEnd.isBefore(startOfMonth) || deliveryEnd.isAfter(monthEndInclusive)) {
+          continue;
+        }
+        final List<dynamic> cb = sd['branches'] ?? [];
+        if (!(cb.isEmpty || cb.contains('all') || cb.contains(_selectedBranch))) continue;
+        branchCampaignIds.add(sDoc.id);
+        final itemName = sd['item'] as String? ?? 'Unnamed';
+        entryFetches.add(() async {
+          try {
+            final snap = await FirebaseFirestore.instance
+                .collection('supersale_user_entries')
+                .doc(_selectedBranch)
+                .collection(itemName)
+                .where('adminPostingId', isEqualTo: sDoc.id)
+                .get();
+            campaignEntriesForBranch[sDoc.id] = snap.docs.map((d) => d.data()).toList();
+          } catch (_) {
+            campaignEntriesForBranch[sDoc.id] = [];
+          }
+        }());
+      }
+      await Future.wait(entryFetches);
 
       final List<YupulseUserCardItem> items = [];
 
@@ -223,7 +261,41 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
           } catch (_) {}
         }
 
-        // 3. Fetch existing document from yupulse_bda_marks if available
+        // 2b. Supersale: Total = campaigns whose deliveryEnd falls in the month
+        // (applicable to branch); Taken = those with a non-cancelled order by user.
+        int supersaleTotal = branchCampaignIds.length;
+        int supersaleTaken = 0;
+        for (final cid in branchCampaignIds) {
+          final entries = campaignEntriesForBranch[cid] ?? [];
+          final taken = entries.any((e) =>
+              (e['userId'] ?? '').toString() == userDoc.id &&
+              (e['status'] ?? '').toString().toLowerCase() != 'cancelled');
+          if (taken) supersaleTaken++;
+        }
+
+        // 2c. Leads created by this user in the month (CC vs Sales)
+        int ccLeadsCreated = 0;
+        int salesLeadsCreated = 0;
+        try {
+          final leadsSnap = await FirebaseFirestore.instance
+              .collection('follow_ups')
+              .where('created_by', isEqualTo: userDoc.id)
+              .get();
+          for (final l in leadsSnap.docs) {
+            final ld = l.data();
+            final ts = ld['created_at'];
+            if (ts is! Timestamp) continue;
+            final dt = ts.toDate();
+            if (dt.isBefore(startOfMonth) || !dt.isBefore(endOfMonth)) continue;
+            final src = (ld['source'] ?? '').toString().toUpperCase();
+            if (src == 'CC') {
+              ccLeadsCreated++;
+            } else if (src != 'SME' && src != 'DME') {
+              salesLeadsCreated++;
+            }
+          }
+        } catch (_) {}
+
         int? savedTodoDoneCount;
         int? savedCallTargetCount;
         int? savedCallDoneCount;
@@ -289,6 +361,10 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
           autoTodoDoneCount: autoTodoDoneCount,
           autoCallTargetCount: autoCallTargetCount,
           autoCallDoneCount: autoCallDoneCount,
+          supersaleTotal: supersaleTotal,
+          supersaleTaken: supersaleTaken,
+          ccLeadsCreated: ccLeadsCreated,
+          salesLeadsCreated: salesLeadsCreated,
           useAutoTodo: useAutoTodo,
           useAutoCalling: useAutoCalling,
           todoController: todoController,
@@ -591,6 +667,10 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
           callDoneCount: callDoneCount,
           callReason: callReason,
           todoDoneCount: todoDoneCount,
+          supersaleTotal: item.supersaleTotal,
+          supersaleTaken: item.supersaleTaken,
+          ccLeadsCreated: item.ccLeadsCreated,
+          salesLeadsCreated: item.salesLeadsCreated,
         );
 
         await MarksFirestoreService.recordSubmissionLock(

@@ -11,6 +11,10 @@ class YupulseUserCardItem {
   final int autoTodoDoneCount;
   final int autoCallTargetCount;
   final int autoCallDoneCount;
+  final int supersaleTotal;
+  final int supersaleTaken;
+  final int ccLeadsCreated;
+  final int salesLeadsCreated;
   bool useAutoTodo;
   bool useAutoCalling;
   final TextEditingController todoController;
@@ -29,6 +33,10 @@ class YupulseUserCardItem {
     required this.autoTodoDoneCount,
     required this.autoCallTargetCount,
     required this.autoCallDoneCount,
+    this.supersaleTotal = 0,
+    this.supersaleTaken = 0,
+    this.ccLeadsCreated = 0,
+    this.salesLeadsCreated = 0,
     required this.useAutoTodo,
     required this.useAutoCalling,
     required this.todoController,

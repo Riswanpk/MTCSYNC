@@ -39,6 +39,10 @@ class MarksFirestoreService {
     required int callDoneCount,
     required String callReason,
     required int todoDoneCount,
+    int supersaleTotal = 0,
+    int supersaleTaken = 0,
+    int ccLeadsCreated = 0,
+    int salesLeadsCreated = 0,
   }) async {
     final docId = '${yupulseId}_$period';
     final docRef = _firestore.collection('yupulse_bda_marks').doc(docId);
@@ -55,6 +59,10 @@ class MarksFirestoreService {
         'callDoneCount': callDoneCount,
         'callReason': callReason,
         'todoDoneCount': todoDoneCount,
+        'supersaleTotal': supersaleTotal,
+        'supersaleTaken': supersaleTaken,
+        'ccLeadsCreated': ccLeadsCreated,
+        'salesLeadsCreated': salesLeadsCreated,
       },
     };
 
