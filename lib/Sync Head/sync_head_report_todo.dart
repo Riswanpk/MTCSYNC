@@ -689,7 +689,6 @@ class _SyncHeadReportTodoPageState extends State<SyncHeadReportTodoPage> {
             // Detailed Checkbox / Switch Option Card
             Material(
               color: isDark ? const Color(0xFF162236) : Colors.white,
-              borderRadius: BorderRadius.circular(14),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
                 side: BorderSide(
