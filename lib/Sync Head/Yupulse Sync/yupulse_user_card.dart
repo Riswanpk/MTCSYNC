@@ -397,6 +397,32 @@ class YupulseUserCard extends StatelessWidget {
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _statBox(
+                      title: 'Supersale',
+                      icon: Icons.local_offer_rounded,
+                      labelA: 'Total',
+                      valueA: item.supersaleTotal,
+                      labelB: 'Taken',
+                      valueB: item.supersaleTaken,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _statBox(
+                      title: 'Leads Created',
+                      icon: Icons.person_add_alt_1_rounded,
+                      labelA: 'CC',
+                      valueA: item.ccLeadsCreated,
+                      labelB: 'Sales',
+                      valueB: item.salesLeadsCreated,
+                    ),
+                  ),
+                ],
+              ),
               // Reason field if manual override is active
               if (isManualOverrideActive) ...[
                 const SizedBox(height: 14),
@@ -490,4 +516,55 @@ class YupulseUserCard extends StatelessWidget {
       ),
     );
   }
+
+  Widget _statBox({
+    required String title,
+    required IconData icon,
+    required String labelA,
+    required int valueA,
+    required String labelB,
+    required int valueB,
+  }) {
+    const green = YupulseUiHelpers.primaryGreen;
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: green),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  title,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white70 : Colors.grey.shade700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '$labelA: $valueA  |  $labelB: $valueB',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : Colors.grey.shade900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
+

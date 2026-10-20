@@ -149,7 +149,7 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
     workbook.dispose();
     final file = File(filePath)..writeAsBytesSync(fileBytes);
 
-    final smtpServer = gmail('crmmalabar@gmail.com', 'rhmo laoh qara qrnd');
+    final smtpServer = gmail('crmmalabar@gmail.com', 'xlqv oxhd xxco lbyo');
     final message = Message()
       ..from = Address('crmmalabar@gmail.com', 'MTC Sync')
       ..recipients.addAll(['performancemtc@gmail.com'])
@@ -160,7 +160,7 @@ Future<void> sendDailyLeadsReport(BuildContext context) async {
     await send(message, smtpServer);
 
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(content: Text('Daily report sent to crmmalabar@gmail.com')),
+      SnackBar(content: Text('Daily report sent to performancemtc@gmail.com')),
     );
   } catch (e, stack) {
     debugPrint('Daily report error: $e\n$stack');

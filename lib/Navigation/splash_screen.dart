@@ -56,20 +56,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
     // Request all permissions that show dialogs
     try {
-      // Request permissions sequentially so dialogs appear one at a time
-      await Permission.camera.request();
-      await Permission.contacts.request();
-      await Permission.phone.request();
-      await Permission.location.request();
-      await Permission.notification.request();
-      await Permission.storage.request();
-      await Permission.manageExternalStorage.request();
-      await Permission.scheduleExactAlarm.request();
-      await Permission.reminders.request();
-      await Permission.ignoreBatteryOptimizations.request();
-
-      // Initialize notification permission service after requesting permission
-      await NotificationPermissionService.instance.isNotificationPermissionGranted();
+      await _requestAllPermissions();
     } catch (e) {
       debugPrint('Permission error: $e');
     }
@@ -77,6 +64,20 @@ class _SplashScreenState extends State<SplashScreen> {
     // Only navigate after main permissions are handled
     if (!mounted) return;
     await _checkAuthAndNavigate();
+  }
+
+  Future<void> _requestAllPermissions() async {
+    // Sequential so dialogs appear one at a time
+    await Permission.camera.request();
+    await Permission.contacts.request();
+    await Permission.phone.request();
+    await Permission.location.request();
+    await Permission.notification.request();
+    await Permission.storage.request();
+    await Permission.manageExternalStorage.request();
+    await Permission.scheduleExactAlarm.request();
+    await Permission.ignoreBatteryOptimizations.request();
+    await NotificationPermissionService.instance.isNotificationPermissionGranted();
   }
 
   /// Robustly resolves the current Firebase Auth user.
@@ -89,8 +90,15 @@ class _SplashScreenState extends State<SplashScreen> {
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) return user;
 
-    // 2. Wait for the first auth state event
-    user = await FirebaseAuth.instance.authStateChanges().first;
+    // 2. Wait for the first auth state event (bounded)
+    try {
+      user = await FirebaseAuth.instance
+          .authStateChanges()
+          .first
+          .timeout(const Duration(seconds: 5), onTimeout: () => null);
+    } catch (_) {
+      user = null;
+    }
     if (user != null) return user;
 
     // 3. Session may still be restoring — wait up to 2s for a non-null event
