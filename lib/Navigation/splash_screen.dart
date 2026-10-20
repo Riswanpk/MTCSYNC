@@ -17,6 +17,7 @@ import '../main.dart'; // For navigatorKey and initialNotificationAction
 import '../Marketing/marketing.dart'; // For MarketingFormPage
 import 'loading_page.dart'; // For LoadingOverlayPage
 import 'navigation_state.dart'; // For navigation state restoration
+import '../Homepage/home_widgets.dart'; // For RotatingLogo
 
 
 class SplashScreen extends StatefulWidget {
@@ -67,18 +68,31 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _requestAllPermissions() async {
-    // Sequential so dialogs appear one at a time
-    await Permission.camera.request();
-    await Permission.contacts.request();
-    await Permission.phone.request();
-    await Permission.location.request();
-    await Permission.notification.request();
-    await Permission.storage.request();
-    await Permission.manageExternalStorage.request();
-    await Permission.scheduleExactAlarm.request();
-    await Permission.ignoreBatteryOptimizations.request();
-    await NotificationPermissionService.instance.isNotificationPermissionGranted();
+    // Sequential with per-request timeouts so permission dialogs or OS hangs never freeze startup
+    Future<void> safeRequest(Permission permission) async {
+      try {
+        await permission.request().timeout(const Duration(seconds: 3));
+      } catch (e) {
+        debugPrint('Permission request error/timeout for $permission: $e');
+      }
+    }
+
+    await safeRequest(Permission.camera);
+    await safeRequest(Permission.contacts);
+    await safeRequest(Permission.phone);
+    await safeRequest(Permission.location);
+    await safeRequest(Permission.notification);
+    await safeRequest(Permission.storage);
+    await safeRequest(Permission.manageExternalStorage);
+    await safeRequest(Permission.scheduleExactAlarm);
+    await safeRequest(Permission.ignoreBatteryOptimizations);
+    try {
+      await NotificationPermissionService.instance
+          .isNotificationPermissionGranted()
+          .timeout(const Duration(seconds: 3));
+    } catch (_) {}
   }
+
 
   /// Robustly resolves the current Firebase Auth user.
   /// On devices with aggressive process management (e.g., Pixel 10 / Android 16),
@@ -195,10 +209,11 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Show empty screen during permission requests - avoids flashing loading circle
     return const Scaffold(
       backgroundColor: Colors.white,
-      body: SizedBox.shrink(),
+      body: Center(
+        child: RotatingLogo(),
+      ),
     );
   }
 }

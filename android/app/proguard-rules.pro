@@ -10,50 +10,35 @@
     public static final android.os.Parcelable$Creator *;
 }
 
-# Keep Javascript interfaces if webviews are used
--keepclassmembers class * {
-    @android.webkit.JavascriptInterface <methods>;
-}
-
 # Kotlin reflection metadata
 -keepclassmembers class kotlin.Metadata { *; }
 
 # ==============================================================================
-# Don't Warn Rules for Harmless Library Warnings
-# Note: Modern SDKs (Firebase, Play Services, OkHttp, gRPC, Flutter plugins)
-# ship their own embedded consumer-rules.pro. We do not use blanket `-keep`
-# rules here so R8 can achieve high shrinking, obfuscation, and optimization rates.
+# Plugin Specific Rules (Reflection & Payload Serialization)
 # ==============================================================================
--dontwarn io.flutter.embedding.engine.FlutterEngine
--dontwarn com.google.android.gms.**
--dontwarn com.google.firebase.**
--dontwarn com.google.firestore.**
--dontwarn io.grpc.**
--dontwarn okhttp3.**
--dontwarn okio.**
+
+# awesome_notifications & notification payloads (uses Gson reflection)
 -dontwarn me.carda.awesome_notifications.**
--dontwarn com.google.android.play.core.**
+-keep class me.carda.awesome_notifications.** { *; }
+-keep class com.google.gson.** { *; }
 
-# Keep Flutter Engine & Plugins for MethodChannels
--keep class io.flutter.app.** { *; }
--keep class io.flutter.plugin.** { *; }
--keep class io.flutter.util.** { *; }
--keep class io.flutter.view.** { *; }
--keep class io.flutter.embedding.** { *; }
--keep class io.flutter.provider.** { *; }
--keep class io.flutter.plugins.** { *; }
--keep class io.flutter.plugins.GeneratedPluginRegistrant { *; }
+# flutter_local_notifications (if present/transitive)
+-keep class com.dexterous.flutterlocalnotifications.** { *; }
 
-# Keep permission_handler plugin
+# permission_handler plugin
 -keep class com.baseflow.permissionhandler.** { *; }
 
-# Keep package_info_plus plugin
+# package_info_plus plugin
 -keep class dev.fluttercommunity.plus.packageinfo.** { *; }
 
-# Keep awesome_notifications plugin
--keep class me.carda.awesome_notifications.** { *; }
-
-# Keep call_log plugin
+# call_log plugin
 -keep class sk.fourq.calllog.** { *; }
+
+# Keep App specific classes (Application and Activities)
+-keep class com.mtc.mtcsync.** { *; }
+
+# Keep Flutter plugin callback and method channel interfaces
 -keep class * implements io.flutter.plugin.common.MethodChannel$MethodCallHandler { *; }
+-keep class * implements io.flutter.plugin.common.PluginRegistry$RequestPermissionsResultListener { *; }
+-keep class * implements io.flutter.plugin.common.PluginRegistry$ActivityResultListener { *; }
 

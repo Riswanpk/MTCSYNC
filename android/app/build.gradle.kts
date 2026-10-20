@@ -45,9 +45,9 @@ android {
 
     buildTypes {
         getByName("release") {
-            // Minification and resource shrinking disabled to prevent R8 stripping native/plugin classes
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // Enable R8 code shrinking, obfuscation, and resource optimization to meet Google Play requirements (>25%)
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
