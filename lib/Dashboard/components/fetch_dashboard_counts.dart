@@ -1,6 +1,28 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-Future<Map<String, int>> fetchDashboardCounts({String? branch}) async {
+class _CachedCounts {
+  final Map<String, int> counts;
+  final DateTime timestamp;
+  _CachedCounts(this.counts, this.timestamp);
+}
+
+final Map<String, _CachedCounts> _dashboardCountsMemoryCache = {};
+const Duration _cacheDuration = Duration(minutes: 30);
+
+Future<Map<String, int>> fetchDashboardCounts({
+  String? branch,
+  bool forceRefresh = false,
+}) async {
+  final cacheKey = branch ?? '__all__';
+
+  if (!forceRefresh) {
+    final cached = _dashboardCountsMemoryCache[cacheKey];
+    if (cached != null &&
+        DateTime.now().difference(cached.timestamp) < _cacheDuration) {
+      return cached.counts;
+    }
+  }
+
   final now = DateTime.now();
   final monthStart = DateTime(now.year, now.month, 1);
   final todayStart = DateTime(now.year, now.month, now.day);
@@ -57,10 +79,14 @@ Future<Map<String, int>> fetchDashboardCounts({String? branch}) async {
     }
   } catch (_) {}
 
-  return {
+  final result = {
     'totalLeads': leadsResults[0].count ?? 0,
     'monthLeads': leadsResults[1].count ?? 0,
     'todayLeads': leadsResults[2].count ?? 0,
     'pendingTodos': pendingTodosCount,
   };
+
+  _dashboardCountsMemoryCache[cacheKey] = _CachedCounts(result, DateTime.now());
+
+  return result;
 }

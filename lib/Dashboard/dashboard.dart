@@ -105,6 +105,9 @@ class _DashboardPageState extends State<DashboardPage>
     final surfaceColor =
         isDark ? const Color(0xFF1A1B22) : const Color(0xFFF5F7FA);
 
+    final targetBranch =
+        (role == 'manager' || role == 'asst_manager') ? branch : null;
+
     return Scaffold(
       backgroundColor: surfaceColor,
       body: GestureDetector(
@@ -118,9 +121,21 @@ class _DashboardPageState extends State<DashboardPage>
         } : null,
         child: FadeTransition(
           opacity: _fadeIn,
-          child: CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
+          child: RefreshIndicator(
+            onRefresh: () async {
+              setState(() {
+                _countsFuture = fetchDashboardCounts(
+                  branch: targetBranch,
+                  forceRefresh: true,
+                );
+              });
+              await _countsFuture;
+            },
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              slivers: [
               // ── Sliver App Bar ──
               SliverAppBar(
                 expandedHeight: 120,
@@ -481,6 +496,7 @@ class _DashboardPageState extends State<DashboardPage>
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 }

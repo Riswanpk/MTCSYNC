@@ -36,17 +36,19 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
 
   Future<void> fetchBranches() async {
     final sortedBranches = await UserCacheService.instance.getBranches();
-    if (mounted) { setState(() {
+    if (!mounted) return;
+    setState(() {
       branches = sortedBranches;
       if (branches.isNotEmpty && (selectedBranch == null || !branches.contains(selectedBranch))) {
         selectedBranch = branches.first;
       }
-    }); }
+    });
     await fetchUsernames();
   }
 
   Future<void> fetchUsernames() async {
     if (selectedBranch == null) {
+      if (!mounted) return;
       setState(() {
         usernames = [];
         selectedUsername = null;
@@ -59,12 +61,13 @@ class _ViewerMarketingPageState extends State<ViewerMarketingPage> {
         .get();
     final allUsers = snapshot.docs.map((doc) => doc['username'] as String? ?? '').toSet().toList();
     allUsers.sort();
-    if (mounted) { setState(() {
+    if (!mounted) return;
+    setState(() {
       usernames = ['All Users', ...allUsers.where((u) => u.isNotEmpty)];
       if (usernames.isNotEmpty && (selectedUsername == null || !usernames.contains(selectedUsername))) {
         selectedUsername = usernames.first;
       }
-    }); }
+    });
   }
 
   InputDecoration _dropdownDecoration(BuildContext context, String label) {
