@@ -181,7 +181,7 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
 
       for (final chunk in chunkList(userIds.toList(), 30)) {
         todoFetches.add(() async {
-          try {
+          {
             final snap = await FirebaseFirestore.instance
                 .collection('todo')
                 .where('created_by', whereIn: chunk)
@@ -196,28 +196,13 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
                 todosByUserId.putIfAbsent(creator, () => {}).add(ts.toDate());
               }
             }
-          } catch (e) {
-            try {
-              final snap = await FirebaseFirestore.instance
-                  .collection('todo')
-                  .where('created_by', whereIn: chunk)
-                  .get();
-              for (final doc in snap.docs) {
-                final d = doc.data();
-                final creator = (d['created_by'] ?? '').toString();
-                final ts = d['timestamp'];
-                if (ts is Timestamp && creator.isNotEmpty) {
-                  todosByUserId.putIfAbsent(creator, () => {}).add(ts.toDate());
-                }
-              }
-            } catch (_) {}
           }
         }());
       }
 
       for (final chunk in chunkList(userEmails.toList(), 30)) {
         todoFetches.add(() async {
-          try {
+          {
             final snap = await FirebaseFirestore.instance
                 .collection('todo')
                 .where('email', whereIn: chunk)
@@ -232,21 +217,6 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
                 todosByEmail.putIfAbsent(em, () => {}).add(ts.toDate());
               }
             }
-          } catch (e) {
-            try {
-              final snap = await FirebaseFirestore.instance
-                  .collection('todo')
-                  .where('email', whereIn: chunk)
-                  .get();
-              for (final doc in snap.docs) {
-                final d = doc.data();
-                final em = (d['email'] ?? '').toString().trim();
-                final ts = d['timestamp'];
-                if (ts is Timestamp && em.isNotEmpty) {
-                  todosByEmail.putIfAbsent(em, () => {}).add(ts.toDate());
-                }
-              }
-            } catch (_) {}
           }
         }());
       }
@@ -267,23 +237,13 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
         final markDocFuture = rawYupulseId.isNotEmpty
             ? MarksFirestoreService.getMarkData(period: periodStr, yupulseId: rawYupulseId)
             : null;
-        // Try date-bounded query on follow_ups if composite index exists,
-        // otherwise fallback seamlessly to created_by query.
-        final leadsFuture = (() async {
-          try {
-            return await FirebaseFirestore.instance
-                .collection('follow_ups')
-                .where('created_by', isEqualTo: userDoc.id)
-                .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfMonth))
-                .where('created_at', isLessThan: Timestamp.fromDate(endOfMonth))
-                .get();
-          } catch (_) {
-            return await FirebaseFirestore.instance
-                .collection('follow_ups')
-                .where('created_by', isEqualTo: userDoc.id)
-                .get();
-          }
-        })();
+        // Needs composite index follow_ups(created_by, created_at)
+        final leadsFuture = FirebaseFirestore.instance
+            .collection('follow_ups')
+            .where('created_by', isEqualTo: userDoc.id)
+            .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfMonth))
+            .where('created_at', isLessThan: Timestamp.fromDate(endOfMonth))
+            .get();
 
         final bool isAlreadySubmitted = await submittedFuture;
 
@@ -363,22 +323,20 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
         // 2c. Leads created by this user in the month (CC vs Sales)
         int ccLeadsCreated = 0;
         int salesLeadsCreated = 0;
-        try {
-          final leadsSnap = await leadsFuture;
-          for (final l in leadsSnap.docs) {
-            final ld = l.data();
-            final ts = ld['created_at'];
-            if (ts is! Timestamp) continue;
-            final dt = ts.toDate();
-            if (dt.isBefore(startOfMonth) || !dt.isBefore(endOfMonth)) continue;
-            final src = (ld['source'] ?? '').toString().toUpperCase();
-            if (src == 'CC') {
-              ccLeadsCreated++;
-            } else if (src != 'SME' && src != 'DME') {
-              salesLeadsCreated++;
-            }
+        final leadsSnap = await leadsFuture;
+        for (final l in leadsSnap.docs) {
+          final ld = l.data();
+          final ts = ld['created_at'];
+          if (ts is! Timestamp) continue;
+          final dt = ts.toDate();
+          if (dt.isBefore(startOfMonth) || !dt.isBefore(endOfMonth)) continue;
+          final src = (ld['source'] ?? '').toString().toUpperCase();
+          if (src == 'CC') {
+            ccLeadsCreated++;
+          } else if (src != 'SME' && src != 'DME') {
+            salesLeadsCreated++;
           }
-        } catch (_) {}
+        }
 
         int? savedSsTotal;
         int? savedSsTaken;
