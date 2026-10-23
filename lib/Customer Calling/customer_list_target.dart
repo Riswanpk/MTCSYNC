@@ -362,7 +362,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                       MaterialPageRoute(builder: (context) => AddCustomerPage()),
                     );
                     if (added == true) {
-                      _fetchCustomerData();
+                      _fetchCustomerData(forceFirestore: true);
                     }
                   },
                 ),
@@ -479,7 +479,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                     MaterialPageRoute(
                       builder: (context) => const CustomerCallingRemarksPendingPage(),
                     ),
-                  ).then((_) => _fetchCustomerData());
+                  ).then((_) => _fetchCustomerData(forceFirestore: true));
                 },
               ),
               IconButton(
@@ -491,7 +491,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                     MaterialPageRoute(builder: (context) => AddCustomerPage()),
                   );
                   if (added == true) {
-                    _fetchCustomerData();
+                    _fetchCustomerData(forceFirestore: true);
                   }
                 },
               ),
