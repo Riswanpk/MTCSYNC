@@ -218,7 +218,13 @@ class _TodoFormPageState extends State<TodoFormPage> {
           debugPrint('Warning: Failed to reschedule todo notification: $e');
         }
 
-        await TodoCacheService.instance.updateLocalReminder(email, widget.docId!, scheduledDate);
+        await TodoCacheService.instance.updateLocalTodo(
+          email: email,
+          docId: widget.docId!,
+          title: title,
+          description: desc,
+          reminder: scheduledDate,
+        );
 
         if (mounted) Navigator.pop(context);
         return;

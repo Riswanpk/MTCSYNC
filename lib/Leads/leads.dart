@@ -10,6 +10,7 @@ import 'components/leads_filter_header.dart';
 import 'components/leads_pagination_footer.dart';
 import 'components/auto_reschedule_service.dart';
 import 'components/leads_calendar_view.dart';
+import 'leads_cache_service.dart';
 
 class LeadsPage extends StatefulWidget {
   final String branch;
@@ -27,6 +28,7 @@ class _LeadsPageState extends State<LeadsPage> {
   String? selectedUser;
   List<String> availableBranches = [];
   bool _isSearching = false;
+  bool _isReloading = false;
   List<Map<String, dynamic>> availableUsers = [];
   final ValueNotifier<bool> _isHovering = ValueNotifier(false);
   bool _showCalendar = false;
@@ -60,7 +62,7 @@ class _LeadsPageState extends State<LeadsPage> {
   Timer? _searchDebounce;
   final Map<String, String> _creatorUsernameCache = {};
 
-  List<DocumentSnapshot> _leads = [];
+  List<LeadItemEntry> _leads = [];
   DocumentSnapshot? _lastDocument;
   bool _isLoading = false;
   int _currentPage = 1;
@@ -180,7 +182,13 @@ class _LeadsPageState extends State<LeadsPage> {
     });
   }
 
-  Future<void> _fetchLeadsPage({bool nextPage = false, bool prevPage = false, bool isSearch = false, bool isRefresh = false}) async {
+  Future<void> _fetchLeadsPage({
+    bool nextPage = false,
+    bool prevPage = false,
+    bool isSearch = false,
+    bool isRefresh = false,
+    bool forceFirestore = false,
+  }) async {
     if (!mounted) return;
     if (_isLoading) return;
     if (!isRefresh) {
@@ -200,6 +208,65 @@ class _LeadsPageState extends State<LeadsPage> {
         _leads = [];
       });
       return;
+    }
+
+    // Determine cache scope key (branch-specific)
+    final cacheKey = branch;
+
+    // Daily cache optimization:
+    // If not paginating, not searching, not a manual refresh/forced fetch:
+    // Check if we already fetched today and have local cached leads.
+    if (!nextPage && !prevPage && !isSearch && !isRefresh && !forceFirestore && _currentPage == 1) {
+      final fetchedToday = await LeadsCacheService.instance.hasFetchedToday(cacheKey);
+      final cached = await LeadsCacheService.instance.getCachedLeads(cacheKey);
+
+      if (fetchedToday && cached.isNotEmpty && mounted) {
+        // Apply filters in-memory on cached leads
+        var list = cached;
+        if (selectedUser != null) {
+          list = list.where((l) =>
+              l.createdBy == selectedUser ||
+              l.assignedTo == selectedUser ||
+              l.screenedBy == selectedUser).toList();
+        }
+        if (selectedStatus != 'All') {
+          final targetStatus = selectedStatus == 'Sold' ? 'Sale' : selectedStatus;
+          list = list.where((l) => l.status == targetStatus).toList();
+        }
+        if (selectedPriority != 'All') {
+          list = list.where((l) => l.priority == selectedPriority).toList();
+        }
+        if (selectedSource != 'All') {
+          final sLower = selectedSource.toLowerCase();
+          list = list.where((l) => (l.source ?? '').toLowerCase() == sLower).toList();
+          if (selectedSource == 'SME') {
+            list = list.where((l) => l.screeningStatus == 'promoted').toList();
+          }
+        } else {
+          list = list.where((l) {
+            final src = (l.source ?? '').toLowerCase();
+            if (src == 'sme') return l.screeningStatus == 'promoted';
+            return true;
+          }).toList();
+        }
+
+        // Sort by created_at
+        list.sort((a, b) {
+          final aTime = a.createdAtMillis ?? 0;
+          final bTime = b.createdAtMillis ?? 0;
+          return sortAscending ? aTime.compareTo(bTime) : bTime.compareTo(aTime);
+        });
+
+        final pageSlice = list.take(_leadsPerPage).toList();
+        final entries = pageSlice.map((l) => LeadItemEntry.fromCachedModel(l)).toList();
+
+        setState(() {
+          _leads = entries;
+          _hasMore = list.length > _leadsPerPage;
+          _isLoading = false;
+        });
+        return;
+      }
     }
 
     Query query = FirebaseFirestore.instance.collection('follow_ups').where('branch', isEqualTo: branch);
@@ -285,14 +352,23 @@ class _LeadsPageState extends State<LeadsPage> {
         _lastDocument = null;
       }
 
+      // Save to local cache & mark today as fetched when loading page 1
+      if (!nextPage && !prevPage && !isSearch && _currentPage == 1) {
+        final models = filteredDocs.map((d) => CachedLeadModel.fromFirestore(d)).toList();
+        await LeadsCacheService.instance.saveCachedLeads(cacheKey, models);
+        await LeadsCacheService.instance.markFetchedToday(cacheKey);
+      }
+
+      final entries = filteredDocs.map((d) => LeadItemEntry.fromDocument(d)).toList();
+
       if (!mounted) return;
       setState(() {
-        _leads = filteredDocs;
+        _leads = entries;
         _hasMore = hasMoreDocs;
         _isLoading = false;
       });
 
-      await _prefetchCreatorUsernames(filteredDocs);
+      await _prefetchCreatorUsernames(entries);
     } catch (e, stack) {
       debugPrint('Error fetching leads in leads.dart: $e\n$stack');
       if (!mounted) return;
@@ -310,9 +386,9 @@ class _LeadsPageState extends State<LeadsPage> {
     }
   }
 
-  Future<void> _prefetchCreatorUsernames(List<DocumentSnapshot> docs) async {
-    final ids = docs
-        .map((d) => (d.data() as Map<String, dynamic>)['created_by'] as String?)
+  Future<void> _prefetchCreatorUsernames(List<LeadItemEntry> items) async {
+    final ids = items
+        .map((d) => d.data['created_by'] as String?)
         .whereType<String>()
         .where((id) => id.isNotEmpty && !_creatorUsernameCache.containsKey(id))
         .toSet()
@@ -344,7 +420,25 @@ class _LeadsPageState extends State<LeadsPage> {
       _currentPage = 1;
       _lastDocument = null;
     });
-    await _fetchLeadsPage(isRefresh: true);
+    await _fetchLeadsPage(isRefresh: true, forceFirestore: true);
+  }
+
+  Future<void> _handleManualReload() async {
+    if (_isReloading) return;
+    setState(() => _isReloading = true);
+    try {
+      await _handleRefresh();
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(
+            content: Text('Leads updated from database'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isReloading = false);
+    }
   }
 
   @override
@@ -388,6 +482,20 @@ class _LeadsPageState extends State<LeadsPage> {
             backgroundColor: const Color(0xFF005BAC),
             foregroundColor: Colors.white,
             actions: [
+              IconButton(
+                icon: _isReloading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.refresh_rounded),
+                tooltip: 'Reload from database',
+                onPressed: _isReloading ? null : _handleManualReload,
+              ),
               IconButton(
                 icon: Icon(_isSearching ? Icons.close : Icons.search),
                 tooltip: 'Search',
@@ -553,12 +661,12 @@ class _LeadsPageState extends State<LeadsPage> {
                                   padding: const EdgeInsets.all(16),
                                   itemCount: _leads.length,
                                   itemBuilder: (context, index) {
-                                    final doc = _leads[index];
-                                    final data = doc.data() as Map<String, dynamic>;
+                                    final item = _leads[index];
+                                    final data = item.data;
                                     final name = data['name'] ?? 'No Name';
                                     final status = data['status'] ?? 'Unknown';
                                     final date = data['date'] ?? 'No Date';
-                                    final docId = doc.id;
+                                    final docId = item.id;
                                     final reminder = data['reminder'] ?? 'No Reminder';
                                     final createdById = data['created_by'] ?? '';
                                     final priority = data['priority'] ?? 'High';
@@ -581,6 +689,7 @@ class _LeadsPageState extends State<LeadsPage> {
                                       reminder: reminder,
                                       priority: priority,
                                       source: source,
+                                      branch: selectedBranch ?? userData['branch'],
                                       onStatusChanged: () => _fetchLeadsPage(),
                                     );
                                   },
@@ -689,3 +798,26 @@ class _LeadsPageState extends State<LeadsPage> {
     );
   }
 }
+
+/// Represents a lead item in the list, either from a Firestore DocumentSnapshot or local cache
+class LeadItemEntry {
+  final String id;
+  final Map<String, dynamic> data;
+
+  LeadItemEntry({required this.id, required this.data});
+
+  factory LeadItemEntry.fromDocument(DocumentSnapshot doc) {
+    return LeadItemEntry(
+      id: doc.id,
+      data: (doc.data() as Map<String, dynamic>?) ?? {},
+    );
+  }
+
+  factory LeadItemEntry.fromCachedModel(CachedLeadModel model) {
+    return LeadItemEntry(
+      id: model.id,
+      data: model.toViewData(),
+    );
+  }
+}
+

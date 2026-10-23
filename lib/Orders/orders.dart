@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../Navigation/user_cache_service.dart';
 import 'orders_form.dart';
 import 'orders_widgets.dart';
+import 'orders_cache_service.dart';
 
 class OrdersPage extends StatefulWidget {
   final String branch;
@@ -22,7 +23,8 @@ class _OrdersPageState extends State<OrdersPage> {
   String? selectedUser;
   bool _isSearching = false;
   bool _isLoading = false;
-  List<DocumentSnapshot> _orders = [];
+  bool _isReloading = false;
+  List<OrderItemEntry> _orders = [];
   List<String> availableBranches = [];
   List<Map<String, dynamic>> availableUsers = [];
   Timer? _searchDebounce;
@@ -115,7 +117,7 @@ class _OrdersPageState extends State<OrdersPage> {
     setState(() => availableUsers = users);
   }
 
-  Future<void> _fetchOrders() async {
+  Future<void> _fetchOrders({bool forceFirestore = false}) async {
     if (_isLoading) return;
     setState(() => _isLoading = true);
 
@@ -138,6 +140,38 @@ class _OrdersPageState extends State<OrdersPage> {
       return;
     }
 
+    // Daily cache optimization: check if we already fetched today
+    if (!forceFirestore) {
+      final fetchedToday = await OrdersCacheService.instance.hasFetchedToday(branch);
+      final cached = await OrdersCacheService.instance.getCachedOrders(branch);
+
+      if (fetchedToday && cached.isNotEmpty && mounted) {
+        var list = cached;
+        if (selectedUser != null) {
+          list = list.where((o) =>
+              o.createdBy == selectedUser ||
+              o.assignedTo == selectedUser).toList();
+        }
+        if (selectedStatus != 'All') {
+          list = list.where((o) => o.status == selectedStatus).toList();
+        }
+
+        list.sort((a, b) {
+          final aTime = a.createdAtMillis ?? 0;
+          final bTime = b.createdAtMillis ?? 0;
+          return bTime.compareTo(aTime);
+        });
+
+        final entries = list.map((o) => OrderItemEntry.fromCachedModel(o)).toList();
+        setState(() {
+          _orders = entries;
+          _isLoading = false;
+        });
+        await _prefetchCreatorUsernames(entries);
+        return;
+      }
+    }
+
     Query query = FirebaseFirestore.instance
         .collection('follow_ups')
         .where('branch', isEqualTo: branch)
@@ -158,21 +192,35 @@ class _OrdersPageState extends State<OrdersPage> {
 
     query = query.orderBy('created_at', descending: true);
 
-    final snapshot = await query.get();
+    try {
+      final snapshot = await query.get();
 
-    if (!mounted) return;
-    setState(() {
-      _orders = snapshot.docs;
-      _isLoading = false;
-    });
+      // Save to local cache & mark today as fetched
+      final models = snapshot.docs.map((d) => CachedOrderModel.fromFirestore(d)).toList();
+      await OrdersCacheService.instance.saveCachedOrders(branch, models);
+      await OrdersCacheService.instance.markFetchedToday(branch);
 
-    await _prefetchCreatorUsernames(snapshot.docs);
+      final entries = snapshot.docs.map((d) => OrderItemEntry.fromDocument(d)).toList();
+
+      if (!mounted) return;
+      setState(() {
+        _orders = entries;
+        _isLoading = false;
+      });
+
+      await _prefetchCreatorUsernames(entries);
+    } catch (e) {
+      debugPrint('Error fetching orders: $e');
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
-  Future<void> _prefetchCreatorUsernames(List<DocumentSnapshot> docs) async {
-    final ids = docs
-        .map((d) => (d.data() as Map<String, dynamic>)['created_by'] as String?)
-        .whereType<String>()
+  Future<void> _prefetchCreatorUsernames(List<OrderItemEntry> items) async {
+    final ids = items
+        .map((d) => (d.data['created_by'] ?? '').toString())
         .where((id) => id.isNotEmpty && !_creatorUsernameCache.containsKey(id))
         .toSet()
         .toList();
@@ -193,6 +241,26 @@ class _OrdersPageState extends State<OrdersPage> {
       }
       if (mounted) {
         setState(() => _creatorUsernameCache.addAll(map));
+      }
+    }
+  }
+
+  Future<void> _handleManualReload() async {
+    if (_isReloading) return;
+    setState(() => _isReloading = true);
+    try {
+      await _fetchOrders(forceFirestore: true);
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(
+            content: Text('Orders refreshed from database'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isReloading = false);
       }
     }
   }
@@ -236,6 +304,20 @@ class _OrdersPageState extends State<OrdersPage> {
             backgroundColor: const Color(0xFF005BAC),
             foregroundColor: Colors.white,
             actions: [
+              IconButton(
+                icon: _isReloading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Icon(Icons.refresh),
+                tooltip: 'Refresh Orders from Database',
+                onPressed: _isReloading ? null : _handleManualReload,
+              ),
               IconButton(
                 icon: Icon(_isSearching ? Icons.close : Icons.search),
                 onPressed: () {
@@ -382,8 +464,8 @@ class _OrdersPageState extends State<OrdersPage> {
                                 padding: const EdgeInsets.all(16),
                                 itemCount: _orders.length,
                                 itemBuilder: (context, index) {
-                                  final doc = _orders[index];
-                                  final data = doc.data() as Map<String, dynamic>;
+                                  final item = _orders[index];
+                                  final data = item.data;
 
                                   final name = (data['name'] ?? 'No Name').toString();
                                   if (searchQuery.isNotEmpty &&
@@ -397,16 +479,24 @@ class _OrdersPageState extends State<OrdersPage> {
                                     name: name,
                                     status: (data['status'] ?? 'In Progress').toString(),
                                     createdAt: data['date'] ?? data['created_at'],
-                                    docId: doc.id,
+                                    docId: item.id,
                                     createdBy: createdBy,
                                     priority: (data['priority'] ?? 'High').toString(),
                                     deliveryDate: data['delivery_datetime'] ?? data['delivery_date'],
+                                    branch: selectedBranch ?? userData['branch'] ?? widget.branch,
                                     onStatusChanged: _fetchOrders,
                                     onDelete: () async {
                                       await FirebaseFirestore.instance
                                           .collection('follow_ups')
-                                          .doc(doc.id)
+                                          .doc(item.id)
                                           .delete();
+                                      final b = selectedBranch ?? userData['branch'] ?? widget.branch;
+                                      if (b.isNotEmpty) {
+                                        await OrdersCacheService.instance.removeOrder(
+                                          branch: b,
+                                          docId: item.id,
+                                        );
+                                      }
                                       await _fetchOrders();
                                     },
                                   );
@@ -429,6 +519,28 @@ class _OrdersPageState extends State<OrdersPage> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Represents an order item in the list, either from a Firestore DocumentSnapshot or local cache
+class OrderItemEntry {
+  final String id;
+  final Map<String, dynamic> data;
+
+  OrderItemEntry({required this.id, required this.data});
+
+  factory OrderItemEntry.fromDocument(DocumentSnapshot doc) {
+    return OrderItemEntry(
+      id: doc.id,
+      data: (doc.data() as Map<String, dynamic>?) ?? {},
+    );
+  }
+
+  factory OrderItemEntry.fromCachedModel(CachedOrderModel model) {
+    return OrderItemEntry(
+      id: model.id,
+      data: model.toViewData(),
     );
   }
 }

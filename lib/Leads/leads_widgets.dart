@@ -4,6 +4,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:intl/intl.dart';
 import 'package:mtcsync/Misc/sound_service.dart';
 import 'presentfollowup.dart';
+import 'leads_cache_service.dart';
 
 Color getPriorityColor(String priority) {
   switch (priority) {
@@ -140,6 +141,7 @@ class LeadCard extends StatelessWidget {
   final String priority;
   final String reminder;
   final String? source;
+  final String? branch;
   final VoidCallback? onStatusChanged;
 
   const LeadCard({
@@ -152,6 +154,7 @@ class LeadCard extends StatelessWidget {
     required this.priority,
     required this.reminder,
     this.source,
+    this.branch,
     this.onStatusChanged,
   });
 
@@ -251,6 +254,14 @@ class LeadCard extends StatelessWidget {
                   .collection('follow_ups')
                   .doc(docId)
                   .update(updateData);
+              if (branch != null && branch!.isNotEmpty) {
+                await LeadsCacheService.instance.updateLeadStatus(
+                  branch!,
+                  docId,
+                  'Sale',
+                  billedPhone: billedPhone,
+                );
+              }
               onStatusChanged?.call();
               if (context.mounted) {
                 ScaffoldMessenger.maybeOf(context)?.showSnackBar(
@@ -282,6 +293,14 @@ class LeadCard extends StatelessWidget {
                 'completed_at': FieldValue.serverTimestamp(),
                 'cancellation_reason': reason,
               });
+              if (branch != null && branch!.isNotEmpty) {
+                await LeadsCacheService.instance.updateLeadStatus(
+                  branch!,
+                  docId,
+                  'Cancelled',
+                  cancellationReason: reason,
+                );
+              }
               onStatusChanged?.call();
               if (context.mounted) {
                 ScaffoldMessenger.maybeOf(context)?.showSnackBar(

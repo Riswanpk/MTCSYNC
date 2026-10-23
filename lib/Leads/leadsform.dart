@@ -12,6 +12,7 @@ import 'dart:convert';
 import 'leads.dart';
 import 'leads_helpers.dart';
 import 'contact_picker_modal.dart';
+import 'leads_cache_service.dart';
 
 
 class FollowUpForm extends StatefulWidget {
@@ -159,6 +160,25 @@ class _FollowUpFormState extends State<FollowUpForm> {
       }
 
       await _clearDraft(); // Clear draft on successful save
+
+      // Upsert to local cache for instant offline visibility
+      if (branch.isNotEmpty) {
+        await LeadsCacheService.instance.upsertLead(
+          branch,
+          CachedLeadModel(
+            id: followUpRef.id,
+            name: _nameController.text.trim(),
+            status: _status,
+            date: DateTime.now().toIso8601String(),
+            reminder: _reminderController.text.trim(),
+            createdBy: user.uid,
+            priority: _priority,
+            source: widget.source,
+            branch: branch,
+            rawData: Map<String, dynamic>.from(payload)..['id'] = followUpRef.id,
+          ),
+        );
+      }
 
       // Upsert customer profile
       await FirebaseFirestore.instance

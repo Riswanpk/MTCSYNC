@@ -33,6 +33,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
   String _searchText = '';
   bool _showSearchBar = false;
   final TextEditingController _searchController = TextEditingController();
+  bool _isReloading = false;
 
   @override
   void initState() {
@@ -41,7 +42,23 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
     _fetchCustomerData();
   }
 
-  Future<void> _fetchCustomerData() async {
+  Future<bool> _hasFetchedToday() async {
+    if (_docId == null) return false;
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final key = 'customer_list_last_fetch_${_docId}_$today';
+    return prefs.getBool(key) ?? false;
+  }
+
+  Future<void> _markFetchedToday() async {
+    if (_docId == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final key = 'customer_list_last_fetch_${_docId}_$today';
+    await prefs.setBool(key, true);
+  }
+
+  Future<void> _fetchCustomerData({bool forceFirestore = false}) async {
     if (!mounted) return;
     setState(() {
       _error = null;
@@ -58,19 +75,35 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
       }
       _docId = user.email!.toLowerCase();
 
-      // Load from local cache for instant display on first load
-      if (_customers == null) {
-        final cached = await _loadFromLocalCache();
-        if (!mounted) return;
-        if (cached != null) {
+      // Load from local cache for instant display
+      final cached = await _loadFromLocalCache();
+      if (cached != null) {
+        if (mounted) {
           setState(() {
             _customers = cached;
             _loading = false;
           });
-        } else {
+        }
+      } else {
+        if (mounted) {
           setState(() {
             _loading = true;
           });
+        }
+      }
+
+      // If we already fetched today and have local cached data, don't read Firestore again
+      // unless forceFirestore is true (e.g., user clicked the reload button).
+      if (!forceFirestore && cached != null && cached.isNotEmpty) {
+        final fetchedToday = await _hasFetchedToday();
+        if (fetchedToday) {
+          _firestoreConfirmed = true;
+          if (mounted) {
+            setState(() {
+              _loading = false;
+            });
+          }
+          return;
         }
       }
 
@@ -109,6 +142,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
         });
         _firestoreConfirmed = true;
         await _saveToLocalCache();
+        await _markFetchedToday();
       } else {
         // Document missing for this month – try to copy from previous month
         final previousMonthData = await _tryGetPreviousMonthData();
@@ -398,6 +432,37 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
             backgroundColor: isDark ? primaryBlue : primaryGreen,
             iconTheme: const IconThemeData(color: Colors.white),
             actions: [
+              IconButton(
+                icon: _isReloading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Icon(Icons.refresh),
+                tooltip: 'Refresh Customer List from Database',
+                onPressed: _isReloading
+                    ? null
+                    : () async {
+                        setState(() => _isReloading = true);
+                        try {
+                          await _fetchCustomerData(forceFirestore: true);
+                          if (context.mounted) {
+                            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                              const SnackBar(
+                                content: Text('Customer list refreshed from database'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        } finally {
+                          if (mounted) setState(() => _isReloading = false);
+                        }
+                      },
+              ),
               IconButton(
                 icon: Badge.count(
                   count: pendingRemarksCount,

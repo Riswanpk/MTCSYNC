@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:intl/intl.dart';
 import 'present_order.dart';
+import 'orders_cache_service.dart';
 
 Color getOrderPriorityColor(String priority) {
   switch (priority) {
@@ -47,6 +48,7 @@ class OrderCard extends StatelessWidget {
   final String createdBy;
   final String priority;
   final dynamic deliveryDate;
+  final String? branch;
   final VoidCallback? onStatusChanged;
   final Future<void> Function()? onDelete;
 
@@ -59,6 +61,7 @@ class OrderCard extends StatelessWidget {
     required this.createdBy,
     required this.priority,
     required this.deliveryDate,
+    this.branch,
     this.onStatusChanged,
     this.onDelete,
   });
@@ -68,6 +71,13 @@ class OrderCard extends StatelessWidget {
       'status': 'Completed',
       'completed_at': FieldValue.serverTimestamp(),
     });
+    if (branch != null && branch!.isNotEmpty) {
+      await OrdersCacheService.instance.updateOrderStatus(
+        branch: branch!,
+        docId: docId,
+        newStatus: 'Completed',
+      );
+    }
     onStatusChanged?.call();
     if (context.mounted) {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(

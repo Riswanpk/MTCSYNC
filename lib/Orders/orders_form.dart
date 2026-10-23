@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../Leads/leads_helpers.dart';
 import 'orders.dart';
+import 'orders_cache_service.dart';
 
 class OrderFormPage extends StatefulWidget {
   const OrderFormPage({super.key});
@@ -146,7 +147,7 @@ class _OrderFormPageState extends State<OrderFormPage> {
       final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       final branch = userDoc.data()?['branch'] ?? 'Unknown';
 
-      await FirebaseFirestore.instance.collection('follow_ups').add({
+      final orderData = {
         'lead_type': 'order_confirmed',
         'date': DateTime.now(),
         'name': _nameController.text.trim(),
@@ -162,7 +163,15 @@ class _OrderFormPageState extends State<OrderFormPage> {
         'created_by': user.uid,
         'created_at': FieldValue.serverTimestamp(),
         'source': 'Sales',
-      });
+      };
+
+      final orderRef = await FirebaseFirestore.instance.collection('follow_ups').add(orderData);
+
+      await OrdersCacheService.instance.upsertOrder(
+        branch: branch,
+        docId: orderRef.id,
+        data: orderData,
+      );
 
       await FirebaseFirestore.instance.collection('customer').doc(_phoneController.text.trim()).set({
         'name': _nameController.text.trim(),

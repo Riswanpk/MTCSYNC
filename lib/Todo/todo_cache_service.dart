@@ -226,6 +226,35 @@ class TodoCacheService {
     await saveCachedTodos(email, updated);
   }
 
+  /// Update a todo's details (title, description, reminder) locally
+  Future<void> updateLocalTodo({
+    required String email,
+    required String docId,
+    required String title,
+    required String description,
+    required DateTime reminder,
+  }) async {
+    final todos = await getCachedTodos(email);
+    final updated = todos.map((t) {
+      if (t.id == docId) {
+        return TodoModel(
+          id: t.id,
+          title: title,
+          description: description,
+          status: t.status,
+          reminder: reminder,
+          timestamp: t.timestamp,
+          email: t.email,
+          createdBy: t.createdBy,
+          assignedByName: t.assignedByName,
+          assignedBy: t.assignedBy,
+        );
+      }
+      return t;
+    }).toList();
+    await saveCachedTodos(email, updated);
+  }
+
   /// Clear all pending todos locally
   Future<void> clearPendingTodos(String email) async {
     final todos = await getCachedTodos(email);

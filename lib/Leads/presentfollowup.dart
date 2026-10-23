@@ -10,6 +10,7 @@ import 'package:mtcsync/Misc/notification_permission_service.dart';
 import '../main.dart'; // Import to use clearNotificationOpened
 import 'leads_detail_widgets.dart';
 import 'transfer_lead_dialog.dart';
+import 'leads_cache_service.dart';
 class PresentFollowUp extends StatefulWidget {
   final String docId;
   final bool editMode; // <-- Add this
@@ -271,6 +272,33 @@ class _PresentFollowUpState extends State<PresentFollowUp> {
             'branch': updatedData['branch'],
           });
         }
+      }
+
+      // Sync with local leads cache
+      final branch = _branch ?? _data?['branch'];
+      if (branch != null && branch is String && branch.isNotEmpty) {
+        final mergedRaw = <String, dynamic>{
+          ...(_data ?? {}),
+          ...updatedData,
+        };
+        await LeadsCacheService.instance.upsertLead(
+          branch,
+          CachedLeadModel(
+            id: widget.docId,
+            name: updatedData['name'] ?? '',
+            status: updatedData['status'] ?? 'In Progress',
+            date: _selectedDate?.toIso8601String() ?? DateTime.now().toIso8601String(),
+            reminder: updatedData['reminder'] ?? '',
+            createdBy: _data?['created_by'] ?? '',
+            priority: _data?['priority'] ?? 'High',
+            source: _data?['source'],
+            branch: branch,
+            assignedTo: _data?['assigned_to'],
+            screenedBy: _data?['screened_by'],
+            screeningStatus: _data?['screening_status'],
+            rawData: mergedRaw,
+          ),
+        );
       }
 
       // --- Schedule or reschedule local notification for reminder ---

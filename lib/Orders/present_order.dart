@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../Leads/leads_detail_widgets.dart';
+import 'orders_cache_service.dart';
 
 class PresentOrderPage extends StatefulWidget {
   final String docId;
@@ -171,6 +172,15 @@ class _PresentOrderPageState extends State<PresentOrderPage> {
       'completed_at': FieldValue.serverTimestamp(),
     });
 
+    final branch = (_data?['branch'] ?? '').toString();
+    if (branch.isNotEmpty) {
+      await OrdersCacheService.instance.updateOrderStatus(
+        branch: branch,
+        docId: widget.docId,
+        newStatus: 'Completed',
+      );
+    }
+
     if (!mounted) return;
     setState(() {
       _data?['status'] = 'Completed';
@@ -213,6 +223,15 @@ class _PresentOrderPageState extends State<PresentOrderPage> {
       }
 
       await FirebaseFirestore.instance.collection('follow_ups').doc(widget.docId).update(updateData);
+
+      final branch = (_data?['branch'] ?? '').toString();
+      if (branch.isNotEmpty) {
+        await OrdersCacheService.instance.upsertOrder(
+          branch: branch,
+          docId: widget.docId,
+          data: {...?_data, ...updateData},
+        );
+      }
 
       if (!mounted) return;
       setState(() {
