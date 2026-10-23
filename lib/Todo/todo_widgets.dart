@@ -14,22 +14,28 @@ const Color primaryGreen = Color(0xFF8CC63F);
 
 /// A reusable todo list item card with slidable actions.
 class TodoListItem extends StatelessWidget {
-  final DocumentSnapshot doc;
+  final DocumentSnapshot? doc;
+  final String? docId;
   final Map<String, dynamic> data;
-  final Future<void> Function(DocumentSnapshot doc) onToggleStatus;
+  final Future<void> Function(String docId, Map<String, dynamic> data) onToggleStatus;
   final Future<void> Function(String docId) onDelete;
+  final Future<void> Function(String docId, DateTime newReminder)? onPostpone;
   final Future<String> Function(String email) getUsernameByEmail;
   final bool showSlidableActions;
 
   const TodoListItem({
     super.key,
-    required this.doc,
+    this.doc,
+    this.docId,
     required this.data,
     required this.onToggleStatus,
     required this.onDelete,
+    this.onPostpone,
     required this.getUsernameByEmail,
     this.showSlidableActions = true,
   });
+
+  String get effectiveDocId => docId ?? doc?.id ?? (data['docId'] as String? ?? '');
 
   @override
   Widget build(BuildContext context) {
@@ -95,7 +101,7 @@ class TodoListItem extends StatelessWidget {
                 builder: (context) => TaskDetailPage(
                   data: {
                     ...data,
-                    'docId': doc.id,
+                    'docId': effectiveDocId,
                   },
                   dateStr: reminderDateTime != null
                       ? reminderDateTime.toString()
@@ -197,14 +203,14 @@ class TodoListItem extends StatelessWidget {
     }
 
     return Slidable(
-      key: ValueKey(doc.id),
+      key: ValueKey(effectiveDocId),
       startActionPane: ActionPane(
         motion: const DrawerMotion(),
         extentRatio: 0.28,
         children: [
           SlidableAction(
             onPressed: (_) async {
-              await onToggleStatus(doc);
+              await onToggleStatus(effectiveDocId, data);
             },
             backgroundColor: Colors.green.shade400,
             foregroundColor: Colors.white,
@@ -243,16 +249,20 @@ class TodoListItem extends StatelessWidget {
                   newReminder = newReminder.add(const Duration(days: 1));
                 }
 
-                await FirebaseFirestore.instance
-                    .collection('todo')
-                    .doc(doc.id)
-                    .update({
-                  'reminder': newReminder.toIso8601String(),
-                });
+                if (onPostpone != null) {
+                  await onPostpone!(effectiveDocId, newReminder);
+                } else {
+                  await FirebaseFirestore.instance
+                      .collection('todo')
+                      .doc(effectiveDocId)
+                      .update({
+                    'reminder': newReminder.toIso8601String(),
+                  });
+                }
 
                 // Reschedule local notification on phone
                 try {
-                  final notifId = doc.id.hashCode & 0x7FFFFFFF;
+                  final notifId = effectiveDocId.hashCode & 0x7FFFFFFF;
                   await AwesomeNotifications().cancel(notifId);
                   final tz = await AwesomeNotifications().getLocalTimeZoneIdentifier();
                   await NotificationPermissionService.instance.safeCreateNotification(
@@ -260,11 +270,11 @@ class TodoListItem extends StatelessWidget {
                       id: notifId,
                       channelKey: 'todo_reminder_channel',
                       title: 'To-Do Reminder',
-                      body: 'Reminder: ${doc['title'] ?? 'Task'}',
+                      body: 'Reminder: ${data['title'] ?? 'Task'}',
                       notificationLayout: NotificationLayout.Default,
                       payload: {
                         'type': 'todo',
-                        'docId': doc.id,
+                        'docId': effectiveDocId,
                       },
                     ),
                     schedule: NotificationCalendar(
@@ -339,7 +349,7 @@ class TodoListItemReadOnly extends StatelessWidget {
             TodoListItem(
               doc: doc,
               data: data,
-              onToggleStatus: (_) async {},
+              onToggleStatus: (_, __) async {},
               onDelete: (_) async {},
               getUsernameByEmail: getUsernameByEmail,
               showSlidableActions: false,

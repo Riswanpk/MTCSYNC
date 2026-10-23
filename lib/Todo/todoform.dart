@@ -10,6 +10,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:mtcsync/Misc/notification_permission_service.dart';
 
 import '../Navigation/user_cache_service.dart';
+import 'todo_cache_service.dart';
 
 /// Returns the current 12 PM–12 PM IST window as [windowStart, windowEnd].
 List<DateTime> getCurrentISTWindow() {
@@ -217,6 +218,8 @@ class _TodoFormPageState extends State<TodoFormPage> {
           debugPrint('Warning: Failed to reschedule todo notification: $e');
         }
 
+        await TodoCacheService.instance.updateLocalReminder(email, widget.docId!, scheduledDate);
+
         if (mounted) Navigator.pop(context);
         return;
       }
@@ -230,6 +233,20 @@ class _TodoFormPageState extends State<TodoFormPage> {
         'created_by': createdBy,
         'reminder': scheduledDate.toIso8601String(),
       });
+
+      final cached = await TodoCacheService.instance.getCachedTodos(email);
+      final newTodo = TodoModel(
+        id: todoRef.id,
+        title: title,
+        description: desc,
+        status: 'pending',
+        reminder: scheduledDate,
+        timestamp: DateTime.now(),
+        email: email,
+        createdBy: createdBy,
+      );
+      cached.insert(0, newTodo);
+      await TodoCacheService.instance.saveCachedTodos(email, cached);
 
 
 

@@ -10,6 +10,7 @@ import 'dart:async';
 import 'todo_widgets.dart' as todowidgets;
 import 'todo_list_body.dart';
 import 'todo_manager_tab.dart';
+import 'todo_cache_service.dart';
 
 // Re-export so existing imports of TaskDetailPage/TaskDetailPageFromId keep working
 export 'task_detail_widgets.dart';
@@ -26,8 +27,11 @@ class _TodoPageState extends State<TodoPage>
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final TextEditingController _todoController = TextEditingController();
+  final GlobalKey<TodoListBodyState> _pendingKey = GlobalKey<TodoListBodyState>();
+  final GlobalKey<TodoListBodyState> _doneKey = GlobalKey<TodoListBodyState>();
   String? _userEmail;
   String? _userRole;
+  bool _isReloading = false;
   late Future<void> _userInfoFuture;
 
   TabController? _tabController;
@@ -171,6 +175,21 @@ class _TodoPageState extends State<TodoPage>
                             },
                           ),
                         IconButton(
+                          icon: _isReloading
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.refresh_rounded,
+                                  color: Colors.white),
+                          tooltip: 'Reload from database',
+                          onPressed: _isReloading ? null : _reloadFromDatabase,
+                        ),
+                        IconButton(
                           icon: const Icon(Icons.delete_sweep_rounded,
                               color: Colors.white),
                           tooltip: 'Clear All Tasks',
@@ -216,22 +235,22 @@ class _TodoPageState extends State<TodoPage>
                   children: isManager
                       ? [
                           TodoListBody(
+                            key: _pendingKey,
                             status: 'pending',
                             userEmail: _userEmail,
-                            firestore: _firestore,
-                            auth: _auth,
                             onToggleStatus: _toggleStatus,
                             onDelete: _deleteTodo,
+                            onPostpone: _postponeTodo,
                             getUsernameByEmail: _getUsernameByEmail,
                             role: _userRole,
                           ),
                           TodoListBody(
+                            key: _doneKey,
                             status: 'done',
                             userEmail: _userEmail,
-                            firestore: _firestore,
-                            auth: _auth,
                             onToggleStatus: _toggleStatus,
                             onDelete: _deleteTodo,
+                            onPostpone: _postponeTodo,
                             getUsernameByEmail: _getUsernameByEmail,
                             role: _userRole,
                           ),
@@ -244,22 +263,22 @@ class _TodoPageState extends State<TodoPage>
                         ]
                       : [
                           TodoListBody(
+                            key: _pendingKey,
                             status: 'pending',
                             userEmail: _userEmail,
-                            firestore: _firestore,
-                            auth: _auth,
                             onToggleStatus: _toggleStatus,
                             onDelete: _deleteTodo,
+                            onPostpone: _postponeTodo,
                             getUsernameByEmail: _getUsernameByEmail,
                             role: _userRole,
                           ),
                           TodoListBody(
+                            key: _doneKey,
                             status: 'done',
                             userEmail: _userEmail,
-                            firestore: _firestore,
-                            auth: _auth,
                             onToggleStatus: _toggleStatus,
                             onDelete: _deleteTodo,
+                            onPostpone: _postponeTodo,
                             getUsernameByEmail: _getUsernameByEmail,
                             role: _userRole,
                           ),
@@ -375,10 +394,38 @@ class _TodoPageState extends State<TodoPage>
     return DateTime(dateTime.year, dateTime.month, dateTime.day);
   }
 
-  Future<void> _toggleStatus(DocumentSnapshot doc) async {
-    final currentStatus = doc['status'] ?? 'pending';
+  Future<void> _reloadFromDatabase() async {
+    if (_userEmail == null || _isReloading) return;
+    setState(() => _isReloading = true);
+    try {
+      await Future.wait([
+        _pendingKey.currentState?.refreshFromDatabase(showSpinner: true) ??
+            TodoCacheService.instance.fetchAndCacheTodos(_userEmail!),
+        _doneKey.currentState?.refreshFromDatabase(showSpinner: true) ??
+            Future.value([]),
+      ]);
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(
+            content: Text('Tasks updated from database'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text('Failed to reload: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isReloading = false);
+    }
+  }
+
+  Future<void> _toggleStatus(String docId, Map<String, dynamic> data) async {
+    final currentStatus = data['status'] ?? 'pending';
     if (currentStatus == 'done') {
-      // Completed tasks cannot be reverted back to pending
       if (mounted) {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           const SnackBar(content: Text('Completed tasks cannot be changed.')),
@@ -413,27 +460,50 @@ class _TodoPageState extends State<TodoPage>
 
     // Cancel the notification using the same ID calculation from todoform.dart
     try {
-      final notificationId = doc.id.hashCode & 0x7FFFFFFF;
+      final notificationId = docId.hashCode & 0x7FFFFFFF;
       await AwesomeNotifications().cancel(notificationId);
     } catch (e) {
       debugPrint('Warning: Failed to cancel todo notification: $e');
     }
 
-    await _firestore.collection('todo').doc(doc.id).update({
+    await _firestore.collection('todo').doc(docId).update({
       'status': newStatus,
       'timestamp': Timestamp.now(),
     });
+
+    if (_userEmail != null) {
+      await TodoCacheService.instance
+          .updateLocalTodoStatus(_userEmail!, docId, newStatus);
+      _pendingKey.currentState?.reloadFromLocalCache();
+      _doneKey.currentState?.reloadFromLocalCache();
+    }
+  }
+
+  Future<void> _postponeTodo(String docId, DateTime newReminder) async {
+    await _firestore.collection('todo').doc(docId).update({
+      'reminder': newReminder.toIso8601String(),
+    });
+
+    if (_userEmail != null) {
+      await TodoCacheService.instance
+          .updateLocalReminder(_userEmail!, docId, newReminder);
+      _pendingKey.currentState?.reloadFromLocalCache();
+      _doneKey.currentState?.reloadFromLocalCache();
+    }
   }
 
   Future<void> _deleteTodo(String docId) async {
-    final doc = await _firestore.collection('todo').doc(docId).get();
-    if (doc.exists && doc.data()?['status'] == 'done') {
-      if (mounted) {
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          const SnackBar(content: Text('Completed tasks cannot be deleted.')),
-        );
+    if (_userEmail != null) {
+      final cached = await TodoCacheService.instance.getCachedTodos(_userEmail!);
+      final match = cached.where((t) => t.id == docId).firstOrNull;
+      if (match?.status == 'done') {
+        if (mounted) {
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            const SnackBar(content: Text('Completed tasks cannot be deleted.')),
+          );
+        }
+        return;
       }
-      return;
     }
 
     // Cancel the notification using the same ID calculation from todoform.dart
@@ -445,6 +515,12 @@ class _TodoPageState extends State<TodoPage>
     }
     
     await _firestore.collection('todo').doc(docId).delete();
+
+    if (_userEmail != null) {
+      await TodoCacheService.instance.removeLocalTodo(_userEmail!, docId);
+      _pendingKey.currentState?.reloadFromLocalCache();
+      _doneKey.currentState?.reloadFromLocalCache();
+    }
   }
 
   Future<void> _clearAllTodos() async {
@@ -478,6 +554,10 @@ class _TodoPageState extends State<TodoPage>
         batch.delete(doc.reference);
       }
       await batch.commit();
+
+      await TodoCacheService.instance.clearPendingTodos(_userEmail!);
+      _pendingKey.currentState?.reloadFromLocalCache();
+      _doneKey.currentState?.reloadFromLocalCache();
     }
   }
 
