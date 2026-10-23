@@ -115,6 +115,7 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
       final supersalesSnap =
           await FirebaseFirestore.instance.collection('supersales').get();
       final List<String> branchCampaignIds = [];
+      final Map<String, DateTime> campaignDeliveryEnds = {};
       final Map<String, List<Map<String, dynamic>>> campaignEntriesForBranch = {};
       final List<Future<void>> entryFetches = [];
       for (final sDoc in supersalesSnap.docs) {
@@ -130,6 +131,7 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
         final List<dynamic> cb = sd['branches'] ?? [];
         if (!(cb.isEmpty || cb.contains('all') || cb.contains(_selectedBranch))) continue;
         branchCampaignIds.add(sDoc.id);
+        campaignDeliveryEnds[sDoc.id] = deliveryEnd;
         final itemName = sd['item'] as String? ?? 'Unnamed';
         entryFetches.add(() async {
           try {
@@ -309,14 +311,46 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
         }
 
         // 2b. Supersale: Total = campaigns whose deliveryEnd falls in the month
-        // (applicable to branch); Taken = those with a non-cancelled order by user.
+        // (applicable to branch); Taken = campaigns with a valid delivered/non-cancelled order by user.
+        // Orders delivered after the delivery date period has ended are NOT counted as taken.
         int supersaleTotal = branchCampaignIds.length;
         int supersaleTaken = 0;
         for (final cid in branchCampaignIds) {
           final entries = campaignEntriesForBranch[cid] ?? [];
-          final taken = entries.any((e) =>
-              (e['userId'] ?? '').toString() == userDoc.id &&
-              (e['status'] ?? '').toString().toLowerCase() != 'cancelled');
+          final campaignDeliveryEnd = campaignDeliveryEnds[cid];
+
+          final taken = entries.any((e) {
+            if ((e['userId'] ?? '').toString() != userDoc.id) return false;
+            final status = (e['status'] ?? '').toString().toLowerCase();
+            if (status == 'cancelled') return false;
+
+            // Determine the campaign/order delivery deadline
+            DateTime? deadline = campaignDeliveryEnd;
+            final dynamic entryDeRaw = e['deliveryEnd'];
+            if (entryDeRaw is Timestamp) {
+              deadline = entryDeRaw.toDate();
+            } else if (entryDeRaw is String) {
+              deadline = DateTime.tryParse(entryDeRaw) ?? deadline;
+            }
+
+            if (deadline != null) {
+              // Parse actual delivery timestamp if delivered
+              final dynamic delAtRaw = e['deliveredAt'];
+              DateTime? deliveredAt;
+              if (delAtRaw is Timestamp) {
+                deliveredAt = delAtRaw.toDate();
+              } else if (delAtRaw is String) {
+                deliveredAt = DateTime.tryParse(delAtRaw);
+              }
+
+              // If delivered, check if delivery occurred after the delivery date period ended
+              if (deliveredAt != null && deliveredAt.isAfter(deadline)) {
+                return false;
+              }
+            }
+
+            return true;
+          });
           if (taken) supersaleTaken++;
         }
 
