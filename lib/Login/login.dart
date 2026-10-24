@@ -134,7 +134,35 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         );
       }
     } on FirebaseAuthException catch (e) {
-      setState(() => _errorMessage = e.message);
+      String message;
+      switch (e.code) {
+        case 'invalid-credential':
+        case 'wrong-password':
+        case 'user-not-found':
+        case 'invalid-email':
+          message = 'Email or Password is incorrect';
+          break;
+        case 'user-disabled':
+          message = 'This user account has been disabled.';
+          break;
+        case 'too-many-requests':
+          message = 'Too many attempts. Please try again later.';
+          break;
+        case 'network-request-failed':
+          message = 'Network error. Please check your connection.';
+          break;
+        default:
+          final lower = (e.message ?? '').toLowerCase();
+          if (lower.contains('credential') ||
+              lower.contains('password') ||
+              lower.contains('no user') ||
+              lower.contains('user not found')) {
+            message = 'Email or Password is incorrect';
+          } else {
+            message = e.message ?? 'Email or Password is incorrect';
+          }
+      }
+      setState(() => _errorMessage = message);
     } catch (e) {
       setState(() {
         _errorMessage = 'Unexpected error occurred';
