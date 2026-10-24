@@ -40,13 +40,8 @@ class YupulseUserCard extends StatelessWidget {
     final todoCtrl = item.todoController;
     final callTargetCtrl = item.callTargetController;
     final callDoneCtrl = item.callDoneController;
-    final reasonCtrl = item.reasonController;
 
     final hasYupulseId = yupulseId.isNotEmpty;
-    final isManualOverrideActive = !useAutoTodo ||
-        !useAutoCalling ||
-        !item.useAutoSupersale ||
-        !item.useAutoLeads;
 
     final submittedBgColor = isDark ? const Color(0xFF0D2818) : const Color(0xFFF0FDF4);
     final submittedBorderColor = primaryGreen.withValues(alpha: isDark ? 0.7 : 0.5);
@@ -263,288 +258,255 @@ class YupulseUserCard extends StatelessWidget {
               const SizedBox(height: 16),
               Divider(height: 1, color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
               const SizedBox(height: 16),
-              // Marks Control Grid
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Todo Column (reduced width)
-                  Expanded(
-                    flex: 4,
-                    child: YupulseUiHelpers.buildMarkSection(
-                      title: 'Todo Mark',
-                      icon: Icons.checklist_rounded,
-                      autoPillText: '$autoTodoDone days',
-                      useAuto: useAutoTodo,
-                      isDark: isDark,
-                      onCheckboxChanged: isSubmitted ? null : (val) => onToggleAutoTodo(val ?? true),
-                      child: TextField(
-                        controller: todoCtrl,
-                        enabled: !useAutoTodo && isSelected && !isSubmitted,
-                        keyboardType: TextInputType.number,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: useAutoTodo || !isSelected || isSubmitted
-                              ? (isDark ? Colors.white38 : Colors.grey.shade500)
-                              : (isDark ? Colors.white : Colors.grey.shade900),
-                        ),
-                        decoration: YupulseUiHelpers.inputDecoration(
-                          labelText: useAutoTodo ? 'Auto Days' : 'Days Done',
-                          useAuto: useAutoTodo || !isSelected || isSubmitted,
-                          isDark: isDark,
-                        ),
+              Divider(height: 1, color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+              const SizedBox(height: 16),
+              // 1. Todo Mark (1 per row)
+              YupulseUiHelpers.buildMarkSection(
+                title: 'Todo Mark',
+                icon: Icons.checklist_rounded,
+                autoPillText: '$autoTodoDone days',
+                useAuto: useAutoTodo,
+                isDark: isDark,
+                onCheckboxChanged: isSubmitted ? null : (val) => onToggleAutoTodo(val ?? true),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: todoCtrl,
+                      enabled: !useAutoTodo && isSelected && !isSubmitted,
+                      keyboardType: TextInputType.number,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: useAutoTodo || !isSelected || isSubmitted
+                            ? (isDark ? Colors.white38 : Colors.grey.shade500)
+                            : (isDark ? Colors.white : Colors.grey.shade900),
+                      ),
+                      decoration: YupulseUiHelpers.inputDecoration(
+                        labelText: useAutoTodo ? 'Auto Days' : 'Days Done',
+                        useAuto: useAutoTodo || !isSelected || isSubmitted,
+                        isDark: isDark,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  // Customer Calling Column
-                  Expanded(
-                    flex: 7,
-                    child: YupulseUiHelpers.buildMarkSection(
-                      title: 'Customer Calling',
-                      icon: Icons.phone_in_talk_rounded,
-                      autoPillText: 'Total: $autoCallTarget | Called: $autoCallDone',
-                      useAuto: useAutoCalling,
-                      isDark: isDark,
-                      onCheckboxChanged: isSubmitted ? null : (val) => onToggleAutoCalling(val ?? true),
-                      child: useAutoCalling
-                          ? TextField(
-                              controller: TextEditingController(
-                                text: 'Total: $autoCallTarget | Called: $autoCallDone',
-                              ),
-                              enabled: false,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? Colors.white38 : Colors.grey.shade500,
-                              ),
-                              decoration: YupulseUiHelpers.inputDecoration(
-                                labelText: 'Auto Target & Done',
-                                useAuto: true,
-                                isDark: isDark,
-                              ),
-                            )
-                          : Row(
-                              children: [
-                                Expanded(
-                                  child: TextField(
-                                    controller: callTargetCtrl,
-                                    enabled: isSelected && !isSubmitted,
-                                    keyboardType: TextInputType.number,
-                                    onChanged: (val) {
-                                      final enteredTarget = int.tryParse(val.trim()) ?? 0;
-                                      final currentDone = int.tryParse(callDoneCtrl.text.trim()) ?? 0;
-                                      if (enteredTarget >= 0 && currentDone > enteredTarget) {
-                                        callDoneCtrl.text = enteredTarget.toString();
-                                      }
-                                    },
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: !isSelected || isSubmitted
-                                          ? (isDark ? Colors.white38 : Colors.grey.shade500)
-                                          : (isDark ? Colors.white : Colors.grey.shade900),
-                                    ),
-                                    decoration: YupulseUiHelpers.inputDecoration(
-                                      labelText: 'Total Target',
-                                      useAuto: !isSelected || isSubmitted,
-                                      isDark: isDark,
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: TextField(
-                                    controller: callDoneCtrl,
-                                    enabled: isSelected && !isSubmitted,
-                                    keyboardType: TextInputType.number,
-                                    onChanged: (val) {
-                                      final enteredDone = int.tryParse(val.trim()) ?? 0;
-                                      final target = int.tryParse(callTargetCtrl.text.trim()) ?? 0;
-                                      if (enteredDone > target) {
-                                        callDoneCtrl.text = target.toString();
-                                        callDoneCtrl.selection = TextSelection.fromPosition(
-                                          TextPosition(offset: callDoneCtrl.text.length),
-                                        );
-                                        ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
-                                        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              'Called count cannot exceed Total Target ($target)',
-                                            ),
-                                            duration: const Duration(seconds: 2),
-                                            backgroundColor: Colors.orange.shade800,
-                                          ),
-                                        );
-                                      }
-                                    },
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: !isSelected || isSubmitted
-                                          ? (isDark ? Colors.white38 : Colors.grey.shade500)
-                                          : (isDark ? Colors.white : Colors.grey.shade900),
-                                    ),
-                                    decoration: YupulseUiHelpers.inputDecoration(
-                                      labelText: 'Called Count',
-                                      useAuto: !isSelected || isSubmitted,
-                                      isDark: isDark,
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
-                  ),
-                ],
+                    if (!useAutoTodo) ...[
+                      const SizedBox(height: 10),
+                      _reasonInput(
+                        controller: item.todoReasonController,
+                        hintText: 'Enter reason for Todo manual override...',
+                        enabled: isSelected && !isSubmitted,
+                      ),
+                    ],
+                  ],
+                ),
               ),
               const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: _manualBox(
-                      title: 'Supersale',
-                      icon: Icons.local_offer_rounded,
-                      autoText: 'Total: ${item.supersaleTotal} | Taken: ${item.supersaleTaken}',
-                      useAuto: item.useAutoSupersale,
-                      enabled: isSelected && !isSubmitted,
-                      isSubmitted: isSubmitted,
-                      onToggle: (v) {
-                        item.useAutoSupersale = v;
-                        if (v) {
-                          item.supersaleTotalController.text = item.supersaleTotal.toString();
-                          item.supersaleTakenController.text = item.supersaleTaken.toString();
-                        }
-                        onReasonChanged();
-                      },
-                      ctrlA: item.supersaleTotalController,
-                      labelA: 'Total',
-                      ctrlB: item.supersaleTakenController,
-                      labelB: 'Taken',
-                      capBByA: true,
-                      context: context,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _manualBox(
-                      title: 'Leads Created',
-                      icon: Icons.person_add_alt_1_rounded,
-                      autoText: 'CC: ${item.ccLeadsCreated} | Sales: ${item.salesLeadsCreated}',
-                      useAuto: item.useAutoLeads,
-                      enabled: isSelected && !isSubmitted,
-                      isSubmitted: isSubmitted,
-                      onToggle: (v) {
-                        item.useAutoLeads = v;
-                        if (v) {
-                          item.ccLeadsController.text = item.ccLeadsCreated.toString();
-                          item.salesLeadsController.text = item.salesLeadsCreated.toString();
-                        }
-                        onReasonChanged();
-                      },
-                      ctrlA: item.ccLeadsController,
-                      labelA: 'CC Leads',
-                      ctrlB: item.salesLeadsController,
-                      labelB: 'Sales Leads',
-                      capBByA: false,
-                      context: context,
-                    ),
-                  ),
-                ],
-              ),
-              // Reason field if manual override is active
-              if (isManualOverrideActive) ...[
-                const SizedBox(height: 14),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF0F172A) : const Color(0xFFFFFBEB),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: reasonCtrl.text.trim().length >= 15
-                          ? primaryGreen.withValues(alpha: 0.5)
-                          : (isDark ? Colors.amber.shade900.withValues(alpha: 0.5) : Colors.amber.shade300),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
+              // 2. Customer Calling (1 per row)
+              YupulseUiHelpers.buildMarkSection(
+                title: 'Customer Calling',
+                icon: Icons.phone_in_talk_rounded,
+                autoPillText: 'Total: $autoCallTarget | Called: $autoCallDone',
+                useAuto: useAutoCalling,
+                isDark: isDark,
+                onCheckboxChanged: isSubmitted ? null : (val) => onToggleAutoCalling(val ?? true),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    useAutoCalling
+                        ? TextField(
+                            controller: TextEditingController(
+                              text: 'Total: $autoCallTarget | Called: $autoCallDone',
+                            ),
+                            enabled: false,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white38 : Colors.grey.shade500,
+                            ),
+                            decoration: YupulseUiHelpers.inputDecoration(
+                              labelText: 'Auto Target & Done',
+                              useAuto: true,
+                              isDark: isDark,
+                            ),
+                          )
+                        : Row(
                             children: [
-                              Icon(Icons.edit_note_rounded, size: 18, color: Colors.amber.shade800),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Reason for Manual Override',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: isDark ? Colors.amber.shade300 : Colors.amber.shade900,
+                              Expanded(
+                                child: TextField(
+                                  controller: callTargetCtrl,
+                                  enabled: isSelected && !isSubmitted,
+                                  keyboardType: TextInputType.number,
+                                  onChanged: (val) {
+                                    final enteredTarget = int.tryParse(val.trim()) ?? 0;
+                                    final currentDone = int.tryParse(callDoneCtrl.text.trim()) ?? 0;
+                                    if (enteredTarget >= 0 && currentDone > enteredTarget) {
+                                      callDoneCtrl.text = enteredTarget.toString();
+                                    }
+                                  },
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: !isSelected || isSubmitted
+                                        ? (isDark ? Colors.white38 : Colors.grey.shade500)
+                                        : (isDark ? Colors.white : Colors.grey.shade900),
+                                  ),
+                                  decoration: YupulseUiHelpers.inputDecoration(
+                                    labelText: 'Total Target',
+                                    useAuto: !isSelected || isSubmitted,
+                                    isDark: isDark,
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: TextField(
+                                  controller: callDoneCtrl,
+                                  enabled: isSelected && !isSubmitted,
+                                  keyboardType: TextInputType.number,
+                                  onChanged: (val) {
+                                    final enteredDone = int.tryParse(val.trim()) ?? 0;
+                                    final target = int.tryParse(callTargetCtrl.text.trim()) ?? 0;
+                                    if (enteredDone > target) {
+                                      callDoneCtrl.text = target.toString();
+                                      callDoneCtrl.selection = TextSelection.fromPosition(
+                                        TextPosition(offset: callDoneCtrl.text.length),
+                                      );
+                                      ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+                                      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Called count cannot exceed Total Target ($target)',
+                                          ),
+                                          duration: const Duration(seconds: 2),
+                                          backgroundColor: Colors.orange.shade800,
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: !isSelected || isSubmitted
+                                        ? (isDark ? Colors.white38 : Colors.grey.shade500)
+                                        : (isDark ? Colors.white : Colors.grey.shade900),
+                                  ),
+                                  decoration: YupulseUiHelpers.inputDecoration(
+                                    labelText: 'Called Count',
+                                    useAuto: !isSelected || isSubmitted,
+                                    isDark: isDark,
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                          Text(
-                            '${reasonCtrl.text.trim().length}/15 min',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: reasonCtrl.text.trim().length >= 15
-                                  ? primaryGreen
-                                  : Colors.amber.shade800,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: reasonCtrl,
+                    if (!useAutoCalling) ...[
+                      const SizedBox(height: 10),
+                      _reasonInput(
+                        controller: item.callReasonController,
+                        hintText: 'Enter reason for Customer Calling manual override...',
                         enabled: isSelected && !isSubmitted,
-                        maxLines: 2,
-                        onChanged: (_) => onReasonChanged(),
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: isDark ? Colors.white : Colors.grey.shade900,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'Enter reason for editing auto values (min 15 characters)...',
-                          hintStyle: TextStyle(
-                            fontSize: 12,
-                            color: isDark ? Colors.white38 : Colors.grey.shade500,
-                          ),
-                          filled: true,
-                          fillColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide.none,
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(
-                              color: reasonCtrl.text.trim().isNotEmpty && reasonCtrl.text.trim().length < 15
-                                  ? Colors.amber.shade600
-                                  : (isDark ? Colors.grey.shade700 : Colors.grey.shade300),
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: primaryGreen, width: 1.5),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        ),
                       ),
                     ],
-                  ),
+                  ],
                 ),
-              ],
+              ),
+              const SizedBox(height: 12),
+              // 3. Supersale (1 per row)
+              _manualBox(
+                title: 'Supersale',
+                icon: Icons.local_offer_rounded,
+                autoText: 'Total: ${item.supersaleTotal} | Taken: ${item.supersaleTaken}',
+                useAuto: item.useAutoSupersale,
+                enabled: isSelected && !isSubmitted,
+                isSubmitted: isSubmitted,
+                onToggle: (v) {
+                  item.useAutoSupersale = v;
+                  if (v) {
+                    item.supersaleTotalController.text = item.supersaleTotal.toString();
+                    item.supersaleTakenController.text = item.supersaleTaken.toString();
+                  }
+                  onReasonChanged();
+                },
+                ctrlA: item.supersaleTotalController,
+                labelA: 'Total',
+                ctrlB: item.supersaleTakenController,
+                labelB: 'Taken',
+                capBByA: true,
+                reasonCtrl: item.supersaleReasonController,
+                reasonHintText: 'Enter reason for Supersale manual override...',
+                context: context,
+              ),
+              const SizedBox(height: 12),
+              // 4. Leads Created (1 per row)
+              _manualBox(
+                title: 'Leads Created',
+                icon: Icons.person_add_alt_1_rounded,
+                autoText: 'CC: ${item.ccLeadsCreated} | Sales: ${item.salesLeadsCreated}',
+                useAuto: item.useAutoLeads,
+                enabled: isSelected && !isSubmitted,
+                isSubmitted: isSubmitted,
+                onToggle: (v) {
+                  item.useAutoLeads = v;
+                  if (v) {
+                    item.ccLeadsController.text = item.ccLeadsCreated.toString();
+                    item.salesLeadsController.text = item.salesLeadsCreated.toString();
+                  }
+                  onReasonChanged();
+                },
+                ctrlA: item.ccLeadsController,
+                labelA: 'CC Leads',
+                ctrlB: item.salesLeadsController,
+                labelB: 'Sales Leads',
+                capBByA: false,
+                reasonCtrl: item.leadsReasonController,
+                reasonHintText: 'Enter reason for Leads Created manual override...',
+                context: context,
+              ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _reasonInput({
+    required TextEditingController controller,
+    required String hintText,
+    required bool enabled,
+  }) {
+    return TextField(
+      controller: controller,
+      enabled: enabled,
+      maxLines: 2,
+      onChanged: (_) => onReasonChanged(),
+      style: TextStyle(
+        fontSize: 12,
+        color: isDark ? Colors.white : Colors.grey.shade900,
+      ),
+      decoration: InputDecoration(
+        hintText: hintText,
+        hintStyle: TextStyle(
+          fontSize: 11,
+          color: isDark ? Colors.white38 : Colors.grey.shade500,
+        ),
+        filled: true,
+        fillColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(
+            color: isDark ? Colors.grey.shade700 : Colors.grey.shade300,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: YupulseUiHelpers.primaryGreen, width: 1.5),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       ),
     );
   }
@@ -562,6 +524,8 @@ class YupulseUserCard extends StatelessWidget {
     required TextEditingController ctrlB,
     required String labelB,
     required bool capBByA,
+    required TextEditingController reasonCtrl,
+    required String reasonHintText,
     required BuildContext context,
   }) {
     final disabledStyle = useAuto || !enabled;
@@ -594,32 +558,45 @@ class YupulseUserCard extends StatelessWidget {
       useAuto: useAuto,
       isDark: isDark,
       onCheckboxChanged: isSubmitted ? null : (v) => onToggle(v ?? true),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: field(ctrlA, labelA, (val) {
-              if (capBByA) {
-                final a = int.tryParse(val.trim()) ?? 0;
-                final b = int.tryParse(ctrlB.text.trim()) ?? 0;
-                if (b > a) ctrlB.text = a.toString();
-              }
-            }),
+          Row(
+            children: [
+              Expanded(
+                child: field(ctrlA, labelA, (val) {
+                  if (capBByA) {
+                    final a = int.tryParse(val.trim()) ?? 0;
+                    final b = int.tryParse(ctrlB.text.trim()) ?? 0;
+                    if (b > a) ctrlB.text = a.toString();
+                  }
+                }),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: field(ctrlB, labelB, (val) {
+                  if (capBByA) {
+                    final a = int.tryParse(ctrlA.text.trim()) ?? 0;
+                    final b = int.tryParse(val.trim()) ?? 0;
+                    if (b > a) {
+                      ctrlB.text = a.toString();
+                      ctrlB.selection = TextSelection.fromPosition(
+                        TextPosition(offset: ctrlB.text.length),
+                      );
+                    }
+                  }
+                }),
+              ),
+            ],
           ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: field(ctrlB, labelB, (val) {
-              if (capBByA) {
-                final a = int.tryParse(ctrlA.text.trim()) ?? 0;
-                final b = int.tryParse(val.trim()) ?? 0;
-                if (b > a) {
-                  ctrlB.text = a.toString();
-                  ctrlB.selection = TextSelection.fromPosition(
-                    TextPosition(offset: ctrlB.text.length),
-                  );
-                }
-              }
-            }),
-          ),
+          if (!useAuto) ...[
+            const SizedBox(height: 10),
+            _reasonInput(
+              controller: reasonCtrl,
+              hintText: reasonHintText,
+              enabled: enabled,
+            ),
+          ],
         ],
       ),
     );

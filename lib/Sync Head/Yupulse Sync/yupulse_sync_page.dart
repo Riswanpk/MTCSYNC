@@ -380,6 +380,9 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
         int? savedCallTargetCount;
         int? savedCallDoneCount;
         String savedReason = '';
+        String savedTodoReason = '';
+        String savedSsReason = '';
+        String savedLeadsReason = '';
         bool hasSavedDoc = false;
 
         if (markDocFuture != null) {
@@ -401,6 +404,15 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
             }
             if (answers['callReason'] != null) {
               savedReason = answers['callReason'].toString();
+            }
+            if (answers['todoReason'] != null) {
+              savedTodoReason = answers['todoReason'].toString();
+            }
+            if (answers['supersaleReason'] != null) {
+              savedSsReason = answers['supersaleReason'].toString();
+            }
+            if (answers['leadsReason'] != null) {
+              savedLeadsReason = answers['leadsReason'].toString();
             }
             savedSsTotal = int.tryParse('${answers['supersaleTotal']}');
             savedSsTaken = int.tryParse('${answers['supersaleTaken']}');
@@ -441,7 +453,10 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
         final todoController = TextEditingController(text: initialTodoDone.toString());
         final callTargetController = TextEditingController(text: initialCallTarget.toString());
         final callDoneController = TextEditingController(text: initialCallDone.toString());
-        final reasonController = TextEditingController(text: savedReason);
+        final callReasonController = TextEditingController(text: savedReason);
+        final todoReasonController = TextEditingController(text: savedTodoReason);
+        final supersaleReasonController = TextEditingController(text: savedSsReason);
+        final leadsReasonController = TextEditingController(text: savedLeadsReason);
 
         return YupulseUserCardItem(
           username: username,
@@ -469,7 +484,10 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
           supersaleTakenController: TextEditingController(text: (savedSsTaken ?? supersaleTaken).toString()),
           ccLeadsController: TextEditingController(text: (savedCcLeads ?? ccLeadsCreated).toString()),
           salesLeadsController: TextEditingController(text: (savedSalesLeads ?? salesLeadsCreated).toString()),
-          reasonController: reasonController,
+          callReasonController: callReasonController,
+          todoReasonController: todoReasonController,
+          supersaleReasonController: supersaleReasonController,
+          leadsReasonController: leadsReasonController,
         );
       }
 
@@ -606,54 +624,6 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
       return;
     }
 
-    final invalidReasonUsers = <String>[];
-    for (final item in selectedItems) {
-      if (!item.useAutoTodo || !item.useAutoCalling || !item.useAutoSupersale || !item.useAutoLeads) {
-        final reason = item.reasonController.text.trim();
-        if (reason.length < 15) {
-          invalidReasonUsers.add('${item.username} (${reason.length}/15 chars)');
-        }
-      }
-    }
-
-    if (invalidReasonUsers.isNotEmpty) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Reason Too Short'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'A minimum of 15 characters is required in the reason field for the following user(s):',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 10),
-              ...invalidReasonUsers.map(
-                (u) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2.0),
-                  child: Text('• $u', style: const TextStyle(color: Colors.red)),
-                ),
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                'Please provide a detailed reason before submitting.',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
     final bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -756,9 +726,10 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
             ? autoCallDone
             : (int.tryParse(item.callDoneController.text.trim()) ?? 0);
 
-        final callReason = (!useAutoTodo || !useAutoCalling || !item.useAutoSupersale || !item.useAutoLeads)
-            ? item.reasonController.text.trim()
-            : '';
+        final todoReason = !useAutoTodo ? item.todoReasonController.text.trim() : '';
+        final callReason = !useAutoCalling ? item.callReasonController.text.trim() : '';
+        final supersaleReason = !item.useAutoSupersale ? item.supersaleReasonController.text.trim() : '';
+        final leadsReason = !item.useAutoLeads ? item.leadsReasonController.text.trim() : '';
 
         await MarksFirestoreService.setMarkData(
           period: period,
@@ -769,6 +740,9 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
           callDoneCount: callDoneCount,
           callReason: callReason,
           todoDoneCount: todoDoneCount,
+          todoReason: todoReason,
+          supersaleReason: supersaleReason,
+          leadsReason: leadsReason,
           supersaleTotal: item.useAutoSupersale ? item.supersaleTotal : (int.tryParse(item.supersaleTotalController.text.trim()) ?? 0),
           supersaleTaken: item.useAutoSupersale ? item.supersaleTaken : (int.tryParse(item.supersaleTakenController.text.trim()) ?? 0),
           ccLeadsCreated: item.useAutoLeads ? item.ccLeadsCreated : (int.tryParse(item.ccLeadsController.text.trim()) ?? 0),

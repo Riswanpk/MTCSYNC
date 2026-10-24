@@ -26,7 +26,13 @@ class YupulseUserCardItem {
   final TextEditingController todoController;
   final TextEditingController callTargetController;
   final TextEditingController callDoneController;
-  final TextEditingController reasonController;
+  final TextEditingController todoReasonController;
+  final TextEditingController callReasonController; // Alias or primary controller for customer calling
+  final TextEditingController supersaleReasonController;
+  final TextEditingController leadsReasonController;
+
+  // Backward compatible getter for existing references if any
+  TextEditingController get reasonController => callReasonController;
 
   YupulseUserCardItem({
     required this.username,
@@ -54,14 +60,20 @@ class YupulseUserCardItem {
     required this.todoController,
     required this.callTargetController,
     required this.callDoneController,
-    required this.reasonController,
+    required this.callReasonController,
+    required this.todoReasonController,
+    required this.supersaleReasonController,
+    required this.leadsReasonController,
   });
 
   void dispose() {
     todoController.dispose();
     callTargetController.dispose();
     callDoneController.dispose();
-    reasonController.dispose();
+    callReasonController.dispose();
+    todoReasonController.dispose();
+    supersaleReasonController.dispose();
+    leadsReasonController.dispose();
     supersaleTotalController.dispose();
     supersaleTakenController.dispose();
     ccLeadsController.dispose();
