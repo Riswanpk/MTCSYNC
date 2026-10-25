@@ -17,6 +17,10 @@ class _SmeAdWiseReportPageState extends State<SmeAdWiseReportPage> {
   DateTimeRange? _selectedDateRange;
 
   Future<Map<String, dynamic>> _fetchAdWiseReport() async {
+    if (_selectedAdFilter == null) {
+      return {'adStats': <String, Map<String, int>>{}, 'totalCount': 0, 'noSelection': true};
+    }
+
     try {
       Query query = FirebaseFirestore.instance
           .collection('follow_ups')
@@ -212,7 +216,24 @@ class _SmeAdWiseReportPageState extends State<SmeAdWiseReportPage> {
                   return Center(child: Text('Error loading report: ${snapshot.error}'));
                 }
 
+                final noSelection = snapshot.data?['noSelection'] == true;
                 final adStats = snapshot.data?['adStats'] as Map<String, Map<String, int>>? ?? {};
+
+                if (noSelection) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.ads_click_rounded, size: 64, color: Colors.grey.shade400),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Select an Ad from the dropdown to view report',
+                          style: TextStyle(fontSize: 15, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                  );
+                }
 
                 if (adStats.isEmpty) {
                   return Center(
