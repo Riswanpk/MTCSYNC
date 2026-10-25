@@ -80,7 +80,8 @@ class _SmeAdWiseReportPageState extends State<SmeAdWiseReportPage> {
           stats['sold'] = (stats['sold'] ?? 0) + 1;
         } else if (status == 'Cancelled') {
           stats['cancelled'] = (stats['cancelled'] ?? 0) + 1;
-        } else {
+        } else if (screeningStatus == 'promoted') {
+          // Only promoted leads awaiting sale/cancellation count as sales in-progress
           stats['in_progress'] = (stats['in_progress'] ?? 0) + 1;
         }
       }

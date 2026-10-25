@@ -86,7 +86,8 @@ class _SmeAdWiseDetailPageState extends State<SmeAdWiseDetailPage> {
           bStats['sold'] = (bStats['sold'] as int) + 1;
         } else if (status == 'Cancelled') {
           bStats['cancelled'] = (bStats['cancelled'] as int) + 1;
-        } else {
+        } else if (screeningStatus == 'promoted') {
+          // Only promoted leads awaiting sale/cancellation count as sales in-progress
           bStats['in_progress'] = (bStats['in_progress'] as int) + 1;
         }
 
@@ -350,13 +351,13 @@ class _SmeAdWiseDetailPageState extends State<SmeAdWiseDetailPage> {
                               ),
                               Builder(
                                 builder: (context) {
-                                  final isPending = screeningLabel == 'Pending';
+                                  final isPromoted = screeningLabel == 'Promoted';
 
                                   return Column(
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
-                                      // If screening is pending, only show the Pending screening badge (don't show "In Progress")
-                                      if (!isPending) ...[
+                                      // Only show sales status (In Progress, Sale, Cancelled) if the lead was promoted
+                                      if (isPromoted) ...[
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                           decoration: BoxDecoration(
