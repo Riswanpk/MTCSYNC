@@ -184,7 +184,6 @@ class _SmeAdWiseDetailPageState extends State<SmeAdWiseDetailPage> {
               return Container(
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF23242B) : Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
@@ -194,11 +193,15 @@ class _SmeAdWiseDetailPageState extends State<SmeAdWiseDetailPage> {
                     ),
                   ],
                 ),
-                child: Theme(
-                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                  child: ExpansionTile(
-                    tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Material(
+                  color: isDark ? const Color(0xFF23242B) : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  clipBehavior: Clip.antiAlias,
+                  child: Theme(
+                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                    child: ExpansionTile(
+                      tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                     leading: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
@@ -345,47 +348,56 @@ class _SmeAdWiseDetailPageState extends State<SmeAdWiseDetailPage> {
                                   ],
                                 ),
                               ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: status == 'Sale'
-                                          ? Colors.green.withValues(alpha: 0.15)
-                                          : (status == 'Cancelled'
-                                              ? Colors.purple.withValues(alpha: 0.15)
-                                              : Colors.blue.withValues(alpha: 0.15)),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      status.isEmpty ? 'In Progress' : status,
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: status == 'Sale'
-                                            ? Colors.green
-                                            : (status == 'Cancelled' ? Colors.purple : Colors.blue),
+                              Builder(
+                                builder: (context) {
+                                  final isPending = screeningLabel == 'Pending';
+
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      // If screening is pending, only show the Pending screening badge (don't show "In Progress")
+                                      if (!isPending) ...[
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: status == 'Sale'
+                                                ? Colors.green.withValues(alpha: 0.15)
+                                                : (status == 'Cancelled'
+                                                    ? Colors.purple.withValues(alpha: 0.15)
+                                                    : Colors.blue.withValues(alpha: 0.15)),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            status.isEmpty ? 'In Progress' : status,
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: status == 'Sale'
+                                                  ? Colors.green
+                                                  : (status == 'Cancelled' ? Colors.purple : Colors.blue),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                      ],
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: screeningColor.withValues(alpha: 0.12),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          screeningLabel,
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: screeningColor,
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: screeningColor.withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      screeningLabel,
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: screeningColor,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                    ],
+                                  );
+                                },
                               ),
                             ],
                           ),
@@ -394,9 +406,10 @@ class _SmeAdWiseDetailPageState extends State<SmeAdWiseDetailPage> {
                     ],
                   ),
                 ),
-              );
-            },
-          );
+              ),
+            );
+          },
+        );
         },
       ),
     );
