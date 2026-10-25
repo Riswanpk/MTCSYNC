@@ -61,6 +61,7 @@ class _SmeAdWiseDetailPageState extends State<SmeAdWiseDetailPage> {
 
         branchData.putIfAbsent(branch, () => {
           'total': 0,
+          'pending': 0,
           'promoted': 0,
           'rejected': 0,
           'sold': 0,
@@ -76,6 +77,9 @@ class _SmeAdWiseDetailPageState extends State<SmeAdWiseDetailPage> {
           bStats['promoted'] = (bStats['promoted'] as int) + 1;
         } else if (screeningStatus == 'rejected') {
           bStats['rejected'] = (bStats['rejected'] as int) + 1;
+        } else {
+          // Assigned but not yet promoted or rejected
+          bStats['pending'] = (bStats['pending'] as int) + 1;
         }
 
         if (status == 'Sale') {
@@ -174,6 +178,7 @@ class _SmeAdWiseDetailPageState extends State<SmeAdWiseDetailPage> {
               final cancelled = data['cancelled'] as int;
               final leads = data['leads'] as List<Map<String, dynamic>>;
 
+              final pending = data['pending'] as int? ?? 0;
               final convRate = total > 0 ? (sold / total * 100).toStringAsFixed(1) : '0.0';
 
               return Container(
@@ -248,13 +253,15 @@ class _SmeAdWiseDetailPageState extends State<SmeAdWiseDetailPage> {
                       // Stat Chips
                       Row(
                         children: [
+                          _chip('Pending', '$pending', const Color(0xFFFFA726), isDark),
+                          const SizedBox(width: 5),
                           _chip('Promoted', '$promoted', const Color(0xFF26A69A), isDark),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 5),
                           _chip('Rejected', '$rejected', const Color(0xFFEF5350), isDark),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 5),
                           _chip('Sold', '$sold', const Color(0xFF42A5F5), isDark),
-                          const SizedBox(width: 6),
-                          _chip('Cancelled', '$cancelled', const Color(0xFFFFA726), isDark),
+                          const SizedBox(width: 5),
+                          _chip('Cancelled', '$cancelled', const Color(0xFFAB47BC), isDark),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -277,6 +284,18 @@ class _SmeAdWiseDetailPageState extends State<SmeAdWiseDetailPage> {
                         final phone = lead['phone'];
                         final assigned = lead['assigned_to_name'];
                         final status = lead['status'];
+                        final screening = (lead['screening_status'] ?? '').toString().toLowerCase();
+
+                        final String screeningLabel = screening == 'promoted'
+                            ? 'Promoted'
+                            : screening == 'rejected'
+                                ? 'Rejected'
+                                : 'Pending';
+                        final Color screeningColor = screening == 'promoted'
+                            ? const Color(0xFF26A69A)
+                            : screening == 'rejected'
+                                ? const Color(0xFFEF5350)
+                                : const Color(0xFFFFA726);
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 6),
@@ -326,26 +345,47 @@ class _SmeAdWiseDetailPageState extends State<SmeAdWiseDetailPage> {
                                   ],
                                 ),
                               ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: status == 'Sale'
-                                      ? Colors.green.withValues(alpha: 0.15)
-                                      : (status == 'Cancelled'
-                                          ? Colors.orange.withValues(alpha: 0.15)
-                                          : Colors.blue.withValues(alpha: 0.15)),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  status.isEmpty ? 'In Progress' : status,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: status == 'Sale'
-                                        ? Colors.green
-                                        : (status == 'Cancelled' ? Colors.orange : Colors.blue),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: status == 'Sale'
+                                          ? Colors.green.withValues(alpha: 0.15)
+                                          : (status == 'Cancelled'
+                                              ? Colors.purple.withValues(alpha: 0.15)
+                                              : Colors.blue.withValues(alpha: 0.15)),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      status.isEmpty ? 'In Progress' : status,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: status == 'Sale'
+                                            ? Colors.green
+                                            : (status == 'Cancelled' ? Colors.purple : Colors.blue),
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  const SizedBox(height: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: screeningColor.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      screeningLabel,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: screeningColor,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
