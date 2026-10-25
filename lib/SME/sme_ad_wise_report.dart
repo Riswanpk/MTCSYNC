@@ -152,7 +152,8 @@ class _SmeAdWiseReportPageState extends State<SmeAdWiseReportPage> {
                     final filterOptions = ['ALL', ...adNames, 'Unspecified / No Ad'];
 
                     return DropdownButtonFormField<String>(
-                      initialValue: _selectedAdFilter ?? 'ALL',
+                      value: _selectedAdFilter,
+                      hint: const Text('Select Ad Name'),
                       decoration: InputDecoration(
                         labelText: 'Filter by Ad Name',
                         prefixIcon: const Icon(Icons.filter_alt_rounded, color: _primaryBlue),
@@ -169,9 +170,11 @@ class _SmeAdWiseReportPageState extends State<SmeAdWiseReportPage> {
                         );
                       }).toList(),
                       onChanged: (val) {
-                        if (mounted) { setState(() {
-                          _selectedAdFilter = val;
-                        }); }
+                        if (mounted) {
+                          setState(() {
+                            _selectedAdFilter = val;
+                          });
+                        }
                       },
                     );
                   },
