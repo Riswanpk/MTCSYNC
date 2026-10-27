@@ -260,6 +260,42 @@ class SyncHeadEditingApprovalService {
     }
   }
 
+  static String _normalizePhone(dynamic phone) {
+    if (phone == null) return '';
+    final cleaned = phone.toString().replaceAll(RegExp(r'\D'), '');
+    if (cleaned.length > 10) {
+      return cleaned.substring(cleaned.length - 10);
+    }
+    return cleaned;
+  }
+
+  static bool _matchesCustomer(Map c, String targetName, String targetContact1Norm, String targetContact2Norm) {
+    final cName = (c['name'] ?? '').toString().trim().toLowerCase();
+    final c1Norm = _normalizePhone(c['contact1'] ?? c['contact']);
+    final c2Norm = _normalizePhone(c['contact2']);
+
+    final hasTargetPhone = targetContact1Norm.isNotEmpty || targetContact2Norm.isNotEmpty;
+    bool phoneMatch = false;
+    if (hasTargetPhone) {
+      if (targetContact1Norm.isNotEmpty && (c1Norm == targetContact1Norm || c2Norm == targetContact1Norm)) {
+        phoneMatch = true;
+      }
+      if (targetContact2Norm.isNotEmpty && (c1Norm == targetContact2Norm || c2Norm == targetContact2Norm)) {
+        phoneMatch = true;
+      }
+    }
+
+    final nameMatch = targetName.isNotEmpty && cName == targetName;
+
+    if (hasTargetPhone && targetName.isNotEmpty) {
+      return phoneMatch || nameMatch;
+    } else if (hasTargetPhone) {
+      return phoneMatch;
+    } else {
+      return nameMatch;
+    }
+  }
+
   /// Approves the customer edit request and updates customer_target in Firestore.
   static Future<void> approveEditing({
     required String reqId,
@@ -281,14 +317,40 @@ class SyncHeadEditingApprovalService {
         .doc(monthYear)
         .collection('users');
 
+    final targetName = (customerData['name'] ?? '').toString().trim().toLowerCase();
+    final targetContact1Norm = _normalizePhone(customerData['contact1'] ?? customerData['contact']);
+    final targetContact2Norm = _normalizePhone(customerData['contact2']);
+
     var userDocRef = usersRef.doc(userDocId);
     var docSnap = await userDocRef.get();
-    if (!docSnap.exists) {
+    bool customerFoundInTargetDoc = false;
+
+    if (docSnap.exists && docSnap.data()?['customers'] is List) {
+      final list = docSnap.data()!['customers'] as List;
+      customerFoundInTargetDoc = list.any((c) => c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm));
+    }
+
+    // If not found in original userDoc, search case-insensitively or across any user in this month
+    if (!customerFoundInTargetDoc) {
       final querySnap = await usersRef.get();
+      // First check case-insensitive match on userDocId
       for (final d in querySnap.docs) {
         if (d.id.toLowerCase() == userDocId.toLowerCase()) {
           userDocRef = usersRef.doc(d.id);
+          docSnap = d;
           break;
+        }
+      }
+      // If still not found, search other user documents (e.g. if customer was transferred)
+      if (docSnap.data()?['customers'] is! List ||
+          !(docSnap.data()!['customers'] as List).any((c) => c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm))) {
+        for (final d in querySnap.docs) {
+          final list = d.data()['customers'];
+          if (list is List && list.any((c) => c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm))) {
+            userDocRef = usersRef.doc(d.id);
+            docSnap = d;
+            break;
+          }
         }
       }
     }
@@ -299,37 +361,24 @@ class SyncHeadEditingApprovalService {
         final docData = snapshot.data()!;
         final List<dynamic> customers = List<dynamic>.from(docData['customers'] ?? []);
 
-        final targetName = (customerData['name'] ?? '').toString().trim().toLowerCase();
-        final targetContact =
-            (customerData['contact1'] ?? customerData['contact'] ?? '')
-                .toString()
-                .replaceAll(RegExp(r'\s+'), '');
-
         for (var c in customers) {
-          if (c is Map) {
-            final cName = (c['name'] ?? '').toString().trim().toLowerCase();
-            final cContact =
-                (c['contact1'] ?? c['contact'] ?? '').toString().replaceAll(RegExp(r'\s+'), '');
-            final cContact2 = (c['contact2'] ?? '').toString().replaceAll(RegExp(r'\s+'), '');
-
-            final isMatch = (cName == targetName && (cContact == targetContact || targetContact.isEmpty)) ||
-                (targetContact.isNotEmpty && (cContact == targetContact || cContact2 == targetContact));
-
-            if (isMatch) {
-              c['name'] = updatedCustomerData['name'] ?? c['name'];
-              c['address'] = updatedCustomerData['address'] ?? c['address'];
-              c['contact1'] = updatedCustomerData['contact1'] ?? c['contact1'];
-              c['contact2'] = updatedCustomerData['contact2'] ?? c['contact2'];
-              c['contact'] = updatedCustomerData['contact'] ?? c['contact'];
-              c['pendingEditing'] = false;
-              c['editApproved'] = true;
-              c['isEdited'] = true;
-              break;
-            }
+          if (c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm)) {
+            c['name'] = updatedCustomerData['name'] ?? c['name'];
+            c['address'] = updatedCustomerData['address'] ?? c['address'];
+            c['contact1'] = updatedCustomerData['contact1'] ?? c['contact1'];
+            c['contact2'] = updatedCustomerData['contact2'] ?? c['contact2'];
+            c['contact'] = updatedCustomerData['contact'] ?? c['contact'];
+            c['pendingEditing'] = false;
+            c['editApproved'] = true;
+            c['isEdited'] = true;
+            break;
           }
         }
 
-        transaction.update(userDocRef, {'customers': customers});
+        transaction.update(userDocRef, {
+          'customers': customers,
+          'updated': FieldValue.serverTimestamp(),
+        });
       }
 
       final reqRef = FirebaseFirestore.instance
@@ -369,14 +418,38 @@ class SyncHeadEditingApprovalService {
           .doc(monthYear)
           .collection('users');
 
+      final targetName = (customerData['name'] ?? '').toString().trim().toLowerCase();
+      final targetContact1Norm = _normalizePhone(customerData['contact1'] ?? customerData['contact']);
+      final targetContact2Norm = _normalizePhone(customerData['contact2']);
+
       var userDocRef = usersRef.doc(userDocId);
       var docSnap = await userDocRef.get();
-      if (!docSnap.exists) {
+      bool customerFoundInTargetDoc = false;
+
+      if (docSnap.exists && docSnap.data()?['customers'] is List) {
+        final list = docSnap.data()!['customers'] as List;
+        customerFoundInTargetDoc = list.any((c) => c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm));
+      }
+
+      // If not found in original userDoc, search case-insensitively or across any user in this month
+      if (!customerFoundInTargetDoc) {
         final querySnap = await usersRef.get();
         for (final d in querySnap.docs) {
           if (d.id.toLowerCase() == userDocId.toLowerCase()) {
             userDocRef = usersRef.doc(d.id);
+            docSnap = d;
             break;
+          }
+        }
+        if (docSnap.data()?['customers'] is! List ||
+            !(docSnap.data()!['customers'] as List).any((c) => c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm))) {
+          for (final d in querySnap.docs) {
+            final list = d.data()['customers'];
+            if (list is List && list.any((c) => c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm))) {
+              userDocRef = usersRef.doc(d.id);
+              docSnap = d;
+              break;
+            }
           }
         }
       }
@@ -387,32 +460,19 @@ class SyncHeadEditingApprovalService {
           final docData = snapshot.data()!;
           final List<dynamic> customers = List<dynamic>.from(docData['customers'] ?? []);
 
-          final targetName = (customerData['name'] ?? '').toString().trim().toLowerCase();
-          final targetContact =
-              (customerData['contact1'] ?? customerData['contact'] ?? '')
-                  .toString()
-                  .replaceAll(RegExp(r'\s+'), '');
-
           for (var c in customers) {
-            if (c is Map) {
-              final cName = (c['name'] ?? '').toString().trim().toLowerCase();
-              final cContact =
-                  (c['contact1'] ?? c['contact'] ?? '').toString().replaceAll(RegExp(r'\s+'), '');
-              final cContact2 = (c['contact2'] ?? '').toString().replaceAll(RegExp(r'\s+'), '');
-
-              final isMatch = (cName == targetName && (cContact == targetContact || targetContact.isEmpty)) ||
-                  (targetContact.isNotEmpty && (cContact == targetContact || cContact2 == targetContact));
-
-              if (isMatch) {
-                c['pendingEditing'] = false;
-                c['editApproved'] = false;
-                c['isEdited'] = false;
-                break;
-              }
+            if (c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm)) {
+              c['pendingEditing'] = false;
+              c['editApproved'] = false;
+              c['isEdited'] = false;
+              break;
             }
           }
 
-          transaction.update(userDocRef, {'customers': customers});
+          transaction.update(userDocRef, {
+            'customers': customers,
+            'updated': FieldValue.serverTimestamp(),
+          });
         }
 
         final reqRef = FirebaseFirestore.instance

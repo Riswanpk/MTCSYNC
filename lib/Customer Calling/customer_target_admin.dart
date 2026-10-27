@@ -644,6 +644,26 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
           .collection('users')
           .doc(_selectedUserEmail!.toLowerCase());
 
+      // Query all users for this month to ensure month-wide duplicate prevention at assign time
+      final allUsersSnap = await FirebaseFirestore.instance
+          .collection('customer_target')
+          .doc(monthYear)
+          .collection('users')
+          .get();
+
+      final existingMonthPhoneSet = <String>{};
+      for (final doc in allUsersSnap.docs) {
+        if (doc.id.toLowerCase() == _selectedUserEmail!.toLowerCase()) continue;
+        final docCustomers = doc.data()['customers'] as List<dynamic>? ?? [];
+        for (final c in docCustomers) {
+          if (c is! Map) continue;
+          final p1 = _normalizePhone(c['contact1'] ?? c['contact']);
+          final p2 = _normalizePhone(c['contact2']);
+          if (p1.length >= 7) existingMonthPhoneSet.add(p1);
+          if (p2.length >= 7) existingMonthPhoneSet.add(p2);
+        }
+      }
+
       final importedCustomers = List<Map<String, dynamic>>.from(_customers!);
       int newCount = 0;
 
@@ -658,27 +678,36 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
           );
         }
 
-        // Normalize phone set from existing customers
-        final existingPhoneSet = <String>{};
+        // Normalize phone set from existing customers of this user
+        final existingUserPhoneSet = <String>{};
         for (final c in existingCustomers) {
           final p1 = _normalizePhone(c['contact1'] ?? c['contact']);
           final p2 = _normalizePhone(c['contact2']);
-          if (p1.length >= 7) existingPhoneSet.add(p1);
-          if (p2.length >= 7) existingPhoneSet.add(p2);
+          if (p1.length >= 7) existingUserPhoneSet.add(p1);
+          if (p2.length >= 7) existingUserPhoneSet.add(p2);
         }
 
-        // Only add customers whose phone numbers don't conflict with existing entries
+        // Only add customers whose phone numbers don't conflict with existing entries (both this user and month-wide)
         final newCustomers = <Map<String, dynamic>>[];
+        final seenInThisBatch = <String>{};
+
         for (final c in importedCustomers) {
-          final p1 = _normalizePhone(c['contact1']);
+          final p1 = _normalizePhone(c['contact1'] ?? c['contact']);
           final p2 = _normalizePhone(c['contact2']);
-          final p1Exists = p1.length >= 7 && existingPhoneSet.contains(p1);
-          final p2Exists = p2.length >= 7 && existingPhoneSet.contains(p2);
+
+          final p1Exists = p1.length >= 7 && (existingUserPhoneSet.contains(p1) || existingMonthPhoneSet.contains(p1) || seenInThisBatch.contains(p1));
+          final p2Exists = p2.length >= 7 && (existingUserPhoneSet.contains(p2) || existingMonthPhoneSet.contains(p2) || seenInThisBatch.contains(p2));
 
           if (!p1Exists && !p2Exists) {
             newCustomers.add({...c, 'callMade': false});
-            if (p1.length >= 7) existingPhoneSet.add(p1);
-            if (p2.length >= 7) existingPhoneSet.add(p2);
+            if (p1.length >= 7) {
+              existingUserPhoneSet.add(p1);
+              seenInThisBatch.add(p1);
+            }
+            if (p2.length >= 7) {
+              existingUserPhoneSet.add(p2);
+              seenInThisBatch.add(p2);
+            }
           }
         }
 

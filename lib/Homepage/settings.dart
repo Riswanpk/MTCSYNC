@@ -263,10 +263,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           final role = (snapshot.data ?? widget.userRole).toLowerCase().trim();
                           if (role.isEmpty) return const SizedBox.shrink();
                           final isAdmin = role == 'admin';
-                          final isSyncHead = role == 'sync_head' ||
-                              role == 'sync head' ||
-                              role == 'synchead' ||
-                              role == 'sync-head';
+                          final isSyncHead = role == 'sync_head';
 
                           if (isAdmin || isSyncHead) {
                             return Column(

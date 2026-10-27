@@ -15,25 +15,34 @@ class TransferResult {
 }
 
 class TransferCallListService {
+  static String _normalizePhone(dynamic phone) {
+    if (phone == null) return '';
+    final cleaned = phone.toString().replaceAll(RegExp(r'\D'), '');
+    if (cleaned.length > 10) {
+      return cleaned.substring(cleaned.length - 10);
+    }
+    return cleaned;
+  }
+
   static bool isCustomerMatching(
     Map<String, dynamic> candidate,
     Map<String, dynamic> target,
   ) {
     final tName = (target['name'] ?? '').toString().trim().toLowerCase();
-    final tContact1 = (target['contact1'] ?? target['contact'] ?? '').toString().trim();
-    final tContact2 = (target['contact2'] ?? '').toString().trim();
+    final t1 = _normalizePhone(target['contact1'] ?? target['contact']);
+    final t2 = _normalizePhone(target['contact2']);
 
     final cName = (candidate['name'] ?? '').toString().trim().toLowerCase();
-    final cContact1 = (candidate['contact1'] ?? candidate['contact'] ?? '').toString().trim();
-    final cContact2 = (candidate['contact2'] ?? '').toString().trim();
+    final c1 = _normalizePhone(candidate['contact1'] ?? candidate['contact']);
+    final c2 = _normalizePhone(candidate['contact2']);
 
-    if (tContact1.isNotEmpty) {
-      if (cContact1 == tContact1 || (cContact2.isNotEmpty && cContact2 == tContact1)) {
+    if (t1.isNotEmpty) {
+      if (c1 == t1 || (c2.isNotEmpty && c2 == t1)) {
         return true;
       }
     }
-    if (tContact2.isNotEmpty) {
-      if (cContact1 == tContact2 || (cContact2.isNotEmpty && cContact2 == tContact2)) {
+    if (t2.isNotEmpty) {
+      if (c1 == t2 || (c2.isNotEmpty && c2 == t2)) {
         return true;
       }
     }
@@ -119,9 +128,43 @@ class TransferCallListService {
                 .toList();
           }
 
-          // Append transferred customers directly without overwriting existing customers
+          // Deduplicate destList against matchedToMove by phone and name
+          final destPhoneSet = <String>{};
+          for (final existing in destList) {
+            final p1 = _normalizePhone(existing['contact1'] ?? existing['contact']);
+            final p2 = _normalizePhone(existing['contact2']);
+            if (p1.length >= 7) destPhoneSet.add(p1);
+            if (p2.length >= 7) destPhoneSet.add(p2);
+          }
+
+          // Append or merge transferred customers without introducing duplicate phone entries in destination list
           for (final toMove in matchedToMove) {
-            destList.add(Map<String, dynamic>.from(toMove));
+            final p1 = _normalizePhone(toMove['contact1'] ?? toMove['contact']);
+            final p2 = _normalizePhone(toMove['contact2']);
+            final hasP1 = p1.length >= 7 && destPhoneSet.contains(p1);
+            final hasP2 = p2.length >= 7 && destPhoneSet.contains(p2);
+
+            if (hasP1 || hasP2) {
+              // Existing customer with same phone already in destination: merge remarks/fields if needed
+              final existingIndex = destList.indexWhere((c) {
+                final cp1 = _normalizePhone(c['contact1'] ?? c['contact']);
+                final cp2 = _normalizePhone(c['contact2']);
+                return (p1.length >= 7 && (cp1 == p1 || cp2 == p1)) ||
+                       (p2.length >= 7 && (cp1 == p2 || cp2 == p2));
+              });
+              if (existingIndex != -1) {
+                final existing = destList[existingIndex];
+                if ((existing['remarks'] == null || (existing['remarks'] as String).isEmpty) &&
+                    (toMove['remarks'] != null && (toMove['remarks'] as String).isNotEmpty)) {
+                  existing['remarks'] = toMove['remarks'];
+                  existing['callMade'] = toMove['callMade'] ?? existing['callMade'];
+                }
+              }
+            } else {
+              destList.add(Map<String, dynamic>.from(toMove));
+              if (p1.length >= 7) destPhoneSet.add(p1);
+              if (p2.length >= 7) destPhoneSet.add(p2);
+            }
           }
 
           final batch = FirebaseFirestore.instance.batch();

@@ -120,6 +120,42 @@ class _SyncHeadCustomerListDeletionApprovalPageState
     return ['All Branches', ...sorted];
   }
 
+  static String _normalizePhone(dynamic phone) {
+    if (phone == null) return '';
+    final cleaned = phone.toString().replaceAll(RegExp(r'\D'), '');
+    if (cleaned.length > 10) {
+      return cleaned.substring(cleaned.length - 10);
+    }
+    return cleaned;
+  }
+
+  static bool _matchesCustomer(Map c, String targetName, String targetContact1Norm, String targetContact2Norm) {
+    final cName = (c['name'] ?? '').toString().trim().toLowerCase();
+    final c1Norm = _normalizePhone(c['contact1'] ?? c['contact']);
+    final c2Norm = _normalizePhone(c['contact2']);
+
+    final hasTargetPhone = targetContact1Norm.isNotEmpty || targetContact2Norm.isNotEmpty;
+    bool phoneMatch = false;
+    if (hasTargetPhone) {
+      if (targetContact1Norm.isNotEmpty && (c1Norm == targetContact1Norm || c2Norm == targetContact1Norm)) {
+        phoneMatch = true;
+      }
+      if (targetContact2Norm.isNotEmpty && (c1Norm == targetContact2Norm || c2Norm == targetContact2Norm)) {
+        phoneMatch = true;
+      }
+    }
+
+    final nameMatch = targetName.isNotEmpty && cName == targetName;
+
+    if (hasTargetPhone && targetName.isNotEmpty) {
+      return phoneMatch || nameMatch;
+    } else if (hasTargetPhone) {
+      return phoneMatch;
+    } else {
+      return nameMatch;
+    }
+  }
+
   Future<void> _approveDeletion(String reqId, Map<String, dynamic> data) async {
     setState(() => _processingIds[reqId] = true);
     try {
@@ -136,14 +172,38 @@ class _SyncHeadCustomerListDeletionApprovalPageState
           .doc(monthYear)
           .collection('users');
 
+      final targetName = (customerData['name'] ?? '').toString().trim().toLowerCase();
+      final targetContact1Norm = _normalizePhone(customerData['contact1'] ?? customerData['contact']);
+      final targetContact2Norm = _normalizePhone(customerData['contact2']);
+
       var userDocRef = usersRef.doc(userDocId);
       var docSnap = await userDocRef.get();
-      if (!docSnap.exists) {
+      bool customerFoundInTargetDoc = false;
+
+      if (docSnap.exists && docSnap.data()?['customers'] is List) {
+        final list = docSnap.data()!['customers'] as List;
+        customerFoundInTargetDoc = list.any((c) => c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm));
+      }
+
+      // If not found in original userDoc, search case-insensitively or across any user in this month
+      if (!customerFoundInTargetDoc) {
         final querySnap = await usersRef.get();
         for (final d in querySnap.docs) {
           if (d.id.toLowerCase() == userDocId.toLowerCase()) {
             userDocRef = usersRef.doc(d.id);
+            docSnap = d;
             break;
+          }
+        }
+        if (docSnap.data()?['customers'] is! List ||
+            !(docSnap.data()!['customers'] as List).any((c) => c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm))) {
+          for (final d in querySnap.docs) {
+            final list = d.data()['customers'];
+            if (list is List && list.any((c) => c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm))) {
+              userDocRef = usersRef.doc(d.id);
+              docSnap = d;
+              break;
+            }
           }
         }
       }
@@ -155,27 +215,17 @@ class _SyncHeadCustomerListDeletionApprovalPageState
           final List<dynamic> customers =
               List<dynamic>.from(docData['customers'] ?? []);
 
-          final targetName = (customerData['name'] ?? '').toString().trim().toLowerCase();
-          final targetContact =
-              (customerData['contact1'] ?? customerData['contact'] ?? '')
-                  .toString()
-                  .replaceAll(RegExp(r'\s+'), '');
-
           customers.removeWhere((c) {
             if (c is Map) {
-              final cName = (c['name'] ?? '').toString().trim().toLowerCase();
-              final cContact =
-                  (c['contact1'] ?? c['contact'] ?? '').toString().replaceAll(RegExp(r'\s+'), '');
-              final cContact2 = (c['contact2'] ?? '').toString().replaceAll(RegExp(r'\s+'), '');
-
-              final isMatch = (cName == targetName && (cContact == targetContact || targetContact.isEmpty)) ||
-                  (targetContact.isNotEmpty && (cContact == targetContact || cContact2 == targetContact));
-              return isMatch;
+              return _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm);
             }
             return false;
           });
 
-          transaction.update(userDocRef, {'customers': customers});
+          transaction.update(userDocRef, {
+            'customers': customers,
+            'updated': FieldValue.serverTimestamp(),
+          });
         }
 
         final reqRef = FirebaseFirestore.instance
@@ -225,14 +275,38 @@ class _SyncHeadCustomerListDeletionApprovalPageState
             .doc(monthYear)
             .collection('users');
 
+        final targetName = (customerData['name'] ?? '').toString().trim().toLowerCase();
+        final targetContact1Norm = _normalizePhone(customerData['contact1'] ?? customerData['contact']);
+        final targetContact2Norm = _normalizePhone(customerData['contact2']);
+
         var userDocRef = usersRef.doc(userDocId);
         var docSnap = await userDocRef.get();
-        if (!docSnap.exists) {
+        bool customerFoundInTargetDoc = false;
+
+        if (docSnap.exists && docSnap.data()?['customers'] is List) {
+          final list = docSnap.data()!['customers'] as List;
+          customerFoundInTargetDoc = list.any((c) => c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm));
+        }
+
+        // If not found in original userDoc, search case-insensitively or across any user in this month
+        if (!customerFoundInTargetDoc) {
           final querySnap = await usersRef.get();
           for (final d in querySnap.docs) {
             if (d.id.toLowerCase() == userDocId.toLowerCase()) {
               userDocRef = usersRef.doc(d.id);
+              docSnap = d;
               break;
+            }
+          }
+          if (docSnap.data()?['customers'] is! List ||
+              !(docSnap.data()!['customers'] as List).any((c) => c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm))) {
+            for (final d in querySnap.docs) {
+              final list = d.data()['customers'];
+              if (list is List && list.any((c) => c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm))) {
+                userDocRef = usersRef.doc(d.id);
+                docSnap = d;
+                break;
+              }
             }
           }
         }
@@ -244,30 +318,17 @@ class _SyncHeadCustomerListDeletionApprovalPageState
             final List<dynamic> customers =
                 List<dynamic>.from(docData['customers'] ?? []);
 
-            final targetName = (customerData['name'] ?? '').toString().trim().toLowerCase();
-            final targetContact =
-                (customerData['contact1'] ?? customerData['contact'] ?? '')
-                    .toString()
-                    .replaceAll(RegExp(r'\s+'), '');
-
             for (var c in customers) {
-              if (c is Map) {
-                final cName = (c['name'] ?? '').toString().trim().toLowerCase();
-                final cContact =
-                    (c['contact1'] ?? c['contact'] ?? '').toString().replaceAll(RegExp(r'\s+'), '');
-                final cContact2 = (c['contact2'] ?? '').toString().replaceAll(RegExp(r'\s+'), '');
-
-                final isMatch = (cName == targetName && (cContact == targetContact || targetContact.isEmpty)) ||
-                    (targetContact.isNotEmpty && (cContact == targetContact || cContact2 == targetContact));
-
-                if (isMatch) {
-                  c['pendingDeletion'] = false;
-                  break;
-                }
+              if (c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm)) {
+                c['pendingDeletion'] = false;
+                break;
               }
             }
 
-            transaction.update(userDocRef, {'customers': customers});
+            transaction.update(userDocRef, {
+              'customers': customers,
+              'updated': FieldValue.serverTimestamp(),
+            });
           }
 
           final reqRef = FirebaseFirestore.instance
@@ -361,7 +422,10 @@ class _SyncHeadCustomerListDeletionApprovalPageState
       builder: (ctx) => AlertDialog(
         title: const Text('Clean Orphaned Pending Records'),
         content: const Text(
-          'This will scan customer target lists for this month and automatically clear "pending approval" on any customers that have no active pending request in the approvals list. Do you want to proceed?',
+          'This will perform a thorough check across all customer target months:\n\n'
+          '1. Clear stuck "pending approval" flags on customers that have no active approval request.\n'
+          '2. Automatically dismiss any approval request documents whose customer has already been deleted or removed.\n\n'
+          'Do you want to proceed?',
         ),
         actions: [
           TextButton(
@@ -371,7 +435,7 @@ class _SyncHeadCustomerListDeletionApprovalPageState
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: _primaryBlue),
-            child: const Text('Clean Up', style: TextStyle(color: Colors.white)),
+            child: const Text('Clean Up All', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -391,7 +455,7 @@ class _SyncHeadCustomerListDeletionApprovalPageState
               children: [
                 CircularProgressIndicator(),
                 SizedBox(width: 16),
-                Text('Cleaning orphaned flags...'),
+                Text('Cleaning orphaned flags across months...'),
               ],
             ),
           ),
@@ -400,104 +464,194 @@ class _SyncHeadCustomerListDeletionApprovalPageState
     );
 
     try {
-      final now = DateTime.now();
-      final monthYear =
-          "${CustomerListTargetService.monthName(now.month)} ${now.year}";
-
-      // Fetch all active pending deletion requests
+      // 1. Fetch all active pending deletion requests
       final delDocs = await FirebaseFirestore.instance
           .collection('customer_deletion_requests')
           .where('status', whereIn: ['pending', 'Pending'])
           .get();
 
-      // Fetch all active pending editing requests
+      // 2. Fetch all active pending editing requests
       final editDocs = await FirebaseFirestore.instance
           .collection('customer_editing_requests')
           .where('status', whereIn: ['pending', 'Pending'])
           .get();
 
       final Set<String> activePendingKeys = {};
+      final List<Map<String, dynamic>> allPendingReqs = [];
 
       for (final doc in delDocs.docs) {
         final data = doc.data();
         final cData = data['customerData'] as Map<String, dynamic>? ?? {};
         final name = (cData['name'] ?? '').toString().trim().toLowerCase();
-        final contact = (cData['contact1'] ?? cData['contact'] ?? '')
-            .toString()
-            .replaceAll(RegExp(r'\s+'), '');
+        final p1 = _normalizePhone(cData['contact1'] ?? cData['contact']);
+        final p2 = _normalizePhone(cData['contact2']);
         final userDocId = (data['userDocId'] ?? '').toString().trim().toLowerCase();
-        if (name.isNotEmpty || contact.isNotEmpty) {
-          activePendingKeys.add('$userDocId|$name|$contact');
+        final monthYear = (data['monthYear'] ?? '').toString().trim();
+
+        if (name.isNotEmpty || p1.isNotEmpty || p2.isNotEmpty) {
+          if (p1.isNotEmpty) {
+            activePendingKeys.add('$monthYear|$userDocId|$name|$p1');
+            activePendingKeys.add('$name|$p1');
+          }
+          if (p2.isNotEmpty) {
+            activePendingKeys.add('$monthYear|$userDocId|$name|$p2');
+            activePendingKeys.add('$name|$p2');
+          }
+          if (p1.isEmpty && p2.isEmpty) {
+            activePendingKeys.add('$monthYear|$userDocId|$name|');
+            activePendingKeys.add('$name|');
+          }
         }
+
+        allPendingReqs.add({
+          'ref': doc.reference,
+          'type': 'deletion',
+          'monthYear': monthYear,
+          'userDocId': userDocId,
+          'name': name,
+          'p1': p1,
+          'p2': p2,
+        });
       }
 
       for (final doc in editDocs.docs) {
         final data = doc.data();
         final cData = data['customerData'] as Map<String, dynamic>? ?? {};
         final name = (cData['name'] ?? '').toString().trim().toLowerCase();
-        final contact = (cData['contact1'] ?? cData['contact'] ?? '')
-            .toString()
-            .replaceAll(RegExp(r'\s+'), '');
+        final p1 = _normalizePhone(cData['contact1'] ?? cData['contact']);
+        final p2 = _normalizePhone(cData['contact2']);
         final userDocId = (data['userDocId'] ?? '').toString().trim().toLowerCase();
-        if (name.isNotEmpty || contact.isNotEmpty) {
-          activePendingKeys.add('$userDocId|$name|$contact');
-        }
-      }
+        final monthYear = (data['monthYear'] ?? '').toString().trim();
 
-      final usersRef = FirebaseFirestore.instance
-          .collection('customer_target')
-          .doc(monthYear)
-          .collection('users');
-
-      final usersSnap = await usersRef.get();
-      int cleanedCount = 0;
-
-      for (final userDoc in usersSnap.docs) {
-        final docData = userDoc.data();
-        if (docData['customers'] == null) continue;
-
-        final List<dynamic> customers = List<dynamic>.from(docData['customers']);
-        bool modified = false;
-        final userDocId = userDoc.id.toLowerCase();
-
-        for (var c in customers) {
-          if (c is! Map) continue;
-          final bool isPendingEditing = c['pendingEditing'] == true;
-          final bool isPendingDeletion = c['pendingDeletion'] == true;
-
-          if (!isPendingEditing && !isPendingDeletion) continue;
-
-          final name = (c['name'] ?? '').toString().trim().toLowerCase();
-          final contact = (c['contact1'] ?? c['contact'] ?? '')
-              .toString()
-              .replaceAll(RegExp(r'\s+'), '');
-
-          final key = '$userDocId|$name|$contact';
-          // Also match without userDocId in case userDocId differed
-          final bool hasActiveRequest = activePendingKeys.contains(key) ||
-              activePendingKeys.any((k) => k.endsWith('|$name|$contact'));
-
-          if (!hasActiveRequest) {
-            c['pendingEditing'] = false;
-            c['pendingDeletion'] = false;
-            modified = true;
-            cleanedCount++;
+        if (name.isNotEmpty || p1.isNotEmpty || p2.isNotEmpty) {
+          if (p1.isNotEmpty) {
+            activePendingKeys.add('$monthYear|$userDocId|$name|$p1');
+            activePendingKeys.add('$name|$p1');
+          }
+          if (p2.isNotEmpty) {
+            activePendingKeys.add('$monthYear|$userDocId|$name|$p2');
+            activePendingKeys.add('$name|$p2');
+          }
+          if (p1.isEmpty && p2.isEmpty) {
+            activePendingKeys.add('$monthYear|$userDocId|$name|');
+            activePendingKeys.add('$name|');
           }
         }
 
-        if (modified) {
-          await userDoc.reference.update({'customers': customers});
+        allPendingReqs.add({
+          'ref': doc.reference,
+          'type': 'editing',
+          'monthYear': monthYear,
+          'userDocId': userDocId,
+          'name': name,
+          'p1': p1,
+          'p2': p2,
+        });
+      }
+
+      // 3. Scan all months in customer_target (or discover from Firestore)
+      final allMonthsSnap = await FirebaseFirestore.instance.collection('customer_target').get();
+      final Set<String> targetMonths = allMonthsSnap.docs.map((d) => d.id).toSet();
+      final now = DateTime.now();
+      targetMonths.add("${CustomerListTargetService.monthName(now.month)} ${now.year}");
+
+      int cleanedCustomerFlagsCount = 0;
+      final Set<String> foundReqKeys = {};
+
+      for (final month in targetMonths) {
+        final usersRef = FirebaseFirestore.instance
+            .collection('customer_target')
+            .doc(month)
+            .collection('users');
+
+        final usersSnap = await usersRef.get();
+
+        for (final userDoc in usersSnap.docs) {
+          final docData = userDoc.data();
+          if (docData['customers'] == null) continue;
+
+          final List<dynamic> customers = List<dynamic>.from(docData['customers']);
+          bool modified = false;
+          final userDocId = userDoc.id.toLowerCase();
+
+          for (var c in customers) {
+            if (c is! Map) continue;
+            final bool isPendingEditing = c['pendingEditing'] == true;
+            final bool isPendingDeletion = c['pendingDeletion'] == true;
+
+            final name = (c['name'] ?? '').toString().trim().toLowerCase();
+            final p1 = _normalizePhone(c['contact1'] ?? c['contact']);
+            final p2 = _normalizePhone(c['contact2']);
+
+            // Track existing customers to see which request docs have valid targets
+            for (final req in allPendingReqs) {
+              if (req['monthYear'] == month) {
+                final bool nameMatches = req['name'] == name;
+                final bool p1Matches = req['p1'].isNotEmpty && (req['p1'] == p1 || req['p1'] == p2);
+                final bool p2Matches = req['p2'].isNotEmpty && (req['p2'] == p1 || req['p2'] == p2);
+                if (p1Matches || p2Matches || (req['p1'].isEmpty && req['p2'].isEmpty && nameMatches)) {
+                  foundReqKeys.add(req['ref'].id);
+                }
+              }
+            }
+
+            if (!isPendingEditing && !isPendingDeletion) continue;
+
+            final bool hasActiveRequest =
+                (p1.isNotEmpty && (activePendingKeys.contains('$month|$userDocId|$name|$p1') || activePendingKeys.contains('$name|$p1'))) ||
+                (p2.isNotEmpty && (activePendingKeys.contains('$month|$userDocId|$name|$p2') || activePendingKeys.contains('$name|$p2'))) ||
+                (p1.isEmpty && p2.isEmpty && (activePendingKeys.contains('$month|$userDocId|$name|') || activePendingKeys.contains('$name|')));
+
+            if (!hasActiveRequest) {
+              c['pendingEditing'] = false;
+              c['pendingDeletion'] = false;
+              modified = true;
+              cleanedCustomerFlagsCount++;
+            }
+          }
+
+          if (modified) {
+            await userDoc.reference.update({
+              'customers': customers,
+              'updated': FieldValue.serverTimestamp(),
+            });
+          }
+        }
+      }
+
+      // 4. Mark requests whose customer records no longer exist as dismissed
+      int dismissedOrphanedReqsCount = 0;
+      for (final req in allPendingReqs) {
+        final String reqId = req['ref'].id;
+        if (!foundReqKeys.contains(reqId)) {
+          await (req['ref'] as DocumentReference).update({
+            'status': 'dismissed_orphaned',
+            'dismissedAt': FieldValue.serverTimestamp(),
+            'dismissReason': 'Customer was removed, merged, or not found in target month',
+          });
+          dismissedOrphanedReqsCount++;
         }
       }
 
       if (mounted) {
         Navigator.of(context, rootNavigator: true).pop();
+        final List<String> results = [];
+        if (cleanedCustomerFlagsCount > 0) {
+          results.add('$cleanedCustomerFlagsCount customer pending flags cleared');
+        }
+        if (dismissedOrphanedReqsCount > 0) {
+          results.add('$dismissedOrphanedReqsCount orphaned request approval items dismissed');
+        }
+
+        final msg = results.isNotEmpty
+            ? 'Cleanup completed successfully:\n• ${results.join('\n• ')}'
+            : 'No orphaned records or pending approval requests found.';
+
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
-            content: Text(cleanedCount > 0
-                ? 'Successfully cleaned $cleanedCount orphaned pending records.'
-                : 'No orphaned pending records found.'),
+            content: Text(msg),
             backgroundColor: Colors.green,
+            duration: const Duration(seconds: 4),
           ),
         );
       }
