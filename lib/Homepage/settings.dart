@@ -5,15 +5,32 @@ import '../Misc/theme_notifier.dart';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../DME/temporary.dart';
+import '../Navigation/user_cache_service.dart';
 
-class SettingsPage extends StatelessWidget {
+import 'dart:async';
+
+class SettingsPage extends StatefulWidget {
   final String userRole;
   final ThemeProvider themeProvider;
 
   const SettingsPage(
       {super.key, required this.userRole, required this.themeProvider});
 
-  Future<void> _generateRegistrationCode(BuildContext context) async {
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  String? _generatedCode;
+  Timer? _codeTimer;
+
+  @override
+  void dispose() {
+    _codeTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _generateRegistrationCode() async {
     final code = (Random().nextInt(9000) + 1000).toString();
     await FirebaseFirestore.instance
         .collection('registration_codes')
@@ -22,16 +39,26 @@ class SettingsPage extends StatelessWidget {
       'code': code,
       'createdAt': FieldValue.serverTimestamp(),
     });
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(
-        content: Text('Generated Registration Code: $code'),
-        duration: const Duration(seconds: 5),
-        backgroundColor: Colors.green,
-      ),
-    );
+    _codeTimer?.cancel();
+    if (mounted) {
+      setState(() {
+        _generatedCode = code;
+      });
+      _codeTimer = Timer(const Duration(seconds: 5), () {
+        if (mounted) {
+          setState(() {
+            _generatedCode = null;
+          });
+        }
+      });
+    }
   }
 
   Future<String?> getUserRole() async {
+    final cachedRole = UserCacheService.instance.role;
+    if (cachedRole != null && cachedRole.isNotEmpty) {
+      return cachedRole.toLowerCase();
+    }
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       final doc = await FirebaseFirestore.instance
@@ -233,17 +260,20 @@ class SettingsPage extends StatelessWidget {
                       FutureBuilder<String?>(
                         future: getUserRole(),
                         builder: (context, snapshot) {
-                          final r = (snapshot.data ?? widget.userRole).toLowerCase().trim().replaceAll(' ', '_').replaceAll('-', '_');
-                          final isAdmin = r == 'admin';
-                          final isSyncHead = r == 'sync_head' || r == 'synchead';
+                          final role = (snapshot.data ?? widget.userRole).toLowerCase().trim();
+                          if (role.isEmpty) return const SizedBox.shrink();
+                          final isAdmin = role == 'admin';
+                          final isSyncHead = role == 'sync_head' ||
+                              role == 'sync head' ||
+                              role == 'synchead' ||
+                              role == 'sync-head';
 
                           if (isAdmin || isSyncHead) {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 ElevatedButton.icon(
-                                  onPressed: () =>
-                                      _generateRegistrationCode(context),
+                                  onPressed: _generateRegistrationCode,
                                   icon: const Icon(Icons.key_rounded),
                                   label:
                                       const Text('Generate Registration Code'),
@@ -252,6 +282,20 @@ class SettingsPage extends StatelessWidget {
                                     foregroundColor: Colors.white,
                                   ),
                                 ),
+                                if (_generatedCode != null) ...[
+                                  const SizedBox(height: 12),
+                                  Center(
+                                    child: SelectableText(
+                                      'Code: $_generatedCode',
+                                      style: const TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.green,
+                                        letterSpacing: 1.2,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                                 if (isAdmin) ...[
                                   const SizedBox(height: 16),
                                   ElevatedButton.icon(

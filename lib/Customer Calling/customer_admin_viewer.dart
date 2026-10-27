@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'customer_target_admin.dart';
 import 'customer_target_export_page.dart'; // <-- Import the export page
+import 'admin_customer_call_edit_page.dart';
 import 'package:provider/provider.dart';
 import '../Navigation/user_cache_service.dart';
 import '../Misc/theme_notifier.dart';
@@ -213,6 +214,39 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
         _error = 'Failed to delete: $e';
         _loading = false;
       });
+    }
+  }
+
+  void _openCustomerEdit(Map<String, dynamic> customer) async {
+    final now = DateTime.now();
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final currentMonthYear = "${months[now.month - 1]} ${now.year}";
+    final isCurrentMonth = _selectedMonthYear == currentMonthYear;
+
+    final userName = _users
+        .firstWhere((u) => u['email'] == _selectedUserEmail, orElse: () => {})
+        ['name'];
+
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AdminCustomerCallEditPage(
+          customer: customer,
+          monthYear: _selectedMonthYear ?? currentMonthYear,
+          userEmail: _selectedUserEmail ?? '',
+          userName: userName,
+          isCurrentMonth: isCurrentMonth,
+          currentMonthYear: currentMonthYear,
+        ),
+      ),
+    );
+
+    if (result == true) {
+      if (mounted) setState(() {});
+      _fetchCustomerTarget();
     }
   }
 
@@ -449,6 +483,8 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
     if (_customers == null) return const SizedBox();
     if (_customers!.isEmpty) return Text('No customer target assigned.', style: TextStyle(color: textColor));
     const tableTextStyle = TextStyle(fontSize: 11);
+    final canEdit =
+        _userRole == 'admin' || _userRole == 'sync_head' || _userRole == 'Sync Head';
 
     // Sort customers by call status if needed
     List<Map<String, dynamic>> sortedCustomers = List<Map<String, dynamic>>.from(_customers!);
@@ -488,8 +524,9 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
           scrollDirection: Axis.horizontal,
           physics: const BouncingScrollPhysics(),
           child: SizedBox(
-            width: 500, //adjust as needed
+            width: canEdit ? 540 : 500, //adjust as needed
             child: DataTable(
+              showCheckboxColumn: false,
               headingRowColor: WidgetStateProperty.resolveWith<Color>(
                 (states) => isDark
                     ? primaryGreen.withValues(alpha: 0.12)
@@ -533,6 +570,13 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                     child: Text('Remarks', style: tableTextStyle.copyWith(color: primaryBlue)),
                   ),
                 ),
+                if (canEdit)
+                  DataColumn(
+                    label: SizedBox(
+                      width: 24,
+                      child: Icon(Icons.edit_note, color: primaryGreen, size: 16),
+                    ),
+                  ),
               ],
               rows: List<DataRow>.generate(
                 sortedCustomers.length,
@@ -540,6 +584,7 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                   final customer = sortedCustomers[index];
                   final isEven = index % 2 == 0;
                   return DataRow(
+                    onSelectChanged: canEdit ? (_) => _openCustomerEdit(customer) : null,
                     color: WidgetStateProperty.resolveWith<Color>(
                       (states) => isDark
                           ? (isEven ? primaryGreen.withValues(alpha: 0.06) : primaryBlue.withValues(alpha: 0.06))
@@ -563,6 +608,7 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                             );
                           },
                         ),
+                        onTap: canEdit ? () => _openCustomerEdit(customer) : null,
                       ),
                       DataCell(
                         Icon(
@@ -570,6 +616,7 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                           color: customer['callMade'] == true ? primaryBlue : primaryGreen,
                           size: 16,
                         ),
+                        onTap: canEdit ? () => _openCustomerEdit(customer) : null,
                       ),
                       DataCell(
                         Builder(
@@ -588,7 +635,17 @@ class _CustomerAdminViewerPageState extends State<CustomerAdminViewerPage> {
                             );
                           },
                         ),
+                        onTap: canEdit ? () => _openCustomerEdit(customer) : null,
                       ),
+                      if (canEdit)
+                        DataCell(
+                          Icon(
+                            Icons.edit_outlined,
+                            size: 16,
+                            color: isDark ? primaryBlue : primaryGreen,
+                          ),
+                          onTap: () => _openCustomerEdit(customer),
+                        ),
                     ],
                   );
                 },
