@@ -111,7 +111,8 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
   /// Fetches lead stats for all users in the selected branch & date range,
   /// then generates and shares an Excel report.
   Future<void> _generateReport() async {
-    final isInterval = _statusFilter == 'Created in this Interval';
+    final reportType = _reportType;
+    final isInterval = _statusFilter == 'Created in this Interval' || reportType == 'datewise';
     if (_selectedBranch == null || (isInterval && _selectedRange == null)) {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         SnackBar(
@@ -127,7 +128,6 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
     final messenger = ScaffoldMessenger.of(context);
     // Capture filter snapshots so they're stable across async gaps
     final selectedSources = Set<String>.from(_selectedSources);
-    final reportType = _reportType;
 
     // Filters a list of lead docs to only those matching the selected sources
     List<DocumentSnapshot> filterBySource(List<DocumentSnapshot> docs) {
@@ -290,9 +290,13 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         final uid = user['uid'] as String;
         final userBranch = user['branch'] as String? ?? '';
 
-        final inProgressLeads = filterBySource(inProgressByUid[uid] ?? []);
-        final saleLeads       = filterBySource(saleByUid[uid] ?? []);
-        final cancelledLeads  = filterBySource(cancelledByUid[uid] ?? []);
+        final rawInProgressLeads = inProgressByUid[uid] ?? [];
+        final rawSaleLeads       = saleByUid[uid] ?? [];
+        final rawCancelledLeads  = cancelledByUid[uid] ?? [];
+
+        final inProgressLeads = filterBySource(rawInProgressLeads);
+        final saleLeads       = filterBySource(rawSaleLeads);
+        final cancelledLeads  = filterBySource(rawCancelledLeads);
         final totalCreated    = inProgressLeads.length + saleLeads.length + cancelledLeads.length;
 
         stats.add({
@@ -306,6 +310,9 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           'inProgressLeads': inProgressLeads,
           'saleLeads': saleLeads,
           'cancelledLeads': cancelledLeads,
+          'rawInProgressLeads': rawInProgressLeads,
+          'rawSaleLeads': rawSaleLeads,
+          'rawCancelledLeads': rawCancelledLeads,
         });
       }
 
@@ -488,20 +495,13 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
               days.add(rangeStart.add(Duration(days: i)));
             }
 
-            final headers = ['User', ...days.map((d) => d.day.toString()), 'CALLS DONE', 'TOTAL CALLS'];
-            final headerStyle = workbook.styles.add('header_dw_$sheetIdx');
-            headerStyle.bold = true;
-            headerStyle.fontSize = 11;
-            headerStyle.backColor = '#8CC63F';
-            headerStyle.fontColor = '#FFFFFF';
-            headerStyle.hAlign = xlsio.HAlignType.center;
-            headerStyle.borders.bottom.lineStyle = xlsio.LineStyle.thin;
-
-            for (int c = 0; c < headers.length; c++) {
-              final cell = sheet.getRangeByIndex(2, c + 1);
-              cell.setText(headers[c]);
-              cell.cellStyle = headerStyle;
-            }
+            final isAllSources = selectedSources.contains('All');
+            final effectiveSources = isAllSources
+                ? ['DME', 'SME', 'CC', 'SALES']
+                : ['DME', 'SME', 'CC', 'SALES']
+                    .where((s) => selectedSources.contains(s))
+                    .toList();
+            final showMultiSourceTables = effectiveSources.length > 1;
 
             final dataStyle = workbook.styles.add('data_dw_$sheetIdx');
             dataStyle.fontSize = 11;
@@ -521,101 +521,150 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
             altNameStyle.hAlign = xlsio.HAlignType.left;
             altNameStyle.backColor = '#F0F5FF';
 
-            int totalCallsDoneAll = 0;
-            int totalCallsOverall = 0;
-            List<int> totalCallsPerDay = List.filled(days.length, 0);
+            int currentRow = 2;
+            int tableCounter = 0;
 
-            for (int i = 0; i < usersForBranch.length; i++) {
-              final row = i + 3;
-              final s = usersForBranch[i];
-              
-              final isAlt = i % 2 == 1;
-              final currentNameStyle = isAlt ? altNameStyle : nameStyle;
-              final currentDataStyle = isAlt ? altStyle : dataStyle;
+            for (final srcKey in (showMultiSourceTables ? effectiveSources : [effectiveSources.firstOrNull ?? 'ALL'])) {
+              tableCounter++;
 
-              final cellA = sheet.getRangeByIndex(row, 1);
-              cellA.setText((s['username'] as String).toUpperCase());
-              cellA.cellStyle = currentNameStyle;
+              if (showMultiSourceTables) {
+                final sourceTitleStyle = workbook.styles.add('srcTitle_${sheetIdx}_$tableCounter');
+                sourceTitleStyle.bold = true;
+                sourceTitleStyle.fontSize = 13;
+                sourceTitleStyle.hAlign = xlsio.HAlignType.left;
+                sourceTitleStyle.backColor = '#005BAC';
+                sourceTitleStyle.fontColor = '#FFFFFF';
 
-              final inProgressLeadsDocs = s['inProgressLeads'] as List<dynamic>;
-              final saleLeadsDocs = s['saleLeads'] as List<dynamic>;
-              final cancelledLeadsDocs = s['cancelledLeads'] as List<dynamic>;
-              final allUserLeads = [...inProgressLeadsDocs, ...saleLeadsDocs, ...cancelledLeadsDocs];
+                final titleEndCol = days.length + 2;
+                final srcTitleRange = sheet.getRangeByIndex(currentRow, 1, currentRow, titleEndCol);
+                srcTitleRange.merge();
+                final displaySrcLabel = srcKey == 'SALES' ? 'Sales' : srcKey;
+                srcTitleRange.setText('$displaySrcLabel Leads');
+                srcTitleRange.cellStyle = sourceTitleStyle;
+                sheet.getRangeByIndex(currentRow, 1).rowHeight = 24;
+                currentRow++;
+              }
 
-              int callsDone = 0;
-              List<int> callsPerDay = List.filled(days.length, 0);
+              final headers = ['User', ...days.map((d) => d.day.toString()), 'Total Leads'];
+              final headerStyle = workbook.styles.add('header_dw_${sheetIdx}_$tableCounter');
+              headerStyle.bold = true;
+              headerStyle.fontSize = 11;
+              headerStyle.backColor = '#8CC63F';
+              headerStyle.fontColor = '#FFFFFF';
+              headerStyle.hAlign = xlsio.HAlignType.center;
+              headerStyle.borders.bottom.lineStyle = xlsio.LineStyle.thin;
 
-              for (final doc in allUserLeads) {
-                final d = (doc as QueryDocumentSnapshot).data() as Map<String, dynamic>;
-                final createdAt = d['created_at'];
-                if (createdAt is Timestamp) {
-                  final date = createdAt.toDate();
-                  if (!date.isBefore(rangeStart) && !date.isAfter(rangeEnd)) {
-                    for (int j = 0; j < days.length; j++) {
-                      if (date.year == days[j].year && date.month == days[j].month && date.day == days[j].day) {
-                        callsPerDay[j]++;
-                        callsDone++;
-                        break;
+              for (int c = 0; c < headers.length; c++) {
+                final cell = sheet.getRangeByIndex(currentRow, c + 1);
+                cell.setText(headers[c]);
+                cell.cellStyle = headerStyle;
+              }
+              currentRow++;
+
+              int totalLeadsAll = 0;
+              List<int> totalCallsPerDay = List.filled(days.length, 0);
+
+              for (int i = 0; i < usersForBranch.length; i++) {
+                final s = usersForBranch[i];
+                final isAlt = i % 2 == 1;
+                final currentNameStyle = isAlt ? altNameStyle : nameStyle;
+                final currentDataStyle = isAlt ? altStyle : dataStyle;
+
+                final cellA = sheet.getRangeByIndex(currentRow, 1);
+                cellA.setText((s['username'] as String).toUpperCase());
+                cellA.cellStyle = currentNameStyle;
+
+                final rawInProgress = (s['rawInProgressLeads'] as List<dynamic>?) ?? (s['inProgressLeads'] as List<dynamic>);
+                final rawSale = (s['rawSaleLeads'] as List<dynamic>?) ?? (s['saleLeads'] as List<dynamic>);
+                final rawCancelled = (s['rawCancelledLeads'] as List<dynamic>?) ?? (s['cancelledLeads'] as List<dynamic>);
+                final allUserLeads = [...rawInProgress, ...rawSale, ...rawCancelled];
+
+                int userTotalLeads = 0;
+                List<int> callsPerDay = List.filled(days.length, 0);
+
+                for (final doc in allUserLeads) {
+                  final d = (doc as DocumentSnapshot).data() as Map<String, dynamic>?;
+                  if (d == null) continue;
+                  final docSrc = (d['source'] ?? '').toString().toUpperCase();
+                  if (showMultiSourceTables) {
+                    if (srcKey == 'SALES') {
+                      if (['DME', 'SME', 'CC'].contains(docSrc)) continue;
+                    } else {
+                      if (docSrc != srcKey) continue;
+                    }
+                  } else {
+                    if (!selectedSources.contains('All')) {
+                      if (selectedSources.contains('SALES') && !['SME', 'DME', 'CC'].contains(docSrc)) {
+                        // matches sales
+                      } else if (!selectedSources.contains(docSrc)) {
+                        continue;
+                      }
+                    }
+                  }
+
+                  final createdAt = d['created_at'];
+                  if (createdAt is Timestamp) {
+                    final date = createdAt.toDate();
+                    if (!date.isBefore(rangeStart) && !date.isAfter(rangeEnd)) {
+                      for (int j = 0; j < days.length; j++) {
+                        if (date.year == days[j].year && date.month == days[j].month && date.day == days[j].day) {
+                          callsPerDay[j]++;
+                          userTotalLeads++;
+                          break;
+                        }
                       }
                     }
                   }
                 }
+
+                for (int j = 0; j < days.length; j++) {
+                  final cell = sheet.getRangeByIndex(currentRow, j + 2);
+                  cell.setNumber(callsPerDay[j].toDouble());
+                  cell.cellStyle = currentDataStyle;
+                  totalCallsPerDay[j] += callsPerDay[j];
+                }
+
+                final cellTotalLeads = sheet.getRangeByIndex(currentRow, days.length + 2);
+                cellTotalLeads.setNumber(userTotalLeads.toDouble());
+                cellTotalLeads.cellStyle = currentDataStyle;
+                totalLeadsAll += userTotalLeads;
+
+                currentRow++;
               }
+
+              // Totals row for this source table
+              final totalsStyle = workbook.styles.add('totals_dw_${sheetIdx}_$tableCounter');
+              totalsStyle.bold = true;
+              totalsStyle.fontSize = 12;
+              totalsStyle.hAlign = xlsio.HAlignType.center;
+              totalsStyle.backColor = '#005BAC';
+              totalsStyle.fontColor = '#FFFFFF';
+              totalsStyle.borders.top.lineStyle = xlsio.LineStyle.medium;
+
+              final totalsNameStyle = workbook.styles.add('totalsName_dw_${sheetIdx}_$tableCounter');
+              totalsNameStyle.bold = true;
+              totalsNameStyle.fontSize = 12;
+              totalsNameStyle.hAlign = xlsio.HAlignType.left;
+              totalsNameStyle.backColor = '#005BAC';
+              totalsNameStyle.fontColor = '#FFFFFF';
+              totalsNameStyle.borders.top.lineStyle = xlsio.LineStyle.medium;
+
+              final tA = sheet.getRangeByIndex(currentRow, 1);
+              tA.setText('TOTAL');
+              tA.cellStyle = totalsNameStyle;
 
               for (int j = 0; j < days.length; j++) {
-                final cell = sheet.getRangeByIndex(row, j + 2);
-                cell.setNumber(callsPerDay[j].toDouble());
-                cell.cellStyle = currentDataStyle;
-                totalCallsPerDay[j] += callsPerDay[j];
+                final tCell = sheet.getRangeByIndex(currentRow, j + 2);
+                tCell.setNumber(totalCallsPerDay[j].toDouble());
+                tCell.cellStyle = totalsStyle;
               }
 
-              final cellCallsDone = sheet.getRangeByIndex(row, days.length + 2);
-              cellCallsDone.setNumber(callsDone.toDouble());
-              cellCallsDone.cellStyle = currentDataStyle;
-              totalCallsDoneAll += callsDone;
+              final tTotalLeads = sheet.getRangeByIndex(currentRow, days.length + 2);
+              tTotalLeads.setNumber(totalLeadsAll.toDouble());
+              tTotalLeads.cellStyle = totalsStyle;
 
-              final totalCreatedCount = s['totalCreated'] as int;
-              final cellTotalCalls = sheet.getRangeByIndex(row, days.length + 3);
-              cellTotalCalls.setNumber(totalCreatedCount.toDouble());
-              cellTotalCalls.cellStyle = currentDataStyle;
-              totalCallsOverall += totalCreatedCount;
+              currentRow += 2; // Extra space between source tables
             }
-
-            // Totals row
-            final totalsRow = usersForBranch.length + 3;
-            final totalsStyle = workbook.styles.add('totals_dw_$sheetIdx');
-            totalsStyle.bold = true;
-            totalsStyle.fontSize = 12;
-            totalsStyle.hAlign = xlsio.HAlignType.center;
-            totalsStyle.backColor = '#005BAC';
-            totalsStyle.fontColor = '#FFFFFF';
-            totalsStyle.borders.top.lineStyle = xlsio.LineStyle.medium;
-
-            final totalsNameStyle = workbook.styles.add('totalsName_dw_$sheetIdx');
-            totalsNameStyle.bold = true;
-            totalsNameStyle.fontSize = 12;
-            totalsNameStyle.hAlign = xlsio.HAlignType.left;
-            totalsNameStyle.backColor = '#005BAC';
-            totalsNameStyle.fontColor = '#FFFFFF';
-            totalsNameStyle.borders.top.lineStyle = xlsio.LineStyle.medium;
-
-            final tA = sheet.getRangeByIndex(totalsRow, 1);
-            tA.setText('TOTAL');
-            tA.cellStyle = totalsNameStyle;
-
-            for (int j = 0; j < days.length; j++) {
-              final tCell = sheet.getRangeByIndex(totalsRow, j + 2);
-              tCell.setNumber(totalCallsPerDay[j].toDouble());
-              tCell.cellStyle = totalsStyle;
-            }
-
-            final tCallsDone = sheet.getRangeByIndex(totalsRow, days.length + 2);
-            tCallsDone.setNumber(totalCallsDoneAll.toDouble());
-            tCallsDone.cellStyle = totalsStyle;
-
-            final tTotalCalls = sheet.getRangeByIndex(totalsRow, days.length + 3);
-            tTotalCalls.setNumber(totalCallsOverall.toDouble());
-            tTotalCalls.cellStyle = totalsStyle;
 
             // Column widths
             sheet.getRangeByIndex(1, 1).columnWidth = 20;
@@ -623,7 +672,6 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
               sheet.getRangeByIndex(1, j + 2).columnWidth = 6;
             }
             sheet.getRangeByIndex(1, days.length + 2).columnWidth = 15;
-            sheet.getRangeByIndex(1, days.length + 3).columnWidth = 15;
           } else {
             sheet.getRangeByIndex(1, 1).columnWidth = 22;
             sheet.getRangeByIndex(1, 2).columnWidth = 14;
@@ -972,20 +1020,13 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           days.add(rangeStart.add(Duration(days: i)));
         }
 
-        final headers = ['User', ...days.map((d) => d.day.toString()), 'CALLS DONE', 'TOTAL CALLS'];
-        final headerStyle = workbook.styles.add('header_dw');
-        headerStyle.bold = true;
-        headerStyle.fontSize = 11;
-        headerStyle.backColor = '#8CC63F';
-        headerStyle.fontColor = '#FFFFFF';
-        headerStyle.hAlign = xlsio.HAlignType.center;
-        headerStyle.borders.bottom.lineStyle = xlsio.LineStyle.thin;
-
-        for (int c = 0; c < headers.length; c++) {
-          final cell = sheet.getRangeByIndex(2, c + 1);
-          cell.setText(headers[c]);
-          cell.cellStyle = headerStyle;
-        }
+        final isAllSources = selectedSources.contains('All');
+        final effectiveSources = isAllSources
+            ? ['DME', 'SME', 'CC', 'SALES']
+            : ['DME', 'SME', 'CC', 'SALES']
+                .where((s) => selectedSources.contains(s))
+                .toList();
+        final showMultiSourceTables = effectiveSources.length > 1;
 
         final dataStyle = workbook.styles.add('data_dw');
         dataStyle.fontSize = 11;
@@ -1005,101 +1046,150 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
         altNameStyle.hAlign = xlsio.HAlignType.left;
         altNameStyle.backColor = '#F0F5FF';
 
-        int totalCallsDoneAll = 0;
-        int totalCallsOverall = 0;
-        List<int> totalCallsPerDay = List.filled(days.length, 0);
+        int currentRow = 2;
+        int tableCounter = 0;
 
-        for (int i = 0; i < stats.length; i++) {
-          final row = i + 3;
-          final s = stats[i];
-          
-          final isAlt = i % 2 == 1;
-          final currentNameStyle = isAlt ? altNameStyle : nameStyle;
-          final currentDataStyle = isAlt ? altStyle : dataStyle;
+        for (final srcKey in (showMultiSourceTables ? effectiveSources : [effectiveSources.firstOrNull ?? 'ALL'])) {
+          tableCounter++;
 
-          final cellA = sheet.getRangeByIndex(row, 1);
-          cellA.setText((s['username'] as String).toUpperCase());
-          cellA.cellStyle = currentNameStyle;
+          if (showMultiSourceTables) {
+            final sourceTitleStyle = workbook.styles.add('srcTitle_sb_$tableCounter');
+            sourceTitleStyle.bold = true;
+            sourceTitleStyle.fontSize = 13;
+            sourceTitleStyle.hAlign = xlsio.HAlignType.left;
+            sourceTitleStyle.backColor = '#005BAC';
+            sourceTitleStyle.fontColor = '#FFFFFF';
 
-          final inProgressLeadsDocs = s['inProgressLeads'] as List<dynamic>;
-          final saleLeadsDocs = s['saleLeads'] as List<dynamic>;
-          final cancelledLeadsDocs = s['cancelledLeads'] as List<dynamic>;
-          final allUserLeads = [...inProgressLeadsDocs, ...saleLeadsDocs, ...cancelledLeadsDocs];
+            final titleEndCol = days.length + 2;
+            final srcTitleRange = sheet.getRangeByIndex(currentRow, 1, currentRow, titleEndCol);
+            srcTitleRange.merge();
+            final displaySrcLabel = srcKey == 'SALES' ? 'Sales' : srcKey;
+            srcTitleRange.setText('$displaySrcLabel Leads');
+            srcTitleRange.cellStyle = sourceTitleStyle;
+            sheet.getRangeByIndex(currentRow, 1).rowHeight = 24;
+            currentRow++;
+          }
 
-          int callsDone = 0;
-          List<int> callsPerDay = List.filled(days.length, 0);
+          final headers = ['User', ...days.map((d) => d.day.toString()), 'Total Leads'];
+          final headerStyle = workbook.styles.add('header_dw_$tableCounter');
+          headerStyle.bold = true;
+          headerStyle.fontSize = 11;
+          headerStyle.backColor = '#8CC63F';
+          headerStyle.fontColor = '#FFFFFF';
+          headerStyle.hAlign = xlsio.HAlignType.center;
+          headerStyle.borders.bottom.lineStyle = xlsio.LineStyle.thin;
 
-          for (final doc in allUserLeads) {
-            final d = (doc as QueryDocumentSnapshot).data() as Map<String, dynamic>;
-            final createdAt = d['created_at'];
-            if (createdAt is Timestamp) {
-              final date = createdAt.toDate();
-              if (!date.isBefore(rangeStart) && !date.isAfter(rangeEnd)) {
-                for (int j = 0; j < days.length; j++) {
-                  if (date.year == days[j].year && date.month == days[j].month && date.day == days[j].day) {
-                    callsPerDay[j]++;
-                    callsDone++;
-                    break;
+          for (int c = 0; c < headers.length; c++) {
+            final cell = sheet.getRangeByIndex(currentRow, c + 1);
+            cell.setText(headers[c]);
+            cell.cellStyle = headerStyle;
+          }
+          currentRow++;
+
+          int totalLeadsAll = 0;
+          List<int> totalCallsPerDay = List.filled(days.length, 0);
+
+          for (int i = 0; i < stats.length; i++) {
+            final s = stats[i];
+            final isAlt = i % 2 == 1;
+            final currentNameStyle = isAlt ? altNameStyle : nameStyle;
+            final currentDataStyle = isAlt ? altStyle : dataStyle;
+
+            final cellA = sheet.getRangeByIndex(currentRow, 1);
+            cellA.setText((s['username'] as String).toUpperCase());
+            cellA.cellStyle = currentNameStyle;
+
+            final rawInProgress = (s['rawInProgressLeads'] as List<dynamic>?) ?? (s['inProgressLeads'] as List<dynamic>);
+            final rawSale = (s['rawSaleLeads'] as List<dynamic>?) ?? (s['saleLeads'] as List<dynamic>);
+            final rawCancelled = (s['rawCancelledLeads'] as List<dynamic>?) ?? (s['cancelledLeads'] as List<dynamic>);
+            final allUserLeads = [...rawInProgress, ...rawSale, ...rawCancelled];
+
+            int userTotalLeads = 0;
+            List<int> callsPerDay = List.filled(days.length, 0);
+
+            for (final doc in allUserLeads) {
+              final d = (doc as DocumentSnapshot).data() as Map<String, dynamic>?;
+              if (d == null) continue;
+              final docSrc = (d['source'] ?? '').toString().toUpperCase();
+              if (showMultiSourceTables) {
+                if (srcKey == 'SALES') {
+                  if (['DME', 'SME', 'CC'].contains(docSrc)) continue;
+                } else {
+                  if (docSrc != srcKey) continue;
+                }
+              } else {
+                if (!selectedSources.contains('All')) {
+                  if (selectedSources.contains('SALES') && !['SME', 'DME', 'CC'].contains(docSrc)) {
+                    // matches sales
+                  } else if (!selectedSources.contains(docSrc)) {
+                    continue;
+                  }
+                }
+              }
+
+              final createdAt = d['created_at'];
+              if (createdAt is Timestamp) {
+                final date = createdAt.toDate();
+                if (!date.isBefore(rangeStart) && !date.isAfter(rangeEnd)) {
+                  for (int j = 0; j < days.length; j++) {
+                    if (date.year == days[j].year && date.month == days[j].month && date.day == days[j].day) {
+                      callsPerDay[j]++;
+                      userTotalLeads++;
+                      break;
+                    }
                   }
                 }
               }
             }
+
+            for (int j = 0; j < days.length; j++) {
+              final cell = sheet.getRangeByIndex(currentRow, j + 2);
+              cell.setNumber(callsPerDay[j].toDouble());
+              cell.cellStyle = currentDataStyle;
+              totalCallsPerDay[j] += callsPerDay[j];
+            }
+
+            final cellTotalLeads = sheet.getRangeByIndex(currentRow, days.length + 2);
+            cellTotalLeads.setNumber(userTotalLeads.toDouble());
+            cellTotalLeads.cellStyle = currentDataStyle;
+            totalLeadsAll += userTotalLeads;
+
+            currentRow++;
           }
+
+          // Totals row for this source table
+          final totalsStyle = workbook.styles.add('totals_dw_$tableCounter');
+          totalsStyle.bold = true;
+          totalsStyle.fontSize = 12;
+          totalsStyle.hAlign = xlsio.HAlignType.center;
+          totalsStyle.backColor = '#005BAC';
+          totalsStyle.fontColor = '#FFFFFF';
+          totalsStyle.borders.top.lineStyle = xlsio.LineStyle.medium;
+
+          final totalsNameStyle = workbook.styles.add('totalsName_dw_$tableCounter');
+          totalsNameStyle.bold = true;
+          totalsNameStyle.fontSize = 12;
+          totalsNameStyle.hAlign = xlsio.HAlignType.left;
+          totalsNameStyle.backColor = '#005BAC';
+          totalsNameStyle.fontColor = '#FFFFFF';
+          totalsNameStyle.borders.top.lineStyle = xlsio.LineStyle.medium;
+
+          final tA = sheet.getRangeByIndex(currentRow, 1);
+          tA.setText('TOTAL');
+          tA.cellStyle = totalsNameStyle;
 
           for (int j = 0; j < days.length; j++) {
-            final cell = sheet.getRangeByIndex(row, j + 2);
-            cell.setNumber(callsPerDay[j].toDouble());
-            cell.cellStyle = currentDataStyle;
-            totalCallsPerDay[j] += callsPerDay[j];
+            final tCell = sheet.getRangeByIndex(currentRow, j + 2);
+            tCell.setNumber(totalCallsPerDay[j].toDouble());
+            tCell.cellStyle = totalsStyle;
           }
 
-          final cellCallsDone = sheet.getRangeByIndex(row, days.length + 2);
-          cellCallsDone.setNumber(callsDone.toDouble());
-          cellCallsDone.cellStyle = currentDataStyle;
-          totalCallsDoneAll += callsDone;
+          final tTotalLeads = sheet.getRangeByIndex(currentRow, days.length + 2);
+          tTotalLeads.setNumber(totalLeadsAll.toDouble());
+          tTotalLeads.cellStyle = totalsStyle;
 
-          final totalCreatedCount = s['totalCreated'] as int;
-          final cellTotalCalls = sheet.getRangeByIndex(row, days.length + 3);
-          cellTotalCalls.setNumber(totalCreatedCount.toDouble());
-          cellTotalCalls.cellStyle = currentDataStyle;
-          totalCallsOverall += totalCreatedCount;
+          currentRow += 2; // Extra space between source tables
         }
-
-        // Totals row
-        final totalsRow = stats.length + 3;
-        final totalsStyle = workbook.styles.add('totals_dw');
-        totalsStyle.bold = true;
-        totalsStyle.fontSize = 12;
-        totalsStyle.hAlign = xlsio.HAlignType.center;
-        totalsStyle.backColor = '#005BAC';
-        totalsStyle.fontColor = '#FFFFFF';
-        totalsStyle.borders.top.lineStyle = xlsio.LineStyle.medium;
-
-        final totalsNameStyle = workbook.styles.add('totalsName_dw');
-        totalsNameStyle.bold = true;
-        totalsNameStyle.fontSize = 12;
-        totalsNameStyle.hAlign = xlsio.HAlignType.left;
-        totalsNameStyle.backColor = '#005BAC';
-        totalsNameStyle.fontColor = '#FFFFFF';
-        totalsNameStyle.borders.top.lineStyle = xlsio.LineStyle.medium;
-
-        final tA = sheet.getRangeByIndex(totalsRow, 1);
-        tA.setText('TOTAL');
-        tA.cellStyle = totalsNameStyle;
-
-        for (int j = 0; j < days.length; j++) {
-          final tCell = sheet.getRangeByIndex(totalsRow, j + 2);
-          tCell.setNumber(totalCallsPerDay[j].toDouble());
-          tCell.cellStyle = totalsStyle;
-        }
-
-        final tCallsDone = sheet.getRangeByIndex(totalsRow, days.length + 2);
-        tCallsDone.setNumber(totalCallsDoneAll.toDouble());
-        tCallsDone.cellStyle = totalsStyle;
-
-        final tTotalCalls = sheet.getRangeByIndex(totalsRow, days.length + 3);
-        tTotalCalls.setNumber(totalCallsOverall.toDouble());
-        tTotalCalls.cellStyle = totalsStyle;
 
         // Column widths
         sheet.getRangeByIndex(1, 1).columnWidth = 20;
@@ -1107,7 +1197,6 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
           sheet.getRangeByIndex(1, j + 2).columnWidth = 6;
         }
         sheet.getRangeByIndex(1, days.length + 2).columnWidth = 15;
-        sheet.getRangeByIndex(1, days.length + 3).columnWidth = 15;
       } else {
         // Column widths for detail view
         sheet.getRangeByIndex(1, 1).columnWidth = 22;
@@ -1377,8 +1466,8 @@ class _SyncHeadReportLeadsPageState extends State<SyncHeadReportLeadsPage> {
             ),
             const SizedBox(height: 16),
 
-            // ── Date range picker (visible only when 'Created in this Interval' is selected) ──
-            if (_statusFilter == 'Created in this Interval') ...[
+            // ── Date range picker (visible when 'Created in this Interval' or 'datewise' report is selected) ──
+            if (_statusFilter == 'Created in this Interval' || _reportType == 'datewise') ...[
               InkWell(
                 onTap: _pickDateRange,
                 borderRadius: BorderRadius.circular(10),

@@ -92,7 +92,7 @@ class _SyncHeadLeadsPageState extends State<SyncHeadLeadsPage> {
         .collection('follow_ups')
         .where('branch', isEqualTo: _selectedBranch);
 
-    if (isInterval) {
+    if (isInterval || _selectedRange != null) {
       branchQuery = branchQuery
           .where('created_at',
               isGreaterThanOrEqualTo: Timestamp.fromDate(rangeStart))
