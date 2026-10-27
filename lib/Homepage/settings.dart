@@ -233,12 +233,9 @@ class SettingsPage extends StatelessWidget {
                       FutureBuilder<String?>(
                         future: getUserRole(),
                         builder: (context, snapshot) {
-                          final role = snapshot.data;
-                          if (role == null) return const SizedBox.shrink();
-                          final isAdmin = role == 'admin';
-                          final isSyncHead = role == 'sync head' ||
-                              role == 'synchead' ||
-                              role == 'sync-head';
+                          final r = (snapshot.data ?? widget.userRole).toLowerCase().trim().replaceAll(' ', '_').replaceAll('-', '_');
+                          final isAdmin = r == 'admin';
+                          final isSyncHead = r == 'sync_head' || r == 'synchead';
 
                           if (isAdmin || isSyncHead) {
                             return Column(
