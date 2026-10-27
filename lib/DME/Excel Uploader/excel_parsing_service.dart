@@ -410,6 +410,26 @@ class ExcelParsingService {
             'qty': row.qty,
           });
         }
+        // If the initial row had missing category or type but a continuation row specifies it, update the sale
+        if (currentSale.categoryName.isEmpty && row.categoryName.isNotEmpty) {
+          currentSale = GroupedSale(
+            voucherNo: currentSale.voucherNo,
+            branchName: currentSale.branchName,
+            branchId: currentSale.branchId,
+            date: currentSale.date,
+            party: currentSale.party,
+            address: currentSale.address,
+            pincode: currentSale.pincode ?? row.pincode,
+            phone: currentSale.phone,
+            typeName: currentSale.typeName.isNotEmpty ? currentSale.typeName : row.typeName,
+            typeId: currentSale.typeId ?? row.typeId,
+            categoryName: row.categoryName,
+            categoryId: row.categoryId,
+            salesman: currentSale.salesman.isNotEmpty ? currentSale.salesman : row.salesman,
+            products: currentSale.products,
+          );
+          groupedList[groupedList.length - 1] = currentSale;
+        }
       } else {
         currentSale = GroupedSale(
           voucherNo: row.voucherNo,

@@ -83,6 +83,35 @@ class ExcelUploadService {
     final Map<String, Map<String, dynamic>> customersToUpsert = {};
     final Map<String, String> activePhoneBySale = {};
 
+    // Strictly validate all sales for essential fields (Category, Type, Branch, Party) before touching the database
+    for (var sale in groupedSales) {
+      final cleanParty = sale.party.trim();
+      if (cleanParty.isEmpty ||
+          cleanParty.toLowerCase() == 'unnamed customer' ||
+          cleanParty.toLowerCase() == 'unnamed party' ||
+          cleanParty.toLowerCase() == 'null') {
+        throw Exception('Upload blocked: Sale (Voucher: "${sale.voucherNo}") has a missing party name. Please message branch to update excel and reupload.');
+      }
+
+      if (sale.categoryName.trim().isEmpty ||
+          sale.categoryId == null ||
+          sale.categoryName.trim().toLowerCase() == 'null') {
+        throw Exception('Upload blocked: Sale for "$cleanParty" (Voucher: "${sale.voucherNo}") has a missing or invalid category. Please message branch to update excel and reupload.');
+      }
+
+      if (sale.typeName.trim().isEmpty ||
+          sale.typeId == null ||
+          sale.typeName.trim().toLowerCase() == 'null') {
+        throw Exception('Upload blocked: Sale for "$cleanParty" (Voucher: "${sale.voucherNo}") has a missing customer type. Please message branch to update excel and reupload.');
+      }
+
+      if (sale.branchName.trim().isEmpty ||
+          sale.branchId == null ||
+          DmeConstants.getBranchIdByName(sale.branchName) == null) {
+        throw Exception('Upload blocked: Sale for "$cleanParty" (Voucher: "${sale.voucherNo}") has a missing or invalid branch ("${sale.branchName}"). Please message branch to update excel and reupload.');
+      }
+    }
+
     for (var sale in groupedSales) {
       String activePhone = sale.phone;
 
@@ -98,10 +127,6 @@ class ExcelUploadService {
 
       if (activePhone.isNotEmpty) {
         final cleanParty = sale.party.trim();
-        if (cleanParty.isEmpty || cleanParty.toLowerCase() == 'unnamed customer' || cleanParty.toLowerCase() == 'unnamed party' || cleanParty.toLowerCase() == 'null') {
-          throw Exception('Upload blocked: Sale with phone $activePhone has a missing party name. Please message branch to update excel and reupload.');
-        }
-
         final cleanPincode = sale.pincode?.trim();
         customersToUpsert[activePhone] = {
           'name': cleanParty,

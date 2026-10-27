@@ -474,10 +474,23 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
         await _showConflictsDialog();
       }
     } catch (e) {
-      if (mounted) { setState(() {
-        _isParsing = false;
-        _statusMessage = 'Could not verify database status: $e';
-      }); }
+      if (mounted) {
+        setState(() {
+          _isParsing = false;
+          _groupedSales.clear();
+          _customerList.clear();
+          _excelConflicts = [
+            ExcelConflictItem(
+              partyName: 'Verification Error',
+              voucherNo: '-',
+              branchName: '-',
+              phone: '-',
+              issues: ['Database verification failed ($e). Upload is blocked. Please retry.'],
+            )
+          ];
+          _statusMessage = 'Could not verify database status: $e';
+        });
+      }
     }
   }
 
