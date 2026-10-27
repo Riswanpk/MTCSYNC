@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:call_log/call_log.dart';
@@ -51,6 +51,47 @@ int _normalizeTs(int? ts) {
   return ts;
 }
 
+
+/// Fetches call log robustly. Some OEMs (e.g. Xiaomi HyperOS) return partial
+/// or empty results for date-filtered queries, so merge with an unfiltered query.
+Future<List<CallLogEntry>> _fetchEntries(DateTime from, DateTime to) async {
+  final Map<String, CallLogEntry> merged = {};
+  void add(Iterable<CallLogEntry> list) {
+    for (final e in list) {
+      merged['${e.timestamp}_${e.number}_${e.duration}'] = e;
+    }
+  }
+
+  try {
+    add(await CallLog.query(
+      dateFrom: from.millisecondsSinceEpoch,
+      dateTo: to.millisecondsSinceEpoch,
+    ));
+  } catch (_) {}
+  try {
+    add(await CallLog.get());
+  } catch (_) {}
+  return merged.values.toList();
+}
+
+/// Outgoing-like: anything that is not clearly incoming/missed/rejected/blocked.
+bool _isOutgoingLike(CallLogEntry e) {
+  final t = e.callType;
+  return t != CallType.incoming &&
+      t != CallType.missed &&
+      t != CallType.rejected &&
+      t != CallType.blocked &&
+      t != CallType.voiceMail &&
+      t != CallType.answeredExternally;
+}
+
+bool _numberMatches(CallLogEntry e, String? c1, String? c2, [String? c3]) {
+  for (final n in [e.number, e.formattedNumber]) {
+    if (n == null || n.isEmpty) continue;
+    if (_matchNumbers(n, c1) || _matchNumbers(n, c2) || (c3 != null && _matchNumbers(n, c3))) return true;
+  }
+  return false;
+}
 Future<bool> _ensurePermissions() async {
   var status = await Permission.phone.status;
   if (!status.isGranted) {
@@ -75,29 +116,15 @@ Future<bool> checkIfCallWasMade({
     final queryStart = callStartTime.subtract(const Duration(minutes: 5));
     final queryEnd = now.add(const Duration(minutes: 30));
 
-    Iterable<CallLogEntry> entries = [];
-    try {
-      entries = await CallLog.query(
-        dateFrom: queryStart.millisecondsSinceEpoch,
-        dateTo: queryEnd.millisecondsSinceEpoch,
-      );
-    } catch (_) {}
-
-    if (entries.isEmpty) {
-      try {
-        entries = await CallLog.query();
-      } catch (_) {}
-    }
-
+    
+    final entries = await _fetchEntries(queryStart, queryEnd);
     String? c1 = customer['contact1'] ?? customer['contact'];
     String? c2 = customer['contact2'];
     bool callMade = entries.any((entry) {
       final ts = _normalizeTs(entry.timestamp);
       if (ts < queryStart.millisecondsSinceEpoch) return false;
-      String logNumber = entry.number ?? '';
       bool wasConnected = (entry.duration ?? 0) > 15;
-      bool matches = _matchNumbers(logNumber, c1) || _matchNumbers(logNumber, c2) || _matchNumbers(logNumber, pendingCallNumber);
-      return matches && wasConnected;
+      return _isOutgoingLike(entry) && wasConnected && _numberMatches(entry, c1, c2, pendingCallNumber);
     });
     if (callMade) {
       customer['callMade'] = true;
@@ -139,31 +166,17 @@ Future<bool> checkForAnyRecentCall({
     final startOfDay = DateTime(now.year, now.month, now.day);
     final endOfPeriod = now.add(const Duration(minutes: 30));
 
-    Iterable<CallLogEntry> entries = [];
-    try {
-      entries = await CallLog.query(
-        dateFrom: startOfDay.millisecondsSinceEpoch,
-        dateTo: endOfPeriod.millisecondsSinceEpoch,
-      );
-    } catch (_) {}
-
-    if (entries.isEmpty) {
-      try {
-        entries = await CallLog.query();
-      } catch (_) {}
-    }
-
+    
+    final entries = await _fetchEntries(startOfDay, endOfPeriod);
     String? c1 = customer['contact1'] ?? customer['contact'];
     String? c2 = customer['contact2'];
 
     int latestOutgoingTime = -1;
     for (final entry in entries) {
-      if (entry.callType != CallType.outgoing) continue;
+      if (!_isOutgoingLike(entry)) continue;
       final ts = _normalizeTs(entry.timestamp);
       if (ts < startOfDay.millisecondsSinceEpoch) continue;
-      String logNumber = entry.number ?? '';
-      if (logNumber.isEmpty) continue;
-      if (_matchNumbers(logNumber, c1) || _matchNumbers(logNumber, c2)) {
+      if (_numberMatches(entry, c1, c2)) {
         if (ts > latestOutgoingTime) {
           latestOutgoingTime = ts;
         }
@@ -174,10 +187,8 @@ Future<bool> checkForAnyRecentCall({
     bool hasLongCall = entries.any((entry) {
       final ts = _normalizeTs(entry.timestamp);
       if (ts < latestOutgoingTime) return false;
-      String logNumber = entry.number ?? '';
-      if (logNumber.isEmpty) return false;
       bool longEnough = (entry.duration ?? 0) > 15;
-      return (_matchNumbers(logNumber, c1) || _matchNumbers(logNumber, c2)) && longEnough;
+      return longEnough && _numberMatches(entry, c1, c2);
     });
     if (hasLongCall) {
       customer['callMade'] = true;
@@ -237,31 +248,17 @@ Future<void> reloadCallStatus({
     final startOfDay = DateTime(now.year, now.month, now.day);
     final endOfPeriod = now.add(const Duration(minutes: 30));
 
-    Iterable<CallLogEntry> entries = [];
-    try {
-      entries = await CallLog.query(
-        dateFrom: startOfDay.millisecondsSinceEpoch,
-        dateTo: endOfPeriod.millisecondsSinceEpoch,
-      );
-    } catch (_) {}
-
-    if (entries.isEmpty) {
-      try {
-        entries = await CallLog.query();
-      } catch (_) {}
-    }
-
+    
+    final entries = await _fetchEntries(startOfDay, endOfPeriod);
     String? c1 = customer['contact1'] ?? customer['contact'];
     String? c2 = customer['contact2'];
 
     bool hasOutgoingLongCall = entries.any((entry) {
-      if (entry.callType != CallType.outgoing) return false;
+      if (!_isOutgoingLike(entry)) return false;
       final ts = _normalizeTs(entry.timestamp);
       if (ts < startOfDay.millisecondsSinceEpoch) return false;
-      String logNumber = entry.number ?? '';
-      if (logNumber.isEmpty) return false;
       bool longEnough = (entry.duration ?? 0) > 15;
-      return (_matchNumbers(logNumber, c1) || _matchNumbers(logNumber, c2)) && longEnough;
+      return longEnough && _numberMatches(entry, c1, c2);
     });
 
     if (hasOutgoingLongCall) {
@@ -302,3 +299,4 @@ Future<void> reloadCallStatus({
     }
   }
 }
+
