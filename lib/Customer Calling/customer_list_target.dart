@@ -67,7 +67,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
           _loading = false;
         });
         _firestoreConfirmed = true;
-        _saveToLocalCache();
+        _scheduleSaveToLocalCache();
       }
     }, onError: (e) {
       debugPrint('Customer target stream error: $e');
@@ -149,7 +149,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
           _loading = false;
         });
         _firestoreConfirmed = true;
-        await _saveToLocalCache();
+        _scheduleSaveToLocalCache();
         _startFirestoreListener(monthYear, _docId!);
       } else {
         // Document missing for this month – try to copy from previous month
@@ -251,6 +251,15 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
     return 'customer_list_${_docId}_$monthYear';
   }
 
+  Timer? _cacheDebounceTimer;
+
+  void _scheduleSaveToLocalCache() {
+    _cacheDebounceTimer?.cancel();
+    _cacheDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+      _saveToLocalCache();
+    });
+  }
+
   Future<void> _saveToLocalCache() async {
     if (_customers == null || _docId == null) return;
     final prefs = await SharedPreferences.getInstance();
@@ -286,6 +295,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
 
   @override
   void dispose() {
+    _cacheDebounceTimer?.cancel();
     _customerDocSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
@@ -300,9 +310,11 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
     }
   }
 
+  static final RegExp _nonDigitRegex = RegExp(r'\D');
+
   static String _normalizePhone(dynamic phone) {
     if (phone == null) return '';
-    final cleaned = phone.toString().replaceAll(RegExp(r'\D'), '');
+    final cleaned = phone.toString().replaceAll(_nonDigitRegex, '');
     if (cleaned.length > 10) {
       return cleaned.substring(cleaned.length - 10);
     }
@@ -326,7 +338,17 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
           .collection('users')
           .doc(_docId);
 
-      final localSnapshot = List<Map<String, dynamic>>.from(_customers!);
+      // Pre-compute normalized lookup maps for O(1) matching instead of O(N^2) regex in transaction
+      final Map<String, Map<String, dynamic>> byPhone = {};
+      final Map<String, Map<String, dynamic>> byName = {};
+      for (final lc in _customers!) {
+        final lcName = (lc['name'] ?? '').toString().trim().toLowerCase();
+        final lc1 = _normalizePhone(lc['contact1'] ?? lc['contact'] ?? lc['phone']);
+        final lc2 = _normalizePhone(lc['contact2']);
+        if (lc1.isNotEmpty) byPhone[lc1] = lc;
+        if (lc2.isNotEmpty) byPhone[lc2] = lc;
+        if (lcName.isNotEmpty) byName[lcName] = lc;
+      }
 
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         final snap = await transaction.get(docRef);
@@ -343,22 +365,12 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
           final sc1 = _normalizePhone(sc['contact1'] ?? sc['contact'] ?? sc['phone']);
           final sc2 = _normalizePhone(sc['contact2']);
 
-          final match = localSnapshot.firstWhere(
-            (lc) {
-              final lcName = (lc['name'] ?? '').toString().trim().toLowerCase();
-              final lc1 = _normalizePhone(lc['contact1'] ?? lc['contact'] ?? lc['phone']);
-              final lc2 = _normalizePhone(lc['contact2']);
-              final phoneMatch = (sc1.isNotEmpty && (sc1 == lc1 || sc1 == lc2)) ||
-                  (sc2.isNotEmpty && (sc2 == lc1 || sc2 == lc2));
-              final nameMatch = scName.isNotEmpty && scName == lcName;
-              return (sc1.isNotEmpty || sc2.isNotEmpty)
-                  ? (phoneMatch || nameMatch)
-                  : nameMatch;
-            },
-            orElse: () => {},
-          );
+          Map<String, dynamic>? match;
+          if (sc1.isNotEmpty) match = byPhone[sc1];
+          if (match == null && sc2.isNotEmpty) match = byPhone[sc2];
+          if (match == null && scName.isNotEmpty) match = byName[scName];
 
-          if (match.isNotEmpty) {
+          if (match != null && match.isNotEmpty) {
             if (match['callMade'] == true && sc['callMade'] != true) {
               sc['callMade'] = true;
               changed = true;
@@ -394,7 +406,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
     } catch (e) {
       debugPrint('Failed to update Firestore: $e');
     }
-    await _saveToLocalCache();
+    _scheduleSaveToLocalCache();
   }
 
   @override
@@ -804,7 +816,9 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                               ),
                             ).then((_) {
                               _isTileViewerOpen = false;
-                              _fetchCustomerData();
+                              if (mounted) {
+                                setState(() {});
+                              }
                             });
                           }
 

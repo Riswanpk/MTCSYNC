@@ -324,7 +324,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
               TextFormField(
                 controller: _contact2Ctrl,
                 decoration: const InputDecoration(
-                  labelText: 'Contact Number 2 (optional)',
+                  labelText: 'Contact Number 2',
                 ),
                 keyboardType: TextInputType.number,
                 inputFormatters: [

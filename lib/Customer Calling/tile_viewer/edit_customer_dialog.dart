@@ -66,7 +66,7 @@ Future<void> editCustomerDialog({
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: contact2Controller,
-                  decoration: const InputDecoration(labelText: 'Contact Number 2 (optional)'),
+                  decoration: const InputDecoration(labelText: 'Contact Number 2'),
                   keyboardType: TextInputType.number,
                   inputFormatters: [
                     FilteringTextInputFormatter.digitsOnly,

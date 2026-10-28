@@ -34,6 +34,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
   List<Map<String, String>> _pastRemarks = [];
   bool _loadingLastRemarks = false;
   bool _remarksSaved = false;
+  bool _remarksEntered = false;
   bool _checkingCall = false;
   bool _isSavingRemarks = false;
 
@@ -44,18 +45,45 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
     customer = Map<String, dynamic>.from(widget.customer);
     called = customer['callMade'] == true;
     remarksController.text = customer['remarks'] ?? '';
-    remarksController.addListener(() {
+    _remarksEntered = remarksController.text.trim().isNotEmpty;
+    remarksController.addListener(_onRemarksTextChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final route = ModalRoute.of(context);
+      final anim = route?.animation;
+      if (anim != null && !anim.isCompleted) {
+        void listener(AnimationStatus status) {
+          if (status == AnimationStatus.completed) {
+            anim.removeStatusListener(listener);
+            if (mounted) {
+              _restorePendingCallState();
+              _fetchLastRemarksData();
+            }
+          }
+        }
+        anim.addStatusListener(listener);
+      } else {
+        _restorePendingCallState();
+        _fetchLastRemarksData();
+      }
+    });
+  }
+
+  void _onRemarksTextChanged() {
+    final bool hasText = remarksController.text.trim().isNotEmpty;
+    final bool prevEntered = _remarksEntered;
+    if (_remarksSaved || hasText != prevEntered) {
       setState(() {
         _remarksSaved = false;
+        _remarksEntered = hasText;
       });
-    });
-    _restorePendingCallState();
-    _fetchLastRemarksData();
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    remarksController.removeListener(_onRemarksTextChanged);
     remarksController.dispose();
     super.dispose();
   }
@@ -345,15 +373,16 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
                           setState(() => _isSavingRemarks = true);
                           try {
                             customer['remarks'] = remarks;
-                            await updateRemarksInFirestore(
-                              customer: customer,
-                              remarks: remarks,
-                              context: context,
-                              mounted: mounted,
-                            );
-                            if (widget.onStatusChanged != null) {
-                              await widget.onStatusChanged!(remarks);
-                            }
+                                if (widget.onStatusChanged != null) {
+                                  await widget.onStatusChanged!(remarks);
+                                } else {
+                                  await updateRemarksInFirestore(
+                                    customer: customer,
+                                    remarks: remarks,
+                                    context: context,
+                                    mounted: mounted,
+                                  );
+                                }
                             if (mounted) {
                               setState(() {
                                 _remarksSaved = true;

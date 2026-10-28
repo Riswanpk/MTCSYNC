@@ -32,8 +32,23 @@ class _AddToLeadsButtonState extends State<AddToLeadsButton> {
   void initState() {
     super.initState();
     _leadExists = widget.customer['leadAdded'] == true;
-    if (!_leadExists) {
-      _checkIfLeadAlreadyExists();
+    if (!_leadExists && widget.called) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final route = ModalRoute.of(context);
+        final anim = route?.animation;
+        if (anim != null && !anim.isCompleted) {
+          void listener(AnimationStatus status) {
+            if (status == AnimationStatus.completed) {
+              anim.removeStatusListener(listener);
+              if (mounted && !_leadExists) _checkIfLeadAlreadyExists();
+            }
+          }
+          anim.addStatusListener(listener);
+        } else {
+          _checkIfLeadAlreadyExists();
+        }
+      });
     }
   }
 
@@ -44,6 +59,8 @@ class _AddToLeadsButtonState extends State<AddToLeadsButton> {
       setState(() {
         _leadExists = true;
       });
+    } else if (!oldWidget.called && widget.called && !_leadExists && !_checkingLead) {
+      _checkIfLeadAlreadyExists();
     }
   }
 
@@ -56,6 +73,7 @@ class _AddToLeadsButtonState extends State<AddToLeadsButton> {
 
     final clean = phone.toString().replaceAll(RegExp(r'\D'), '');
     final last10 = clean.length >= 10 ? clean.substring(clean.length - 10) : clean;
+    if (last10.isEmpty) return;
 
     setState(() => _checkingLead = true);
     try {
@@ -65,9 +83,19 @@ class _AddToLeadsButtonState extends State<AddToLeadsButton> {
           ? DateTime(now.year + 1, 1, 1)
           : DateTime(now.year, now.month + 1, 1);
 
+      final variants = <String>{
+        last10,
+        '+91 $last10',
+        '+91$last10',
+        '91$last10',
+        '0$last10',
+        phone.toString().trim(),
+      }.where((s) => s.isNotEmpty).toList();
+
       final snap = await FirebaseFirestore.instance
           .collection('follow_ups')
           .where('source', isEqualTo: 'CC')
+          .where('phone', whereIn: variants)
           .get();
 
       bool found = false;
@@ -90,7 +118,7 @@ class _AddToLeadsButtonState extends State<AddToLeadsButton> {
         }
 
         final docPhone = (data['phone'] ?? '').toString().replaceAll(RegExp(r'\D'), '');
-        if (docPhone.isNotEmpty && last10.isNotEmpty && docPhone.endsWith(last10)) {
+        if (docPhone.isNotEmpty && docPhone.endsWith(last10)) {
           found = true;
           break;
         }

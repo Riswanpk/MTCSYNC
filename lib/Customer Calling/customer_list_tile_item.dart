@@ -34,15 +34,13 @@ class CustomerListTileItem extends StatelessWidget {
     final bool isPendingEditing = customer['pendingEditing'] == true;
     final bool isPending = isPendingDeletion || isPendingEditing;
 
-    return Opacity(
-      opacity: isPending ? 0.45 : 1.0,
-      child: Material(
-        color: isPending
-            ? (isDark ? Colors.grey.shade900 : Colors.grey.shade300)
-            : (isEven
-                ? (isDark ? const Color(0xFF1E2128) : Colors.white)
-                : (isDark ? const Color(0xFF23272E) : const Color(0xFFF5F9FF))),
-        child: InkWell(
+    final Widget tileContent = Material(
+      color: isPending
+          ? (isDark ? Colors.grey.shade900 : Colors.grey.shade300)
+          : (isEven
+              ? (isDark ? const Color(0xFF1E2128) : Colors.white)
+              : (isDark ? const Color(0xFF23272E) : const Color(0xFFF5F9FF))),
+      child: InkWell(
           onTap: openViewer,
           onLongPress: isPending
               ? null
@@ -183,7 +181,12 @@ class CustomerListTileItem extends StatelessWidget {
             ),
           ),
         ),
-      ),
+      );
+
+    if (!isPending) return tileContent;
+    return Opacity(
+      opacity: 0.45,
+      child: tileContent,
     );
   }
 }

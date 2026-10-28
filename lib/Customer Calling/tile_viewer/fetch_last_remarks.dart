@@ -1,6 +1,42 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+/// In-memory cache of past months' customer lists keyed by `<email>_<monthYear>`
+/// to avoid re-fetching and re-parsing 3 large documents on every tile tap.
+final Map<String, List<dynamic>> _pastMonthsCache = {};
+final Map<String, Future<List<dynamic>>> _inFlightFetches = {};
+
+Future<List<dynamic>> _getPastMonthCustomers(String email, String monthYear) {
+  final cacheKey = '${email}_$monthYear';
+  if (_pastMonthsCache.containsKey(cacheKey)) {
+    return Future.value(_pastMonthsCache[cacheKey]!);
+  }
+  if (_inFlightFetches.containsKey(cacheKey)) {
+    return _inFlightFetches[cacheKey]!;
+  }
+  final future = FirebaseFirestore.instance
+      .collection('customer_target')
+      .doc(monthYear)
+      .collection('users')
+      .doc(email)
+      .get()
+      .then((doc) {
+    final data = doc.data();
+    final List<dynamic> list =
+        (doc.exists && data != null && data['customers'] is List)
+            ? data['customers'] as List<dynamic>
+            : const [];
+    _pastMonthsCache[cacheKey] = list;
+    _inFlightFetches.remove(cacheKey);
+    return list;
+  }).catchError((_) {
+    _inFlightFetches.remove(cacheKey);
+    return const <dynamic>[];
+  });
+  _inFlightFetches[cacheKey] = future;
+  return future;
+}
+
 Future<List<Map<String, String>>> fetchLastRemarks({
   required Map<String, dynamic> customer,
 }) async {
@@ -15,6 +51,7 @@ Future<List<Map<String, String>>> fetchLastRemarks({
       return [];
     }
 
+    final email = user.email!.toLowerCase();
     final now = DateTime.now();
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -22,37 +59,31 @@ Future<List<Map<String, String>>> fetchLastRemarks({
     ];
     final List<Map<String, String>> results = [];
 
-    final futures = <Future<DocumentSnapshot>>[];
+    final futures = <Future<List<dynamic>>>[];
     final monthYears = <String>[];
     for (int i = 1; i <= 3; i++) {
       final prev = DateTime(now.year, now.month - i, 1);
       final monthYear = "${months[prev.month - 1]} ${prev.year}";
       monthYears.add(monthYear);
-      futures.add(FirebaseFirestore.instance
-          .collection('customer_target')
-          .doc(monthYear)
-          .collection('users')
-          .doc(user.email!.toLowerCase())
-          .get());
+      futures.add(_getPastMonthCustomers(email, monthYear));
     }
-    final docs = await Future.wait(futures);
+    final lists = await Future.wait(futures);
 
-    for (int i = 0; i < docs.length; i++) {
-      final doc = docs[i];
+    for (int i = 0; i < lists.length; i++) {
+      final customerList = lists[i];
       final monthYear = monthYears[i];
-      if (doc.exists && doc.data() != null && (doc.data() as Map<String, dynamic>)['customers'] != null) {
-        final List customerList = (doc.data() as Map<String, dynamic>)['customers'];
+      if (customerList.isNotEmpty) {
         dynamic prevCustomer;
         if (contact1 != null && contact1.isNotEmpty) {
           prevCustomer = customerList.firstWhere(
-            (c) => c['contact'] == contact1 || c['contact1'] == contact1,
+            (c) => c is Map && (c['contact'] == contact1 || c['contact1'] == contact1),
             orElse: () => null,
           );
         }
         if ((prevCustomer == null || prevCustomer['remarks'] == null || prevCustomer['remarks'].toString().trim().isEmpty) &&
             contact2 != null && contact2.isNotEmpty) {
           prevCustomer = customerList.firstWhere(
-            (c) => c['contact'] == contact2 || c['contact2'] == contact2,
+            (c) => c is Map && (c['contact'] == contact2 || c['contact2'] == contact2),
             orElse: () => null,
           );
         }

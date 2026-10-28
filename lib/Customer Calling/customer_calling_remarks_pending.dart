@@ -116,9 +116,11 @@ class _CustomerCallingRemarksPendingPageState
     }
   }
 
+  static final RegExp _nonDigitRegex = RegExp(r'\D');
+
   static String _normalizePhone(dynamic phone) {
     if (phone == null) return '';
-    final cleaned = phone.toString().replaceAll(RegExp(r'\D'), '');
+    final cleaned = phone.toString().replaceAll(_nonDigitRegex, '');
     if (cleaned.length > 10) {
       return cleaned.substring(cleaned.length - 10);
     }
@@ -137,7 +139,16 @@ class _CustomerCallingRemarksPendingPageState
           .collection('users')
           .doc(_docId);
 
-      final localSnapshot = List<Map<String, dynamic>>.from(_allCustomers);
+      final Map<String, Map<String, dynamic>> byPhone = {};
+      final Map<String, Map<String, dynamic>> byName = {};
+      for (final lc in _allCustomers) {
+        final lcName = (lc['name'] ?? '').toString().trim().toLowerCase();
+        final lc1 = _normalizePhone(lc['contact1'] ?? lc['contact'] ?? lc['phone']);
+        final lc2 = _normalizePhone(lc['contact2']);
+        if (lc1.isNotEmpty) byPhone[lc1] = lc;
+        if (lc2.isNotEmpty) byPhone[lc2] = lc;
+        if (lcName.isNotEmpty) byName[lcName] = lc;
+      }
 
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         final snap = await transaction.get(docRef);
@@ -154,22 +165,12 @@ class _CustomerCallingRemarksPendingPageState
           final sc1 = _normalizePhone(sc['contact1'] ?? sc['contact'] ?? sc['phone']);
           final sc2 = _normalizePhone(sc['contact2']);
 
-          final match = localSnapshot.firstWhere(
-            (lc) {
-              final lcName = (lc['name'] ?? '').toString().trim().toLowerCase();
-              final lc1 = _normalizePhone(lc['contact1'] ?? lc['contact'] ?? lc['phone']);
-              final lc2 = _normalizePhone(lc['contact2']);
-              final phoneMatch = (sc1.isNotEmpty && (sc1 == lc1 || sc1 == lc2)) ||
-                  (sc2.isNotEmpty && (sc2 == lc1 || sc2 == lc2));
-              final nameMatch = scName.isNotEmpty && scName == lcName;
-              return (sc1.isNotEmpty || sc2.isNotEmpty)
-                  ? (phoneMatch || nameMatch)
-                  : nameMatch;
-            },
-            orElse: () => {},
-          );
+          Map<String, dynamic>? match;
+          if (sc1.isNotEmpty) match = byPhone[sc1];
+          if (match == null && sc2.isNotEmpty) match = byPhone[sc2];
+          if (match == null && scName.isNotEmpty) match = byName[scName];
 
-          if (match.isNotEmpty) {
+          if (match != null && match.isNotEmpty) {
             final localRemarks = (match['remarks'] ?? '').toString().trim();
             if (localRemarks.isNotEmpty && sc['remarks'] != match['remarks']) {
               sc['remarks'] = match['remarks'];

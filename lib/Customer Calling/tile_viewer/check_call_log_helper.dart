@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:call_log/call_log.dart';
@@ -53,25 +53,23 @@ int _normalizeTs(int? ts) {
 
 
 /// Fetches call log robustly. Some OEMs (e.g. Xiaomi HyperOS) return partial
-/// or empty results for date-filtered queries, so merge with an unfiltered query.
+/// or empty results for date-filtered queries, so fallback to an unfiltered query only if empty.
 Future<List<CallLogEntry>> _fetchEntries(DateTime from, DateTime to) async {
-  final Map<String, CallLogEntry> merged = {};
-  void add(Iterable<CallLogEntry> list) {
-    for (final e in list) {
-      merged['${e.timestamp}_${e.number}_${e.duration}'] = e;
-    }
-  }
-
   try {
-    add(await CallLog.query(
+    final filtered = await CallLog.query(
       dateFrom: from.millisecondsSinceEpoch,
       dateTo: to.millisecondsSinceEpoch,
-    ));
+    );
+    if (filtered.isNotEmpty) {
+      return filtered.toList();
+    }
   } catch (_) {}
   try {
-    add(await CallLog.get());
+    final all = await CallLog.get();
+    final minTs = from.millisecondsSinceEpoch;
+    return all.where((e) => _normalizeTs(e.timestamp) >= minTs).toList();
   } catch (_) {}
-  return merged.values.toList();
+  return const [];
 }
 
 /// Outgoing-like: anything that is not clearly incoming/missed/rejected/blocked.
