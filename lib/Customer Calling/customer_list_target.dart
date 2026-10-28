@@ -34,6 +34,8 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
   bool _showSearchBar = false;
   final TextEditingController _searchController = TextEditingController();
   bool _isReloading = false;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _customerDocSub;
+  String? _listeningDocPath;
 
   @override
   void initState() {
@@ -42,20 +44,34 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
     _fetchCustomerData();
   }
 
-  Future<bool> _hasFetchedToday() async {
-    if (_docId == null) return false;
-    final prefs = await SharedPreferences.getInstance();
-    final today = DateTime.now().toIso8601String().substring(0, 10);
-    final key = 'customer_list_last_fetch_${_docId}_$today';
-    return prefs.getBool(key) ?? false;
-  }
+  void _startFirestoreListener(String monthYear, String docId) {
+    final path = 'customer_target/$monthYear/users/$docId';
+    if (_listeningDocPath == path && _customerDocSub != null) return;
 
-  Future<void> _markFetchedToday() async {
-    if (_docId == null) return;
-    final prefs = await SharedPreferences.getInstance();
-    final today = DateTime.now().toIso8601String().substring(0, 10);
-    final key = 'customer_list_last_fetch_${_docId}_$today';
-    await prefs.setBool(key, true);
+    _customerDocSub?.cancel();
+    _listeningDocPath = path;
+    _customerDocSub = FirebaseFirestore.instance
+        .collection('customer_target')
+        .doc(monthYear)
+        .collection('users')
+        .doc(docId)
+        .snapshots()
+        .listen((docSnap) {
+      if (!mounted) return;
+      if (docSnap.exists && docSnap.data()?['customers'] is List) {
+        final List<dynamic> data = docSnap.data()!['customers'];
+        final customers =
+            data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        setState(() {
+          _customers = customers;
+          _loading = false;
+        });
+        _firestoreConfirmed = true;
+        _saveToLocalCache();
+      }
+    }, onError: (e) {
+      debugPrint('Customer target stream error: $e');
+    });
   }
 
   Future<void> _fetchCustomerData({bool forceFirestore = false}) async {
@@ -75,39 +91,27 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
       }
       _docId = user.email!.toLowerCase();
 
-      // Load from local cache for instant display
-      final cached = await _loadFromLocalCache();
-      if (cached != null) {
-        if (mounted) {
-          setState(() {
-            _customers = cached;
-            _loading = false;
-          });
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _loading = true;
-          });
-        }
-      }
-
-      // If we already fetched today and have local cached data, don't read Firestore again
-      // unless forceFirestore is true (e.g., user clicked the reload button).
-      if (!forceFirestore && cached != null && cached.isNotEmpty) {
-        final fetchedToday = await _hasFetchedToday();
-        if (fetchedToday) {
-          _firestoreConfirmed = true;
+      // Load from local cache for instant initial display if not yet loaded in memory
+      if (_customers == null) {
+        final cached = await _loadFromLocalCache();
+        if (cached != null) {
           if (mounted) {
             setState(() {
+              _customers = cached;
               _loading = false;
             });
           }
-          return;
+        } else {
+          if (mounted) {
+            setState(() {
+              _loading = true;
+            });
+          }
         }
       }
 
-      // Fetch latest from Firestore
+      // Always verify latest from Firestore so Sync Head deletion/edit approvals
+      // are reflected immediately and local cache never stays stale.
       final now = DateTime.now();
       final monthYear = "${CustomerListTargetService.monthName(now.month)} ${now.year}";
 
@@ -116,7 +120,11 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
           .doc(monthYear)
           .collection('users');
 
-      var doc = await usersRef.doc(_docId).get();
+      var doc = await usersRef.doc(_docId).get(
+            forceFirestore
+                ? const GetOptions(source: Source.server)
+                : const GetOptions(source: Source.serverAndCache),
+          );
 
       // If not found with lowercase email, search case-insensitively
       if (!doc.exists || doc.data()?['customers'] == null) {
@@ -142,7 +150,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
         });
         _firestoreConfirmed = true;
         await _saveToLocalCache();
-        await _markFetchedToday();
+        _startFirestoreListener(monthYear, _docId!);
       } else {
         // Document missing for this month – try to copy from previous month
         final previousMonthData = await _tryGetPreviousMonthData();
@@ -151,6 +159,9 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
             final copy = Map<String, dynamic>.from(e);
             copy['callMade'] = false;
             copy['remarks'] = '';
+            copy.remove('callDate');
+            copy.remove('pendingDeletion');
+            copy.remove('pendingEditing');
             return copy;
           }).toList();
 
@@ -162,6 +173,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
           }); }
           _firestoreConfirmed = true;
           await _saveToLocalCache();
+          _startFirestoreListener(monthYear, _docId!);
 
           if (mounted) {
             ScaffoldMessenger.maybeOf(context)?.showSnackBar(
@@ -274,6 +286,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
 
   @override
   void dispose() {
+    _customerDocSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
     super.dispose();
@@ -287,8 +300,17 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
     }
   }
 
+  static String _normalizePhone(dynamic phone) {
+    if (phone == null) return '';
+    final cleaned = phone.toString().replaceAll(RegExp(r'\D'), '');
+    if (cleaned.length > 10) {
+      return cleaned.substring(cleaned.length - 10);
+    }
+    return cleaned;
+  }
+
   Future<void> _updateFirestore() async {
-    if (_docId == null) return;
+    if (_docId == null || _customers == null) return;
     if (!_firestoreConfirmed) {
       debugPrint('Skipping Firestore write – data not confirmed from server');
       return;
@@ -298,12 +320,77 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
       final monthYear =
           "${CustomerListTargetService.monthName(now.month)} ${now.year}";
 
-      await FirebaseFirestore.instance
+      final docRef = FirebaseFirestore.instance
           .collection('customer_target')
           .doc(monthYear)
           .collection('users')
-          .doc(_docId)
-          .update({'customers': _customers});
+          .doc(_docId);
+
+      final localSnapshot = List<Map<String, dynamic>>.from(_customers!);
+
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final snap = await transaction.get(docRef);
+        if (!snap.exists || snap.data()?['customers'] is! List) return;
+
+        final List<Map<String, dynamic>> serverCustomers =
+            (snap.data()!['customers'] as List)
+                .map((e) => Map<String, dynamic>.from(e as Map))
+                .toList();
+
+        bool changed = false;
+        for (final sc in serverCustomers) {
+          final scName = (sc['name'] ?? '').toString().trim().toLowerCase();
+          final sc1 = _normalizePhone(sc['contact1'] ?? sc['contact'] ?? sc['phone']);
+          final sc2 = _normalizePhone(sc['contact2']);
+
+          final match = localSnapshot.firstWhere(
+            (lc) {
+              final lcName = (lc['name'] ?? '').toString().trim().toLowerCase();
+              final lc1 = _normalizePhone(lc['contact1'] ?? lc['contact'] ?? lc['phone']);
+              final lc2 = _normalizePhone(lc['contact2']);
+              final phoneMatch = (sc1.isNotEmpty && (sc1 == lc1 || sc1 == lc2)) ||
+                  (sc2.isNotEmpty && (sc2 == lc1 || sc2 == lc2));
+              final nameMatch = scName.isNotEmpty && scName == lcName;
+              return (sc1.isNotEmpty || sc2.isNotEmpty)
+                  ? (phoneMatch || nameMatch)
+                  : nameMatch;
+            },
+            orElse: () => {},
+          );
+
+          if (match.isNotEmpty) {
+            if (match['callMade'] == true && sc['callMade'] != true) {
+              sc['callMade'] = true;
+              changed = true;
+            }
+            if (match['callDate'] != null && sc['callDate'] == null) {
+              sc['callDate'] = match['callDate'];
+              changed = true;
+            }
+            final localRemarks = (match['remarks'] ?? '').toString().trim();
+            if (localRemarks.isNotEmpty && sc['remarks'] != match['remarks']) {
+              sc['remarks'] = match['remarks'];
+              changed = true;
+            }
+            if (match['leadAdded'] == true && sc['leadAdded'] != true) {
+              sc['leadAdded'] = true;
+              changed = true;
+            }
+            if (match['lastCalledNumber'] != null &&
+                sc['lastCalledNumber'] != match['lastCalledNumber']) {
+              sc['lastCalledNumber'] = match['lastCalledNumber'];
+              changed = true;
+            }
+          }
+        }
+
+        if (changed) {
+          transaction.update(docRef, {
+            'customers': serverCustomers,
+            'updated': FieldValue.serverTimestamp(),
+          });
+        }
+      });
     } catch (e) {
       debugPrint('Failed to update Firestore: $e');
     }

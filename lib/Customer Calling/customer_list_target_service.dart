@@ -24,6 +24,50 @@ class CustomerListTargetService {
     return months[month - 1];
   }
 
+  static String _normalizePhone(dynamic phone) {
+    if (phone == null) return '';
+    final cleaned = phone.toString().replaceAll(RegExp(r'\D'), '');
+    if (cleaned.length > 10) {
+      return cleaned.substring(cleaned.length - 10);
+    }
+    return cleaned;
+  }
+
+  static bool _matchesCustomer(
+    Map c,
+    String targetName,
+    String targetContact1Norm,
+    String targetContact2Norm,
+  ) {
+    final cName = (c['name'] ?? '').toString().trim().toLowerCase();
+    final c1Norm = _normalizePhone(c['contact1'] ?? c['contact'] ?? c['phone']);
+    final c2Norm = _normalizePhone(c['contact2']);
+
+    final hasTargetPhone =
+        targetContact1Norm.isNotEmpty || targetContact2Norm.isNotEmpty;
+    bool phoneMatch = false;
+    if (hasTargetPhone) {
+      if (targetContact1Norm.isNotEmpty &&
+          (c1Norm == targetContact1Norm || c2Norm == targetContact1Norm)) {
+        phoneMatch = true;
+      }
+      if (targetContact2Norm.isNotEmpty &&
+          (c1Norm == targetContact2Norm || c2Norm == targetContact2Norm)) {
+        phoneMatch = true;
+      }
+    }
+
+    final nameMatch = targetName.isNotEmpty && cName == targetName;
+
+    if (hasTargetPhone && targetName.isNotEmpty) {
+      return phoneMatch || nameMatch;
+    } else if (hasTargetPhone) {
+      return phoneMatch;
+    } else {
+      return nameMatch;
+    }
+  }
+
   static Future<void> requestCustomerDeletion({
     required BuildContext context,
     required Map<String, dynamic> customer,
@@ -140,11 +184,60 @@ class CustomerListTargetService {
           'type': 'deletion',
         });
 
-        // 2. Persist customer['pendingDeletion'] to Firestore
+        // 2. Persist customer['pendingDeletion'] = true directly to Firestore on the latest server list
+        //    so we never overwrite previously approved deletions/edits from a stale local list.
         try {
-          await onUpdateFirestore();
+          if (effectiveDocId != null && effectiveDocId.isNotEmpty) {
+            final usersRef = FirebaseFirestore.instance
+                .collection('customer_target')
+                .doc(monthYear)
+                .collection('users');
+
+            var targetDocRef = usersRef.doc(effectiveDocId);
+            final directSnap = await targetDocRef.get();
+            if (!directSnap.exists || directSnap.data()?['customers'] == null) {
+              final querySnap = await usersRef.get();
+              for (final d in querySnap.docs) {
+                if (d.id.toLowerCase() == effectiveDocId.toLowerCase()) {
+                  targetDocRef = usersRef.doc(d.id);
+                  break;
+                }
+              }
+            }
+
+            final targetName =
+                (customer['name'] ?? '').toString().trim().toLowerCase();
+            final targetContact1Norm = _normalizePhone(
+                customer['contact1'] ?? customer['contact'] ?? customer['phone']);
+            final targetContact2Norm = _normalizePhone(customer['contact2']);
+
+            await FirebaseFirestore.instance.runTransaction((transaction) async {
+              final snapshot = await transaction.get(targetDocRef);
+              if (snapshot.exists && snapshot.data()?['customers'] is List) {
+                final List<dynamic> serverCustomers =
+                    List<dynamic>.from(snapshot.data()!['customers']);
+                bool updated = false;
+                for (var c in serverCustomers) {
+                  if (c is Map &&
+                      _matchesCustomer(
+                          c, targetName, targetContact1Norm, targetContact2Norm)) {
+                    c['pendingDeletion'] = true;
+                    updated = true;
+                  }
+                }
+                if (updated) {
+                  transaction.update(targetDocRef, {
+                    'customers': serverCustomers,
+                    'updated': FieldValue.serverTimestamp(),
+                  });
+                }
+              }
+            });
+          } else {
+            await onUpdateFirestore();
+          }
         } catch (e) {
-          debugPrint('Warning: onUpdateFirestore failed after deletion request creation: $e');
+          debugPrint('Warning: Firestore update failed after deletion request creation: $e');
         }
 
         // Close loading dialog

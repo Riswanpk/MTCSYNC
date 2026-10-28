@@ -271,7 +271,7 @@ class SyncHeadEditingApprovalService {
 
   static bool _matchesCustomer(Map c, String targetName, String targetContact1Norm, String targetContact2Norm) {
     final cName = (c['name'] ?? '').toString().trim().toLowerCase();
-    final c1Norm = _normalizePhone(c['contact1'] ?? c['contact']);
+    final c1Norm = _normalizePhone(c['contact1'] ?? c['contact'] ?? c['phone']);
     final c2Norm = _normalizePhone(c['contact2']);
 
     final hasTargetPhone = targetContact1Norm.isNotEmpty || targetContact2Norm.isNotEmpty;
@@ -296,6 +296,50 @@ class SyncHeadEditingApprovalService {
     }
   }
 
+  static Future<List<DocumentReference<Map<String, dynamic>>>> _resolveTargetUserDocs({
+    required String monthYear,
+    required String userDocId,
+    required String targetName,
+    required String targetContact1Norm,
+    required String targetContact2Norm,
+  }) async {
+    final now = DateTime.now();
+    final currentMonthYear =
+        "${CustomerListTargetService.monthName(now.month)} ${now.year}";
+    final monthsToCheck = <String>{monthYear.trim(), currentMonthYear};
+
+    final Map<String, DocumentReference<Map<String, dynamic>>> matchedRefs = {};
+
+    for (final month in monthsToCheck) {
+      if (month.isEmpty) continue;
+      final usersRef = FirebaseFirestore.instance
+          .collection('customer_target')
+          .doc(month)
+          .collection('users');
+
+      final directRef = usersRef.doc(userDocId);
+      final directSnap = await directRef.get();
+      if (directSnap.exists) {
+        matchedRefs[directRef.path] = directRef;
+      }
+
+      final querySnap = await usersRef.get();
+      for (final d in querySnap.docs) {
+        final list = d.data()['customers'];
+        final hasCustomer = list is List &&
+            list.any((c) =>
+                c is Map &&
+                _matchesCustomer(
+                    c, targetName, targetContact1Norm, targetContact2Norm));
+        if (d.id.toLowerCase() == userDocId.toLowerCase() || hasCustomer) {
+          matchedRefs[d.reference.path] = d.reference;
+        }
+      }
+    }
+
+    return matchedRefs.values.toList();
+  }
+
   /// Approves the customer edit request and updates customer_target in Firestore.
   static Future<void> approveEditing({
     required String reqId,
@@ -312,73 +356,55 @@ class SyncHeadEditingApprovalService {
       throw Exception('Invalid edit request payload format');
     }
 
-    final usersRef = FirebaseFirestore.instance
-        .collection('customer_target')
-        .doc(monthYear)
-        .collection('users');
-
     final targetName = (customerData['name'] ?? '').toString().trim().toLowerCase();
-    final targetContact1Norm = _normalizePhone(customerData['contact1'] ?? customerData['contact']);
+    final targetContact1Norm = _normalizePhone(
+        customerData['contact1'] ?? customerData['contact'] ?? customerData['phone']);
     final targetContact2Norm = _normalizePhone(customerData['contact2']);
 
-    var userDocRef = usersRef.doc(userDocId);
-    var docSnap = await userDocRef.get();
-    bool customerFoundInTargetDoc = false;
-
-    if (docSnap.exists && docSnap.data()?['customers'] is List) {
-      final list = docSnap.data()!['customers'] as List;
-      customerFoundInTargetDoc = list.any((c) => c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm));
-    }
-
-    // If not found in original userDoc, search case-insensitively or across any user in this month
-    if (!customerFoundInTargetDoc) {
-      final querySnap = await usersRef.get();
-      // First check case-insensitive match on userDocId
-      for (final d in querySnap.docs) {
-        if (d.id.toLowerCase() == userDocId.toLowerCase()) {
-          userDocRef = usersRef.doc(d.id);
-          docSnap = d;
-          break;
-        }
-      }
-      // If still not found, search other user documents (e.g. if customer was transferred)
-      if (docSnap.data()?['customers'] is! List ||
-          !(docSnap.data()!['customers'] as List).any((c) => c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm))) {
-        for (final d in querySnap.docs) {
-          final list = d.data()['customers'];
-          if (list is List && list.any((c) => c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm))) {
-            userDocRef = usersRef.doc(d.id);
-            docSnap = d;
-            break;
-          }
-        }
-      }
-    }
+    final targetDocRefs = await _resolveTargetUserDocs(
+      monthYear: monthYear,
+      userDocId: userDocId,
+      targetName: targetName,
+      targetContact1Norm: targetContact1Norm,
+      targetContact2Norm: targetContact2Norm,
+    );
 
     await FirebaseFirestore.instance.runTransaction((transaction) async {
-      final snapshot = await transaction.get(userDocRef);
-      if (snapshot.exists && snapshot.data() != null) {
-        final docData = snapshot.data()!;
-        final List<dynamic> customers = List<dynamic>.from(docData['customers'] ?? []);
+      final snapshots = <DocumentReference<Map<String, dynamic>>,
+          DocumentSnapshot<Map<String, dynamic>>>{};
+      for (final ref in targetDocRefs) {
+        snapshots[ref] = await transaction.get(ref);
+      }
 
-        for (var c in customers) {
-          if (c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm)) {
-            c['name'] = updatedCustomerData['name'] ?? c['name'];
-            c['address'] = updatedCustomerData['address'] ?? c['address'];
-            c['contact1'] = updatedCustomerData['contact1'] ?? c['contact1'];
-            c['contact2'] = updatedCustomerData['contact2'] ?? c['contact2'];
-            c['contact'] = updatedCustomerData['contact'] ?? c['contact'];
-            c['pendingEditing'] = false;
-            c['editApproved'] = true;
-            c['isEdited'] = true;
-            break;
+      for (final entry in snapshots.entries) {
+        final ref = entry.key;
+        final snapshot = entry.value;
+        if (snapshot.exists && snapshot.data() != null) {
+          final docData = snapshot.data()!;
+          final List<dynamic> customers = List<dynamic>.from(docData['customers'] ?? []);
+
+          bool modified = false;
+          for (var c in customers) {
+            if (c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm)) {
+              c['name'] = updatedCustomerData['name'] ?? c['name'];
+              c['address'] = updatedCustomerData['address'] ?? c['address'];
+              c['contact1'] = updatedCustomerData['contact1'] ?? c['contact1'];
+              c['contact2'] = updatedCustomerData['contact2'] ?? c['contact2'];
+              c['contact'] = updatedCustomerData['contact'] ?? c['contact'];
+              c['pendingEditing'] = false;
+              c['editApproved'] = true;
+              c['isEdited'] = true;
+              modified = true;
+            }
+          }
+
+          if (modified) {
+            transaction.update(ref, {
+              'customers': customers,
+              'updated': FieldValue.serverTimestamp(),
+            });
           }
         }
-
-        transaction.update(userDocRef, {
-          'customers': customers,
-          'updated': FieldValue.serverTimestamp(),
-        });
       }
 
       final reqRef = FirebaseFirestore.instance
@@ -413,66 +439,50 @@ class SyncHeadEditingApprovalService {
     final customerData = data['customerData'] as Map<String, dynamic>?;
 
     if (monthYear != null && userDocId != null && customerData != null) {
-      final usersRef = FirebaseFirestore.instance
-          .collection('customer_target')
-          .doc(monthYear)
-          .collection('users');
-
       final targetName = (customerData['name'] ?? '').toString().trim().toLowerCase();
-      final targetContact1Norm = _normalizePhone(customerData['contact1'] ?? customerData['contact']);
+      final targetContact1Norm = _normalizePhone(
+          customerData['contact1'] ?? customerData['contact'] ?? customerData['phone']);
       final targetContact2Norm = _normalizePhone(customerData['contact2']);
 
-      var userDocRef = usersRef.doc(userDocId);
-      var docSnap = await userDocRef.get();
-      bool customerFoundInTargetDoc = false;
-
-      if (docSnap.exists && docSnap.data()?['customers'] is List) {
-        final list = docSnap.data()!['customers'] as List;
-        customerFoundInTargetDoc = list.any((c) => c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm));
-      }
-
-      // If not found in original userDoc, search case-insensitively or across any user in this month
-      if (!customerFoundInTargetDoc) {
-        final querySnap = await usersRef.get();
-        for (final d in querySnap.docs) {
-          if (d.id.toLowerCase() == userDocId.toLowerCase()) {
-            userDocRef = usersRef.doc(d.id);
-            docSnap = d;
-            break;
-          }
-        }
-        if (docSnap.data()?['customers'] is! List ||
-            !(docSnap.data()!['customers'] as List).any((c) => c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm))) {
-          for (final d in querySnap.docs) {
-            final list = d.data()['customers'];
-            if (list is List && list.any((c) => c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm))) {
-              userDocRef = usersRef.doc(d.id);
-              docSnap = d;
-              break;
-            }
-          }
-        }
-      }
+      final targetDocRefs = await _resolveTargetUserDocs(
+        monthYear: monthYear,
+        userDocId: userDocId,
+        targetName: targetName,
+        targetContact1Norm: targetContact1Norm,
+        targetContact2Norm: targetContact2Norm,
+      );
 
       await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final snapshot = await transaction.get(userDocRef);
-        if (snapshot.exists && snapshot.data() != null) {
-          final docData = snapshot.data()!;
-          final List<dynamic> customers = List<dynamic>.from(docData['customers'] ?? []);
+        final snapshots = <DocumentReference<Map<String, dynamic>>,
+            DocumentSnapshot<Map<String, dynamic>>>{};
+        for (final ref in targetDocRefs) {
+          snapshots[ref] = await transaction.get(ref);
+        }
 
-          for (var c in customers) {
-            if (c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm)) {
-              c['pendingEditing'] = false;
-              c['editApproved'] = false;
-              c['isEdited'] = false;
-              break;
+        for (final entry in snapshots.entries) {
+          final ref = entry.key;
+          final snapshot = entry.value;
+          if (snapshot.exists && snapshot.data() != null) {
+            final docData = snapshot.data()!;
+            final List<dynamic> customers = List<dynamic>.from(docData['customers'] ?? []);
+
+            bool modified = false;
+            for (var c in customers) {
+              if (c is Map && _matchesCustomer(c, targetName, targetContact1Norm, targetContact2Norm)) {
+                c['pendingEditing'] = false;
+                c['editApproved'] = false;
+                c['isEdited'] = false;
+                modified = true;
+              }
+            }
+
+            if (modified) {
+              transaction.update(ref, {
+                'customers': customers,
+                'updated': FieldValue.serverTimestamp(),
+              });
             }
           }
-
-          transaction.update(userDocRef, {
-            'customers': customers,
-            'updated': FieldValue.serverTimestamp(),
-          });
         }
 
         final reqRef = FirebaseFirestore.instance

@@ -116,18 +116,79 @@ class _CustomerCallingRemarksPendingPageState
     }
   }
 
+  static String _normalizePhone(dynamic phone) {
+    if (phone == null) return '';
+    final cleaned = phone.toString().replaceAll(RegExp(r'\D'), '');
+    if (cleaned.length > 10) {
+      return cleaned.substring(cleaned.length - 10);
+    }
+    return cleaned;
+  }
+
   Future<void> _updateFirestore() async {
     if (_docId == null) return;
     try {
       final now = DateTime.now();
       final monthYear = "${_monthName(now.month)} ${now.year}";
 
-      await FirebaseFirestore.instance
+      final docRef = FirebaseFirestore.instance
           .collection('customer_target')
           .doc(monthYear)
           .collection('users')
-          .doc(_docId)
-          .update({'customers': _allCustomers});
+          .doc(_docId);
+
+      final localSnapshot = List<Map<String, dynamic>>.from(_allCustomers);
+
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final snap = await transaction.get(docRef);
+        if (!snap.exists || snap.data()?['customers'] is! List) return;
+
+        final List<Map<String, dynamic>> serverCustomers =
+            (snap.data()!['customers'] as List)
+                .map((e) => Map<String, dynamic>.from(e as Map))
+                .toList();
+
+        bool changed = false;
+        for (final sc in serverCustomers) {
+          final scName = (sc['name'] ?? '').toString().trim().toLowerCase();
+          final sc1 = _normalizePhone(sc['contact1'] ?? sc['contact'] ?? sc['phone']);
+          final sc2 = _normalizePhone(sc['contact2']);
+
+          final match = localSnapshot.firstWhere(
+            (lc) {
+              final lcName = (lc['name'] ?? '').toString().trim().toLowerCase();
+              final lc1 = _normalizePhone(lc['contact1'] ?? lc['contact'] ?? lc['phone']);
+              final lc2 = _normalizePhone(lc['contact2']);
+              final phoneMatch = (sc1.isNotEmpty && (sc1 == lc1 || sc1 == lc2)) ||
+                  (sc2.isNotEmpty && (sc2 == lc1 || sc2 == lc2));
+              final nameMatch = scName.isNotEmpty && scName == lcName;
+              return (sc1.isNotEmpty || sc2.isNotEmpty)
+                  ? (phoneMatch || nameMatch)
+                  : nameMatch;
+            },
+            orElse: () => {},
+          );
+
+          if (match.isNotEmpty) {
+            final localRemarks = (match['remarks'] ?? '').toString().trim();
+            if (localRemarks.isNotEmpty && sc['remarks'] != match['remarks']) {
+              sc['remarks'] = match['remarks'];
+              changed = true;
+            }
+            if (match['leadAdded'] == true && sc['leadAdded'] != true) {
+              sc['leadAdded'] = true;
+              changed = true;
+            }
+          }
+        }
+
+        if (changed) {
+          transaction.update(docRef, {
+            'customers': serverCustomers,
+            'updated': FieldValue.serverTimestamp(),
+          });
+        }
+      });
     } catch (e) {
       debugPrint('Failed to update Firestore from pending remarks page: $e');
     }
