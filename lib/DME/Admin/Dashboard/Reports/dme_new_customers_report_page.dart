@@ -72,6 +72,11 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
   bool _isExporting = false;
   String _searchQuery = '';
 
+  // View mode: 'detailed' | 'summary' | 'branchwise'
+  String _viewMode = 'detailed';
+  // Summary/Branchwise grouping mode: 'category' or 'type'
+  String _summaryGroupBy = 'category'; // 'category' | 'type'
+
   List<DmeNewCustomerReportItem> _reportItems = [];
 
   @override
@@ -380,6 +385,7 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
     setState(() => _isExporting = true);
 
     try {
+      final filteredList = _getFilteredItems();
       final xlsio.Workbook workbook = xlsio.Workbook();
       final xlsio.Worksheet sheet = workbook.worksheets[0];
       sheet.name = 'New Customers';
@@ -392,9 +398,22 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
           ? '${DateFormat('dd MMM yyyy').format(_startDate!)} to ${DateFormat('dd MMM yyyy').format(_endDate!)}'
           : 'All Time';
 
+      final String groupLabel = _summaryGroupBy == 'category' ? 'Category' : 'Customer Type';
+      final String sheetSubtitle = _viewMode == 'detailed'
+          ? 'Date Interval: $dateIntervalTitle  |  Total New Customers: ${_reportItems.length}'
+          : _viewMode == 'summary'
+              ? 'Date Interval: $dateIntervalTitle  |  Summary by $groupLabel  |  Total New Customers: ${_reportItems.length}'
+              : 'Date Interval: $dateIntervalTitle  |  Branchwise Distribution by $groupLabel  |  Total New Customers: ${_reportItems.length}';
+
+      final String sheetTitle = _viewMode == 'detailed'
+          ? 'NEW CUSTOMERS REPORT - $branchTitle'
+          : _viewMode == 'summary'
+              ? 'NEW CUSTOMERS SUMMARY REPORT - $branchTitle'
+              : 'NEW CUSTOMERS BRANCHWISE REPORT - $branchTitle';
+
       sheet.getRangeByName('A1:H1').merge();
       final xlsio.Range titleRange = sheet.getRangeByName('A1');
-      titleRange.setText('NEW CUSTOMERS REPORT - $branchTitle');
+      titleRange.setText(sheetTitle);
       titleRange.cellStyle.fontSize = 14;
       titleRange.cellStyle.bold = true;
       titleRange.cellStyle.fontColor = '#FFFFFF';
@@ -405,7 +424,7 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
 
       sheet.getRangeByName('A2:H2').merge();
       final xlsio.Range subTitleRange = sheet.getRangeByName('A2');
-      subTitleRange.setText('Date Interval: $dateIntervalTitle  |  Total New Customers: ${_reportItems.length}');
+      subTitleRange.setText(sheetSubtitle);
       subTitleRange.cellStyle.fontSize = 11;
       subTitleRange.cellStyle.bold = true;
       subTitleRange.cellStyle.fontColor = '#333333';
@@ -414,97 +433,294 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
       subTitleRange.cellStyle.vAlign = xlsio.VAlignType.center;
       sheet.setRowHeightInPixels(2, 24);
 
-      // 2. Table Column Headers
-      final List<String> headers = [
-        'SL NO',
-        'CUSTOMER NAME',
-        'PHONE NUMBER',
-        'PRIMARY BRANCH',
-        'ADDRESS',
-        'CATEGORY',
-        'CUSTOMER TYPE',
-        'PURCHASE DATE(S)',
-      ];
+      if (_viewMode == 'branchwise') {
+        // BRANCHWISE EXPORT
+        final branchwiseData = _calculateBranchwiseDistribution();
+        final totalCount = _getFilteredItems().length;
+        int currentRow = 4;
 
-      for (int i = 0; i < headers.length; i++) {
-        final cell = sheet.getRangeByIndex(4, i + 1);
-        cell.setText(headers[i]);
-        cell.cellStyle.bold = true;
-        cell.cellStyle.fontSize = 11;
-        cell.cellStyle.fontColor = '#FFFFFF';
-        cell.cellStyle.backColor = '#005BAC';
-        cell.cellStyle.hAlign = xlsio.HAlignType.center;
-        cell.cellStyle.vAlign = xlsio.VAlignType.center;
-      }
-      sheet.setRowHeightInPixels(4, 26);
+        for (final entry in branchwiseData.entries) {
+          final groupName = entry.key;
+          final branches = entry.value;
+          final groupTotal = branches.fold<int>(0, (acc, b) => acc + b.value);
+          final groupPct = totalCount > 0 ? (groupTotal / totalCount) * 100 : 0.0;
 
-      // 3. Populate Rows
-      final filteredList = _getFilteredItems();
-      for (int r = 0; r < filteredList.length; r++) {
-        final item = filteredList[r];
-        final int rowIndex = 5 + r;
+          // Category/Type Section Header
+          sheet.getRangeByIndex(currentRow, 1, currentRow, 4).merge();
+          final groupHeaderCell = sheet.getRangeByIndex(currentRow, 1);
+          groupHeaderCell.setText('$groupLabel: $groupName  (Total: $groupTotal | ${groupPct.toStringAsFixed(1)}%)');
+          groupHeaderCell.cellStyle.bold = true;
+          groupHeaderCell.cellStyle.fontSize = 11;
+          groupHeaderCell.cellStyle.fontColor = '#FFFFFF';
+          groupHeaderCell.cellStyle.backColor = '#005BAC';
+          groupHeaderCell.cellStyle.vAlign = xlsio.VAlignType.center;
+          sheet.setRowHeightInPixels(currentRow, 26);
+          currentRow++;
 
-        final isEven = r % 2 == 0;
-        final String rowBgColor = isEven ? '#FFFFFF' : '#F9FBFD';
+          // Table Columns Header
+          final List<String> bHeaders = ['SL NO', 'BRANCH NAME', 'CUSTOMER COUNT', '% OF GROUP'];
+          for (int c = 0; c < bHeaders.length; c++) {
+            final cell = sheet.getRangeByIndex(currentRow, c + 1);
+            cell.setText(bHeaders[c]);
+            cell.cellStyle.bold = true;
+            cell.cellStyle.fontSize = 10;
+            cell.cellStyle.fontColor = '#005BAC';
+            cell.cellStyle.backColor = '#E6F0FA';
+            cell.cellStyle.hAlign = xlsio.HAlignType.center;
+            cell.cellStyle.vAlign = xlsio.VAlignType.center;
+            cell.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
+            cell.cellStyle.borders.all.color = '#B9D5F2';
+          }
+          sheet.setRowHeightInPixels(currentRow, 22);
+          currentRow++;
 
-        // SL NO
-        final slCell = sheet.getRangeByIndex(rowIndex, 1);
-        slCell.setNumber((r + 1).toDouble());
-        slCell.cellStyle.hAlign = xlsio.HAlignType.center;
+          // Branch rows
+          for (int bIdx = 0; bIdx < branches.length; bIdx++) {
+            final bEntry = branches[bIdx];
+            final bCount = bEntry.value;
+            final bPct = groupTotal > 0 ? (bCount / groupTotal) * 100 : 0.0;
+            final isEven = bIdx % 2 == 0;
+            final String rowBg = isEven ? '#FFFFFF' : '#F9FBFD';
 
-        // Name
-        final nameCell = sheet.getRangeByIndex(rowIndex, 2);
-        nameCell.setText(item.name);
-        nameCell.cellStyle.bold = true;
+            // SL NO
+            final slCell = sheet.getRangeByIndex(currentRow, 1);
+            slCell.setNumber((bIdx + 1).toDouble());
+            slCell.cellStyle.hAlign = xlsio.HAlignType.center;
 
-        // Phone
-        final phoneCell = sheet.getRangeByIndex(rowIndex, 3);
-        phoneCell.setText(item.phone);
-        phoneCell.cellStyle.hAlign = xlsio.HAlignType.center;
+            // Branch Name
+            final branchNameCell = sheet.getRangeByIndex(currentRow, 2);
+            branchNameCell.setText(bEntry.key);
 
-        // Primary Branch
-        final branchCell = sheet.getRangeByIndex(rowIndex, 4);
-        branchCell.setText(item.branchName);
-        branchCell.cellStyle.hAlign = xlsio.HAlignType.center;
+            // Count
+            final countCell = sheet.getRangeByIndex(currentRow, 3);
+            countCell.setNumber(bCount.toDouble());
+            countCell.cellStyle.hAlign = xlsio.HAlignType.center;
 
-        // Address
-        final addrCell = sheet.getRangeByIndex(rowIndex, 5);
-        addrCell.setText(item.address.isNotEmpty ? item.address : '-');
+            // % of group
+            final pctCell = sheet.getRangeByIndex(currentRow, 4);
+            pctCell.setText('${bPct.toStringAsFixed(1)}%');
+            pctCell.cellStyle.hAlign = xlsio.HAlignType.center;
 
-        // Category
-        final catCell = sheet.getRangeByIndex(rowIndex, 6);
-        catCell.setText(item.categoryName);
-        catCell.cellStyle.hAlign = xlsio.HAlignType.center;
+            for (int col = 1; col <= 4; col++) {
+              final cell = sheet.getRangeByIndex(currentRow, col);
+              cell.cellStyle.backColor = rowBg;
+              cell.cellStyle.vAlign = xlsio.VAlignType.center;
+              cell.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
+              cell.cellStyle.borders.all.color = '#DDDDDD';
+            }
+            sheet.setRowHeightInPixels(currentRow, 20);
+            currentRow++;
+          }
 
-        // Customer Type
-        final typeCell = sheet.getRangeByIndex(rowIndex, 7);
-        typeCell.setText(item.customerTypeName);
-        typeCell.cellStyle.hAlign = xlsio.HAlignType.center;
+          // Group Subtotal Row
+          sheet.getRangeByIndex(currentRow, 1).setText('');
+          final subtotalLabel = sheet.getRangeByIndex(currentRow, 2);
+          subtotalLabel.setText('Subtotal - $groupName');
+          subtotalLabel.cellStyle.bold = true;
 
-        // Purchase Date(s)
-        final dateCell = sheet.getRangeByIndex(rowIndex, 8);
-        dateCell.setText(item.purchaseDatesFormatted);
-        dateCell.cellStyle.hAlign = xlsio.HAlignType.center;
+          final subtotalCount = sheet.getRangeByIndex(currentRow, 3);
+          subtotalCount.setNumber(groupTotal.toDouble());
+          subtotalCount.cellStyle.bold = true;
+          subtotalCount.cellStyle.hAlign = xlsio.HAlignType.center;
 
-        for (int c = 1; c <= 8; c++) {
-          final cell = sheet.getRangeByIndex(rowIndex, c);
-          cell.cellStyle.backColor = rowBgColor;
+          final subtotalPct = sheet.getRangeByIndex(currentRow, 4);
+          subtotalPct.setText('100.0%');
+          subtotalPct.cellStyle.bold = true;
+          subtotalPct.cellStyle.hAlign = xlsio.HAlignType.center;
+
+          for (int col = 1; col <= 4; col++) {
+            final cell = sheet.getRangeByIndex(currentRow, col);
+            cell.cellStyle.backColor = '#F2F2F2';
+            cell.cellStyle.vAlign = xlsio.VAlignType.center;
+            cell.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
+            cell.cellStyle.borders.all.color = '#CCCCCC';
+          }
+          sheet.setRowHeightInPixels(currentRow, 22);
+          currentRow += 2; // Blank row between tables
+        }
+
+        sheet.setColumnWidthInPixels(1, 60);
+        sheet.setColumnWidthInPixels(2, 220);
+        sheet.setColumnWidthInPixels(3, 140);
+        sheet.setColumnWidthInPixels(4, 120);
+      } else if (_viewMode == 'summary') {
+        // SUMMARY EXPORT
+        final groupTitle = _summaryGroupBy == 'category' ? 'CATEGORY' : 'CUSTOMER TYPE';
+        final List<String> summaryHeaders = ['SL NO', groupTitle, 'CUSTOMER COUNT', 'PERCENTAGE'];
+
+        for (int i = 0; i < summaryHeaders.length; i++) {
+          final cell = sheet.getRangeByIndex(4, i + 1);
+          cell.setText(summaryHeaders[i]);
+          cell.cellStyle.bold = true;
+          cell.cellStyle.fontSize = 11;
+          cell.cellStyle.fontColor = '#FFFFFF';
+          cell.cellStyle.backColor = '#005BAC';
+          cell.cellStyle.hAlign = xlsio.HAlignType.center;
+          cell.cellStyle.vAlign = xlsio.VAlignType.center;
+        }
+        sheet.setRowHeightInPixels(4, 26);
+
+        final summaryData = _calculateSummaryDistribution();
+        final totalCount = _getFilteredItems().length;
+
+        for (int r = 0; r < summaryData.length; r++) {
+          final entry = summaryData[r];
+          final int rowIndex = 5 + r;
+          final pct = totalCount > 0 ? (entry.value / totalCount) * 100 : 0.0;
+          final isEven = r % 2 == 0;
+          final String rowBgColor = isEven ? '#FFFFFF' : '#F9FBFD';
+
+          final slCell = sheet.getRangeByIndex(rowIndex, 1);
+          slCell.setNumber((r + 1).toDouble());
+          slCell.cellStyle.hAlign = xlsio.HAlignType.center;
+
+          final nameCell = sheet.getRangeByIndex(rowIndex, 2);
+          nameCell.setText(entry.key);
+          nameCell.cellStyle.bold = true;
+
+          final countCell = sheet.getRangeByIndex(rowIndex, 3);
+          countCell.setNumber(entry.value.toDouble());
+          countCell.cellStyle.hAlign = xlsio.HAlignType.center;
+
+          final pctCell = sheet.getRangeByIndex(rowIndex, 4);
+          pctCell.setText('${pct.toStringAsFixed(1)}%');
+          pctCell.cellStyle.hAlign = xlsio.HAlignType.center;
+
+          for (int c = 1; c <= 4; c++) {
+            final cell = sheet.getRangeByIndex(rowIndex, c);
+            cell.cellStyle.backColor = rowBgColor;
+            cell.cellStyle.vAlign = xlsio.VAlignType.center;
+            cell.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
+            cell.cellStyle.borders.all.color = '#DDDDDD';
+          }
+          sheet.setRowHeightInPixels(rowIndex, 22);
+        }
+
+        // Total Row
+        final int totalRowIndex = 5 + summaryData.length;
+        sheet.getRangeByIndex(totalRowIndex, 1).setText('');
+        final totalLabel = sheet.getRangeByIndex(totalRowIndex, 2);
+        totalLabel.setText('TOTAL');
+        totalLabel.cellStyle.bold = true;
+        totalLabel.cellStyle.hAlign = xlsio.HAlignType.center;
+
+        final totalCountCell = sheet.getRangeByIndex(totalRowIndex, 3);
+        totalCountCell.setNumber(totalCount.toDouble());
+        totalCountCell.cellStyle.bold = true;
+        totalCountCell.cellStyle.hAlign = xlsio.HAlignType.center;
+
+        final totalPctCell = sheet.getRangeByIndex(totalRowIndex, 4);
+        totalPctCell.setText('100.0%');
+        totalPctCell.cellStyle.bold = true;
+        totalPctCell.cellStyle.hAlign = xlsio.HAlignType.center;
+
+        for (int c = 1; c <= 4; c++) {
+          final cell = sheet.getRangeByIndex(totalRowIndex, c);
+          cell.cellStyle.backColor = '#EAEAEA';
           cell.cellStyle.vAlign = xlsio.VAlignType.center;
           cell.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
-          cell.cellStyle.borders.all.color = '#DDDDDD';
+          cell.cellStyle.borders.all.color = '#CCCCCC';
         }
-        sheet.setRowHeightInPixels(rowIndex, 22);
-      }
+        sheet.setRowHeightInPixels(totalRowIndex, 24);
 
-      // Column Widths
-      sheet.setColumnWidthInPixels(1, 60);
-      sheet.setColumnWidthInPixels(2, 200);
-      sheet.setColumnWidthInPixels(3, 130);
-      sheet.setColumnWidthInPixels(4, 150);
-      sheet.setColumnWidthInPixels(5, 200);
-      sheet.setColumnWidthInPixels(6, 140);
-      sheet.setColumnWidthInPixels(7, 140);
-      sheet.setColumnWidthInPixels(8, 220);
+        sheet.setColumnWidthInPixels(1, 60);
+        sheet.setColumnWidthInPixels(2, 220);
+        sheet.setColumnWidthInPixels(3, 140);
+        sheet.setColumnWidthInPixels(4, 120);
+      } else {
+        // DETAILED EXPORT
+        // 2. Table Column Headers
+        final List<String> headers = [
+          'SL NO',
+          'CUSTOMER NAME',
+          'PHONE NUMBER',
+          'PRIMARY BRANCH',
+          'ADDRESS',
+          'CATEGORY',
+          'CUSTOMER TYPE',
+          'PURCHASE DATE(S)',
+        ];
+
+        for (int i = 0; i < headers.length; i++) {
+          final cell = sheet.getRangeByIndex(4, i + 1);
+          cell.setText(headers[i]);
+          cell.cellStyle.bold = true;
+          cell.cellStyle.fontSize = 11;
+          cell.cellStyle.fontColor = '#FFFFFF';
+          cell.cellStyle.backColor = '#005BAC';
+          cell.cellStyle.hAlign = xlsio.HAlignType.center;
+          cell.cellStyle.vAlign = xlsio.VAlignType.center;
+        }
+        sheet.setRowHeightInPixels(4, 26);
+
+        // 3. Populate Rows
+        final filteredList = _getFilteredItems();
+        for (int r = 0; r < filteredList.length; r++) {
+          final item = filteredList[r];
+          final int rowIndex = 5 + r;
+
+          final isEven = r % 2 == 0;
+          final String rowBgColor = isEven ? '#FFFFFF' : '#F9FBFD';
+
+          // SL NO
+          final slCell = sheet.getRangeByIndex(rowIndex, 1);
+          slCell.setNumber((r + 1).toDouble());
+          slCell.cellStyle.hAlign = xlsio.HAlignType.center;
+
+          // Name
+          final nameCell = sheet.getRangeByIndex(rowIndex, 2);
+          nameCell.setText(item.name);
+          nameCell.cellStyle.bold = true;
+
+          // Phone
+          final phoneCell = sheet.getRangeByIndex(rowIndex, 3);
+          phoneCell.setText(item.phone);
+          phoneCell.cellStyle.hAlign = xlsio.HAlignType.center;
+
+          // Primary Branch
+          final branchCell = sheet.getRangeByIndex(rowIndex, 4);
+          branchCell.setText(item.branchName);
+          branchCell.cellStyle.hAlign = xlsio.HAlignType.center;
+
+          // Address
+          final addrCell = sheet.getRangeByIndex(rowIndex, 5);
+          addrCell.setText(item.address.isNotEmpty ? item.address : '-');
+
+          // Category
+          final catCell = sheet.getRangeByIndex(rowIndex, 6);
+          catCell.setText(item.categoryName);
+          catCell.cellStyle.hAlign = xlsio.HAlignType.center;
+
+          // Customer Type
+          final typeCell = sheet.getRangeByIndex(rowIndex, 7);
+          typeCell.setText(item.customerTypeName);
+          typeCell.cellStyle.hAlign = xlsio.HAlignType.center;
+
+          // Purchase Date(s)
+          final dateCell = sheet.getRangeByIndex(rowIndex, 8);
+          dateCell.setText(item.purchaseDatesFormatted);
+          dateCell.cellStyle.hAlign = xlsio.HAlignType.center;
+
+          for (int c = 1; c <= 8; c++) {
+            final cell = sheet.getRangeByIndex(rowIndex, c);
+            cell.cellStyle.backColor = rowBgColor;
+            cell.cellStyle.vAlign = xlsio.VAlignType.center;
+            cell.cellStyle.borders.all.lineStyle = xlsio.LineStyle.thin;
+            cell.cellStyle.borders.all.color = '#DDDDDD';
+          }
+          sheet.setRowHeightInPixels(rowIndex, 22);
+        }
+
+        // Column Widths
+        sheet.setColumnWidthInPixels(1, 60);
+        sheet.setColumnWidthInPixels(2, 200);
+        sheet.setColumnWidthInPixels(3, 130);
+        sheet.setColumnWidthInPixels(4, 150);
+        sheet.setColumnWidthInPixels(5, 200);
+        sheet.setColumnWidthInPixels(6, 140);
+        sheet.setColumnWidthInPixels(7, 140);
+        sheet.setColumnWidthInPixels(8, 220);
+      }
 
       // 4. Save and Directly Share Excel File
       final List<int> bytes = workbook.saveAsStream();
@@ -535,6 +751,70 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
         );
       }
     }
+  }
+
+  List<MapEntry<String, int>> _calculateSummaryDistribution() {
+    final filtered = _getFilteredItems();
+    final Map<String, int> counts = {};
+
+    for (final item in filtered) {
+      final key = _summaryGroupBy == 'category'
+          ? (item.categoryName.isNotEmpty ? item.categoryName : 'N/A')
+          : (item.customerTypeName.isNotEmpty ? item.customerTypeName : 'Regular');
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+
+    final sortedEntries = counts.entries.toList()
+      ..sort((a, b) {
+        final cmp = b.value.compareTo(a.value);
+        if (cmp != 0) return cmp;
+        return a.key.compareTo(b.key);
+      });
+
+    return sortedEntries;
+  }
+
+  /// Groups items by primary grouping (_summaryGroupBy: category or customer type),
+  /// and within each group provides the branchwise breakdown sorted by customer count descending.
+  Map<String, List<MapEntry<String, int>>> _calculateBranchwiseDistribution() {
+    final filtered = _getFilteredItems();
+    final Map<String, Map<String, int>> groupToBranchCounts = {};
+
+    for (final item in filtered) {
+      final groupKey = _summaryGroupBy == 'category'
+          ? (item.categoryName.isNotEmpty ? item.categoryName : 'N/A')
+          : (item.customerTypeName.isNotEmpty ? item.customerTypeName : 'Regular');
+      final branchKey = item.branchName.isNotEmpty ? item.branchName : 'Unknown';
+
+      groupToBranchCounts.putIfAbsent(groupKey, () => {});
+      groupToBranchCounts[groupKey]![branchKey] =
+          (groupToBranchCounts[groupKey]![branchKey] ?? 0) + 1;
+    }
+
+    final Map<String, List<MapEntry<String, int>>> result = {};
+
+    // Sort group keys by total customer count in that group descending
+    final sortedGroupKeys = groupToBranchCounts.keys.toList()
+      ..sort((a, b) {
+        final totalA = groupToBranchCounts[a]!.values.fold<int>(0, (acc, c) => acc + c);
+        final totalB = groupToBranchCounts[b]!.values.fold<int>(0, (acc, c) => acc + c);
+        final cmp = totalB.compareTo(totalA);
+        if (cmp != 0) return cmp;
+        return a.compareTo(b);
+      });
+
+    for (final gk in sortedGroupKeys) {
+      final branchCounts = groupToBranchCounts[gk]!;
+      final sortedBranches = branchCounts.entries.toList()
+        ..sort((a, b) {
+          final cmp = b.value.compareTo(a.value);
+          if (cmp != 0) return cmp;
+          return a.key.compareTo(b.key);
+        });
+      result[gk] = sortedBranches;
+    }
+
+    return result;
   }
 
   List<DmeNewCustomerReportItem> _getFilteredItems() {
@@ -715,6 +995,76 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 10),
+
+                // View Mode (Detailed vs Summary vs Branchwise) & Grouping Toggle
+                Row(
+                  children: [
+                    // Segmented Mode Selector
+                    Container(
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.grey[850] : Colors.grey[200],
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      padding: const EdgeInsets.all(2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildModeTab(
+                            title: 'Detailed',
+                            icon: Icons.list_alt_rounded,
+                            isSelected: _viewMode == 'detailed',
+                            isDark: isDark,
+                            onTap: () => setState(() => _viewMode = 'detailed'),
+                          ),
+                          _buildModeTab(
+                            title: 'Summary',
+                            icon: Icons.pie_chart_outline_rounded,
+                            isSelected: _viewMode == 'summary',
+                            isDark: isDark,
+                            onTap: () => setState(() => _viewMode = 'summary'),
+                          ),
+                          _buildModeTab(
+                            title: 'Branchwise',
+                            icon: Icons.store_mall_directory_rounded,
+                            isSelected: _viewMode == 'branchwise',
+                            isDark: isDark,
+                            onTap: () => setState(() => _viewMode = 'branchwise'),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const Spacer(),
+
+                    // Category vs Type selector (Visible in summary or branchwise mode)
+                    if (_viewMode != 'detailed')
+                      Container(
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.grey[850] : Colors.grey[200],
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        padding: const EdgeInsets.all(2),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildGroupTab(
+                              title: 'Cat',
+                              isSelected: _summaryGroupBy == 'category',
+                              isDark: isDark,
+                              onTap: () => setState(() => _summaryGroupBy = 'category'),
+                            ),
+                            _buildGroupTab(
+                              title: 'Type',
+                              isSelected: _summaryGroupBy == 'type',
+                              isDark: isDark,
+                              onTap: () => setState(() => _summaryGroupBy = 'type'),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -799,7 +1149,11 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
                               ],
                             ),
                           )
-                    : ListView.separated(
+                    : _viewMode == 'branchwise'
+                        ? _buildBranchwiseView(filteredItems, isDark)
+                        : _viewMode == 'summary'
+                            ? _buildSummaryView(filteredItems, isDark)
+                            : ListView.separated(
                         padding: const EdgeInsets.all(12),
                         itemCount: filteredItems.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 8),
@@ -947,6 +1301,489 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
                         },
                       ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryView(List<DmeNewCustomerReportItem> filteredItems, bool isDark) {
+    final summaryData = _calculateSummaryDistribution();
+    final totalCount = filteredItems.length;
+    final isCategory = _summaryGroupBy == 'category';
+    final groupLabel = isCategory ? 'Category' : 'Customer Type';
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header Summary Card
+          Card(
+            elevation: 1.5,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Distribution by $groupLabel',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Total Distinct Groups: ${summaryData.length}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _primaryBlue.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          children: [
+                            const Text(
+                              'TOTAL',
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _primaryBlue),
+                            ),
+                            Text(
+                              '$totalCount',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: _primaryBlue,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Distribution breakdown list
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: summaryData.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (context, idx) {
+              final entry = summaryData[idx];
+              final count = entry.value;
+              final pct = totalCount > 0 ? (count / totalCount) : 0.0;
+              final pctFormatted = (pct * 100).toStringAsFixed(1);
+
+              return Card(
+                elevation: 1,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 12,
+                            backgroundColor: _primaryBlue.withValues(alpha: 0.12),
+                            foregroundColor: _primaryBlue,
+                            child: Text(
+                              '${idx + 1}',
+                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              entry.key,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: _primaryBlue.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '$count ($pctFormatted%)',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                color: _primaryBlue,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      // Progress Bar
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: pct,
+                          minHeight: 6,
+                          backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200],
+                          valueColor: const AlwaysStoppedAnimation<Color>(_primaryGreen),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModeTab({
+    required String title,
+    required IconData icon,
+    required bool isSelected,
+    required bool isDark,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(5),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected ? _primaryBlue : Colors.transparent,
+          borderRadius: BorderRadius.circular(5),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 12,
+              color: isSelected ? Colors.white : (isDark ? Colors.grey[400] : Colors.grey[700]),
+            ),
+            const SizedBox(width: 3),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? Colors.white : (isDark ? Colors.grey[300] : Colors.grey[800]),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGroupTab({
+    required String title,
+    required bool isSelected,
+    required bool isDark,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(5),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected ? _primaryBlue : Colors.transparent,
+          borderRadius: BorderRadius.circular(5),
+        ),
+        child: Text(
+          title,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            color: isSelected ? Colors.white : (isDark ? Colors.grey[300] : Colors.grey[800]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBranchwiseView(List<DmeNewCustomerReportItem> filteredItems, bool isDark) {
+    final branchwiseData = _calculateBranchwiseDistribution();
+    final totalCount = filteredItems.length;
+    final isCategory = _summaryGroupBy == 'category';
+    final groupLabel = isCategory ? 'Category' : 'Customer Type';
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header Summary Card
+          Card(
+            elevation: 1.5,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Branchwise by $groupLabel',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Total Distinct ${groupLabel}s: ${branchwiseData.length}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _primaryBlue.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'TOTAL',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _primaryBlue),
+                        ),
+                        Text(
+                          '$totalCount',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: _primaryBlue,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // For each category/type: render a separate table/card with branch distribution
+          ...branchwiseData.entries.map((entry) {
+            final groupName = entry.key;
+            final branches = entry.value;
+            final groupTotal = branches.fold<int>(0, (acc, b) => acc + b.value);
+            final groupPct = totalCount > 0 ? (groupTotal / totalCount) * 100 : 0.0;
+
+            return Card(
+              elevation: 1.5,
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Category Header bar
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: _primaryBlue.withValues(alpha: 0.08),
+                      border: Border(
+                        bottom: BorderSide(color: _primaryBlue.withValues(alpha: 0.2)),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Icon(
+                                isCategory ? Icons.category_rounded : Icons.badge_rounded,
+                                size: 16,
+                                color: _primaryBlue,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  groupName,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: _primaryBlue,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: _primaryBlue,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '$groupTotal (${groupPct.toStringAsFixed(1)}%)',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Table of Branches for this category/type
+                  Table(
+                    border: TableBorder(
+                      horizontalInside: BorderSide(
+                        color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
+                        width: 1,
+                      ),
+                    ),
+                    columnWidths: const {
+                      0: FlexColumnWidth(1),
+                      1: FlexColumnWidth(4),
+                      2: FlexColumnWidth(2),
+                      3: FlexColumnWidth(2),
+                    },
+                    defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                    children: [
+                      // Header Row
+                      TableRow(
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.grey[850] : Colors.grey[100],
+                        ),
+                        children: const [
+                          Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                            child: Text(
+                              '#',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                            child: Text(
+                              'Branch',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                            child: Text(
+                              'Count',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                            child: Text(
+                              'Share',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // Branch Data Rows
+                      ...branches.asMap().entries.map((bMapEntry) {
+                        final bIdx = bMapEntry.key;
+                        final bItem = bMapEntry.value;
+                        final bPct = groupTotal > 0 ? (bItem.value / groupTotal) * 100 : 0.0;
+
+                        return TableRow(
+                          decoration: BoxDecoration(
+                            color: bIdx % 2 == 1
+                                ? (isDark ? Colors.grey[900]!.withValues(alpha: 0.5) : Colors.grey[50])
+                                : null,
+                          ),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 8),
+                              child: Text(
+                                '${bIdx + 1}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 8),
+                              child: Text(
+                                bItem.key,
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 8),
+                              child: Text(
+                                '${bItem.value}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: _primaryBlue,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 8),
+                              child: Text(
+                                '${bPct.toStringAsFixed(1)}%',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark ? Colors.grey[300] : Colors.grey[700],
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ],
+                        );
+                      }),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
         ],
       ),
     );
