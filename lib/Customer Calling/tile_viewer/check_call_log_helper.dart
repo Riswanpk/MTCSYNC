@@ -3,20 +3,35 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:call_log/call_log.dart';
 import 'make_call.dart';
-import 'update_call_status_in_firestore.dart';
+
+final RegExp _nonDigitRegex = RegExp(r'\D');
+final RegExp _leadingZerosRegex = RegExp(r'^0+');
+
+String _cleanDigits(String? s) {
+  if (s == null || s.isEmpty) return '';
+  return s.replaceAll(_nonDigitRegex, '');
+}
+
+String _last10Digits(String? s) {
+  final clean = _cleanDigits(s);
+  if (clean.length >= 10) {
+    return clean.substring(clean.length - 10);
+  }
+  return clean;
+}
 
 bool _matchNumbers(String logNumber, String? contact) {
   if (contact == null || contact.isEmpty) return false;
-  final cleanContact = contact.replaceAll(RegExp(r'\D'), '');
-  final cleanLog = logNumber.replaceAll(RegExp(r'\D'), '');
+  final cleanContact = _cleanDigits(contact);
+  final cleanLog = _cleanDigits(logNumber);
   if (cleanContact.isEmpty || cleanLog.isEmpty) return false;
 
   if (cleanLog == cleanContact) return true;
   if (cleanLog.endsWith(cleanContact) || cleanContact.endsWith(cleanLog)) return true;
 
   // Remove leading zeros (e.g. 09497062072 -> 9497062072)
-  final stripZeroContact = cleanContact.replaceFirst(RegExp(r'^0+'), '');
-  final stripZeroLog = cleanLog.replaceFirst(RegExp(r'^0+'), '');
+  final stripZeroContact = cleanContact.replaceFirst(_leadingZerosRegex, '');
+  final stripZeroLog = cleanLog.replaceFirst(_leadingZerosRegex, '');
   if (stripZeroContact.isNotEmpty && stripZeroLog.isNotEmpty) {
     if (stripZeroContact == stripZeroLog) return true;
     if (stripZeroLog.endsWith(stripZeroContact) || stripZeroContact.endsWith(stripZeroLog)) return true;
@@ -51,25 +66,73 @@ int _normalizeTs(int? ts) {
   return ts;
 }
 
+/// Fetches call log entries robustly across Xiaomi/Redmi (MIUI/HyperOS), Nothing OS, and stock Android,
+/// without dumping the entire lifetime call history into RAM on 4GB devices.
+///
+/// Strategy:
+/// 1. Query by SQLite `number LIKE '%<last10>%'` for each target phone number (typically returns 1-20 rows total,
+///    completely bypassing Xiaomi's `dateFrom` seconds-vs-milliseconds SQLite bug AND avoiding 10,000-row OOM).
+/// 2. Also run `CallLog.query(dateFrom, dateTo)` and merge any entries within the time window (covers cases where
+///    OEM dialers store spaces/hyphens inside the `number` column).
+/// 3. Only if both return empty, fall back to `CallLog.get()` filtered by timestamp.
+Future<List<CallLogEntry>> _fetchEntriesForNumbers(
+  DateTime from,
+  DateTime to,
+  List<String?> targetNumbers,
+) async {
+  final Map<String, CallLogEntry> merged = {};
+  final int minTs = from.millisecondsSinceEpoch;
+  final int maxTs = to.millisecondsSinceEpoch;
 
-/// Fetches call log robustly. Some OEMs (e.g. Xiaomi HyperOS) return partial
-/// or empty results for date-filtered queries, so fallback to an unfiltered query only if empty.
-Future<List<CallLogEntry>> _fetchEntries(DateTime from, DateTime to) async {
-  try {
-    final filtered = await CallLog.query(
-      dateFrom: from.millisecondsSinceEpoch,
-      dateTo: to.millisecondsSinceEpoch,
-    );
-    if (filtered.isNotEmpty) {
-      return filtered.toList();
+  void addFiltered(Iterable<CallLogEntry> entries) {
+    for (final e in entries) {
+      final ts = _normalizeTs(e.timestamp);
+      if (ts >= minTs && ts <= maxTs) {
+        merged['${ts}_${e.number}_${e.duration}'] = e;
+      }
     }
-  } catch (_) {}
+  }
+
+  // 1. Targeted number queries (fast on 4GB RAM & immune to MIUI/HyperOS dateFrom SQLite unit issues)
+  final Set<String> queriedSubstrings = {};
+  for (final raw in targetNumbers) {
+    final last10 = _last10Digits(raw);
+    if (last10.length >= 7 && queriedSubstrings.add(last10)) {
+      try {
+        final byNum = await CallLog.query(number: last10);
+        addFiltered(byNum);
+      } catch (_) {}
+      // Also try last 5 digits in case the dialer formatted the middle of the number with spaces/hyphens
+      if (last10.length == 10) {
+        final last5 = last10.substring(5);
+        if (queriedSubstrings.add(last5)) {
+          try {
+            final byLast5 = await CallLog.query(number: last5);
+            addFiltered(byLast5);
+          } catch (_) {}
+        }
+      }
+    }
+  }
+
+  // 2. Date-range query
   try {
-    final all = await CallLog.get();
-    final minTs = from.millisecondsSinceEpoch;
-    return all.where((e) => _normalizeTs(e.timestamp) >= minTs).toList();
+    final byDate = await CallLog.query(
+      dateFrom: minTs,
+      dateTo: maxTs,
+    );
+    addFiltered(byDate);
   } catch (_) {}
-  return const [];
+
+  // 3. Fallback only if nothing was found in steps 1 & 2
+  if (merged.isEmpty) {
+    try {
+      final all = await CallLog.get();
+      addFiltered(all);
+    } catch (_) {}
+  }
+
+  return merged.values.toList();
 }
 
 /// Outgoing-like: anything that is not clearly incoming/missed/rejected/blocked.
@@ -115,24 +178,38 @@ Future<bool> checkIfCallWasMade({
     final queryEnd = now.add(const Duration(minutes: 30));
 
     
-    final entries = await _fetchEntries(queryStart, queryEnd);
     String? c1 = customer['contact1'] ?? customer['contact'];
     String? c2 = customer['contact2'];
-    bool callMade = entries.any((entry) {
+    final entries = await _fetchEntriesForNumbers(
+      queryStart,
+      queryEnd,
+      [c1, c2, pendingCallNumber],
+    );
+    int latestOutgoingTime = -1;
+    for (final entry in entries) {
+      if (!_isOutgoingLike(entry)) continue;
       final ts = _normalizeTs(entry.timestamp);
-      if (ts < queryStart.millisecondsSinceEpoch) return false;
-      bool wasConnected = (entry.duration ?? 0) > 15;
-      return _isOutgoingLike(entry) && wasConnected && _numberMatches(entry, c1, c2, pendingCallNumber);
-    });
+      if (ts < queryStart.millisecondsSinceEpoch) continue;
+      if (_numberMatches(entry, c1, c2, pendingCallNumber)) {
+        if (ts > latestOutgoingTime) {
+          latestOutgoingTime = ts;
+        }
+      }
+    }
+
+    bool callMade = false;
+    if (latestOutgoingTime != -1) {
+      callMade = entries.any((entry) {
+        final ts = _normalizeTs(entry.timestamp);
+        if (ts < latestOutgoingTime) return false;
+        bool wasConnected = (entry.duration ?? 0) > 15;
+        return wasConnected && _numberMatches(entry, c1, c2, pendingCallNumber);
+      });
+    }
     if (callMade) {
       customer['callMade'] = true;
       customer['callDate'] = Timestamp.now();
       await clearPendingCallState(customer);
-      await updateCallStatusInFirestore(
-        customer: customer,
-        context: context,
-        mounted: mounted,
-      );
       onCallDetected();
       if (context != null && context.mounted) {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
@@ -165,9 +242,13 @@ Future<bool> checkForAnyRecentCall({
     final endOfPeriod = now.add(const Duration(minutes: 30));
 
     
-    final entries = await _fetchEntries(startOfDay, endOfPeriod);
     String? c1 = customer['contact1'] ?? customer['contact'];
     String? c2 = customer['contact2'];
+    final entries = await _fetchEntriesForNumbers(
+      startOfDay,
+      endOfPeriod,
+      [c1, c2],
+    );
 
     int latestOutgoingTime = -1;
     for (final entry in entries) {
@@ -192,11 +273,6 @@ Future<bool> checkForAnyRecentCall({
       customer['callMade'] = true;
       customer['callDate'] = Timestamp.now();
       await clearPendingCallState(customer);
-      await updateCallStatusInFirestore(
-        customer: customer,
-        context: context,
-        mounted: context != null && context.mounted,
-      );
       onCallDetected();
       if (context != null && context.mounted) {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
@@ -247,27 +323,40 @@ Future<void> reloadCallStatus({
     final endOfPeriod = now.add(const Duration(minutes: 30));
 
     
-    final entries = await _fetchEntries(startOfDay, endOfPeriod);
     String? c1 = customer['contact1'] ?? customer['contact'];
     String? c2 = customer['contact2'];
+    final entries = await _fetchEntriesForNumbers(
+      startOfDay,
+      endOfPeriod,
+      [c1, c2],
+    );
 
-    bool hasOutgoingLongCall = entries.any((entry) {
-      if (!_isOutgoingLike(entry)) return false;
+    int latestOutgoingTime = -1;
+    for (final entry in entries) {
+      if (!_isOutgoingLike(entry)) continue;
       final ts = _normalizeTs(entry.timestamp);
-      if (ts < startOfDay.millisecondsSinceEpoch) return false;
-      bool longEnough = (entry.duration ?? 0) > 15;
-      return longEnough && _numberMatches(entry, c1, c2);
-    });
+      if (ts < startOfDay.millisecondsSinceEpoch) continue;
+      if (_numberMatches(entry, c1, c2)) {
+        if (ts > latestOutgoingTime) {
+          latestOutgoingTime = ts;
+        }
+      }
+    }
+
+    bool hasOutgoingLongCall = false;
+    if (latestOutgoingTime != -1) {
+      hasOutgoingLongCall = entries.any((entry) {
+        final ts = _normalizeTs(entry.timestamp);
+        if (ts < latestOutgoingTime) return false;
+        bool longEnough = (entry.duration ?? 0) > 15;
+        return longEnough && _numberMatches(entry, c1, c2);
+      });
+    }
 
     if (hasOutgoingLongCall) {
       customer['callMade'] = true;
       customer['callDate'] = Timestamp.now();
       await clearPendingCallState(customer);
-      await updateCallStatusInFirestore(
-        customer: customer,
-        context: context,
-        mounted: context.mounted,
-      );
       onCallDetected();
       if (context.mounted) {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(

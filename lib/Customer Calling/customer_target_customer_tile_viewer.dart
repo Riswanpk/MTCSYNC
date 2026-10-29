@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'tile_viewer/make_call.dart';
 import 'tile_viewer/check_call_log_helper.dart';
-import 'tile_viewer/fetch_last_remarks.dart';
+import 'tile_viewer/update_call_status_in_firestore.dart';
 import 'tile_viewer/update_remarks_in_firestore.dart';
 import 'tile_viewer/edit_customer_dialog.dart';
 import 'tile_viewer/customer_header_card.dart';
 import 'tile_viewer/customer_status_indicator.dart';
 import 'tile_viewer/customer_details_section.dart';
-import 'tile_viewer/customer_last_remarks_section.dart';
 import 'tile_viewer/customer_remarks_section.dart';
 import 'tile_viewer/add_to_leads_button.dart';
 
@@ -31,8 +30,6 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
   TextEditingController remarksController = TextEditingController();
   String? _pendingCallNumber;
   DateTime? _callStartTime;
-  List<Map<String, String>> _pastRemarks = [];
-  bool _loadingLastRemarks = false;
   bool _remarksSaved = false;
   bool _remarksEntered = false;
   bool _checkingCall = false;
@@ -57,14 +54,12 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
             anim.removeStatusListener(listener);
             if (mounted) {
               _restorePendingCallState();
-              _fetchLastRemarksData();
             }
           }
         }
         anim.addStatusListener(listener);
       } else {
         _restorePendingCallState();
-        _fetchLastRemarksData();
       }
     });
   }
@@ -100,46 +95,75 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
         savedTime > 0) {
       _pendingCallNumber = savedNumber;
       _callStartTime = DateTime.fromMillisecondsSinceEpoch(savedTime);
-      _checkIfCallWasMade();
+      final detected = await _checkIfCallWasMade();
+      if (!detected && mounted && !called) {
+        await checkForAnyRecentCall(
+          customer: customer,
+          context: context,
+          mounted: mounted,
+          onCallDetected: _onCallDetectedFromLog,
+        );
+      }
+    } else if (mounted && !called) {
+      // Even without a saved pending call state (e.g. if killed by MIUI/HyperOS or dialed earlier today),
+      // check if a valid outgoing call (>15s) to this customer was already made today.
+      await checkForAnyRecentCall(
+        customer: customer,
+        context: context,
+        mounted: mounted,
+        onCallDetected: _onCallDetectedFromLog,
+      );
     }
   }
 
-  Future<void> _checkIfCallWasMade() async {
-    if (_pendingCallNumber == null || _callStartTime == null) return;
-    if (_checkingCall) return;
+  void _onCallDetectedFromLog() {
+    if (mounted) {
+      setState(() {
+        called = true;
+      });
+    } else {
+      called = true;
+    }
+    _pendingCallNumber = null;
+    _callStartTime = null;
+
+    if (widget.onStatusChanged != null) {
+      widget.onStatusChanged!(remarksController.text.trim());
+    } else {
+      updateCallStatusInFirestore(
+        customer: customer,
+        context: context,
+        mounted: mounted,
+      );
+    }
+
+    if (mounted) {
+      Future.delayed(const Duration(milliseconds: 300), () {
+        try {
+          if (mounted) {
+            Scrollable.ensureVisible(
+              context,
+              alignment: 1.0,
+              duration: const Duration(milliseconds: 500),
+            );
+          }
+        } catch (_) {}
+      });
+    }
+  }
+
+  Future<bool> _checkIfCallWasMade() async {
+    if (_pendingCallNumber == null || _callStartTime == null) return false;
+    if (_checkingCall) return false;
     _checkingCall = true;
     try {
-      await checkIfCallWasMade(
+      return await checkIfCallWasMade(
         customer: customer,
         pendingCallNumber: _pendingCallNumber,
         callStartTime: _callStartTime,
         context: context,
         mounted: mounted,
-        onCallDetected: () {
-          if (mounted) {
-            setState(() {
-              called = true;
-            });
-          } else {
-            called = true;
-          }
-          _pendingCallNumber = null;
-          _callStartTime = null;
-
-          if (mounted) {
-            Future.delayed(const Duration(milliseconds: 300), () {
-              try {
-                if (mounted) {
-                  Scrollable.ensureVisible(
-                    context,
-                    alignment: 1.0,
-                    duration: const Duration(milliseconds: 500),
-                  );
-                }
-              } catch (_) {}
-            });
-          }
-        },
+        onCallDetected: _onCallDetectedFromLog,
       );
     } finally {
       _checkingCall = false;
@@ -152,46 +176,41 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
       called: called,
       context: context,
       mounted: mounted,
-      onCallDetected: () {
-        if (mounted) {
-          setState(() {
-            called = true;
-          });
-        } else {
-          called = true;
-        }
-        _pendingCallNumber = null;
-        _callStartTime = null;
-      },
+      onCallDetected: _onCallDetectedFromLog,
     );
-  }
-
-  Future<void> _fetchLastRemarksData() async {
-    if (!mounted) return;
-    setState(() {
-      _loadingLastRemarks = true;
-    });
-    final results = await fetchLastRemarks(customer: customer);
-    if (mounted) {
-      setState(() {
-        _pastRemarks = results;
-        _loadingLastRemarks = false;
-      });
-    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      if (_pendingCallNumber != null) {
-        _checkIfCallWasMade().then((_) {
-          if (!called && _pendingCallNumber != null && mounted) {
-            Future.delayed(const Duration(seconds: 3), () {
-              if (mounted && !called) _checkIfCallWasMade();
+    if (state == AppLifecycleState.resumed && !called) {
+      // On Redmi/Xiaomi (MIUI/HyperOS) and Nothing OS, the system dialer often writes the
+      // CallLog entry 1-5 seconds AFTER the user returns to the app. Retry progressively.
+      Future<void> attemptDetection() async {
+        if (!mounted || called) return;
+        if (_pendingCallNumber != null) {
+          await _checkIfCallWasMade();
+        }
+        if (mounted && !called) {
+          await checkForAnyRecentCall(
+            customer: customer,
+            context: context,
+            mounted: mounted,
+            onCallDetected: _onCallDetectedFromLog,
+          );
+        }
+      }
+
+      attemptDetection().then((_) {
+        for (final delaySec in const [1, 3, 6]) {
+          if (!called && mounted) {
+            Future.delayed(Duration(seconds: delaySec), () {
+              if (mounted && !called) {
+                attemptDetection();
+              }
             });
           }
-        });
-      }
+        }
+      });
     }
   }
 
@@ -355,10 +374,6 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
               ),
               CustomerDetailsSection(
                 fields: fields,
-              ),
-              CustomerLastRemarksSection(
-                loadingLastRemarks: _loadingLastRemarks,
-                pastRemarks: _pastRemarks,
               ),
               CustomerRemarksSection(
                 remarksController: remarksController,

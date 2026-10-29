@@ -104,7 +104,14 @@ class CallScannerService {
 
         int latestOutgoingTime = -1;
         for (final entry in entries) {
-          if (entry.callType != CallType.outgoing) continue;
+          final t = entry.callType;
+          final isOutgoingLike = t != CallType.incoming &&
+              t != CallType.missed &&
+              t != CallType.rejected &&
+              t != CallType.blocked &&
+              t != CallType.voiceMail &&
+              t != CallType.answeredExternally;
+          if (!isOutgoingLike) continue;
           String logNumber = entry.number?.replaceAll(RegExp(r'\D'), '') ?? '';
           if (logNumber.isEmpty) continue;
           if (numberMatches(logNumber, c1) || numberMatches(logNumber, c2)) {
