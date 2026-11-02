@@ -48,7 +48,7 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
     _fetchLeads();
   }
 
-  Future<void> _fetchLeads() async {
+  Future<void> _fetchLeads({bool resetFilters = true}) async {
     setState(() => _isLoading = true);
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -92,13 +92,17 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
         .toList()
       ..sort();
 
-    // Reset everything when date range changes
-    _selectedBranch = null;
-    _selectedUser = null;
-    _selectedStatus = null;
-    _selectedScreeningStatus = null;
-    _isReady = false;
-    _filteredLeads = [];
+    if (resetFilters) {
+      // Reset everything when date range changes or coming from dashboard
+      _selectedBranch = null;
+      _selectedUser = null;
+      _selectedStatus = null;
+      _selectedScreeningStatus = null;
+      _isReady = false;
+      _filteredLeads = [];
+    } else {
+      _applyFilters();
+    }
 
     if (mounted) setState(() => _isLoading = false);
   }
@@ -327,13 +331,16 @@ class _SmeAllLeadsPageState extends State<SmeAllLeadsPage> {
                           ),
                         )
                       : RefreshIndicator(
-                          onRefresh: _fetchLeads,
+                          onRefresh: () => _fetchLeads(resetFilters: false),
                           color: _primaryBlue,
                           child: ListView.builder(
                             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                             itemCount: _filteredLeads.length,
                             itemBuilder: (context, index) =>
-                                _LeadCard(lead: _filteredLeads[index], isDark: isDark, onRefresh: _fetchLeads),
+                                _LeadCard(
+                                  lead: _filteredLeads[index],
+                                  isDark: isDark,
+                                ),
                           ),
                         ),
                 ),
@@ -567,10 +574,11 @@ class _SummaryChip extends StatelessWidget {
 class _LeadCard extends StatelessWidget {
   final Map<String, dynamic> lead;
   final bool isDark;
-  final VoidCallback onRefresh;
 
-  const _LeadCard(
-      {required this.lead, required this.isDark, required this.onRefresh});
+  const _LeadCard({
+    required this.lead,
+    required this.isDark,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -602,7 +610,7 @@ class _LeadCard extends StatelessWidget {
           context,
           MaterialPageRoute(
               builder: (_) => PresentFollowUp(docId: lead['docId'])),
-        ).then((_) => onRefresh());
+        );
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
