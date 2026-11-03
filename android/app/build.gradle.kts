@@ -18,7 +18,7 @@ plugins {
 android {
     namespace = "com.mtc.mtcsync"
     compileSdk = 37
-    ndkVersion = "28.2.13676358"
+    ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
