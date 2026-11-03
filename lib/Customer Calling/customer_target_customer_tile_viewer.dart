@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'tile_viewer/make_call.dart';
 import 'tile_viewer/check_call_log_helper.dart';
+import 'tile_viewer/fetch_last_remarks.dart';
 import 'tile_viewer/update_call_status_in_firestore.dart';
 import 'tile_viewer/update_remarks_in_firestore.dart';
 import 'tile_viewer/edit_customer_dialog.dart';
 import 'tile_viewer/customer_header_card.dart';
 import 'tile_viewer/customer_status_indicator.dart';
 import 'tile_viewer/customer_details_section.dart';
+import 'tile_viewer/customer_last_remarks_section.dart';
 import 'tile_viewer/customer_remarks_section.dart';
 import 'tile_viewer/add_to_leads_button.dart';
 
@@ -34,6 +36,8 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
   bool _remarksEntered = false;
   bool _checkingCall = false;
   bool _isSavingRemarks = false;
+  List<Map<String, String>> _pastRemarks = [];
+  bool _loadingLastRemarks = false;
 
   @override
   void initState() {
@@ -44,6 +48,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
     remarksController.text = customer['remarks'] ?? '';
     _remarksEntered = remarksController.text.trim().isNotEmpty;
     remarksController.addListener(_onRemarksTextChanged);
+    _fetchLastRemarksData();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final route = ModalRoute.of(context);
@@ -81,6 +86,23 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
     remarksController.removeListener(_onRemarksTextChanged);
     remarksController.dispose();
     super.dispose();
+  }
+
+  Future<void> _fetchLastRemarksData() async {
+    if (!mounted) return;
+    setState(() {
+      _loadingLastRemarks = true;
+    });
+    final results = await fetchLastRemarks(
+      customer: customer,
+      targetUserEmail: widget.docId,
+    );
+    if (mounted) {
+      setState(() {
+        _pastRemarks = results;
+        _loadingLastRemarks = false;
+      });
+    }
   }
 
   Future<void> _restorePendingCallState() async {
@@ -134,6 +156,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
         customer: customer,
         context: context,
         mounted: mounted,
+        docId: widget.docId,
       );
     }
 
@@ -375,6 +398,10 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
               CustomerDetailsSection(
                 fields: fields,
               ),
+              CustomerLastRemarksSection(
+                loadingLastRemarks: _loadingLastRemarks,
+                pastRemarks: _pastRemarks,
+              ),
               CustomerRemarksSection(
                 remarksController: remarksController,
                 called: called,
@@ -396,6 +423,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
                                     remarks: remarks,
                                     context: context,
                                     mounted: mounted,
+                                    docId: widget.docId,
                                   );
                                 }
                             if (mounted) {

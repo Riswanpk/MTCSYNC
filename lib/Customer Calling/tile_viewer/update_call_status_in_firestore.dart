@@ -2,40 +2,77 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+final RegExp _nonDigitRegex = RegExp(r'\D');
+
+String _normalizePhone(dynamic phone) {
+  if (phone == null) return '';
+  final cleaned = phone.toString().replaceAll(_nonDigitRegex, '');
+  if (cleaned.length > 10) {
+    return cleaned.substring(cleaned.length - 10);
+  }
+  return cleaned;
+}
+
 Future<void> updateCallStatusInFirestore({
   required Map<String, dynamic> customer,
   required BuildContext? context,
   required bool mounted,
+  String? docId,
 }) async {
   try {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null || user.email == null) return;
+    final effectiveDocId = (docId != null && docId.isNotEmpty)
+        ? docId.toLowerCase()
+        : user?.email?.toLowerCase();
+    if (effectiveDocId == null || effectiveDocId.isEmpty) return;
+
     final now = DateTime.now();
-    final months = [
+    const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
     final monthYear = "${months[now.month - 1]} ${now.year}";
-    final docRef = FirebaseFirestore.instance
+    final usersRef = FirebaseFirestore.instance
         .collection('customer_target')
         .doc(monthYear)
-        .collection('users')
-        .doc(user.email!.toLowerCase());
-    final doc = await docRef.get();
+        .collection('users');
+
+    var doc = await usersRef.doc(effectiveDocId).get();
+    String finalDocId = effectiveDocId;
+
+    if (!doc.exists || doc.data()?['customers'] == null) {
+      final querySnap = await usersRef.get();
+      for (final d in querySnap.docs) {
+        if (d.id.toLowerCase() == effectiveDocId) {
+          doc = d;
+          finalDocId = d.id;
+          break;
+        }
+      }
+    }
+
     if (doc.exists && doc.data()?['customers'] != null) {
       List customers = List.from(doc.data()!['customers']);
-      String? c1 = customer['contact1'] ?? customer['contact'];
-      String? c2 = customer['contact2'];
-      int idx = customers.indexWhere((c) =>
-        (c['contact'] == c1 || c['contact1'] == c1) ||
-        (c2 != null && c2.isNotEmpty && (c['contact'] == c2 || c['contact2'] == c2))
-      );
+      final c1Norm = _normalizePhone(customer['contact1'] ?? customer['contact'] ?? customer['phone']);
+      final c2Norm = _normalizePhone(customer['contact2']);
+      final cName = (customer['name'] ?? '').toString().trim().toLowerCase();
+
+      int idx = customers.indexWhere((c) {
+        if (c is! Map) return false;
+        final p1 = _normalizePhone(c['contact1'] ?? c['contact'] ?? c['phone']);
+        final p2 = _normalizePhone(c['contact2']);
+        if (c1Norm.isNotEmpty && (p1 == c1Norm || p2 == c1Norm)) return true;
+        if (c2Norm.isNotEmpty && (p1 == c2Norm || p2 == c2Norm)) return true;
+        if (cName.isNotEmpty && (c['name'] ?? '').toString().trim().toLowerCase() == cName) return true;
+        return false;
+      });
+
       if (idx != -1) {
         customers[idx]['callMade'] = true;
         if (customers[idx]['callDate'] == null) {
           customers[idx]['callDate'] = Timestamp.now();
         }
-        await docRef.update({'customers': customers});
+        await usersRef.doc(finalDocId).update({'customers': customers});
       }
     }
   } catch (e) {
@@ -50,3 +87,4 @@ Future<void> updateCallStatusInFirestore({
     }
   }
 }
+

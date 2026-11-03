@@ -53,7 +53,10 @@ class _AdminCustomerCallEditPageState extends State<AdminCustomerCallEditPage> {
   Future<void> _loadPastRemarks() async {
     setState(() => _loadingLastRemarks = true);
     try {
-      final results = await fetchLastRemarks(customer: widget.customer);
+      final results = await fetchLastRemarks(
+        customer: widget.customer,
+        targetUserEmail: widget.userEmail,
+      );
       if (mounted) {
         setState(() {
           _pastRemarks = results;

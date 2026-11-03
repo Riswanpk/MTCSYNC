@@ -47,7 +47,7 @@ class _CustomerCallingRemarksPendingPageState
     _fetchPendingRemarks();
   }
 
-  Future<void> _fetchPendingRemarks() async {
+  Future<void> _fetchPendingRemarks({bool fromServer = false}) async {
     if (!mounted) return;
     setState(() {
       _loading = true;
@@ -74,7 +74,11 @@ class _CustomerCallingRemarksPendingPageState
           .doc(monthYear)
           .collection('users');
 
-      var doc = await usersRef.doc(_docId).get();
+      var doc = await usersRef.doc(_docId).get(
+            fromServer
+                ? const GetOptions(source: Source.server)
+                : const GetOptions(source: Source.serverAndCache),
+          );
 
       if (!doc.exists || doc.data()?['customers'] == null) {
         final querySnap = await usersRef.get();
@@ -127,7 +131,7 @@ class _CustomerCallingRemarksPendingPageState
     return cleaned;
   }
 
-  Future<void> _updateFirestore() async {
+  Future<void> _updateFirestore(Map<String, dynamic> updatedCustomer, String newRemarks) async {
     if (_docId == null) return;
     try {
       final now = DateTime.now();
@@ -139,16 +143,9 @@ class _CustomerCallingRemarksPendingPageState
           .collection('users')
           .doc(_docId);
 
-      final Map<String, Map<String, dynamic>> byPhone = {};
-      final Map<String, Map<String, dynamic>> byName = {};
-      for (final lc in _allCustomers) {
-        final lcName = (lc['name'] ?? '').toString().trim().toLowerCase();
-        final lc1 = _normalizePhone(lc['contact1'] ?? lc['contact'] ?? lc['phone']);
-        final lc2 = _normalizePhone(lc['contact2']);
-        if (lc1.isNotEmpty) byPhone[lc1] = lc;
-        if (lc2.isNotEmpty) byPhone[lc2] = lc;
-        if (lcName.isNotEmpty) byName[lcName] = lc;
-      }
+      final c1Norm = _normalizePhone(updatedCustomer['contact1'] ?? updatedCustomer['contact'] ?? updatedCustomer['phone']);
+      final c2Norm = _normalizePhone(updatedCustomer['contact2']);
+      final cName = (updatedCustomer['name'] ?? '').toString().trim().toLowerCase();
 
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         final snap = await transaction.get(docRef);
@@ -165,21 +162,22 @@ class _CustomerCallingRemarksPendingPageState
           final sc1 = _normalizePhone(sc['contact1'] ?? sc['contact'] ?? sc['phone']);
           final sc2 = _normalizePhone(sc['contact2']);
 
-          Map<String, dynamic>? match;
-          if (sc1.isNotEmpty) match = byPhone[sc1];
-          if (match == null && sc2.isNotEmpty) match = byPhone[sc2];
-          if (match == null && scName.isNotEmpty) match = byName[scName];
+          bool isMatch = false;
+          if (c1Norm.isNotEmpty && (sc1 == c1Norm || sc2 == c1Norm)) isMatch = true;
+          if (!isMatch && c2Norm.isNotEmpty && (sc1 == c2Norm || sc2 == c2Norm)) isMatch = true;
+          if (!isMatch && cName.isNotEmpty && scName == cName) isMatch = true;
 
-          if (match != null && match.isNotEmpty) {
-            final localRemarks = (match['remarks'] ?? '').toString().trim();
-            if (localRemarks.isNotEmpty && sc['remarks'] != match['remarks']) {
-              sc['remarks'] = match['remarks'];
-              changed = true;
+          if (isMatch) {
+            sc['remarks'] = newRemarks;
+            sc['callMade'] = true;
+            if (sc['callDate'] == null) {
+              sc['callDate'] = Timestamp.now();
             }
-            if (match['leadAdded'] == true && sc['leadAdded'] != true) {
+            if (updatedCustomer['leadAdded'] == true) {
               sc['leadAdded'] = true;
-              changed = true;
             }
+            changed = true;
+            break;
           }
         }
 
@@ -345,20 +343,21 @@ class _CustomerCallingRemarksPendingPageState
                                               docId: _docId,
                                               onStatusChanged:
                                                   (remarks) async {
-                                                if (mounted) {
-                                                  setState(() {
-                                                    customer['remarks'] = remarks;
-                                                  });
-                                                } else {
-                                                  customer['remarks'] = remarks;
+                                                customer['remarks'] = remarks;
+                                                customer['callMade'] = true;
+                                                if (customer['callDate'] == null) {
+                                                  customer['callDate'] = Timestamp.now();
                                                 }
-                                                await _updateFirestore();
+                                                if (mounted) {
+                                                  setState(() {});
+                                                }
+                                                await _updateFirestore(customer, remarks);
                                               },
                                             ),
                                           ),
                                         ).then((_) {
                                           if (mounted) {
-                                            _fetchPendingRemarks();
+                                            _fetchPendingRemarks(fromServer: true);
                                           }
                                         });
                                       },
