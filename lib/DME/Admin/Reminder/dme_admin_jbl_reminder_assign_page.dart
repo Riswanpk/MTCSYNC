@@ -143,9 +143,30 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
 
           if (hasAttempt && remarks.isEmpty) {
             attemptedCount++;
+            String? targetUid;
+            if (calledEmail != null && calledEmail.isNotEmpty) {
+              final cleanPrefix = calledEmail.split('@').first.trim();
+              for (var u in _jblUsers) {
+                final uEmail = (u['email']?.toString() ?? '').toLowerCase().trim();
+                final uPrefix = uEmail.split('@').first.trim();
+                final uName = (u['username']?.toString() ?? '').toLowerCase().trim();
+                final uUid = u['uid']?.toString() ?? '';
+                if (uEmail == calledEmail ||
+                    (uPrefix.isNotEmpty && uPrefix == cleanPrefix) ||
+                    uName == calledEmail ||
+                    uName == cleanPrefix ||
+                    uUid.toLowerCase() == calledEmail) {
+                  targetUid = uUid;
+                  break;
+                }
+              }
+            }
             final prevAssigned = item['assigned_to']?.toString();
-            if (prevAssigned != null && prevAssigned.isNotEmpty) {
-              attemptedUserCounts[prevAssigned] = (attemptedUserCounts[prevAssigned] ?? 0) + 1;
+            if (targetUid == null && prevAssigned != null && prevAssigned.isNotEmpty) {
+              targetUid = prevAssigned;
+            }
+            if (targetUid != null && targetUid.isNotEmpty) {
+              attemptedUserCounts[targetUid] = (attemptedUserCounts[targetUid] ?? 0) + 1;
             }
           } else {
             final rDateStr = item['reminder_date']?.toString();
@@ -528,15 +549,34 @@ class _DmeAdminJblReminderAssignPageState extends State<DmeAdminJblReminderAssig
         final bool hasAttempt = attempts > 0 || (calledEmail != null && calledEmail.isNotEmpty) || status == 'called' || duration > 0;
 
         // Sticky assignment: When a user has already attempted a call on a reminder,
-        // assign that reminder to the same user next day and henceforth until remarks are submitted.
+        // prioritize `called_by` first over `assigned_to`, and never drop into unattemptedOverdueIds.
         if (hasAttempt && remarks.isEmpty) {
           String? targetCaller;
+          if (calledEmail != null && calledEmail.isNotEmpty) {
+            final cleanPrefix = calledEmail.split('@').first.trim();
+            for (var u in _jblUsers) {
+              final uEmail = (u['email']?.toString() ?? '').toLowerCase().trim();
+              final uPrefix = uEmail.split('@').first.trim();
+              final uName = (u['username']?.toString() ?? '').toLowerCase().trim();
+              final uUid = u['uid']?.toString() ?? '';
+              if (uEmail == calledEmail ||
+                  (uPrefix.isNotEmpty && uPrefix == cleanPrefix) ||
+                  uName == calledEmail ||
+                  uName == cleanPrefix ||
+                  uUid.toLowerCase() == calledEmail) {
+                targetCaller = uUid;
+                break;
+              }
+            }
+          }
           final prevAssigned = item['assigned_to']?.toString();
-          if (prevAssigned != null && presentUserUids.contains(prevAssigned)) {
+          if (targetCaller == null && prevAssigned != null && prevAssigned.isNotEmpty) {
             targetCaller = prevAssigned;
           }
           if (targetCaller != null) {
-            attemptedItems.add({'id': id, 'targetCaller': targetCaller});
+            if (presentUserUids.contains(targetCaller)) {
+              attemptedItems.add({'id': id, 'targetCaller': targetCaller});
+            }
             continue;
           }
         }

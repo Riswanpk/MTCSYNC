@@ -89,6 +89,17 @@ class _DmeAdminCustomerDetailPageState extends State<DmeAdminCustomerDetailPage>
             .maybeSingle(),
       ]);
 
+      try {
+        final custRow = await client
+            .from('dme_customers')
+            .select('blacklisted')
+            .eq('id', customerId)
+            .maybeSingle();
+        if (custRow != null && custRow.containsKey('blacklisted')) {
+          _customer['blacklisted'] = custRow['blacklisted'];
+        }
+      } catch (_) {}
+
       if (!mounted) return;
 
       setState(() {
@@ -198,6 +209,28 @@ class _DmeAdminCustomerDetailPageState extends State<DmeAdminCustomerDetailPage>
                                                   ),
                                               ],
                                             ),
+                                            if (_customer['blacklisted'] == true || _customer['blacklisted'] == 'true' || _customer['blacklisted'] == 1) ...[
+                                              const SizedBox(height: 6),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.red.withValues(alpha: 0.15),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(color: Colors.red.shade700, width: 0.8),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(Icons.block_rounded, size: 13, color: Colors.red.shade800),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      'BLACKLISTED (No Reminders)',
+                                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red.shade900),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
                                             if (_customer['primary_branch'] != null) ...[
                                               const SizedBox(height: 4),
                                               Container(

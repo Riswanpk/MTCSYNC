@@ -150,6 +150,78 @@ class DmeAssignmentService {
     return map;
   }
 
+  /// Resolves a `called_by` identifier (email, username, or UID) to a DME user's UID.
+  static String? resolveCallerUid({
+    required String? calledByRaw,
+    required Map<String, String> identifierToUid,
+    Map<String, String>? userUidToEmail,
+    Map<String, String>? userUidToName,
+    Iterable<String>? candidateUids,
+  }) {
+    if (calledByRaw == null) return null;
+    final clean = calledByRaw.trim().toLowerCase();
+    if (clean.isEmpty) return null;
+
+    if (identifierToUid.containsKey(clean)) {
+      return identifierToUid[clean];
+    }
+    if (clean.contains('@')) {
+      final prefix = clean.split('@').first.trim();
+      if (prefix.isNotEmpty && identifierToUid.containsKey(prefix)) {
+        return identifierToUid[prefix];
+      }
+    }
+
+    final uidsToSearch = candidateUids ??
+        <String>{
+          ...?userUidToEmail?.keys,
+          ...?userUidToName?.keys,
+        };
+
+    for (final u in uidsToSearch) {
+      if (u.toLowerCase() == clean) return u;
+      final uEmail = (userUidToEmail?[u] ?? '').trim().toLowerCase();
+      if (uEmail.isNotEmpty) {
+        if (uEmail == clean) return u;
+        final uPrefix = uEmail.split('@').first.trim();
+        final cleanPrefix = clean.split('@').first.trim();
+        if (uPrefix.isNotEmpty && uPrefix == cleanPrefix) return u;
+      }
+      final uName = (userUidToName?[u] ?? '').trim().toLowerCase();
+      if (uName.isNotEmpty && (uName == clean || uName == clean.split('@').first.trim())) {
+        return u;
+      }
+    }
+    return null;
+  }
+
+  /// Builds a lookup map of lowercased (uid, email, email-prefix, username, name) -> uid for all DME users
+  static Future<Map<String, String>> buildAllDmeUserIdentifierMap() async {
+    final Map<String, String> map = {};
+    try {
+      final snap = await FirebaseFirestore.instance.collection('users').get();
+      for (var doc in snap.docs) {
+        final data = doc.data();
+        final uid = doc.id;
+        final email = (data['email'] ?? '').toString().trim().toLowerCase();
+        final username = (data['username'] ?? '').toString().trim().toLowerCase();
+        final name = (data['name'] ?? '').toString().trim().toLowerCase();
+
+        map[uid.toLowerCase()] = uid;
+        if (email.isNotEmpty) {
+          map[email] = uid;
+          final prefix = email.split('@').first.trim();
+          if (prefix.isNotEmpty) map[prefix] = uid;
+        }
+        if (username.isNotEmpty) map[username] = uid;
+        if (name.isNotEmpty) map[name] = uid;
+      }
+    } catch (e) {
+      debugPrint('Error building DME user identifier map: $e');
+    }
+    return map;
+  }
+
   /// Admin manual assignment of reminders across branches with explicitly chosen users.
   /// If a user is on leave, they are simply excluded from the active user list for their branches.
   static Future<Map<String, dynamic>> assignRemindersByAdmin({
@@ -166,6 +238,7 @@ class DmeAssignmentService {
     int totalAssigned = 0;
     final nowIso = DateTime.now().toIso8601String();
     final currentDay = DateTime.tryParse(dateStr) ?? DateTime.now();
+    final identifierToUid = await buildAllDmeUserIdentifierMap();
 
     // Track new, unattempted overdue, and attempted reminders across all branches for each user today
     final Map<String, int> globalUserNewCount = {};
@@ -345,6 +418,7 @@ class DmeAssignmentService {
       final List<int> unattemptedOverdueIds = [];
       final List<int> newIds = [];
       final List<Map<String, dynamic>> attemptedItems = [];
+      final Map<String, List<int>> absentCallerAttempted = {};
 
       for (var item in allPending) {
         final id = int.tryParse(item['id']?.toString() ?? '');
@@ -358,24 +432,28 @@ class DmeAssignmentService {
         final bool hasAttempt = attempts > 0 || (calledEmail != null && calledEmail.isNotEmpty) || status == 'called' || duration > 0;
 
         // Sticky assignment: When a user has already attempted a call on a reminder,
-        // assign that reminder to the same user next day and henceforth until remarks are submitted.
+        // ALWAYS prioritize `called_by` (the user who actually called the customer) over `assigned_to`,
+        // and NEVER reassign an attempted reminder to another user's unattempted pool.
         if (hasAttempt && remarks.isEmpty) {
-          String? targetCaller;
+          String? callerUid = resolveCallerUid(
+            calledByRaw: calledEmail,
+            identifierToUid: identifierToUid,
+            userUidToEmail: userUidToEmail,
+            userUidToName: userUidToName,
+            candidateUids: activeUsers,
+          );
           final prevAssigned = item['assigned_to']?.toString();
-          if (prevAssigned != null && activeUsers.contains(prevAssigned)) {
-            targetCaller = prevAssigned;
-          } else if (calledEmail != null && calledEmail.isNotEmpty) {
-            for (var u in activeUsers) {
-              final uEmail = (userUidToEmail?[u] ?? '').toLowerCase().trim();
-              if (uEmail == calledEmail || u.toLowerCase() == calledEmail) {
-                targetCaller = u;
-                break;
-              }
-            }
+          if (callerUid == null && prevAssigned != null && prevAssigned.isNotEmpty) {
+            callerUid = prevAssigned;
           }
 
-          if (targetCaller != null) {
-            attemptedItems.add({'id': id, 'targetCaller': targetCaller});
+          if (callerUid != null) {
+            if (activeUsers.contains(callerUid)) {
+              attemptedItems.add({'id': id, 'targetCaller': callerUid});
+            } else {
+              // Caller is absent or in another branch today: keep assigned strictly to the caller!
+              absentCallerAttempted.putIfAbsent(callerUid, () => []).add(id);
+            }
             continue;
           }
         }
@@ -461,6 +539,21 @@ class DmeAssignmentService {
             'assigned_to': user,
             'assigned_date': dateStr,
             'is_overdue_leftover': false,
+            'updated_at': nowIso,
+          }).inFilter('id', chunk);
+        }
+      }
+
+      // Ensure any attempted reminders whose caller is absent today or in another branch
+      // have their `assigned_to` corrected to the actual caller so they never appear in another user's list
+      for (final absentEntry in absentCallerAttempted.entries) {
+        final callerUid = absentEntry.key;
+        final ids = absentEntry.value;
+        for (int i = 0; i < ids.length; i += batchSize) {
+          final chunk = ids.sublist(i, min(i + batchSize, ids.length));
+          await client.from('dme_reminders').update({
+            'assigned_to': callerUid,
+            'is_overdue_leftover': true,
             'updated_at': nowIso,
           }).inFilter('id', chunk);
         }
@@ -823,6 +916,7 @@ class DmeAssignmentService {
       if (allPending.isEmpty) return;
 
       final currentDay = DateTime(today.year, today.month, today.day);
+      final identifierToUid = await buildAllDmeUserIdentifierMap();
       final Map<String, List<int>> userOverdue = {for (var u in eligibleUsers) u: []};
       final Map<String, List<int>> userNew = {for (var u in eligibleUsers) u: []};
       final Map<String, List<int>> userAttempted = {for (var u in eligibleUsers) u: []};
@@ -842,15 +936,21 @@ class DmeAssignmentService {
         final bool hasAttempt = attempts > 0 || (calledEmail != null && calledEmail.isNotEmpty) || status == 'called' || duration > 0;
 
         // Sticky assignment: When a user has already attempted a call on a reminder,
-        // assign that reminder to the same user next day and henceforth until remarks are submitted.
+        // prioritize `called_by` first over `assigned_to` so it stays strictly with the caller.
         if (hasAttempt && remarks.isEmpty) {
-          String? targetCaller;
+          String? targetCaller = resolveCallerUid(
+            calledByRaw: calledEmail,
+            identifierToUid: identifierToUid,
+            candidateUids: eligibleUsers,
+          );
           final prevAssigned = item['assigned_to']?.toString();
-          if (prevAssigned != null && eligibleUsers.contains(prevAssigned)) {
+          if (targetCaller == null && prevAssigned != null && eligibleUsers.contains(prevAssigned)) {
             targetCaller = prevAssigned;
           }
           if (targetCaller != null) {
-            attemptedItems.add({'id': id, 'targetCaller': targetCaller});
+            if (eligibleUsers.contains(targetCaller)) {
+              attemptedItems.add({'id': id, 'targetCaller': targetCaller});
+            }
             continue;
           }
         }
@@ -1038,7 +1138,38 @@ class DmeAssignmentService {
 
       if (data.isNotEmpty) {
         final reminders = _parseReminderList(data);
-        reminders.sort((a, b) {
+
+        // Self-healing sticky caller check:
+        // If any reminder assigned to `currentUserId` was actually called by a DIFFERENT user (`called_by`),
+        // automatically reassign it in Supabase to that caller's UID and exclude it from `currentUserId`'s list.
+        final identifierToUid = await buildAllDmeUserIdentifierMap();
+        final List<Map<String, dynamic>> validForCurrentUser = [];
+        for (final rem in reminders) {
+          final calledBy = rem['called_by']?.toString().trim();
+          final remarks = (rem['remarks'] ?? '').toString().trim();
+          if (calledBy != null && calledBy.isNotEmpty && remarks.isEmpty) {
+            final actualCallerUid = resolveCallerUid(
+              calledByRaw: calledBy,
+              identifierToUid: identifierToUid,
+            );
+            if (actualCallerUid != null && actualCallerUid != currentUserId) {
+              final remId = int.tryParse(rem['id']?.toString() ?? '');
+              if (remId != null) {
+                try {
+                  await client.from('dme_reminders').update({
+                    'assigned_to': actualCallerUid,
+                    'is_overdue_leftover': true,
+                    'updated_at': DateTime.now().toIso8601String(),
+                  }).eq('id', remId);
+                } catch (_) {}
+              }
+              continue; // Do not show another user's called reminder in currentUserId's list
+            }
+          }
+          validForCurrentUser.add(rem);
+        }
+
+        validForCurrentUser.sort((a, b) {
           final aLeftover = a['is_overdue_leftover'] == true ? 1 : 0;
           final bLeftover = b['is_overdue_leftover'] == true ? 1 : 0;
           if (aLeftover != bLeftover) {
@@ -1048,7 +1179,7 @@ class DmeAssignmentService {
           final bDate = b['reminder_date']?.toString() ?? '';
           return aDate.compareTo(bDate);
         });
-        return reminders;
+        return validForCurrentUser;
       }
     } catch (e) {
       debugPrint('fetchUserAssignedReminders error: $e');

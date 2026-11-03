@@ -51,6 +51,9 @@ class DmeNotificationService {
         case 'call_completion':
           friendlyType = 'Call Completion';
           break;
+        case 'blacklist_customer':
+          friendlyType = 'Customer Blacklist';
+          break;
         default:
           friendlyType = 'Request';
       }
@@ -126,6 +129,9 @@ class DmeNotificationService {
           break;
         case 'call_completion':
           friendlyType = 'Call completion';
+          break;
+        case 'blacklist_customer':
+          friendlyType = 'Customer blacklist';
           break;
         default:
           friendlyType = 'Request';

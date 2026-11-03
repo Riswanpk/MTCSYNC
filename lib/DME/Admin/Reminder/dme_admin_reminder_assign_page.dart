@@ -205,17 +205,25 @@ class _DmeAdminReminderAssignPageState extends State<DmeAdminReminderAssignPage>
           if (hasAttempt) {
             attemptedMap[bId] = (attemptedMap[bId] ?? 0) + 1;
             String? targetUid;
-            if (prevAssigned != null && prevAssigned.isNotEmpty) {
-              targetUid = prevAssigned;
-            } else if (calledEmail != null && calledEmail.isNotEmpty) {
+            if (calledEmail != null && calledEmail.isNotEmpty) {
+              final cleanPrefix = calledEmail.split('@').first.trim();
               for (var u in _dmeUsers) {
                 final uEmail = (u['email']?.toString() ?? '').toLowerCase().trim();
+                final uPrefix = uEmail.split('@').first.trim();
+                final uName = (u['username']?.toString() ?? '').toLowerCase().trim();
                 final uUid = u['uid']?.toString() ?? '';
-                if (uEmail == calledEmail || uUid.toLowerCase() == calledEmail) {
+                if (uEmail == calledEmail ||
+                    (uPrefix.isNotEmpty && uPrefix == cleanPrefix) ||
+                    uName == calledEmail ||
+                    uName == cleanPrefix ||
+                    uUid.toLowerCase() == calledEmail) {
                   targetUid = uUid;
                   break;
                 }
               }
+            }
+            if (targetUid == null && prevAssigned != null && prevAssigned.isNotEmpty) {
+              targetUid = prevAssigned;
             }
             if (targetUid != null) {
               userAttemptedMap[targetUid] = (userAttemptedMap[targetUid] ?? 0) + 1;

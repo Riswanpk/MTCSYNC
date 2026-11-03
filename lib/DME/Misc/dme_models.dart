@@ -58,6 +58,7 @@ class DmeCustomer {
   final String? salesman;
   final String preference; // 'Call' or 'Whatsapp' (default: 'Call')
   final String? contactPerson;
+  final bool blacklisted;
   final DateTime? lastPurchaseDate;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -71,6 +72,7 @@ class DmeCustomer {
     this.salesman,
     this.preference = 'Call',
     this.contactPerson,
+    this.blacklisted = false,
     this.lastPurchaseDate,
     this.createdAt,
     this.updatedAt,
@@ -86,6 +88,7 @@ class DmeCustomer {
       'salesman': salesman,
       'preference': preference,
       if (contactPerson != null) 'Contact_Person': contactPerson,
+      'blacklisted': blacklisted,
       'last_purchase_date': lastPurchaseDate?.toIso8601String(),
       'created_at': createdAt?.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
@@ -102,6 +105,9 @@ class DmeCustomer {
       salesman: map['salesman'] as String?,
       preference: map['preference'] as String? ?? 'Call',
       contactPerson: (map['Contact_Person'] ?? map['contact_person']) as String?,
+      blacklisted: map['blacklisted'] == true ||
+          map['blacklisted'] == 'true' ||
+          map['blacklisted'] == 1,
       lastPurchaseDate: map['last_purchase_date'] != null
           ? DateTime.tryParse(map['last_purchase_date'].toString())
           : null,

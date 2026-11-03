@@ -81,7 +81,9 @@ class CallRemarksCard extends StatelessWidget {
                                     ? 'A preference change request is pending Admin approval. Completion and remarks are locked.'
                                     : (pendingRequestType == 'edit_customer_details'
                                         ? 'A customer details change request is pending Admin approval. Completion and remarks are locked.'
-                                        : 'A change request is pending Admin approval. Completion and remarks are locked until approved or rejected.'))),
+                                        : (pendingRequestType == 'blacklist_customer'
+                                            ? 'A customer blacklist request is pending Admin approval. Completion and remarks are locked.'
+                                            : 'A change request is pending Admin approval. Completion and remarks are locked until approved or rejected.')))),
                         style: TextStyle(
                           fontSize: 12,
                           color: isDark ? Colors.amber[200] : Colors.amber[900],

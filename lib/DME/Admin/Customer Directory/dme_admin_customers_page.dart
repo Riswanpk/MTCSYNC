@@ -123,13 +123,24 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
     }
 
     try {
-      final response = await client
-          .from('dme_customers')
-          .select(
-              'id, name, phone, address, salesman, last_purchase_date, created_at, primary_branch, dme_customer_branches(branch_id, category_id, customer_type_id)')
-          .or('name.ilike.%$q%,phone.ilike.%$q%,salesman.ilike.%$q%,address.ilike.%$q%')
-          .order('last_purchase_date', ascending: false, nullsFirst: false)
-          .range(0, _pageSize - 1);
+      dynamic response;
+      try {
+        response = await client
+            .from('dme_customers')
+            .select(
+                'id, name, phone, address, salesman, blacklisted, last_purchase_date, created_at, primary_branch, dme_customer_branches(branch_id, category_id, customer_type_id)')
+            .or('name.ilike.%$q%,phone.ilike.%$q%,salesman.ilike.%$q%,address.ilike.%$q%')
+            .order('last_purchase_date', ascending: false, nullsFirst: false)
+            .range(0, _pageSize - 1);
+      } catch (_) {
+        response = await client
+            .from('dme_customers')
+            .select(
+                'id, name, phone, address, salesman, last_purchase_date, created_at, primary_branch, dme_customer_branches(branch_id, category_id, customer_type_id)')
+            .or('name.ilike.%$q%,phone.ilike.%$q%,salesman.ilike.%$q%,address.ilike.%$q%')
+            .order('last_purchase_date', ascending: false, nullsFirst: false)
+            .range(0, _pageSize - 1);
+      }
 
       if (!mounted) return;
 
@@ -162,13 +173,24 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
     setState(() => _isLoadingMore = true);
 
     try {
-      final response = await client
-          .from('dme_customers')
-          .select(
-              'id, name, phone, address, salesman, last_purchase_date, created_at, primary_branch, dme_customer_branches(branch_id, category_id, customer_type_id)')
-          .or('name.ilike.%$q%,phone.ilike.%$q%,salesman.ilike.%$q%,address.ilike.%$q%')
-          .order('last_purchase_date', ascending: false, nullsFirst: false)
-          .range(_currentOffset, _currentOffset + _pageSize - 1);
+      dynamic response;
+      try {
+        response = await client
+            .from('dme_customers')
+            .select(
+                'id, name, phone, address, salesman, blacklisted, last_purchase_date, created_at, primary_branch, dme_customer_branches(branch_id, category_id, customer_type_id)')
+            .or('name.ilike.%$q%,phone.ilike.%$q%,salesman.ilike.%$q%,address.ilike.%$q%')
+            .order('last_purchase_date', ascending: false, nullsFirst: false)
+            .range(_currentOffset, _currentOffset + _pageSize - 1);
+      } catch (_) {
+        response = await client
+            .from('dme_customers')
+            .select(
+                'id, name, phone, address, salesman, last_purchase_date, created_at, primary_branch, dme_customer_branches(branch_id, category_id, customer_type_id)')
+            .or('name.ilike.%$q%,phone.ilike.%$q%,salesman.ilike.%$q%,address.ilike.%$q%')
+            .order('last_purchase_date', ascending: false, nullsFirst: false)
+            .range(_currentOffset, _currentOffset + _pageSize - 1);
+      }
 
       if (!mounted) return;
 
@@ -446,6 +468,30 @@ class _DmeAdminCustomersPageState extends State<DmeAdminCustomersPage> {
                                                   spacing: 4,
                                                   runSpacing: 4,
                                                   children: [
+                                                    if (c['blacklisted'] == true || c['blacklisted'] == 'true' || c['blacklisted'] == 1)
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.red.withValues(alpha: 0.15),
+                                                          borderRadius: BorderRadius.circular(4),
+                                                          border: Border.all(color: Colors.red.shade700, width: 0.8),
+                                                        ),
+                                                        child: Row(
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            Icon(Icons.block_rounded, size: 11, color: Colors.red.shade800),
+                                                            const SizedBox(width: 2),
+                                                            Text(
+                                                              'BLACKLISTED',
+                                                              style: TextStyle(
+                                                                fontSize: 10,
+                                                                fontWeight: FontWeight.bold,
+                                                                color: Colors.red.shade900,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
                                                     if (c['primary_branch'] != null)
                                                       Container(
                                                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

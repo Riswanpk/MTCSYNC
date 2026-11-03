@@ -249,11 +249,12 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
     final isPhoneChange = requestType == 'phone_number_change';
     final isCallCompletion = requestType == 'call_completion';
     final isEditCustomerDetails = requestType == 'edit_customer_details';
+    final isBlacklist = requestType == 'blacklist_customer';
     final newValue = (request['new_value'] ?? '').toString().trim();
     final customerId = int.tryParse(request['customer_id']?.toString() ?? '');
     final reminderId = int.tryParse(request['reminder_id']?.toString() ?? '');
 
-    if (customerId == null || (!isPhoneChange && newValue.isEmpty)) {
+    if (customerId == null || (!isPhoneChange && !isBlacklist && newValue.isEmpty)) {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('Invalid request data.'), backgroundColor: Colors.red),
       );
@@ -460,6 +461,78 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
       );
 
       if (confirmEdit != true) return;
+    } else if (isBlacklist) {
+      final blReason = (request['reason'] ?? '').toString().trim();
+      final bool? confirmBlacklist = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: Row(
+            children: [
+              Icon(Icons.block_rounded, color: Colors.red.shade700),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Approve Customer Blacklist',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Are you sure you want to blacklist "$customerName"?',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Effect: Future Excel uploads will store sales data for this customer, but NO call reminders will be created.',
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.red.shade900),
+                    ),
+                    if (blReason.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Reason: $blReason',
+                        style: const TextStyle(fontSize: 12.5, fontStyle: FontStyle.italic),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade700,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Approve Blacklist'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmBlacklist != true) return;
     } else {
       // Call completion or Preference change dialog
       final bool? confirm = await showDialog<bool>(
@@ -670,6 +743,37 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
             });
           }
         }
+      } else if (isBlacklist) {
+        await client.from(DmeConstants.tableCustomers).update({
+          'blacklisted': true,
+          'updated_at': nowIso,
+        }).eq('id', customerId);
+
+        // Close any active/pending reminders for this blacklisted customer so they don't appear in call queues
+        try {
+          final blReason = (request['reason'] ?? '').toString().trim();
+          final remNote = blReason.isNotEmpty
+              ? 'Customer Blacklisted: $blReason'
+              : 'Customer Blacklisted';
+          if (reminderId != null) {
+            await client.from('dme_reminders').update({
+              'status': 'completed',
+              'remarks': remNote,
+              'updated_at': nowIso,
+            }).eq('id', reminderId);
+          }
+          await client
+              .from('dme_reminders')
+              .update({
+                'status': 'completed',
+                'remarks': remNote,
+                'updated_at': nowIso,
+              })
+              .eq('customer_id', customerId)
+              .inFilter('status', ['pending', 'called']);
+        } catch (remErr) {
+          debugPrint('Notice closing pending reminders for blacklisted customer: $remErr');
+        }
       } else {
         await client.from(DmeConstants.tableCustomers).update({
           'preference': newValue,
@@ -708,7 +812,9 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
                       ? 'Phone number updated to $phoneToUpdate! Reminder unlocked.'
                       : (isEditCustomerDetails
                           ? 'Customer details updated successfully!'
-                          : 'Preference updated to $newValue successfully!')),
+                          : (isBlacklist
+                              ? 'Customer "$customerName" marked as blacklisted!'
+                              : 'Preference updated to $newValue successfully!'))),
             ),
             backgroundColor: Colors.green,
           ),
@@ -751,7 +857,7 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
             TextField(
               controller: noteController,
               decoration: InputDecoration(
-                labelText: 'Reason for Rejection (Optional)',
+                labelText: 'Reason for Rejection',
                 hintText: 'e.g. Invalid phone format, verified existing number is active',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
@@ -1017,6 +1123,16 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
                           if (val) setState(() => _selectedTypeFilter = 'call_completion');
                         },
                       ),
+                      const SizedBox(width: 8),
+                      ChoiceChip(
+                        avatar: const Icon(Icons.block_rounded, size: 16),
+                        label: const Text('Blacklist'),
+                        selected: _selectedTypeFilter == 'blacklist_customer',
+                        selectedColor: Colors.red.withValues(alpha: 0.25),
+                        onSelected: (val) {
+                          if (val) setState(() => _selectedTypeFilter = 'blacklist_customer');
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -1092,6 +1208,7 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
           final isCallCompletion = type == 'call_completion';
           final isPhone = type == 'phone_number_change';
           final isEditDetails = type == 'edit_customer_details';
+          final isBlacklist = type == 'blacklist_customer';
           final status = (req['status'] ?? 'pending').toString().toLowerCase();
           final customerName = req['customer_name'] ?? 'Unnamed Customer';
           final currentVal = req['current_value'] ?? 'N/A';
@@ -1155,7 +1272,9 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
                                   ? Colors.orange.withValues(alpha: 0.15)
                                   : (isEditDetails
                                       ? const Color(0xFF007A87).withValues(alpha: 0.15)
-                                      : const Color(0xFF005BAC).withValues(alpha: 0.15))),
+                                      : (isBlacklist
+                                          ? Colors.red.withValues(alpha: 0.15)
+                                          : const Color(0xFF005BAC).withValues(alpha: 0.15)))),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Row(
@@ -1168,7 +1287,9 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
                                       ? Icons.phone_iphone_rounded
                                       : (isEditDetails
                                           ? Icons.manage_accounts_rounded
-                                          : Icons.swap_horiz_rounded)),
+                                          : (isBlacklist
+                                              ? Icons.block_rounded
+                                              : Icons.swap_horiz_rounded))),
                               size: 13,
                               color: isCallCompletion
                                   ? Colors.purple.shade900
@@ -1176,7 +1297,9 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
                                       ? Colors.orange.shade900
                                       : (isEditDetails
                                           ? const Color(0xFF005B66)
-                                          : const Color(0xFF005BAC))),
+                                          : (isBlacklist
+                                              ? Colors.red.shade900
+                                              : const Color(0xFF005BAC)))),
                             ),
                             const SizedBox(width: 4),
                             Text(
@@ -1186,7 +1309,9 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
                                       ? 'PHONE CHANGE'
                                       : (isEditDetails
                                           ? 'CUSTOMER DETAILS'
-                                          : 'PREFERENCE CHANGE')),
+                                          : (isBlacklist
+                                              ? 'BLACKLIST CUSTOMER'
+                                              : 'PREFERENCE CHANGE'))),
                               style: TextStyle(
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.bold,
@@ -1196,7 +1321,9 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
                                         ? Colors.orange.shade900
                                         : (isEditDetails
                                             ? const Color(0xFF005B66)
-                                            : const Color(0xFF005BAC))),
+                                            : (isBlacklist
+                                                ? Colors.red.shade900
+                                                : const Color(0xFF005BAC)))),
                               ),
                             ),
                           ],
@@ -1460,6 +1587,43 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
                                   child: Text(
                                     reason,
                                     style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ] else if (isBlacklist) ...[
+                          Row(
+                            children: [
+                              Text(
+                                'Requested Action: ',
+                                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  'Blacklist Customer (No future reminders)',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.red.shade800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (reason.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Reason: ',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    reason,
+                                    style: const TextStyle(fontSize: 12.5, fontStyle: FontStyle.italic),
                                   ),
                                 ),
                               ],

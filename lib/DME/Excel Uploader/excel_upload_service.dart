@@ -142,25 +142,40 @@ class ExcelUploadService {
 
     onProgress(0.3, 'Syncing ${customersToUpsert.length} customer(s)...');
 
-    // Determine which customers already exist in dme_customers and check their primary_branch and creation_date
+    // Determine which customers already exist in dme_customers and check their primary_branch, creation_date, and blacklisted status
     final activePhones = customersToUpsert.keys.toList();
     final Map<String, int?> existingCustomerPrimaryBranches = {};
     final Map<String, String?> existingCustomerCreationDates = {};
+    final Set<String> blacklistedPhones = {};
     for (int i = 0; i < activePhones.length; i += 500) {
       final chunk = activePhones.sublist(
         i,
         (i + 500 > activePhones.length) ? activePhones.length : i + 500,
       );
       try {
-        final existingRows = await client
-            .from('dme_customers')
-            .select('phone, primary_branch, creation_date')
-            .inFilter('phone', chunk);
+        dynamic existingRows;
+        try {
+          existingRows = await client
+              .from('dme_customers')
+              .select('phone, primary_branch, creation_date, blacklisted')
+              .inFilter('phone', chunk);
+        } catch (_) {
+          existingRows = await client
+              .from('dme_customers')
+              .select('phone, primary_branch, creation_date')
+              .inFilter('phone', chunk);
+        }
         for (var row in (existingRows as List)) {
           final p = row['phone']?.toString();
           if (p != null) {
             existingCustomerPrimaryBranches[p] = row['primary_branch'] as int?;
             existingCustomerCreationDates[p] = row['creation_date']?.toString();
+            final isBlacklisted = row['blacklisted'] == true ||
+                row['blacklisted'] == 'true' ||
+                row['blacklisted'] == 1;
+            if (isBlacklisted) {
+              blacklistedPhones.add(p);
+            }
           }
         }
       } catch (e) {
@@ -272,6 +287,37 @@ class ExcelUploadService {
 
     // 2. Fetch any existing sales in the database for these customers to obtain their IDs
     final List<int> customerIds = phoneToCustomerId.values.toSet().toList();
+    final Set<int> blacklistedCustomerIds = {};
+    for (var entry in phoneToCustomerId.entries) {
+      if (blacklistedPhones.contains(entry.key)) {
+        blacklistedCustomerIds.add(entry.value);
+      }
+    }
+
+    if (customerIds.isNotEmpty) {
+      try {
+        for (int i = 0; i < customerIds.length; i += 500) {
+          final chunk = customerIds.sublist(
+            i,
+            (i + 500 > customerIds.length) ? customerIds.length : i + 500,
+          );
+          final blRows = await client
+              .from('dme_customers')
+              .select('id, phone')
+              .inFilter('id', chunk)
+              .eq('blacklisted', true);
+          for (var r in (blRows as List)) {
+            final cId = r['id'] as int?;
+            final ph = r['phone']?.toString();
+            if (cId != null) blacklistedCustomerIds.add(cId);
+            if (ph != null) blacklistedPhones.add(ph);
+          }
+        }
+      } catch (e) {
+        debugPrint('Notice checking blacklisted customers: $e');
+      }
+    }
+
     final Map<String, int> existingSaleIdsByKey = {}; // '${custId}_$dateStr' -> id
 
     if (customerIds.isNotEmpty) {
@@ -482,6 +528,7 @@ class ExcelUploadService {
     final List<Map<String, dynamic>> detailsToInsert = [];
     final Map<int, Map<String, dynamic>> remindersByCustomer = {};
     final Map<String, Map<String, dynamic>> branchesByCustBranch = {};
+    final Set<int> skippedBlacklistedCustomerIds = {};
 
     for (int i = 0; i < groupedSales.length; i++) {
       final sale = groupedSales[i];
@@ -500,6 +547,11 @@ class ExcelUploadService {
       }
 
       if (custId != null) {
+        final isBlacklisted = blacklistedCustomerIds.contains(custId) || blacklistedPhones.contains(activePhone);
+        if (isBlacklisted) {
+          skippedBlacklistedCustomerIds.add(custId);
+        }
+
         // Check if this sale's category is excluded from reminders
         // Excluded: AUDITORIUM (6), TRUST (7), INSTITUTION (8), VEHICLE SHOWROOM (11), GENERAL & OTHERS (13)
         final isExcludedCategory = DmeConstants.isCategoryExcludedFromReminders(
@@ -508,9 +560,9 @@ class ExcelUploadService {
           typeName: sale.typeName,
         );
 
-        // If this branch/sale is an eligible category, set/update reminder specifically for this branch
-        // If it is an excluded category (e.g. branch B purchase in an excluded category), DO NOT update reminders!
-        if (!isExcludedCategory) {
+        // If this branch/sale is an eligible category AND customer is NOT blacklisted, set/update reminder specifically for this branch
+        // If it is an excluded category or blacklisted customer, DO NOT create or update reminders!
+        if (!isExcludedCategory && !isBlacklisted) {
           final reminderDate = sale.date.add(const Duration(days: 28));
           final existingReminderForCust = remindersByCustomer[custId];
 
@@ -576,6 +628,10 @@ class ExcelUploadService {
 
     final List<Map<String, dynamic>> remindersToInsert = [];
     final List<Map<String, dynamic>> remindersToUpdate = [];
+
+    if (skippedBlacklistedCustomerIds.isNotEmpty) {
+      onLog('ℹ Skipped reminder creation for ${skippedBlacklistedCustomerIds.length} blacklisted customer(s) (sales data stored)');
+    }
 
     // Check existing reminders in database to ensure we advance due dates for existing customers
     final List<int> customerIdsWithNewReminders = remindersByCustomer.keys.toList();

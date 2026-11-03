@@ -10,11 +10,13 @@ export 'dme_requests_phone_number_invalid.dart';
 export 'dme_requests_change_preference.dart';
 export 'dme_requests_mark_call_as_completed.dart';
 export 'dme_requests_edit_customer_details.dart';
+export 'dme_requests_blacklist_customer.dart';
 
 import 'dme_requests_phone_number_invalid.dart';
 import 'dme_requests_change_preference.dart';
 import 'dme_requests_mark_call_as_completed.dart';
 import 'dme_requests_edit_customer_details.dart';
+import 'dme_requests_blacklist_customer.dart';
 import 'dme_notification_service.dart';
 
 class DmeRaiseRequestPage extends StatefulWidget {
@@ -33,7 +35,7 @@ class _DmeRaiseRequestPageState extends State<DmeRaiseRequestPage> {
   final _formKey = GlobalKey<FormState>();
   final _editCustomerDetailsKey = GlobalKey<DmeRequestsEditCustomerDetailsFormState>();
 
-  // 'phone', 'edit_customer_details', 'preference', or 'completion'
+  // 'phone', 'edit_customer_details', 'preference', 'completion', or 'blacklist'
   String _selectedRequestType = 'phone';
 
   // 1. Phone number form controller (only reason needed as admin enters new number)
@@ -51,6 +53,9 @@ class _DmeRaiseRequestPageState extends State<DmeRaiseRequestPage> {
   late TextEditingController _callDurationController;
   late TextEditingController _completionRemarksController;
   late TextEditingController _completionReasonController;
+
+  // 5. Blacklist customer form controller
+  late TextEditingController _blacklistReasonController;
 
   bool _isSubmitting = false;
 
@@ -71,6 +76,8 @@ class _DmeRaiseRequestPageState extends State<DmeRaiseRequestPage> {
     _callDurationController = TextEditingController();
     _completionRemarksController = TextEditingController();
     _completionReasonController = TextEditingController();
+
+    _blacklistReasonController = TextEditingController();
   }
 
   @override
@@ -82,6 +89,7 @@ class _DmeRaiseRequestPageState extends State<DmeRaiseRequestPage> {
     _callDurationController.dispose();
     _completionRemarksController.dispose();
     _completionReasonController.dispose();
+    _blacklistReasonController.dispose();
     super.dispose();
   }
 
@@ -141,6 +149,11 @@ class _DmeRaiseRequestPageState extends State<DmeRaiseRequestPage> {
       currentValue = currentPreference;
       newValue = _selectedPreference;
       reason = _preferenceReasonController.text.trim();
+    } else if (_selectedRequestType == 'blacklist') {
+      requestType = 'blacklist_customer';
+      currentValue = 'false';
+      newValue = 'true';
+      reason = _blacklistReasonController.text.trim();
     } else {
       requestType = 'call_completion';
       currentValue = (widget.reminder['status'] ?? 'pending').toString();
@@ -373,6 +386,17 @@ class _DmeRaiseRequestPageState extends State<DmeRaiseRequestPage> {
                 accentColor: Colors.purple.shade700,
               ),
 
+              const SizedBox(height: 10),
+
+              // Option 5: Blacklist Customer
+              _buildTypeCard(
+                type: 'blacklist',
+                title: 'Blacklist Customer',
+                subtitle: 'Request to blacklist this customer so future Excel uploads store data without creating reminders.',
+                icon: Icons.block_rounded,
+                accentColor: Colors.red.shade800,
+              ),
+
               const SizedBox(height: 24),
 
               // Modular Dynamic Input Fields based on selected type
@@ -395,6 +419,11 @@ class _DmeRaiseRequestPageState extends State<DmeRaiseRequestPage> {
                     setState(() => _selectedPreference = newPref);
                   },
                   reasonController: _preferenceReasonController,
+                )
+              else if (_selectedRequestType == 'blacklist')
+                DmeRequestsBlacklistCustomerForm(
+                  reminder: widget.reminder,
+                  reasonController: _blacklistReasonController,
                 )
               else
                 DmeRequestsMarkCallAsCompletedForm(
