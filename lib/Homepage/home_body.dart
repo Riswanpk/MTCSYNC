@@ -960,6 +960,16 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
             ),
           );
         },
+        onLongPress: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const LoadingOverlayPage(
+                child: YupulseMonthlyMarksReportPage(),
+              ),
+            ),
+          );
+        },
         text: 'Yupulse Sync',
         color: isDark ? const Color(0xFF23272A) : Colors.white,
         textColor: isDark ? Colors.white70 : const Color(0xFF607D8B),

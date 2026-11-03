@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../Navigation/user_cache_service.dart';
 import 'marks_firestore_service.dart';
 import 'yupulse_mark_model.dart';
+import 'yupulse_monthly_marks_report_page.dart';
 import 'yupulse_ui_helpers.dart';
 import 'yupulse_user_card.dart';
 
@@ -968,6 +969,24 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
         backgroundColor: primaryGreen,
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.assessment_rounded),
+            tooltip: 'Monthly Marks Report',
+            onPressed: () {
+              final monthIdx = _months.indexOf(_selectedMonth) + 1;
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => YupulseMonthlyMarksReportPage(
+                    initialBranch: _selectedBranch,
+                    initialMonth: monthIdx > 0 ? monthIdx : null,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: _loadingBranches
           ? const Center(child: CircularProgressIndicator(color: primaryGreen))
