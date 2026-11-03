@@ -624,56 +624,217 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
       return;
     }
 
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
     final bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 24),
-            SizedBox(width: 8),
-            Text('Confirm Submission', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.assignment_turned_in_rounded, color: Colors.orange, size: 22),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'Submission Summary',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+            ),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Are you sure you want to submit marks for ${selectedItems.length} user(s) in $_selectedBranch for $_selectedMonth?',
-              style: const TextStyle(fontSize: 14),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.red.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.shade200),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Review marks for ${selectedItems.length} user(s) in $_selectedBranch ($_selectedMonth) before final submission:',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? Colors.white70 : Colors.grey.shade700,
+                ),
               ),
-              child: Row(
-                children: [
-                  Icon(Icons.lock_rounded, color: Colors.red.shade700, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Important: Once submitted, marks cannot be edited or submitted again for this month.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.red.shade900,
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.45,
+                ),
+                child: Scrollbar(
+                  thumbVisibility: true,
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: selectedItems.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final item = selectedItems[index];
+
+                      final todoDone = item.useAutoTodo
+                          ? item.autoTodoDoneCount
+                          : (int.tryParse(item.todoController.text.trim()) ?? 0);
+
+                      final callTarget = item.useAutoCalling
+                          ? item.autoCallTargetCount
+                          : (int.tryParse(item.callTargetController.text.trim()) ?? 0);
+                      final callDone = item.useAutoCalling
+                          ? item.autoCallDoneCount
+                          : (int.tryParse(item.callDoneController.text.trim()) ?? 0);
+
+                      final supersaleTotal = item.useAutoSupersale
+                          ? item.supersaleTotal
+                          : (int.tryParse(item.supersaleTotalController.text.trim()) ?? 0);
+                      final supersaleTaken = item.useAutoSupersale
+                          ? item.supersaleTaken
+                          : (int.tryParse(item.supersaleTakenController.text.trim()) ?? 0);
+
+                      final ccLeads = item.useAutoLeads
+                          ? item.ccLeadsCreated
+                          : (int.tryParse(item.ccLeadsController.text.trim()) ?? 0);
+                      final salesLeads = item.useAutoLeads
+                          ? item.salesLeadsCreated
+                          : (int.tryParse(item.salesLeadsController.text.trim()) ?? 0);
+
+                      final bool hasManualOverrides = !item.useAutoTodo ||
+                          !item.useAutoCalling ||
+                          !item.useAutoSupersale ||
+                          !item.useAutoLeads;
+
+                      return Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 13,
+                                  backgroundColor: primaryGreen,
+                                  child: Text(
+                                    item.username.isNotEmpty ? item.username[0].toUpperCase() : 'U',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    item.username,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (hasManualOverrides)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.amber.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: Colors.amber.shade700, width: 0.8),
+                                    ),
+                                    child: Text(
+                                      'Manual Edit',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                        color: isDark ? Colors.amber.shade300 : Colors.amber.shade900,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                _buildSummaryMetricChip(
+                                  label: 'Todo',
+                                  value: '$todoDone days',
+                                  isManual: !item.useAutoTodo,
+                                  isDark: isDark,
+                                ),
+                                _buildSummaryMetricChip(
+                                  label: 'Calling',
+                                  value: '$callDone / $callTarget',
+                                  isManual: !item.useAutoCalling,
+                                  isDark: isDark,
+                                ),
+                                _buildSummaryMetricChip(
+                                  label: 'Supersale',
+                                  value: '$supersaleTaken / $supersaleTotal',
+                                  isManual: !item.useAutoSupersale,
+                                  isDark: isDark,
+                                ),
+                                _buildSummaryMetricChip(
+                                  label: 'Leads',
+                                  value: 'CC: $ccLeads | Sales: $salesLeads',
+                                  isManual: !item.useAutoLeads,
+                                  isDark: isDark,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.lock_rounded, color: Colors.red.shade700, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Important: Once submitted, marks cannot be edited or submitted again for this month.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.red.shade900,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+            child: const Text('Back to Review', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -1134,6 +1295,52 @@ class _YupulseSyncPageState extends State<YupulseSyncPage> {
                   ),
               ],
             ),
+    );
+  }
+
+  Widget _buildSummaryMetricChip({
+    required String label,
+    required String value,
+    required bool isManual,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: isManual
+            ? Colors.amber.withValues(alpha: isDark ? 0.15 : 0.12)
+            : (isDark ? const Color(0xFF0F172A) : Colors.white),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isManual
+              ? (isDark ? Colors.amber.shade700 : Colors.amber.shade400)
+              : (isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+          width: 0.8,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$label: ',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.white60 : Colors.grey.shade600,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: isManual
+                  ? (isDark ? Colors.amber.shade300 : Colors.amber.shade900)
+                  : (isDark ? Colors.white : Colors.grey.shade900),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
