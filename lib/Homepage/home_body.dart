@@ -29,6 +29,7 @@ import '../SME/sme_ads_page.dart';
 import '../SME/sme_deletion_approval.dart';
 import '../Supersale/Admin/supersale_admin.dart';
 import '../Supersale/Admin/supersale_admin_report.dart';
+import '../Supersale/Admin/supersale_admin_dashboard.dart';
 import '../Supersale/User/supersale_user_mainpage.dart';
 import '../SME/sme_assigned_leads_page.dart';
 import '../Task/task_admin.dart';
@@ -387,6 +388,16 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     }
   }
 
+  Future<void> _navigateToSupersaleDashboard(BuildContext context) async {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const LoadingOverlayPage(
+          child: SupersaleAdminDashboardPage(),
+        ),
+      ),
+    );
+  }
+
   Future<void> _navigateToSupersaleReport(BuildContext context) async {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -591,16 +602,23 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
         icon: Icons.flash_on_rounded,
       ),
       NeumorphicButton(
+        onTap: () => _navigateToSupersaleDashboard(context),
+        text: 'Dashboard',
+        color: primaryGreen,
+        textColor: Colors.white,
+        icon: Icons.dashboard_rounded,
+      ),
+      NeumorphicButton(
         onTap: () => _navigateToSupersaleReport(context),
         text: 'Reports',
-        color: primaryGreen,
+        color: primaryBlue,
         textColor: Colors.white,
         icon: Icons.assessment_rounded,
       ),
       NeumorphicButton(
         onTap: () => _navigateToMarketing(context),
         text: 'Marketing',
-        color: primaryBlue.withBlue(180),
+        color: primaryGreen,
         textColor: Colors.white,
         icon: Icons.campaign_rounded,
       ),

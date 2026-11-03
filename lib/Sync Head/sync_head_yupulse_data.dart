@@ -5,3 +5,4 @@ export 'Yupulse Sync/yupulse_mark_model.dart';
 export 'Yupulse Sync/yupulse_ui_helpers.dart';
 export 'Yupulse Sync/yupulse_user_card.dart';
 export 'Yupulse Sync/yupulse_sync_page.dart';
+export 'Yupulse Sync/yupulse_monthly_marks_report_page.dart';

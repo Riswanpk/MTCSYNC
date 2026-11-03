@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'supersale_admin_form.dart';
+import 'supersale_admin_dashboard.dart';
 import 'supersale_admin_report.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
@@ -420,6 +421,18 @@ class _SupersalePageState extends State<SupersalePage> {
               onPressed: () => Navigator.pop(context),
             ),
             actions: [
+              IconButton(
+                icon: const Icon(Icons.dashboard_rounded),
+                tooltip: 'Supersale Dashboard',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SupersaleAdminDashboardPage(),
+                    ),
+                  );
+                },
+              ),
               IconButton(
                 icon: const Icon(Icons.assessment_rounded),
                 tooltip: 'Supersale Reports',
