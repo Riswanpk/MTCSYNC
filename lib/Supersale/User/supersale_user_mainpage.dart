@@ -144,10 +144,37 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
     }
   }
 
+  static DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    return null;
+  }
+
+  static bool _isOlderThanTwoWeeksDelivered(Map<String, dynamic> data, DateTime now) {
+    final status = (data['status'] ?? 'pending').toString().toLowerCase();
+    if (status != 'delivered') return false;
+
+    // Delivery date defaults to deliveredAt, fallback to created_at if deliveredAt is absent
+    final deliveredTime = _parseDate(data['deliveredAt']) ?? _parseDate(data['created_at']);
+    if (deliveredTime == null) return false;
+
+    return now.difference(deliveredTime) > const Duration(days: 14);
+  }
+
   void _updateAllEntries() {
     final merged = <QueryDocumentSnapshot>[];
+    final now = DateTime.now();
+
     _entriesMap.forEach((key, list) {
-      merged.addAll(list);
+      for (final doc in list) {
+        final data = doc.data() as Map<String, dynamic>;
+        // Stop displaying / tracking delivered bookings older than 2 weeks
+        if (!_isOlderThanTwoWeeksDelivered(data, now)) {
+          merged.add(doc);
+        }
+      }
     });
 
     // Sort bookings in-memory by created_at descending to avoid custom index creation requirements
@@ -271,7 +298,8 @@ class _SupersaleUserMainPageState extends State<SupersaleUserMainPage> {
 
         final deliveredEntries = _allUserEntries.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
-          return (data['status'] ?? 'pending') == 'delivered';
+          if ((data['status'] ?? 'pending') != 'delivered') return false;
+          return !_isOlderThanTwoWeeksDelivered(data, now);
         }).toList();
 
         return DefaultTabController(

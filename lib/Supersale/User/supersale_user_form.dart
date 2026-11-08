@@ -332,6 +332,7 @@ class _SupersaleUserFormPageState extends State<SupersaleUserFormPage> {
           'isSpotSale': _isSpotSale,
           'saleType': _isSpotSale ? 'spot_sale' : 'booking',
           if (_isSpotSale) 'billedPhone': phoneDigits,
+          if (_isSpotSale) 'deliveredAt': FieldValue.serverTimestamp(),
           if (!_isSpotSale && _deliveryReminderDateTime != null)
             'deliveryReminder': Timestamp.fromDate(_deliveryReminderDateTime!),
         };
