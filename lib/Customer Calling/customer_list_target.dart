@@ -238,16 +238,6 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
     }
   }
 
-  static final RegExp _nonDigitRegex = RegExp(r'\D');
-
-  static String _normalizePhone(dynamic phone) {
-    if (phone == null) return '';
-    final cleaned = phone.toString().replaceAll(_nonDigitRegex, '');
-    if (cleaned.length > 10) {
-      return cleaned.substring(cleaned.length - 10);
-    }
-    return cleaned;
-  }
 
   Future<void> _updateFirestore() async {
     if (_docId == null || _customers == null) return;
@@ -267,12 +257,15 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
           .doc(_docId);
 
       // Pre-compute normalized lookup maps for O(1) matching instead of O(N^2) regex in transaction
+      final Map<String, Map<String, dynamic>> byId = {};
       final Map<String, Map<String, dynamic>> byPhone = {};
       final Map<String, Map<String, dynamic>> byName = {};
       for (final lc in _customers!) {
-        final lcName = (lc['name'] ?? '').toString().trim().toLowerCase();
-        final lc1 = _normalizePhone(lc['contact1'] ?? lc['contact'] ?? lc['phone']);
-        final lc2 = _normalizePhone(lc['contact2']);
+        final lcId = (lc['id'] ?? lc['customer_id'] ?? lc['slno'] ?? lc['sl_no'])?.toString().trim();
+        if (lcId != null && lcId.isNotEmpty) byId[lcId] = lc;
+        final lcName = (lc['name'] ?? lc['customer_name'] ?? '').toString().trim().toLowerCase();
+        final lc1 = CustomerListTargetService.normalizePhone(lc['contact1'] ?? lc['contact'] ?? lc['phone'] ?? lc['contact_no_1'] ?? lc['mobile']);
+        final lc2 = CustomerListTargetService.normalizePhone(lc['contact2'] ?? lc['contact_no_2']);
         if (lc1.isNotEmpty) byPhone[lc1] = lc;
         if (lc2.isNotEmpty) byPhone[lc2] = lc;
         if (lcName.isNotEmpty) byName[lcName] = lc;
@@ -289,12 +282,14 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
 
         bool changed = false;
         for (final sc in serverCustomers) {
-          final scName = (sc['name'] ?? '').toString().trim().toLowerCase();
-          final sc1 = _normalizePhone(sc['contact1'] ?? sc['contact'] ?? sc['phone']);
-          final sc2 = _normalizePhone(sc['contact2']);
+          final scId = (sc['id'] ?? sc['customer_id'] ?? sc['slno'] ?? sc['sl_no'])?.toString().trim();
+          final scName = (sc['name'] ?? sc['customer_name'] ?? '').toString().trim().toLowerCase();
+          final sc1 = CustomerListTargetService.normalizePhone(sc['contact1'] ?? sc['contact'] ?? sc['phone'] ?? sc['contact_no_1'] ?? sc['mobile']);
+          final sc2 = CustomerListTargetService.normalizePhone(sc['contact2'] ?? sc['contact_no_2']);
 
           Map<String, dynamic>? match;
-          if (sc1.isNotEmpty) match = byPhone[sc1];
+          if (scId != null && scId.isNotEmpty) match = byId[scId];
+          if (match == null && sc1.isNotEmpty) match = byPhone[sc1];
           if (match == null && sc2.isNotEmpty) match = byPhone[sc2];
           if (match == null && scName.isNotEmpty) match = byName[scName];
 
@@ -745,6 +740,7 @@ class _CustomerListTargetState extends State<CustomerListTarget> with WidgetsBin
                             ).then((_) {
                               _isTileViewerOpen = false;
                               if (mounted) {
+                                _saveToLocalCache();
                                 setState(() {});
                               }
                             });

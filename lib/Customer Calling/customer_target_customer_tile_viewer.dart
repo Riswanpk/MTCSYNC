@@ -146,18 +146,21 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
     } else {
       called = true;
     }
+    customer['callMade'] = true;
+    widget.customer['callMade'] = true;
     _pendingCallNumber = null;
     _callStartTime = null;
 
+    // Always trigger direct targeted status update
+    updateCallStatusInFirestore(
+      customer: customer,
+      context: context,
+      mounted: mounted,
+      docId: widget.docId,
+    );
+
     if (widget.onStatusChanged != null) {
       widget.onStatusChanged!(remarksController.text.trim());
-    } else {
-      updateCallStatusInFirestore(
-        customer: customer,
-        context: context,
-        mounted: mounted,
-        docId: widget.docId,
-      );
     }
 
     if (mounted) {
@@ -382,6 +385,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
                     contact1 ?? '',
                     contact2,
                     (numberToCall, startTime) {
+                      if (!mounted) return;
                       setState(() {
                         _pendingCallNumber = numberToCall;
                         _callStartTime = startTime;
@@ -415,17 +419,25 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
                           setState(() => _isSavingRemarks = true);
                           try {
                             customer['remarks'] = remarks;
-                                if (widget.onStatusChanged != null) {
-                                  await widget.onStatusChanged!(remarks);
-                                } else {
-                                  await updateRemarksInFirestore(
-                                    customer: customer,
-                                    remarks: remarks,
-                                    context: context,
-                                    mounted: mounted,
-                                    docId: widget.docId,
-                                  );
-                                }
+                            widget.customer['remarks'] = remarks;
+                            if (called) {
+                              customer['callMade'] = true;
+                              widget.customer['callMade'] = true;
+                            }
+
+                            // 1. Direct targeted Firestore update to guarantee remarks are written immediately
+                            await updateRemarksInFirestore(
+                              customer: customer,
+                              remarks: remarks,
+                              context: context,
+                              mounted: mounted,
+                              docId: widget.docId,
+                            );
+
+                            // 2. Notify parent listener (e.g. customer_list_target or customer_calling_remarks_pending)
+                            if (widget.onStatusChanged != null) {
+                              await widget.onStatusChanged!(remarks);
+                            }
                             if (mounted) {
                               setState(() {
                                 _remarksSaved = true;

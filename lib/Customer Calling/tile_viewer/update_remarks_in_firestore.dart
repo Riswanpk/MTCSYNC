@@ -1,17 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-
-final RegExp _nonDigitRegex = RegExp(r'\D');
-
-String _normalizePhone(dynamic phone) {
-  if (phone == null) return '';
-  final cleaned = phone.toString().replaceAll(_nonDigitRegex, '');
-  if (cleaned.length > 10) {
-    return cleaned.substring(cleaned.length - 10);
-  }
-  return cleaned;
-}
+import '../customer_list_target_service.dart';
 
 Future<void> updateRemarksInFirestore({
   required Map<String, dynamic> customer,
@@ -54,26 +44,22 @@ Future<void> updateRemarksInFirestore({
 
     if (doc.exists && doc.data()?['customers'] != null) {
       List customers = List.from(doc.data()!['customers']);
-      final c1Norm = _normalizePhone(customer['contact1'] ?? customer['contact'] ?? customer['phone']);
-      final c2Norm = _normalizePhone(customer['contact2']);
-      final cName = (customer['name'] ?? '').toString().trim().toLowerCase();
 
       int idx = customers.indexWhere((c) {
         if (c is! Map) return false;
-        final p1 = _normalizePhone(c['contact1'] ?? c['contact'] ?? c['phone']);
-        final p2 = _normalizePhone(c['contact2']);
-        if (c1Norm.isNotEmpty && (p1 == c1Norm || p2 == c1Norm)) return true;
-        if (c2Norm.isNotEmpty && (p1 == c2Norm || p2 == c2Norm)) return true;
-        if (cName.isNotEmpty && (c['name'] ?? '').toString().trim().toLowerCase() == cName) return true;
-        return false;
+        return CustomerListTargetService.isSameCustomer(c, customer);
       });
 
       if (idx != -1) {
+        customers[idx]['callMade'] = true;
         customers[idx]['remarks'] = remarks;
         if (customers[idx]['callDate'] == null) {
           customers[idx]['callDate'] = Timestamp.now();
         }
-        await usersRef.doc(finalDocId).update({'customers': customers});
+        await usersRef.doc(finalDocId).update({
+          'customers': customers,
+          'updated': FieldValue.serverTimestamp(),
+        });
       }
     }
   } catch (e) {

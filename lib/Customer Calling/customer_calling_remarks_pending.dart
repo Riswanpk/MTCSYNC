@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 
 import '../Misc/theme_notifier.dart';
+import 'customer_list_target_service.dart';
 import 'customer_target_customer_tile_viewer.dart';
 
 class CustomerCallingRemarksPendingPage extends StatefulWidget {
@@ -120,32 +121,33 @@ class _CustomerCallingRemarksPendingPageState
     }
   }
 
-  static final RegExp _nonDigitRegex = RegExp(r'\D');
-
-  static String _normalizePhone(dynamic phone) {
-    if (phone == null) return '';
-    final cleaned = phone.toString().replaceAll(_nonDigitRegex, '');
-    if (cleaned.length > 10) {
-      return cleaned.substring(cleaned.length - 10);
-    }
-    return cleaned;
-  }
-
   Future<void> _updateFirestore(Map<String, dynamic> updatedCustomer, String newRemarks) async {
     if (_docId == null) return;
     try {
       final now = DateTime.now();
       final monthYear = "${_monthName(now.month)} ${now.year}";
 
-      final docRef = FirebaseFirestore.instance
+      final usersRef = FirebaseFirestore.instance
           .collection('customer_target')
           .doc(monthYear)
-          .collection('users')
-          .doc(_docId);
+          .collection('users');
 
-      final c1Norm = _normalizePhone(updatedCustomer['contact1'] ?? updatedCustomer['contact'] ?? updatedCustomer['phone']);
-      final c2Norm = _normalizePhone(updatedCustomer['contact2']);
-      final cName = (updatedCustomer['name'] ?? '').toString().trim().toLowerCase();
+      // Verify actual document key
+      var doc = await usersRef.doc(_docId).get();
+      String finalDocId = _docId!;
+      if (!doc.exists || doc.data()?['customers'] == null) {
+        final querySnap = await usersRef.get();
+        for (final d in querySnap.docs) {
+          if (d.id.toLowerCase() == _docId!.toLowerCase()) {
+            doc = d;
+            finalDocId = d.id;
+            _docId = d.id;
+            break;
+          }
+        }
+      }
+
+      final docRef = usersRef.doc(finalDocId);
 
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         final snap = await transaction.get(docRef);
@@ -158,16 +160,7 @@ class _CustomerCallingRemarksPendingPageState
 
         bool changed = false;
         for (final sc in serverCustomers) {
-          final scName = (sc['name'] ?? '').toString().trim().toLowerCase();
-          final sc1 = _normalizePhone(sc['contact1'] ?? sc['contact'] ?? sc['phone']);
-          final sc2 = _normalizePhone(sc['contact2']);
-
-          bool isMatch = false;
-          if (c1Norm.isNotEmpty && (sc1 == c1Norm || sc2 == c1Norm)) isMatch = true;
-          if (!isMatch && c2Norm.isNotEmpty && (sc1 == c2Norm || sc2 == c2Norm)) isMatch = true;
-          if (!isMatch && cName.isNotEmpty && scName == cName) isMatch = true;
-
-          if (isMatch) {
+          if (CustomerListTargetService.isSameCustomer(sc, updatedCustomer)) {
             sc['remarks'] = newRemarks;
             sc['callMade'] = true;
             if (sc['callDate'] == null) {
@@ -348,8 +341,12 @@ class _CustomerCallingRemarksPendingPageState
                                                 if (customer['callDate'] == null) {
                                                   customer['callDate'] = Timestamp.now();
                                                 }
-                                                if (mounted) {
-                                                  setState(() {});
+                                                // Optimistically update list if remarks were added
+                                                if (remarks.trim().isNotEmpty && mounted) {
+                                                  setState(() {
+                                                    _pendingCustomers.removeWhere(
+                                                        (c) => CustomerListTargetService.isSameCustomer(c, customer));
+                                                  });
                                                 }
                                                 await _updateFirestore(customer, remarks);
                                               },
@@ -357,6 +354,14 @@ class _CustomerCallingRemarksPendingPageState
                                           ),
                                         ).then((_) {
                                           if (mounted) {
+                                            // Check if customer now has remarks and remove optimistically
+                                            final r = (customer['remarks'] ?? '').toString().trim();
+                                            if (r.isNotEmpty) {
+                                              setState(() {
+                                                _pendingCustomers.removeWhere(
+                                                    (c) => CustomerListTargetService.isSameCustomer(c, customer));
+                                              });
+                                            }
                                             _fetchPendingRemarks(fromServer: true);
                                           }
                                         });

@@ -24,7 +24,7 @@ class CustomerListTargetService {
     return months[month - 1];
   }
 
-  static String _normalizePhone(dynamic phone) {
+  static String normalizePhone(dynamic phone) {
     if (phone == null) return '';
     final cleaned = phone.toString().replaceAll(RegExp(r'\D'), '');
     if (cleaned.length > 10) {
@@ -33,39 +33,59 @@ class CustomerListTargetService {
     return cleaned;
   }
 
+  static String _normalizePhone(dynamic phone) => normalizePhone(phone);
+
+  static bool isSameCustomer(Map<dynamic, dynamic>? a, Map<dynamic, dynamic>? b) {
+    if (a == null || b == null) return false;
+
+    // 1. If both have unique IDs / slno, match on that first
+    final idA = (a['id'] ?? a['customer_id'] ?? a['slno'] ?? a['sl_no'])?.toString().trim();
+    final idB = (b['id'] ?? b['customer_id'] ?? b['slno'] ?? b['sl_no'])?.toString().trim();
+    if (idA != null && idA.isNotEmpty && idB != null && idB.isNotEmpty && idA == idB) {
+      return true;
+    }
+
+    final aName = (a['name'] ?? a['customer_name'] ?? '').toString().trim().toLowerCase();
+    final bName = (b['name'] ?? b['customer_name'] ?? '').toString().trim().toLowerCase();
+
+    final a1 = normalizePhone(a['contact1'] ?? a['contact'] ?? a['phone'] ?? a['contact_no_1'] ?? a['mobile']);
+    final a2 = normalizePhone(a['contact2'] ?? a['contact_no_2']);
+
+    final b1 = normalizePhone(b['contact1'] ?? b['contact'] ?? b['phone'] ?? b['contact_no_1'] ?? b['mobile']);
+    final b2 = normalizePhone(b['contact2'] ?? b['contact_no_2']);
+
+    final hasAPhone = a1.isNotEmpty || a2.isNotEmpty;
+    final hasBPhone = b1.isNotEmpty || b2.isNotEmpty;
+
+    bool phoneMatch = false;
+    if (hasAPhone && hasBPhone) {
+      if (a1.isNotEmpty && (a1 == b1 || a1 == b2)) phoneMatch = true;
+      if (a2.isNotEmpty && (a2 == b1 || a2 == b2)) phoneMatch = true;
+    }
+
+    final nameMatch = aName.isNotEmpty && bName.isNotEmpty && aName == bName;
+
+    if (hasAPhone && hasBPhone && aName.isNotEmpty && bName.isNotEmpty) {
+      return phoneMatch || nameMatch;
+    } else if (hasAPhone && hasBPhone) {
+      return phoneMatch;
+    } else if (aName.isNotEmpty && bName.isNotEmpty) {
+      return nameMatch;
+    }
+    return false;
+  }
+
   static bool _matchesCustomer(
     Map c,
     String targetName,
     String targetContact1Norm,
     String targetContact2Norm,
   ) {
-    final cName = (c['name'] ?? '').toString().trim().toLowerCase();
-    final c1Norm = _normalizePhone(c['contact1'] ?? c['contact'] ?? c['phone']);
-    final c2Norm = _normalizePhone(c['contact2']);
-
-    final hasTargetPhone =
-        targetContact1Norm.isNotEmpty || targetContact2Norm.isNotEmpty;
-    bool phoneMatch = false;
-    if (hasTargetPhone) {
-      if (targetContact1Norm.isNotEmpty &&
-          (c1Norm == targetContact1Norm || c2Norm == targetContact1Norm)) {
-        phoneMatch = true;
-      }
-      if (targetContact2Norm.isNotEmpty &&
-          (c1Norm == targetContact2Norm || c2Norm == targetContact2Norm)) {
-        phoneMatch = true;
-      }
-    }
-
-    final nameMatch = targetName.isNotEmpty && cName == targetName;
-
-    if (hasTargetPhone && targetName.isNotEmpty) {
-      return phoneMatch || nameMatch;
-    } else if (hasTargetPhone) {
-      return phoneMatch;
-    } else {
-      return nameMatch;
-    }
+    return isSameCustomer(c, {
+      'name': targetName,
+      'contact1': targetContact1Norm,
+      'contact2': targetContact2Norm,
+    });
   }
 
   static Future<void> requestCustomerDeletion({
