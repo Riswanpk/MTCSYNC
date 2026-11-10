@@ -1,6 +1,8 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../Navigation/user_cache_service.dart';
 import '../expo_service.dart';
 import 'expo_order_detail_page.dart';
 
@@ -335,23 +337,64 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
         final order = orders[index];
         final typeColor = _getOrderTypeColor(order.orderType);
 
+        final bool isClaimedByOther = order.claimedById != null &&
+            order.claimedById != FirebaseAuth.instance.currentUser?.uid &&
+            order.claimedAt != null &&
+            DateTime.now().difference(order.claimedAt!).inMinutes < 5;
+
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           elevation: 1.5,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
             side: BorderSide(
-              color: isDark
-                  ? Colors.white12
-                  : Colors.black.withValues(alpha: 0.08),
+              color: isClaimedByOther
+                  ? Colors.amber.shade700
+                  : (isDark
+                      ? Colors.white12
+                      : Colors.black.withValues(alpha: 0.08)),
+              width: isClaimedByOther ? 1.5 : 1,
             ),
           ),
           color: isDark ? const Color(0xFF0F243E) : Colors.white,
           child: InkWell(
-            onTap: () {
-              Navigator.of(context).push(
+            onTap: () async {
+              final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+              final currentUserName =
+                  UserCacheService.instance.username ?? 'Accounts User';
+
+              // Only perform queue claim lock on pending verification orders
+              if (order.status != 'Completed') {
+                final claimResult = await ExpoService.instance
+                    .claimOrderForVerification(
+                  orderId: order.id,
+                  userId: currentUserId,
+                  userName: currentUserName,
+                );
+
+                if (claimResult['success'] != true) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          claimResult['message'] ??
+                              'Order is currently being verified by another accounts user.',
+                        ),
+                        backgroundColor: Colors.amber.shade800,
+                      ),
+                    );
+                  }
+                  return;
+                }
+              }
+
+              if (!context.mounted) return;
+              await Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => ExpoOrderDetailPage(order: order),
+                  builder: (_) => ExpoOrderDetailPage(
+                    order: order,
+                    currentUserId: currentUserId,
+                  ),
                 ),
               );
             },
@@ -361,6 +404,33 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (isClaimedByOther) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade100,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.lock_clock_rounded,
+                              size: 14, color: Colors.amber.shade900),
+                          const SizedBox(width: 4),
+                          Text(
+                            'In review by ${order.claimedByName ?? "another user"}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.amber.shade900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   // Top row: Shop name & Order type badge
                   Row(
                     children: [
@@ -368,13 +438,38 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              order.shopName,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                color: isDark ? Colors.white : Colors.black87,
-                              ),
+                            Row(
+                              children: [
+                                if (order.billNumber != null) ...[
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    margin: const EdgeInsets.only(right: 6),
+                                    decoration: BoxDecoration(
+                                      color: primaryBlue.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      '#${order.billNumber}',
+                                      style: const TextStyle(
+                                        color: primaryBlue,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                Expanded(
+                                  child: Text(
+                                    order.shopName,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                      color: isDark ? Colors.white : Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                             if (order.customerName.isNotEmpty) ...[
                               const SizedBox(height: 2),

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../Navigation/user_cache_service.dart';
 import '../expo_service.dart';
 import 'expo_order_form.dart';
+import '../expo_draft_service.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -132,6 +133,12 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (order.billNumber != null)
+                  _buildDialogInfoRow(
+                    'Bill No.',
+                    '#${order.billNumber}',
+                    isDark,
+                  ),
                 // Info block
                 _buildDialogInfoRow(
                   'Date',
@@ -478,6 +485,137 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
     );
   }
 
+  Widget _buildDraftsList(Exhibition exhibition, bool isDark) {
+    return FutureBuilder<List<ExpoOrderDraft>>(
+      future: ExpoDraftService.instance.getDrafts(exhibitionId: exhibition.id),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final drafts = snapshot.data ?? [];
+        if (drafts.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.edit_note_rounded,
+                  size: 64,
+                  color: isDark ? Colors.white24 : Colors.black26,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'No Drafts Found',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white70 : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'In-progress orders you leave will be saved here.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.white54 : Colors.black54,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
+          itemCount: drafts.length,
+          itemBuilder: (context, index) {
+            final draft = drafts[index];
+            final title = draft.shopName.isNotEmpty
+                ? draft.shopName
+                : (draft.customerName.isNotEmpty
+                    ? draft.customerName
+                    : (draft.phone.isNotEmpty ? draft.phone : 'Untitled Draft'));
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(
+                  color: isDark
+                      ? Colors.white12
+                      : Colors.black.withValues(alpha: 0.08),
+                ),
+              ),
+              color: isDark ? const Color(0xFF0F243E) : Colors.white,
+              child: ListTile(
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                leading: CircleAvatar(
+                  backgroundColor: const Color(0xFFFF6F00).withValues(alpha: 0.15),
+                  child: const Icon(Icons.edit_document,
+                      color: Color(0xFFFF6F00), size: 22),
+                ),
+                title: Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 4),
+                    Text(
+                      '${draft.orderType} • ${draft.items.length} items • Phone: ${draft.phone.isNotEmpty ? draft.phone : "Not added"}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.white60 : Colors.black54,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Last edited: ${DateFormat('dd MMM yyyy, hh:mm a').format(draft.updatedAt)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark ? Colors.white38 : Colors.black38,
+                      ),
+                    ),
+                  ],
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded,
+                          color: Colors.redAccent),
+                      tooltip: 'Delete Draft',
+                      onPressed: () async {
+                        await ExpoDraftService.instance.deleteDraft(draft.id);
+                        if (context.mounted) setState(() {});
+                      },
+                    ),
+                    const Icon(Icons.chevron_right_rounded, color: primaryBlue),
+                  ],
+                ),
+                onTap: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ExpoOrderFormPage(
+                        exhibition: exhibition,
+                        initialOrderType: draft.orderType,
+                        initialDraft: draft,
+                      ),
+                    ),
+                  );
+                  if (context.mounted) setState(() {});
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildDialogInfoRow(String label, String value, bool isDark) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
@@ -601,7 +739,7 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
         final currentEx = _selectedExhibition!;
 
         return DefaultTabController(
-          length: 2,
+          length: 4,
           child: Scaffold(
             backgroundColor:
                 isDark ? const Color(0xFF0A1628) : const Color(0xFFF7F9FC),
@@ -648,12 +786,16 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                   ),
               ],
               bottom: const TabBar(
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
                 indicatorColor: primaryGreen,
                 labelColor: Colors.white,
                 unselectedLabelColor: Colors.white70,
                 tabs: [
                   Tab(text: 'Pending'),
                   Tab(text: 'Completed'),
+                  Tab(text: 'STALL'),
+                  Tab(text: 'DRAFT'),
                 ],
               ),
             ),
@@ -724,6 +866,9 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                       final completedOrders = allOrders
                           .where((o) => o.status == 'Completed')
                           .toList();
+                      final stallOrders = allOrders
+                          .where((o) => o.orderType == 'Stall Delivery')
+                          .toList();
 
                       return TabBarView(
                         children: [
@@ -737,6 +882,12 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                             isDark,
                             tabName: 'Completed',
                           ),
+                          _buildOrdersList(
+                            stallOrders,
+                            isDark,
+                            tabName: 'STALL',
+                          ),
+                          _buildDraftsList(currentEx, isDark),
                         ],
                       );
                     },

@@ -7,7 +7,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../Navigation/user_cache_service.dart';
+import '../expo_draft_service.dart';
 import '../expo_service.dart';
+import '../expo_supabase_config.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -15,11 +17,13 @@ const Color primaryGreen = Color(0xFF8CC63F);
 class ExpoOrderFormPage extends StatefulWidget {
   final Exhibition exhibition;
   final String initialOrderType;
+  final ExpoOrderDraft? initialDraft;
 
   const ExpoOrderFormPage({
     super.key,
     required this.exhibition,
     this.initialOrderType = 'Spot Delivery',
+    this.initialDraft,
   });
 
   @override
@@ -121,12 +125,60 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
   // Item Details
   final List<_ItemRowData> _items = [];
   bool _isSaving = false;
+  late String _draftId;
 
   @override
   void initState() {
     super.initState();
-    _selectedOrderType = widget.initialOrderType;
-    _items.add(_ItemRowData()..recalculateTotal());
+    _draftId = widget.initialDraft?.id ??
+        'draft_${DateTime.now().millisecondsSinceEpoch}';
+    _selectedOrderType = widget.initialDraft?.orderType ?? widget.initialOrderType;
+
+    if (widget.initialDraft != null) {
+      final d = widget.initialDraft!;
+      _phoneController.text = d.phone;
+      _shopNameController.text = d.shopName;
+      _customerNameController.text = d.customerName;
+      _placeController.text = d.place;
+      _districtController.text = d.district;
+      _stateController.text = d.state.isNotEmpty ? d.state : 'Kerala';
+      _selectedPreferredBranch = d.preferredBranch;
+      _selectedSalesman = d.preferredSalesman;
+      _deliveryDate = d.deliveryDate;
+      _stallPickupDate = d.stallPickupDate;
+      _advanceController.text = d.advanceText;
+      _selectedPaymentMode = d.paymentMode;
+      if (d.paymentProofPath != null && d.paymentProofPath!.isNotEmpty) {
+        final f = File(d.paymentProofPath!);
+        if (f.existsSync()) _paymentProofFile = f;
+      }
+      _currentStep = d.currentStep.clamp(0, _steps.length - 1);
+
+      if (d.items.isNotEmpty) {
+        for (final itemMap in d.items) {
+          final row = _ItemRowData();
+          row.mtcCodeController.text = itemMap['mtcCode'] ?? '';
+          row.itemNameController.text = itemMap['itemName'] ?? '';
+          row.descriptionController.text = itemMap['description'] ?? '';
+          row.qtyController.text = (itemMap['qty'] ?? '').toString();
+          row.rateController.text = (itemMap['rate'] ?? '').toString();
+          row.gstController.text = (itemMap['gst'] ?? '').toString();
+          row.isSaved = itemMap['isSaved'] == true;
+          final pPath = itemMap['photoPath']?.toString();
+          if (pPath != null && pPath.isNotEmpty) {
+            final f = File(pPath);
+            if (f.existsSync()) row.photoFile = f;
+          }
+          row.recalculateTotal();
+          _items.add(row);
+        }
+      } else {
+        _items.add(_ItemRowData()..recalculateTotal());
+      }
+    } else {
+      _items.add(_ItemRowData()..recalculateTotal());
+    }
+
     _loadBranches();
   }
 
@@ -565,11 +617,74 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     }
   }
 
-  void _goBack() {
+  bool get _hasDraftContent {
+    if (_phoneController.text.trim().isNotEmpty) return true;
+    if (_shopNameController.text.trim().isNotEmpty) return true;
+    if (_customerNameController.text.trim().isNotEmpty) return true;
+    if (_placeController.text.trim().isNotEmpty) return true;
+    if (_items.any((it) =>
+        it.itemNameController.text.trim().isNotEmpty ||
+        it.mtcCodeController.text.trim().isNotEmpty)) {
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> _saveAsDraft({bool showNotice = false}) async {
+    if (!_hasDraftContent) return;
+
+    final draft = ExpoOrderDraft(
+      id: _draftId,
+      exhibitionId: widget.exhibition.id,
+      exhibitionName: widget.exhibition.name,
+      orderType: _selectedOrderType,
+      phone: _phoneController.text.trim(),
+      shopName: _shopNameController.text.trim(),
+      customerName: _customerNameController.text.trim(),
+      place: _placeController.text.trim(),
+      district: _districtController.text.trim(),
+      state: _stateController.text.trim(),
+      preferredBranch: _selectedPreferredBranch,
+      preferredSalesman: _selectedSalesman,
+      deliveryDate: _deliveryDate,
+      stallPickupDate: _stallPickupDate,
+      advanceText: _advanceController.text.trim(),
+      paymentMode: _selectedPaymentMode,
+      paymentProofPath: _paymentProofFile?.path,
+      currentStep: _currentStep,
+      items: _items.map((it) {
+        return {
+          'mtcCode': it.mtcCodeController.text.trim(),
+          'itemName': it.itemNameController.text.trim(),
+          'description': it.descriptionController.text.trim(),
+          'qty': it.qtyController.text.trim(),
+          'rate': it.rateController.text.trim(),
+          'gst': it.gstController.text.trim(),
+          'isSaved': it.isSaved,
+          'photoPath': it.photoFile?.path,
+        };
+      }).toList(),
+      updatedAt: DateTime.now(),
+    );
+
+    await ExpoDraftService.instance.saveDraft(draft);
+    if (showNotice && mounted) {
+      _showSnack('Draft saved locally', color: primaryGreen);
+    }
+  }
+
+  Future<void> _handleBack() async {
     FocusScope.of(context).unfocus();
     if (_currentStep > 0) {
+      await _saveAsDraft();
       setState(() => _currentStep--);
+      return;
     }
+
+    if (_hasDraftContent) {
+      await _saveAsDraft(showNotice: true);
+    }
+    if (mounted) Navigator.of(context).pop();
   }
 
   Future<void> _submitOrder() async {
@@ -583,15 +698,23 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       final cache = UserCacheService.instance;
       await cache.ensureLoaded();
 
-      // 1. Upload payment proof concurrently if provided
+      // 1. Upload payment proof concurrently if provided to dedicated bucket
       final Future<String?> paymentProofFuture = (_paymentProofFile != null)
-          ? ExpoService.instance.uploadFile(_paymentProofFile!, 'payment_proofs')
+          ? ExpoService.instance.uploadFile(
+              _paymentProofFile!,
+              bucketName: _selectedPaymentMode == 'UPI'
+                  ? ExpoSupabaseConfig.bucketUpiProofs
+                  : ExpoSupabaseConfig.bucketBankProofs,
+            )
           : Future.value(_existingPaymentProofUrl);
 
-      // 2. Upload item photos concurrently if provided
+      // 2. Upload item photos concurrently if provided to item bucket
       final List<Future<String?>> itemPhotoFutures = _items.map((it) {
         if (it.photoFile != null) {
-          return ExpoService.instance.uploadFile(it.photoFile!, 'item_photos');
+          return ExpoService.instance.uploadFile(
+            it.photoFile!,
+            bucketName: ExpoSupabaseConfig.bucketItemPhotos,
+          );
         }
         return Future.value(it.existingPhotoUrl);
       }).toList();
@@ -664,6 +787,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       );
 
       await ExpoService.instance.createOrder(newOrder);
+      await ExpoDraftService.instance.deleteDraft(_draftId);
 
       if (mounted) {
         _showSnack('Order submitted successfully!', color: primaryGreen);
@@ -699,9 +823,9 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     }
 
     return PopScope(
-      canPop: _currentStep == 0 && !_isSaving,
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && !_isSaving) _goBack();
+        if (!didPop && !_isSaving) _handleBack();
       },
       child: Scaffold(
         backgroundColor:
@@ -844,7 +968,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                 child: SizedBox(
                   height: 50,
                   child: OutlinedButton.icon(
-                    onPressed: _isSaving ? null : _goBack,
+                    onPressed: _isSaving ? null : _handleBack,
                     icon: const Icon(Icons.arrow_back_rounded,
                         color: primaryBlue),
                     label: const Text(

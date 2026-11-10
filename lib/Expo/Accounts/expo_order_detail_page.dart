@@ -12,8 +12,13 @@ const Color primaryGreen = Color(0xFF8CC63F);
 /// full payment receipt image viewer, and action buttons to Verify or Print/Export PDF.
 class ExpoOrderDetailPage extends StatefulWidget {
   final ExpoOrder order;
+  final String? currentUserId;
 
-  const ExpoOrderDetailPage({super.key, required this.order});
+  const ExpoOrderDetailPage({
+    super.key,
+    required this.order,
+    this.currentUserId,
+  });
 
   @override
   State<ExpoOrderDetailPage> createState() => _ExpoOrderDetailPageState();
@@ -28,6 +33,20 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
   void initState() {
     super.initState();
     _currentOrder = widget.order;
+  }
+
+  @override
+  void dispose() {
+    // Release the claim lock if order was not completed
+    if (_currentOrder.status != 'Completed' &&
+        widget.currentUserId != null &&
+        widget.currentUserId!.isNotEmpty) {
+      ExpoService.instance.releaseOrderClaim(
+        orderId: _currentOrder.id,
+        userId: widget.currentUserId!,
+      );
+    }
+    super.dispose();
   }
 
   String _formatDate(DateTime dt) {
@@ -332,6 +351,25 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                   children: [
                     Row(
                       children: [
+                        if (order.billNumber != null) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: BoxDecoration(
+                              color: primaryBlue.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'Bill #${order.billNumber}',
+                              style: const TextStyle(
+                                color: primaryBlue,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ],
                         Expanded(
                           child: Text(
                             order.shopName,

@@ -152,6 +152,11 @@ class ExpoPdfService {
                         _buildTemplateField('Date', dateFormatted, colorLimeGreen),
                         pw.SizedBox(height: 4),
 
+                        if (order.billNumber != null) ...[
+                          _buildTemplateField('Bill No.', '#${order.billNumber}', colorLimeGreen),
+                          pw.SizedBox(height: 4),
+                        ],
+
                         // Sales Rep Field
                         _buildTemplateField(
                           'Sales Rep.',

@@ -11,8 +11,14 @@ class ExpoSupabaseConfig {
   /// Postgres schema dedicated for Expo tables
   static const String schema = 'expo';
 
-  /// Storage bucket used for item photos and payment proofs
-  static const String storageBucket = 'expo';
+  /// Storage bucket dedicated for Expo item photos
+  static const String bucketItemPhotos = 'expo-item-photos';
+
+  /// Storage bucket dedicated for UPI payment receipts/proofs
+  static const String bucketUpiProofs = 'expo-upi-proofs';
+
+  /// Storage bucket dedicated for Bank Transfer payment receipts/proofs
+  static const String bucketBankProofs = 'expo-bank-proofs';
 
   /// Supabase Client instance from DmeConfig
   static SupabaseClient get client {
