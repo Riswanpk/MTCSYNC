@@ -14,9 +14,26 @@ class _CoreTeamTaskPageState extends State<CoreTeamTaskPage>
   late TabController _tabController;
 
   final List<String> _branches = [
-    'BGR', 'CBE', 'CHN', 'CLT', 'EKM', 'JBL', 'KKM', 'KSD',
-    'KTM', 'PKD', 'PKT', 'PMN', 'TRR', 'TSR', 'TLY', 'TVM',
-    'UDP', 'VDK', 'WND',
+    'BGR',
+    'CBE',
+    'CHN',
+    'CLT',
+    'EKM',
+    'EXPO',
+    'JBL',
+    'KKM',
+    'KSD',
+    'KTM',
+    'PKD',
+    'PKT',
+    'PMN',
+    'TRR',
+    'TSR',
+    'TLY',
+    'TVM',
+    'UDP',
+    'VDK',
+    'WND',
   ];
 
   @override

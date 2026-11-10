@@ -400,6 +400,7 @@ class _RegisterPageState extends State<RegisterPage>
                                     'CHN',
                                     'CLT',
                                     'EKM',
+                                    'EXPO'
                                     'JBL',
                                     'KKM',
                                     'KSD',
