@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../Navigation/user_cache_service.dart';
@@ -64,6 +65,7 @@ class _CustomerCallingDuplicatesPageState
   String? _selectedMonthYear;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  Timer? _searchDebounce;
 
   List<DuplicateGroup> _duplicateGroups = [];
   final Set<String> _resolvingPhones = {};
@@ -83,6 +85,7 @@ class _CustomerCallingDuplicatesPageState
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -592,8 +595,13 @@ class _CustomerCallingDuplicatesPageState
                     ),
                   ),
                   onChanged: (val) {
-                    setState(() {
-                      _searchQuery = val.trim();
+                    _searchDebounce?.cancel();
+                    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+                      if (mounted) {
+                        setState(() {
+                          _searchQuery = val.trim();
+                        });
+                      }
                     });
                   },
                 ),

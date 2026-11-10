@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -88,6 +89,7 @@ class _DmeExcelUploadReportPageState extends State<DmeExcelUploadReportPage> wit
   // Date selector for Tab 2 (Branch Status)
   DateTime _selectedDate = DateTime.now();
   String _searchQuery = '';
+  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -98,6 +100,7 @@ class _DmeExcelUploadReportPageState extends State<DmeExcelUploadReportPage> wit
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -776,7 +779,12 @@ class _DmeExcelUploadReportPageState extends State<DmeExcelUploadReportPage> wit
                   borderSide: BorderSide(color: Colors.grey.shade300),
                 ),
               ),
-              onChanged: (val) => setState(() => _searchQuery = val),
+              onChanged: (val) {
+                _searchDebounce?.cancel();
+                _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+                  if (mounted) setState(() => _searchQuery = val);
+                });
+              },
             ),
           ),
 

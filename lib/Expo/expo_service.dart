@@ -600,6 +600,19 @@ class ExpoService {
     }).eq('id', orderId);
   }
 
+  /// Bulk updates multiple orders to a new status (e.g. verifying selected cash orders).
+  Future<void> updateMultipleOrdersStatus(List<String> orderIds, String newStatus) async {
+    if (orderIds.isEmpty) return;
+    await _table(_ordersTable).update({
+      'status': newStatus,
+      'completed_at':
+          newStatus == 'Completed' ? _ts(DateTime.now()) : null,
+      'claimed_by_id': null,
+      'claimed_by_name': null,
+      'claimed_at': null,
+    }).filter('id', 'in', orderIds);
+  }
+
   /// Attempts to atomically claim an order for verification queue so two
   /// accounts users do not review or modify the same order simultaneously.
   Future<Map<String, dynamic>> claimOrderForVerification({

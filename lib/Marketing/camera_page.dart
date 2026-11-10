@@ -543,6 +543,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     return Image.file(
       imageFile,
       height: height,
+      cacheWidth: 800,
       fit: fit,
       errorBuilder: (context, error, stackTrace) {
         debugPrint('Error loading image: $error');

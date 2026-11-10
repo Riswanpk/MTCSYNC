@@ -1,10 +1,112 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../Navigation/user_cache_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border;
+
+/// Runs in a background isolate via [compute] so large Excel sheets do not freeze the UI thread.
+List<Map<String, dynamic>> _parseCustomerTargetExcelBytes(Uint8List bytes) {
+  final excel = Excel.decodeBytes(bytes);
+  if (excel.tables.isEmpty) {
+    throw Exception("No sheets found in Excel file");
+  }
+
+  final sheet = excel.tables.values.first;
+  if (sheet.maxRows < 2) {
+    throw Exception("Sheet is empty");
+  }
+
+  final headerRow = sheet.row(0);
+
+  int? nameCol;
+  int? contactCol;
+  int? contact2Col;
+  int? addressCol;
+
+  for (int i = 0; i < headerRow.length; i++) {
+    final header = headerRow[i]?.value?.toString().toLowerCase().trim();
+    if (header == null) continue;
+
+    if (header.contains('name') || header.contains('customer') || header.contains('client')) {
+      nameCol ??= i;
+    }
+
+    if (header.contains('phone 2') ||
+        header.contains('mobile 2') ||
+        header.contains('contact 2') ||
+        header.contains('alternate') ||
+        header.contains('second contact') ||
+        header.contains('second phone')) {
+      contact2Col ??= i;
+    } else if (header.contains('phone') ||
+        header.contains('mobile') ||
+        header.contains('contact')) {
+      contactCol ??= i;
+    }
+
+    if (header.contains('address')) {
+      addressCol ??= i;
+    }
+  }
+
+  if (nameCol == null || contactCol == null || addressCol == null) {
+    throw Exception("Required columns not found (Name / Address / Contact)");
+  }
+
+  final List<Map<String, dynamic>> parsedRows = [];
+
+  for (int i = 1; i < sheet.maxRows; i++) {
+    final row = sheet.row(i);
+    final excelRowNum = i + 1;
+
+    final String name = row.length > nameCol && row[nameCol]?.value != null
+        ? row[nameCol]!.value.toString().trim()
+        : '';
+
+    final String address = row.length > addressCol && row[addressCol]?.value != null
+        ? row[addressCol]!.value.toString().trim()
+        : '';
+
+    final String contactRaw = row.length > contactCol && row[contactCol]?.value != null
+        ? row[contactCol]!.value.toString().trim()
+        : '';
+
+    final List<String> contacts = contactRaw
+        .split(RegExp(r'[,/|]'))
+        .map((c) => c.trim())
+        .where((c) => c.isNotEmpty)
+        .toList();
+
+    final String contact1 = contacts.isNotEmpty ? contacts[0] : '';
+    String contact2 = contacts.length > 1 ? contacts[1] : '';
+
+    if (contact2.isEmpty &&
+        contact2Col != null &&
+        row.length > contact2Col &&
+        row[contact2Col]?.value != null) {
+      contact2 = row[contact2Col]!.value.toString().trim();
+    }
+
+    if (name.isNotEmpty && (contact1.isNotEmpty || contact2.isNotEmpty)) {
+      parsedRows.add({
+        'name': name,
+        'address': address,
+        'contact1': contact1,
+        'contact2': contact2,
+        'row': excelRowNum,
+      });
+    }
+  }
+
+  if (parsedRows.isEmpty) {
+    throw Exception("No valid customer data found in Excel.");
+  }
+
+  return parsedRows;
+}
 
 /// Details of a customer occurrence inside the uploaded Excel
 class ExcelRowCustomerInfo {
@@ -312,106 +414,8 @@ class _CustomerTargetAdminPageState extends State<CustomerTargetAdminPage> {
 
       File file = File(result.files.single.path!);
       var bytes = await file.readAsBytes();
-      var excel = Excel.decodeBytes(bytes);
-
-      if (excel.tables.isEmpty) {
-        throw Exception("No sheets found in Excel file");
-      }
-
-      final sheet = excel.tables.values.first;
-      if (sheet.maxRows < 2) {
-        throw Exception("Sheet is empty");
-      }
-
-      // ---- READ HEADER ROW ----
-      final headerRow = sheet.row(0);
-
-      int? nameCol;
-      int? contactCol;
-      int? contact2Col;
-      int? addressCol;
-
-      for (int i = 0; i < headerRow.length; i++) {
-        final header = headerRow[i]?.value?.toString().toLowerCase().trim();
-
-        if (header == null) continue;
-
-        if (header.contains('name') || header.contains('customer') || header.contains('client')) {
-          nameCol ??= i;
-        }
-
-        if (header.contains('phone 2') ||
-            header.contains('mobile 2') ||
-            header.contains('contact 2') ||
-            header.contains('alternate') ||
-            header.contains('second contact') ||
-            header.contains('second phone')) {
-          contact2Col ??= i;
-        } else if (header.contains('phone') ||
-            header.contains('mobile') ||
-            header.contains('contact')) {
-          contactCol ??= i;
-        }
-
-        if (header.contains('address')) {
-          addressCol ??= i;
-        }
-      }
-
-      if (nameCol == null || contactCol == null || addressCol == null) {
-        throw Exception("Required columns not found (Name / Address / Contact)");
-      }
-
-      // ---- READ DATA ROWS ----
-      List<Map<String, dynamic>> parsedRows = [];
-
-      for (int i = 1; i < sheet.maxRows; i++) {
-        final row = sheet.row(i);
-        final excelRowNum = i + 1; // 1-indexed row number in Excel
-
-        String name = row.length > nameCol && row[nameCol]?.value != null
-            ? row[nameCol]!.value.toString().trim()
-            : '';
-
-        String address = row.length > addressCol && row[addressCol]?.value != null
-            ? row[addressCol]!.value.toString().trim()
-            : '';
-
-        String contactRaw = row.length > contactCol && row[contactCol]?.value != null
-            ? row[contactCol]!.value.toString().trim()
-            : '';
-
-        // Split by comma, slash, or pipe
-        List<String> contacts = contactRaw
-            .split(RegExp(r'[,/|]'))
-            .map((c) => c.trim())
-            .where((c) => c.isNotEmpty)
-            .toList();
-
-        String contact1 = contacts.isNotEmpty ? contacts[0] : '';
-        String contact2 = contacts.length > 1 ? contacts[1] : '';
-
-        if (contact2.isEmpty &&
-            contact2Col != null &&
-            row.length > contact2Col &&
-            row[contact2Col]?.value != null) {
-          contact2 = row[contact2Col]!.value.toString().trim();
-        }
-
-        if (name.isNotEmpty && (contact1.isNotEmpty || contact2.isNotEmpty)) {
-          parsedRows.add({
-            'name': name,
-            'address': address,
-            'contact1': contact1,
-            'contact2': contact2,
-            'row': excelRowNum,
-          });
-        }
-      }
-
-      if (parsedRows.isEmpty) {
-        throw Exception("No valid customer data found in Excel.");
-      }
+      List<Map<String, dynamic>> parsedRows =
+          await compute(_parseCustomerTargetExcelBytes, bytes);
 
       // =========================================================================
       // CHECK 1: INTERNAL DUPLICATES WITHIN THE UPLOADED EXCEL SHEET

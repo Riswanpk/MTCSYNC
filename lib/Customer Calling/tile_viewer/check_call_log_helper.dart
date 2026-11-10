@@ -93,6 +93,8 @@ Future<List<CallLogEntry>> _fetchEntriesForNumbers(
     }
   }
 
+  bool anyQuerySucceeded = false;
+
   // 1. Targeted number queries (fast on 4GB RAM & immune to MIUI/HyperOS dateFrom SQLite unit issues)
   final Set<String> queriedSubstrings = {};
   for (final raw in targetNumbers) {
@@ -100,6 +102,7 @@ Future<List<CallLogEntry>> _fetchEntriesForNumbers(
     if (last10.length >= 7 && queriedSubstrings.add(last10)) {
       try {
         final byNum = await CallLog.query(number: last10);
+        anyQuerySucceeded = true;
         addFiltered(byNum);
       } catch (_) {}
       // Also try last 5 digits in case the dialer formatted the middle of the number with spaces/hyphens
@@ -108,6 +111,7 @@ Future<List<CallLogEntry>> _fetchEntriesForNumbers(
         if (queriedSubstrings.add(last5)) {
           try {
             final byLast5 = await CallLog.query(number: last5);
+            anyQuerySucceeded = true;
             addFiltered(byLast5);
           } catch (_) {}
         }
@@ -115,17 +119,25 @@ Future<List<CallLogEntry>> _fetchEntriesForNumbers(
     }
   }
 
-  // 2. Date-range query
+  // 2. Date-range query (ms, and seconds fallback for older OEM ROMs)
   try {
     final byDate = await CallLog.query(
       dateFrom: minTs,
       dateTo: maxTs,
     );
+    anyQuerySucceeded = true;
     addFiltered(byDate);
+    if (byDate.isEmpty) {
+      final byDateSec = await CallLog.query(
+        dateFrom: minTs ~/ 1000,
+        dateTo: maxTs ~/ 1000,
+      );
+      addFiltered(byDateSec);
+    }
   } catch (_) {}
 
-  // 3. Fallback only if nothing was found in steps 1 & 2
-  if (merged.isEmpty) {
+  // 3. Fallback only if parameterized queries threw/failed on this ROM
+  if (merged.isEmpty && !anyQuerySucceeded) {
     try {
       final all = await CallLog.get();
       addFiltered(all);

@@ -1,4 +1,5 @@
 // ignore_for_file: deprecated_member_use
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'camera_page.dart';
@@ -155,15 +156,26 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
         decoration: _inputDecoration(label, required: required, error: error, errorText: errorText),
         validator: validator,
         onChanged: (v) {
-          _saveDraft();
+          _scheduleSaveDraft();
           if (onChanged != null) onChanged(v);
-          setState(() {
-            if (label == 'FIRM NAME') _firmNameError = v.trim().isEmpty;
-            if (label == 'PLACE') _placeError = v.trim().isEmpty;
-            if (label == 'CONTACT PERSON NAME') _contactPersonError = v.trim().isEmpty;
-            if (label == 'CONTACT NUMBER') _contactNumberError = v.trim().isEmpty || v.length != 10;
-            if (label == 'CURRENT ENQUIRY') _currentEnquiryError = v.trim().isEmpty;
-          });
+          bool nextFirmErr = label == 'FIRM NAME' ? v.trim().isEmpty : _firmNameError;
+          bool nextPlaceErr = label == 'PLACE' ? v.trim().isEmpty : _placeError;
+          bool nextPersonErr = label == 'CONTACT PERSON NAME' ? v.trim().isEmpty : _contactPersonError;
+          bool nextNumberErr = label == 'CONTACT NUMBER' ? (v.trim().isEmpty || v.length != 10) : _contactNumberError;
+          bool nextEnquiryErr = label == 'CURRENT ENQUIRY' ? v.trim().isEmpty : _currentEnquiryError;
+          if (nextFirmErr != _firmNameError ||
+              nextPlaceErr != _placeError ||
+              nextPersonErr != _contactPersonError ||
+              nextNumberErr != _contactNumberError ||
+              nextEnquiryErr != _currentEnquiryError) {
+            setState(() {
+              _firmNameError = nextFirmErr;
+              _placeError = nextPlaceErr;
+              _contactPersonError = nextPersonErr;
+              _contactNumberError = nextNumberErr;
+              _currentEnquiryError = nextEnquiryErr;
+            });
+          }
         },
         inputFormatters: inputFormatters,
       ),
@@ -210,6 +222,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
 
   @override
   void dispose() {
+    _draftTimer?.cancel();
     _firmNameController.dispose();
     _placeController.dispose();
     _contactPersonController.dispose();
@@ -221,6 +234,15 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
     _customCategoryController.dispose();
     _otherPurchasesReasonController.dispose();
     super.dispose();
+  }
+
+  Timer? _draftTimer;
+
+  void _scheduleSaveDraft() {
+    _draftTimer?.cancel();
+    _draftTimer = Timer(const Duration(milliseconds: 500), () {
+      if (mounted) _saveDraft();
+    });
   }
 
   Map<String, dynamic> _toDraftMap() {
@@ -243,6 +265,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
   }
 
   Future<void> _saveDraft() async {
+    _draftTimer?.cancel();
     try {
       final prefs = await SharedPreferences.getInstance();
       Map<String, dynamic> draftData = _toDraftMap();
@@ -250,8 +273,13 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
       if (_imageFile != null && _imageFile!.existsSync()) {
         final appDir = await getApplicationDocumentsDirectory();
         final fileName = path.basename(_imageFile!.path);
-        final savedImage = await _imageFile!.copy('${appDir.path}/$fileName');
-        draftData['imagePath'] = savedImage.path;
+        final destPath = '${appDir.path}/$fileName';
+        if (_imageFile!.path != destPath && !File(destPath).existsSync()) {
+          final savedImage = await _imageFile!.copy(destPath);
+          draftData['imagePath'] = savedImage.path;
+        } else {
+          draftData['imagePath'] = destPath;
+        }
       } else {
         draftData.remove('imagePath');
       }
@@ -598,7 +626,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                             );
                           }
                           contactNumber = formatted;
-                          _saveDraft();
+                          _scheduleSaveDraft();
                           if (_contactNumberError) {
                             if (mounted) { setState(() {
                               _contactNumberError =
@@ -679,11 +707,11 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                                 errorText: 'Please specify category',
                               ),
                               onChanged: (v) {
-                                setState(() {
-                                  customCategory = v;
-                                  if (v.trim().isNotEmpty) _customCategoryError = false;
-                                  _saveDraft();
-                                });
+                                customCategory = v;
+                                if (v.trim().isNotEmpty && _customCategoryError) {
+                                  setState(() => _customCategoryError = false);
+                                }
+                                _scheduleSaveDraft();
                               },
                             ),
                           ),
@@ -782,10 +810,13 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                               errorText: 'Enter reason',
                             ),
                             onChanged: (v) {
-                              setState(() {
-                                _otherPurchasesReasonError = v.trim().isEmpty;
-                              });
-                              _saveDraft();
+                              final isErr = v.trim().isEmpty;
+                              if (_otherPurchasesReasonError != isErr) {
+                                setState(() {
+                                  _otherPurchasesReasonError = isErr;
+                                });
+                              }
+                              _scheduleSaveDraft();
                             },
                           ),
                         ),
@@ -889,7 +920,7 @@ class _HotelResortCustomerFormState extends State<HotelResortCustomerForm> {
                                 bottomLeft: Radius.circular(22),
                               ),
                               child: Image.file(_imageFile!,
-                                  height: 150, fit: BoxFit.cover),
+                                  height: 150, cacheWidth: 600, fit: BoxFit.cover),
                             ),
                           ),
                     if (_imageFile != null)

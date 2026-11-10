@@ -162,7 +162,7 @@ class CustomerPreviewSection extends StatelessWidget {
                       child: Center(child: Text('No transactions match the filter')),
                     )
                   : ListView.separated(
-                      shrinkWrap: true,
+                      shrinkWrap: filteredCustomers.length <= 6,
                       itemCount: filteredCustomers.length,
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (context, idx) {

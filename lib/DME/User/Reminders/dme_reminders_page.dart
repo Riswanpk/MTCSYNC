@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -23,6 +24,7 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
   bool _isLoading = true;
   bool _isAssignedByAdminToday = false;
   String _searchQuery = '';
+  Timer? _searchDebounce;
   bool _filterOnlyMultipleAttempts = true;
 
   List<Map<String, dynamic>> _todayReminders = [];
@@ -42,6 +44,7 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -449,7 +452,12 @@ class _DmeRemindersPageState extends State<DmeRemindersPage>
                 ),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               ),
-              onChanged: (val) => setState(() => _searchQuery = val.toLowerCase()),
+              onChanged: (val) {
+                _searchDebounce?.cancel();
+                _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+                  if (mounted) setState(() => _searchQuery = val.toLowerCase());
+                });
+              },
             ),
           ),
 

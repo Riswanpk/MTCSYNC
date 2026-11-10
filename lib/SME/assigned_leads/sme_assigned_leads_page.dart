@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -28,6 +29,7 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
   String _searchQuery = '';
   bool _isSearching = false;
   bool _isLoading = false;
+  Timer? _searchDebounce;
 
   List<DocumentSnapshot> _leads = [];
   DocumentSnapshot? _lastDocument;
@@ -58,6 +60,7 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -279,8 +282,12 @@ class _SmeAssignedLeadsPageState extends State<SmeAssignedLeadsPage>
                   border: InputBorder.none,
                 ),
                 onChanged: (val) {
-                  setState(() => _searchQuery = val.toLowerCase().trim());
-                  _fetchLeadsPage(isSearch: true);
+                  _searchDebounce?.cancel();
+                  _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+                    if (!mounted) return;
+                    setState(() => _searchQuery = val.toLowerCase().trim());
+                    _fetchLeadsPage(isSearch: true);
+                  });
                 },
               )
             : const Text(

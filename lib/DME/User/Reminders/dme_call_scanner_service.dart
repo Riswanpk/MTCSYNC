@@ -195,16 +195,40 @@ class DmeCallScannerService {
 
       try {
         Iterable<CallLogEntry> entries = [];
-        try {
-          entries = await CallLog.query(
-            dateFrom: startOfPeriod.millisecondsSinceEpoch,
-            dateTo: endOfPeriod.millisecondsSinceEpoch,
-          );
-        } catch (queryErr) {
-          debugPrint('[DmeCallScanner] date-filtered query failed ($queryErr). Falling back to unfiltered query.');
+        bool querySucceeded = false;
+        final cleanDigits = contactPhone.replaceAll(RegExp(r'\D'), '');
+        final last10 = cleanDigits.length >= 10
+            ? cleanDigits.substring(cleanDigits.length - 10)
+            : cleanDigits;
+
+        // 1. Targeted number query first (returns 0-20 rows, immune to epoch unit differences)
+        if (last10.length >= 7) {
+          try {
+            entries = await CallLog.query(number: last10);
+            querySucceeded = true;
+          } catch (_) {}
         }
 
+        // 2. Date-filtered query if targeted number query returned empty (e.g. formatted dialer number)
         if (entries.isEmpty) {
+          try {
+            entries = await CallLog.query(
+              dateFrom: startOfPeriod.millisecondsSinceEpoch,
+              dateTo: endOfPeriod.millisecondsSinceEpoch,
+            );
+            querySucceeded = true;
+            if (entries.isEmpty) {
+              entries = await CallLog.query(
+                dateFrom: startOfPeriod.millisecondsSinceEpoch ~/ 1000,
+                dateTo: endOfPeriod.millisecondsSinceEpoch ~/ 1000,
+              );
+            }
+          } catch (queryErr) {
+            debugPrint('[DmeCallScanner] date-filtered query failed ($queryErr). Falling back to unfiltered query.');
+          }
+        }
+
+        if (entries.isEmpty && !querySucceeded) {
           try {
             entries = await CallLog.query();
           } catch (e) {
@@ -505,14 +529,22 @@ class DmeCallScannerService {
       final endOfPeriod = now.add(const Duration(minutes: 30));
 
       Iterable<CallLogEntry> entries = [];
+      bool dateQuerySucceeded = false;
       try {
         entries = await CallLog.query(
           dateFrom: startOfPeriod.millisecondsSinceEpoch,
           dateTo: endOfPeriod.millisecondsSinceEpoch,
         );
+        dateQuerySucceeded = true;
+        if (entries.isEmpty) {
+          entries = await CallLog.query(
+            dateFrom: startOfPeriod.millisecondsSinceEpoch ~/ 1000,
+            dateTo: endOfPeriod.millisecondsSinceEpoch ~/ 1000,
+          );
+        }
       } catch (_) {}
 
-      if (entries.isEmpty) {
+      if (entries.isEmpty && !dateQuerySucceeded) {
         try {
           entries = await CallLog.query();
         } catch (_) {}

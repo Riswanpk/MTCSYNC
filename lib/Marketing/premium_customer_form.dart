@@ -1,4 +1,5 @@
 // ignore_for_file: deprecated_member_use
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -106,6 +107,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
 
   @override
   void dispose() {
+    _draftTimer?.cancel();
     _shopNameController.dispose();
     _phoneNoController.dispose();
     _currentEnquiriesController.dispose();
@@ -115,6 +117,15 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
     _otherPurchasesReasonController.dispose();
     // Removed: _upcomingTrendsController, _feedbackController
     super.dispose();
+  }
+
+  Timer? _draftTimer;
+
+  void _scheduleSaveDraft() {
+    _draftTimer?.cancel();
+    _draftTimer = Timer(const Duration(milliseconds: 500), () {
+      if (mounted) _saveDraft();
+    });
   }
 
   Map<String, dynamic> _toDraftMap() {
@@ -134,6 +145,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
   }
 
   Future<void> _saveDraft() async {
+    _draftTimer?.cancel();
     try {
       final prefs = await SharedPreferences.getInstance();
       Map<String, dynamic> draftData = _toDraftMap();
@@ -141,8 +153,13 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
       if (_imageFile != null && _imageFile!.existsSync()) {
         final appDir = await getApplicationDocumentsDirectory();
         final fileName = path.basename(_imageFile!.path);
-        final savedImage = await _imageFile!.copy('${appDir.path}/$fileName');
-        draftData['imagePath'] = savedImage.path;
+        final destPath = '${appDir.path}/$fileName';
+        if (_imageFile!.path != destPath && !File(destPath).existsSync()) {
+          final savedImage = await _imageFile!.copy(destPath);
+          draftData['imagePath'] = savedImage.path;
+        } else {
+          draftData['imagePath'] = destPath;
+        }
       } else {
         draftData.remove('imagePath');
       }
@@ -447,11 +464,11 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                           errorText: 'Enter shop name',
                         ),
                         onChanged: (v) {
-                          _saveDraft();
-                          setState(() {
-                            shopName = v;
-                            if (v.trim().isNotEmpty) _shopNameError = false;
-                          });
+                          _scheduleSaveDraft();
+                          shopName = v;
+                          if (v.trim().isNotEmpty && _shopNameError) {
+                            setState(() => _shopNameError = false);
+                          }
                         },
                       ),
                     ),
@@ -537,17 +554,17 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                               TextPosition(offset: formatted.length),
                             );
                           }
-                          _saveDraft();
-                          if (mounted) { setState(() {
-                            phoneNo = formatted;
-                            if (_phoneNoError &&
-                                formatted
-                                        .replaceAll(RegExp(r'\D'), '')
-                                        .length ==
-                                    12) {
-                              _phoneNoError = false;
+                          _scheduleSaveDraft();
+                          phoneNo = formatted;
+                          if (_phoneNoError &&
+                              formatted
+                                      .replaceAll(RegExp(r'\D'), '')
+                                      .length ==
+                                  12) {
+                            if (mounted) {
+                              setState(() => _phoneNoError = false);
                             }
-                          }); }
+                          }
                         },
                       ),
                     ),
@@ -583,11 +600,11 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                           errorText: 'Enter current enquiries',
                         ),
                         onChanged: (v) {
-                          _saveDraft();
-                          setState(() {
-                            currentEnquiries = v;
-                            if (v.trim().isNotEmpty) _currentEnquiriesError = false;
-                          });
+                          _scheduleSaveDraft();
+                          currentEnquiries = v;
+                          if (v.trim().isNotEmpty && _currentEnquiriesError) {
+                            setState(() => _currentEnquiriesError = false);
+                          }
                         },
                       ),
                     ),
@@ -618,11 +635,11 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                           errorText: 'Enter confirmed order',
                         ),
                         onChanged: (v) {
-                          _saveDraft();
-                          setState(() {
-                            confirmedOrder = v;
-                            if (v.trim().isNotEmpty) _confirmedOrderError = false;
-                          });
+                          _scheduleSaveDraft();
+                          confirmedOrder = v;
+                          if (v.trim().isNotEmpty && _confirmedOrderError) {
+                            setState(() => _confirmedOrderError = false);
+                          }
                         },
                       ),
                     ),
@@ -710,10 +727,13 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                               errorText: 'Enter reason',
                             ),
                             onChanged: (v) {
-                              setState(() {
-                                _otherPurchasesReasonError = v.trim().isEmpty;
-                              });
-                              _saveDraft();
+                              final isErr = v.trim().isEmpty;
+                              if (_otherPurchasesReasonError != isErr) {
+                                setState(() {
+                                  _otherPurchasesReasonError = isErr;
+                                });
+                              }
+                              _scheduleSaveDraft();
                             },
                           ),
                         ),
@@ -764,10 +784,8 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                         controller: _upcomingEventDetailsController,
                         decoration: _inputDecoration('Upcoming Big Events Details'),
                         onChanged: (v) {
-                          _saveDraft();
-                          if (mounted) { setState(() {
-                            upcomingEventDetails = v;
-                          }); }
+                          upcomingEventDetails = v;
+                          _scheduleSaveDraft();
                         },
                       ),
                     ),
@@ -798,10 +816,8 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                         controller: _newProductSuggestionController,
                         decoration: _inputDecoration('New Product Suggestion'),
                         onChanged: (v) {
-                          _saveDraft();
-                          setState(() {
-                            newProductSuggestion = v;
-                          });
+                          newProductSuggestion = v;
+                          _scheduleSaveDraft();
                         },
                       ),
                     ),
@@ -842,7 +858,7 @@ class _PremiumCustomerFormState extends State<PremiumCustomerForm> {
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(13),
-                                  child: Image.file(_imageFile!, height: 160, fit: BoxFit.cover),
+                                  child: Image.file(_imageFile!, height: 160, cacheWidth: 600, fit: BoxFit.cover),
                                 ),
                               ),
                               TextButton.icon(

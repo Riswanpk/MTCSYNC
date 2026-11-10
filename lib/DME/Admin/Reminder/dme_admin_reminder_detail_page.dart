@@ -1002,10 +1002,12 @@ class _DmeAdminReminderDetailPageState extends State<DmeAdminReminderDetailPage>
                               child: proofUrl.startsWith('data:image/')
                                   ? Image.memory(
                                       base64Decode(proofUrl.split(',').last),
+                                      cacheWidth: 1080,
                                       fit: BoxFit.contain,
                                     )
                                   : Image.network(
                                       proofUrl,
+                                      cacheWidth: 1080,
                                       fit: BoxFit.contain,
                                     ),
                             ),
@@ -1031,11 +1033,13 @@ class _DmeAdminReminderDetailPageState extends State<DmeAdminReminderDetailPage>
                         proofUrl.startsWith('data:image/')
                             ? Image.memory(
                                 base64Decode(proofUrl.split(',').last),
+                                cacheWidth: 600,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => const Center(child: Text('Could not load image')),
                               )
                             : Image.network(
                                 proofUrl,
+                                cacheWidth: 600,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => const Center(child: Text('Could not load image')),
                               ),

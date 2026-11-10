@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -41,6 +42,7 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
 
   String _customerFilter = 'all'; // 'all', 'new', 'existing', 'conflict'
   String _customerSearch = '';
+  Timer? _searchDebounce;
 
   SupabaseClient? get _supabaseClient {
     try {
@@ -54,6 +56,12 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
   void initState() {
     super.initState();
     _initSupabaseIfNeeded();
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
   }
 
   Future<void> _initSupabaseIfNeeded() async {
@@ -206,7 +214,7 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
     });
 
     try {
-      final result = ExcelParsingService.parseExcelBytes(bytes);
+      final result = await compute(ExcelParsingService.parseExcelBytes, bytes);
       final List<ParsedExcelRow> parsed = result['parsedRows'] as List<ParsedExcelRow>;
       final List<GroupedSale> groupedList = result['groupedSales'] as List<GroupedSale>;
 
@@ -1091,7 +1099,12 @@ class _DmeExcelUploaderPageState extends State<DmeExcelUploaderPage> with Single
                 customerFilter: _customerFilter,
                 customerSearch: _customerSearch,
                 onFilterChanged: (filter) => setState(() => _customerFilter = filter),
-                onSearchChanged: (val) => setState(() => _customerSearch = val),
+                onSearchChanged: (val) {
+                  _searchDebounce?.cancel();
+                  _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+                    if (mounted) setState(() => _customerSearch = val);
+                  });
+                },
                 onResolveConflictsPressed: () {},
               ),
               const SizedBox(height: 16),

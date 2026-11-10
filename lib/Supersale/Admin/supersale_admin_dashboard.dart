@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'supersale_admin_booking_report.dart';
@@ -47,6 +48,8 @@ class _SupersaleAdminDashboardPageState
   String _auditSubTab = 'spot_vs_booking'; // 'spot_vs_booking' | 'cancelled' | 'split'
   String _orderStatusFilter = 'all'; // 'all', 'pending', 'delivered', 'spot', 'overdue', 'cancelled'
   String _orderSearchQuery = '';
+  Timer? _staffSearchDebounce;
+  Timer? _orderSearchDebounce;
 
   // Monthly Excel Quick Export controls
   int _exportYear = DateTime.now().year;
@@ -67,6 +70,8 @@ class _SupersaleAdminDashboardPageState
 
   @override
   void dispose() {
+    _staffSearchDebounce?.cancel();
+    _orderSearchDebounce?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -1533,8 +1538,12 @@ class _SupersaleAdminDashboardPageState
                     child: SizedBox(
                       height: 38,
                       child: TextField(
-                        onChanged: (val) =>
-                            setState(() => _staffSearchQuery = val.trim()),
+                        onChanged: (val) {
+                          _staffSearchDebounce?.cancel();
+                          _staffSearchDebounce = Timer(const Duration(milliseconds: 250), () {
+                            if (mounted) setState(() => _staffSearchQuery = val.trim());
+                          });
+                        },
                         style: TextStyle(
                           fontSize: 13,
                           color: isDark ? Colors.white : Colors.black87,
@@ -2094,7 +2103,12 @@ class _SupersaleAdminDashboardPageState
         ),
         const SizedBox(height: 10),
         TextField(
-          onChanged: (val) => setState(() => _orderSearchQuery = val.trim()),
+          onChanged: (val) {
+            _orderSearchDebounce?.cancel();
+            _orderSearchDebounce = Timer(const Duration(milliseconds: 250), () {
+              if (mounted) setState(() => _orderSearchQuery = val.trim());
+            });
+          },
           style: TextStyle(
             fontSize: 13,
             color: isDark ? Colors.white : Colors.black87,

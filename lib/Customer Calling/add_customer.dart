@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -385,6 +387,7 @@ class _ContactPickerModalState extends State<_ContactPickerModal> {
   List<Contact> _filtered = [];
   bool _loading = true;
   final TextEditingController _searchController = TextEditingController();
+  Timer? _searchDebounce;
 
   List<Contact> _getFilteredContacts(String q) {
     final qLower = q.toLowerCase();
@@ -417,7 +420,10 @@ class _ContactPickerModalState extends State<_ContactPickerModal> {
     // Show cached contacts immediately, then refresh in background
     _refreshContactsInBackground();
     _searchController.addListener(() {
-      _applyFilter(_searchController.text);
+      _searchDebounce?.cancel();
+      _searchDebounce = Timer(const Duration(milliseconds: 220), () {
+        if (mounted) _applyFilter(_searchController.text);
+      });
     });
   }
 
@@ -435,7 +441,8 @@ class _ContactPickerModalState extends State<_ContactPickerModal> {
       if (!mounted) return;
       // update shared prefs cache
       final prefs = await SharedPreferences.getInstance();
-      final encoded = jsonEncode(latest.map((c) => c.toJson()).toList());
+      final rawList = latest.map((c) => c.toJson()).toList();
+      final encoded = await compute(jsonEncode, rawList);
       await prefs.setString('contacts_cache', encoded);
 
       if (mounted) { setState(() {
@@ -456,6 +463,7 @@ class _ContactPickerModalState extends State<_ContactPickerModal> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }

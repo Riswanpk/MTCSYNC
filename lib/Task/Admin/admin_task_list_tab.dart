@@ -937,7 +937,7 @@ class _AdminTaskListTabState extends State<AdminTaskListTab> {
                                                 alignment: Alignment.topRight,
                                                 children: [
                                                   InteractiveViewer(
-                                                    child: Image.network(url),
+                                                    child: Image.network(url, cacheWidth: 1080),
                                                   ),
                                                   Positioned(
                                                     top: 8,
@@ -990,6 +990,7 @@ class _AdminTaskListTabState extends State<AdminTaskListTab> {
                                                     BorderRadius.circular(8),
                                                 child: Image.network(
                                                   url,
+                                                  cacheWidth: 240,
                                                   fit: BoxFit.cover,
                                                   errorBuilder: (context, error,
                                                           stackTrace) =>

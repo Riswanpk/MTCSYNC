@@ -72,17 +72,26 @@ class CallScannerService {
       final endEpoch = now.millisecondsSinceEpoch + (30 * 60 * 1000);
 
       Iterable<CallLogEntry> entries = [];
+      bool dateQuerySucceeded = false;
       try {
         entries = await CallLog.query(
           dateFrom: startEpoch,
           dateTo: endEpoch,
         );
+        dateQuerySucceeded = true;
+        if (entries.isEmpty) {
+          // Seconds-based epoch fallback for older Android ROMs without dumping full call history
+          entries = await CallLog.query(
+            dateFrom: startEpoch ~/ 1000,
+            dateTo: endEpoch ~/ 1000,
+          );
+        }
       } catch (e) {
         debugPrint('CallScannerService: Parameterized query failed on device, falling back to unfiltered: $e');
       }
 
-      // Older Android fallback: some Android ROMs return empty or throw on parameterized CallLog.query
-      if (entries.isEmpty) {
+      // Older Android fallback: only run unfiltered query if parameterized CallLog.query threw an error
+      if (entries.isEmpty && !dateQuerySucceeded) {
         try {
           final allEntries = await CallLog.query();
           entries = allEntries.where((e) {

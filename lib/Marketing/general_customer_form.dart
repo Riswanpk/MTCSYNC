@@ -1,4 +1,5 @@
 // ignore_for_file: deprecated_member_use
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'camera_page.dart'; // Add this import
@@ -151,6 +152,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
 
   @override
   void dispose() {
+    _draftTimer?.cancel();
     _shopNameController.dispose();
     _placeController.dispose();
     _phoneNoController.dispose();
@@ -160,6 +162,15 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
     _newProductSuggestionController.dispose();
     _otherPurchasesReasonController.dispose();
     super.dispose();
+  }
+
+  Timer? _draftTimer;
+
+  void _scheduleSaveDraft() {
+    _draftTimer?.cancel();
+    _draftTimer = Timer(const Duration(milliseconds: 500), () {
+      if (mounted) _saveDraft();
+    });
   }
 
   Map<String, dynamic> _toDraftMap() {
@@ -179,6 +190,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
   }
 
   Future<void> _saveDraft() async {
+    _draftTimer?.cancel();
     try {
       final prefs = await SharedPreferences.getInstance();
       Map<String, dynamic> draftData = _toDraftMap();
@@ -186,8 +198,13 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
       if (_imageFile != null && _imageFile!.existsSync()) {
         final appDir = await getApplicationDocumentsDirectory();
         final fileName = path.basename(_imageFile!.path);
-        final savedImage = await _imageFile!.copy('${appDir.path}/$fileName');
-        draftData['imagePath'] = savedImage.path;
+        final destPath = '${appDir.path}/$fileName';
+        if (_imageFile!.path != destPath && !File(destPath).existsSync()) {
+          final savedImage = await _imageFile!.copy(destPath);
+          draftData['imagePath'] = savedImage.path;
+        } else {
+          draftData['imagePath'] = destPath;
+        }
       } else {
         draftData.remove('imagePath');
       }
@@ -431,14 +448,14 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                         controller: _shopNameController,
                         decoration: _inputDecoration('SHOP NAME', required: true),
                         validator: (v) => v == null || v.isEmpty ? 'Enter shop name' : null,
-                        onChanged: (v) => _saveDraft(),
+                        onChanged: (v) => _scheduleSaveDraft(),
                       ),
                     ),
                     _buildFieldCard(
                       child: TextFormField(
                         controller: _placeController,
                         decoration: _inputDecoration('PLACE', required: true),
-                        onChanged: (v) => _saveDraft(),
+                        onChanged: (v) => _scheduleSaveDraft(),
                       ),
                     ),
                     _buildFieldCard(
@@ -480,7 +497,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                           return null;
                         },
                         onChanged: (val) {
-                          _saveDraft();
+                          _scheduleSaveDraft();
                           if (!val.startsWith('+91 ')) {
                             _phoneNoController.text = '+91 ';
                             _phoneNoController.selection = TextSelection.fromPosition(
@@ -683,10 +700,12 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                                 controller: _otherPurchasesReasonController,
                                 decoration: _inputDecoration('REASON FOR OUTSIDE PURCHASING', required: true),
                                 onChanged: (v) {
-                                  setState(() {
-                                    _otherPurchasesReasonError = false;
-                                  });
-                                  _saveDraft();
+                                  if (_otherPurchasesReasonError) {
+                                    setState(() {
+                                      _otherPurchasesReasonError = false;
+                                    });
+                                  }
+                                  _scheduleSaveDraft();
                                 },
                               ),
                             ),
@@ -709,21 +728,21 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                       child: TextFormField(
                         controller: _currentEnquiriesController,
                         decoration: _inputDecoration('CURRENT ENQUIRIES', required: true),
-                        onChanged: (v) => _saveDraft(),
+                        onChanged: (v) => _scheduleSaveDraft(),
                       ),
                     ),
                     _buildFieldCard(
                       child: TextFormField(
                         controller: _confirmedOrderController,
                         decoration: _inputDecoration('CONFIRMED ORDER'),
-                        onChanged: (v) => _saveDraft(),
+                        onChanged: (v) => _scheduleSaveDraft(),
                       ),
                     ),
                     _buildFieldCard(
                       child: TextFormField(
                         controller: _newProductSuggestionController,
                         decoration: _inputDecoration('REMARKS & SUGGESTIONS'),
-                        onChanged: (v) => _saveDraft(),
+                        onChanged: (v) => _scheduleSaveDraft(),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -771,7 +790,7 @@ class _GeneralCustomerFormState extends State<GeneralCustomerForm> {
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(14),
-                                  child: Image.file(_imageFile!, height: 140, fit: BoxFit.cover),
+                                  child: Image.file(_imageFile!, height: 140, cacheWidth: 600, fit: BoxFit.cover),
                                 ),
                               ),
                               TextButton.icon(

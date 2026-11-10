@@ -224,6 +224,7 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
               child: InteractiveViewer(
                 child: Image.network(
                   imageUrl,
+                  cacheWidth: 1080,
                   fit: BoxFit.contain,
                   loadingBuilder: (context, child, loadingProgress) {
                     if (loadingProgress == null) return child;
@@ -578,6 +579,7 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                                   order.paymentProofUrl!,
                                   width: 64,
                                   height: 64,
+                                  cacheWidth: 200,
                                   fit: BoxFit.cover,
                                   errorBuilder: (_, __, ___) => const Icon(
                                     Icons.receipt_long_rounded,

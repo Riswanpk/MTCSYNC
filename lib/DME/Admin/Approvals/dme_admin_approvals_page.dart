@@ -21,6 +21,7 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
   late TabController _tabController;
   bool _isLoading = true;
   String _searchQuery = '';
+  Timer? _searchDebounce;
   String _selectedTypeFilter = 'all'; // 'all', 'phone_number_change', 'preference_change'
 
   List<Map<String, dynamic>> _allRequests = [];
@@ -36,6 +37,7 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -1058,7 +1060,12 @@ class _DmeAdminApprovalsPageState extends State<DmeAdminApprovalsPage>
               children: [
                 // Search Input
                 TextField(
-                  onChanged: (val) => setState(() => _searchQuery = val.trim()),
+                  onChanged: (val) {
+                    _searchDebounce?.cancel();
+                    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+                      if (mounted) setState(() => _searchQuery = val.trim());
+                    });
+                  },
                   decoration: InputDecoration(
                     hintText: 'Search by customer name, phone, user...',
                     prefixIcon: const Icon(Icons.search, size: 20),

@@ -954,6 +954,7 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
               constraints: const BoxConstraints(maxHeight: 400),
               child: Image.network(
                 imageUrl,
+                cacheWidth: 1080,
                 fit: BoxFit.contain,
                 loadingBuilder: (context, child, loadingProgress) {
                   if (loadingProgress == null) return child;

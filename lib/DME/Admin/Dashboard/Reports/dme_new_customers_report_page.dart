@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -71,6 +72,7 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
   bool _isLoading = false;
   bool _isExporting = false;
   String _searchQuery = '';
+  Timer? _searchDebounce;
 
   // View mode: 'detailed' | 'summary' | 'branchwise'
   String _viewMode = 'detailed';
@@ -86,6 +88,12 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
     _endDate = widget.initialEndDate;
     _selectedBranchId = widget.initialBranchId;
     _initBranchAccess();
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
   }
 
   Future<void> _initBranchAccess() async {
@@ -970,7 +978,12 @@ class _DmeNewCustomersReportPageState extends State<DmeNewCustomersReportPage> {
                           filled: true,
                           fillColor: isDark ? Colors.grey[850] : Colors.grey[100],
                         ),
-                        onChanged: (val) => setState(() => _searchQuery = val),
+                        onChanged: (val) {
+                          _searchDebounce?.cancel();
+                          _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+                            if (mounted) setState(() => _searchQuery = val);
+                          });
+                        },
                       ),
                     ),
                     const SizedBox(width: 8),

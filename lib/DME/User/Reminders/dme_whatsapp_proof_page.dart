@@ -273,6 +273,7 @@ class _DmeWhatsAppProofPageState extends State<DmeWhatsAppProofPage> {
                         borderRadius: BorderRadius.circular(12),
                         child: Image.memory(
                           _compressedBytes!,
+                          cacheWidth: 600,
                           fit: BoxFit.cover,
                         ),
                       ),

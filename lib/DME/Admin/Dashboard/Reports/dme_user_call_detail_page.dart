@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../Misc/dme_constants.dart';
@@ -28,6 +29,7 @@ class _DmeUserCallDetailPageState extends State<DmeUserCallDetailPage>
   late TabController _tabController;
   late List<int> _days;
   String _customerSearchQuery = '';
+  Timer? _searchDebounce;
   int? _pendingCount;
   bool _isLoadingPending = false;
 
@@ -76,6 +78,7 @@ class _DmeUserCallDetailPageState extends State<DmeUserCallDetailPage>
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -333,7 +336,14 @@ class _DmeUserCallDetailPageState extends State<DmeUserCallDetailPage>
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               ),
-              onChanged: (val) => setState(() => _customerSearchQuery = val.trim().toLowerCase()),
+              onChanged: (val) {
+                _searchDebounce?.cancel();
+                _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+                  if (mounted) {
+                    setState(() => _customerSearchQuery = val.trim().toLowerCase());
+                  }
+                });
+              },
             ),
           ),
 

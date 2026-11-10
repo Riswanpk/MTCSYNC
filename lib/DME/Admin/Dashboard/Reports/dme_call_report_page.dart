@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -30,6 +31,7 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
 
   bool _isLoading = false;
   String _searchQuery = '';
+  Timer? _searchDebounce;
 
   List<DmeUserCallStat> _userStats = [];
 
@@ -42,6 +44,12 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
   void initState() {
     super.initState();
     _initBranchAccess();
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
   }
 
   Future<void> _initBranchAccess() async {
@@ -545,7 +553,12 @@ class _DmeCallReportPageState extends State<DmeCallReportPage> {
                     filled: true,
                     fillColor: isDark ? Colors.grey[850] : Colors.grey[100],
                   ),
-                  onChanged: (val) => setState(() => _searchQuery = val),
+                  onChanged: (val) {
+                    _searchDebounce?.cancel();
+                    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+                      if (mounted) setState(() => _searchQuery = val);
+                    });
+                  },
                 ),
               ],
             ),

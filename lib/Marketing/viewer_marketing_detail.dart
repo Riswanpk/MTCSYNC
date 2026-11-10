@@ -134,6 +134,7 @@ class ViewerMarketingDetailPage extends StatelessWidget {
                             child: Image.network(
                               data['imageUrl'],
                               height: 180,
+                              cacheWidth: 600,
                               fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) => const Text('Image not available'),
                             ),
@@ -269,6 +270,7 @@ class ViewerMarketingDetailPage extends StatelessWidget {
                 child: Center(
                   child: Image.network(
                     imageUrl,
+                    cacheWidth: 1080,
                     fit: BoxFit.contain,
                     errorBuilder: (_, __, ___) => const Text('Image not available', style: TextStyle(color: Colors.white)),
                   ),

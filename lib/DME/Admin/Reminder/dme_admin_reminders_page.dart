@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -45,6 +46,7 @@ class _DmeAdminRemindersPageState extends State<DmeAdminRemindersPage> {
   // Quick filter tab in list
   String _activeQuickFilter = 'all'; // 'all', 'called', 'pending', 'whatsapped'
   String _searchQuery = '';
+  Timer? _searchDebounce;
 
   // Data
   List<Map<String, dynamic>> _reminders = [];
@@ -53,6 +55,12 @@ class _DmeAdminRemindersPageState extends State<DmeAdminRemindersPage> {
   void initState() {
     super.initState();
     _initData();
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
   }
 
   Future<void> _initData() async {
@@ -896,7 +904,12 @@ class _DmeAdminRemindersPageState extends State<DmeAdminRemindersPage> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
       child: TextField(
-        onChanged: (val) => setState(() => _searchQuery = val),
+        onChanged: (val) {
+          _searchDebounce?.cancel();
+          _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+            if (mounted) setState(() => _searchQuery = val);
+          });
+        },
         decoration: InputDecoration(
           hintText: 'Search customer, phone, remarks, branch...',
           prefixIcon: const Icon(Icons.search, size: 20),

@@ -219,6 +219,7 @@ class HomeDrawer extends StatelessWidget {
       leading: const Icon(Icons.logout, color: Colors.red),
       title: const Text('Log Out'),
       onTap: () async {
+        final navigator = Navigator.of(context);
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
           try {
@@ -231,11 +232,12 @@ class HomeDrawer extends StatelessWidget {
         }
         UserCacheService.instance.clear();
         await FirebaseAuth.instance.signOut();
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginPage()),
-          (Route<dynamic> route) => false,
-        );
+        if (context.mounted) {
+          navigator.pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const LoginPage()),
+            (Route<dynamic> route) => false,
+          );
+        }
       },
     );
   }

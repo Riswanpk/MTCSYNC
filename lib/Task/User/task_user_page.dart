@@ -445,7 +445,7 @@ class _UserTaskPageState extends State<UserTaskPage> {
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(8),
                                       child: type == 'image'
-                                          ? Image.file(file, fit: BoxFit.cover)
+                                          ? Image.file(file, cacheWidth: 200, fit: BoxFit.cover)
                                           : const Center(child: Icon(Icons.video_library_rounded, color: Colors.orange, size: 28)),
                                     ),
                                   ),

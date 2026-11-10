@@ -44,6 +44,7 @@ import '../DME/Admin/Customer Directory/dme_customer_merge_page.dart';
 import '../Expo/Admin/expo_admin_page.dart';
 import '../Expo/User/expo_user_mainpage.dart';
 import '../Expo/Accounts/expo_accounts_page.dart';
+import '../Expo/Accounts/expo_accounts_dashboard_page.dart';
 
 /// App brand colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -545,10 +546,26 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       NeumorphicButton(
         onTap: () => _navigateToExpo(context),
         text: 'Expo',
-        color: isAcc ? const Color(0xFF7C3AED) : primaryBlue, // Distinct purple for expo_acc, primaryBlue for expo_user
+        color: primaryBlue,
         textColor: Colors.white,
         icon: isAcc ? Icons.verified_user_rounded : Icons.storefront_rounded,
       ),
+      if (isAcc)
+        NeumorphicButton(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const LoadingOverlayPage(
+                  child: ExpoAccountsDashboardPage(),
+                ),
+              ),
+            );
+          },
+          text: 'Dashboard',
+          color: primaryGreen,
+          textColor: Colors.white,
+          icon: Icons.dashboard_rounded,
+        ),
     ];
     return _buildButtonGrid(buttons);
   }

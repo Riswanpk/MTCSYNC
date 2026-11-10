@@ -63,6 +63,14 @@ class _FollowUpFormState extends State<FollowUpForm> {
   late FocusNode _phoneFieldFocusNode;
   Timer? _nameSearchTimer;
   Timer? _phoneSearchTimer;
+  Timer? _draftTimer;
+
+  void _scheduleSaveDraft() {
+    _draftTimer?.cancel();
+    _draftTimer = Timer(const Duration(milliseconds: 500), () {
+      if (mounted) _saveDraft();
+    });
+  }
 
   String _status = 'In Progress';
   String _priority = 'High';
@@ -379,6 +387,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
 
   @override
   void dispose() {
+    _draftTimer?.cancel();
     _nameSearchTimer?.cancel();
     _phoneSearchTimer?.cancel();
     _nameFieldFocusNode.dispose();
@@ -601,7 +610,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                                 decoration: buildInputDecoration(label: 'Customer Name', icon: Icons.person_outline_rounded),
                                 validator: (value) => value!.isEmpty ? 'Enter customer name' : null,
                                 onChanged: (_) {
-                                  if (mounted) _saveDraft();
+                                  if (mounted) _scheduleSaveDraft();
                                 },
                               );
                             },
@@ -653,7 +662,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                         controller: _addressController,
                         decoration: buildInputDecoration(label: 'Address', icon: Icons.location_on_outlined),
                         validator: (value) => value!.isEmpty ? 'Enter address' : null,
-                        onChanged: (_) => _saveDraft(),
+                        onChanged: (_) => _scheduleSaveDraft(),
                       ),
                       const SizedBox(height: 14),
                       RawAutocomplete<Map<String, dynamic>>(
@@ -808,7 +817,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                               return null;
                             },
                             onChanged: (val) {
-                              if (mounted) _saveDraft();
+                              if (mounted) _scheduleSaveDraft();
                               if (!val.startsWith('+91 ')) {
                                 controller.text = '+91 ';
                                 controller.selection = TextSelection.fromPosition(TextPosition(offset: controller.text.length));
@@ -877,7 +886,7 @@ class _FollowUpFormState extends State<FollowUpForm> {
                         maxLines: 3,
                         decoration: buildInputDecoration(label: 'Comments / Notes', icon: Icons.comment_outlined),
                         validator: (value) => value!.isEmpty ? 'Enter comments' : null,
-                        onChanged: (_) => _saveDraft(),
+                        onChanged: (_) => _scheduleSaveDraft(),
                       ),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

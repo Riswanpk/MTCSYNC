@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -25,6 +26,7 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
   bool sortAscending = false;
   bool _isSearching = false;
   bool _isLoading = false;
+  Timer? _searchDebounce;
 
   List<DocumentSnapshot> _leads = [];
   DocumentSnapshot? _lastDocument;
@@ -44,6 +46,12 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
   void initState() {
     super.initState();
     _loadBranches();
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadBranches() async {
@@ -393,8 +401,12 @@ class _SmeLeadsPageState extends State<SmeLeadsPage> {
                   border: InputBorder.none,
                 ),
                 onChanged: (val) {
-                  setState(() => searchQuery = val.toLowerCase().trim());
-                  _fetchLeadsPage(isSearch: true);
+                  _searchDebounce?.cancel();
+                  _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+                    if (!mounted) return;
+                    setState(() => searchQuery = val.toLowerCase().trim());
+                    _fetchLeadsPage(isSearch: true);
+                  });
                 },
               )
             : const Text('SME Leads'),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -54,6 +55,7 @@ class _YupulseMonthlyMarksReportPageState
   bool _isExporting = false;
   String _searchQuery = '';
   String _statusFilter = 'all'; // 'all', 'submitted', 'pending'
+  Timer? _searchDebounce;
 
   List<_UserMarkReportItem> _reportItems = [];
 
@@ -67,6 +69,12 @@ class _YupulseMonthlyMarksReportPageState
     _selectedYear = widget.initialYear ?? now.year;
     _selectedBranch = widget.initialBranch;
     _fetchBranches();
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
   }
 
   String get _periodStr {
@@ -628,8 +636,12 @@ class _YupulseMonthlyMarksReportPageState
                             child: SizedBox(
                               height: 36,
                               child: TextField(
-                                onChanged: (val) =>
-                                    setState(() => _searchQuery = val.trim()),
+                                onChanged: (val) {
+                                  _searchDebounce?.cancel();
+                                  _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+                                    if (mounted) setState(() => _searchQuery = val.trim());
+                                  });
+                                },
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: isDark ? Colors.white : Colors.black87,

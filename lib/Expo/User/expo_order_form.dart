@@ -1690,6 +1690,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                 item.photoFile!,
                 height: 44,
                 width: 44,
+                cacheWidth: 160,
                 fit: BoxFit.cover,
               ),
             )
@@ -1973,6 +1974,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                 _paymentProofFile!,
                 height: 140,
                 width: double.infinity,
+                cacheWidth: 600,
                 fit: BoxFit.cover,
               ),
             ),
@@ -2296,6 +2298,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                     item.photoFile!,
                     height: 50,
                     width: 50,
+                    cacheWidth: 160,
                     fit: BoxFit.cover,
                   ),
                 ),
