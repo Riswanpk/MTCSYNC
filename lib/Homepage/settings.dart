@@ -64,7 +64,7 @@ class _SettingsPageState extends State<SettingsPage>
     },
     {
       'permission': Permission.storage,
-      'title': 'Storage / Photos',
+      'title': 'Storage',
       'description': 'Used to save and export Excel files and documents',
       'icon': Icons.folder_open_outlined,
     },
@@ -102,17 +102,8 @@ class _SettingsPageState extends State<SettingsPage>
       final perm = item['permission'] as Permission;
       try {
         if (perm == Permission.storage) {
-          // On Android 13+ (API 33+), Permission.storage is deprecated and replaces with photos/videos.
-          // Check storage, photos, or manageExternalStorage
           final storageStatus = await Permission.storage.status;
-          final photosStatus = await Permission.photos.status;
-          if (storageStatus.isGranted || photosStatus.isGranted) {
-            updatedStatuses[perm] = PermissionStatus.granted;
-          } else if (photosStatus.isPermanentlyDenied || storageStatus.isPermanentlyDenied) {
-            updatedStatuses[perm] = PermissionStatus.permanentlyDenied;
-          } else {
-            updatedStatuses[perm] = storageStatus.isDenied ? storageStatus : photosStatus;
-          }
+          updatedStatuses[perm] = storageStatus;
         } else {
           final status = await perm.status;
           updatedStatuses[perm] = status;
@@ -132,22 +123,7 @@ class _SettingsPageState extends State<SettingsPage>
   Future<void> _requestPermission(
       Permission permission, String title, BuildContext context) async {
     // 1. Always attempt an in-app request first.
-    PermissionStatus newStatus;
-    if (permission == Permission.storage) {
-      // On Android 13+, requesting Permission.storage returns permanentlyDenied immediately
-      // unless Permission.photos (READ_MEDIA_IMAGES) is requested!
-      final photosStatus = await Permission.photos.request();
-      if (photosStatus.isGranted || photosStatus.isLimited) {
-        newStatus = photosStatus;
-      } else {
-        newStatus = await Permission.storage.request();
-        if (!newStatus.isGranted && photosStatus.isPermanentlyDenied) {
-          newStatus = photosStatus;
-        }
-      }
-    } else {
-      newStatus = await permission.request();
-    }
+    final PermissionStatus newStatus = await permission.request();
 
     if (mounted) {
       setState(() {
