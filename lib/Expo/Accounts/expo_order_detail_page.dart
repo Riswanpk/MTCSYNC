@@ -778,6 +778,19 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                                   style: const TextStyle(fontSize: 13)),
                             ],
                           ),
+                          if (order.roundOff != 0) ...[
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Round Off:',
+                                    style: TextStyle(fontSize: 13)),
+                                Text(
+                                    '${order.roundOff >= 0 ? '+' : '-'} ₹${order.roundOff.abs().toStringAsFixed(2)}',
+                                    style: const TextStyle(fontSize: 13)),
+                              ],
+                            ),
+                          ],
                           const Divider(height: 16),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,

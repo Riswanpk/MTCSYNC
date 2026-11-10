@@ -1,10 +1,37 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import '../Misc/firebase_storage_helper.dart';
+import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../Navigation/user_cache_service.dart';
+import 'expo_supabase_config.dart';
+
+// ---------------------------------------------------------------------------
+// Parsing helpers (Supabase / PostgREST returns ISO strings & JSON numbers)
+// ---------------------------------------------------------------------------
+
+DateTime _parseDate(dynamic field, {DateTime? fallback}) {
+  if (field is DateTime) return field.toLocal();
+  if (field is String) {
+    final parsed = DateTime.tryParse(field);
+    if (parsed != null) return parsed.isUtc ? parsed.toLocal() : parsed;
+  }
+  return fallback ?? DateTime.now();
+}
+
+DateTime? _parseNullableDate(dynamic field) {
+  if (field == null) return null;
+  return _parseDate(field);
+}
+
+double _toDouble(dynamic v) => (v as num?)?.toDouble() ?? 0.0;
+int _toInt(dynamic v) => (v as num?)?.toInt() ?? 0;
+
+/// timestamptz columns: always send UTC ISO-8601.
+String _ts(DateTime d) => d.toUtc().toIso8601String();
+
+/// date columns: send yyyy-MM-dd (local calendar date).
+String _dateOnly(DateTime d) => DateFormat('yyyy-MM-dd').format(d);
 
 /// Data model representing an Exhibition created by an Admin.
 class Exhibition {
@@ -45,35 +72,28 @@ class Exhibition {
     return DateTime.now().isAfter(endDate);
   }
 
+  /// Row for the `expo.exhibitions` table.
   Map<String, dynamic> toMap() {
     return {
       'name': name,
-      'startDate': Timestamp.fromDate(startDate),
-      'endDate': Timestamp.fromDate(endDate),
+      'start_date': _ts(startDate),
+      'end_date': _ts(endDate),
       'location': location,
-      'selectedUserIds': selectedUserIds,
-      'selectedUsers': selectedUsers,
-      'createdAt': Timestamp.fromDate(createdAt),
-      'createdBy': createdBy,
-      'createdByName': createdByName,
+      'selected_user_ids': selectedUserIds,
+      'selected_users': selectedUsers,
+      'created_at': _ts(createdAt),
+      'created_by': createdBy,
+      'created_by_name': createdByName,
     };
   }
 
-  factory Exhibition.fromDoc(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-
-    DateTime parseTimestamp(dynamic field) {
-      if (field is Timestamp) return field.toDate();
-      if (field is String) return DateTime.tryParse(field) ?? DateTime.now();
-      return DateTime.now();
-    }
-
-    final rawUserIds = data['selectedUserIds'];
+  factory Exhibition.fromMap(Map<String, dynamic> data) {
+    final rawUserIds = data['selected_user_ids'];
     final List<String> userIds = rawUserIds is List
         ? rawUserIds.map((e) => e.toString()).toList()
         : <String>[];
 
-    final rawUsers = data['selectedUsers'];
+    final rawUsers = data['selected_users'];
     final List<Map<String, dynamic>> users = rawUsers is List
         ? rawUsers
             .whereType<Map>()
@@ -82,21 +102,21 @@ class Exhibition {
         : <Map<String, dynamic>>[];
 
     return Exhibition(
-      id: doc.id,
+      id: (data['id'] ?? '').toString(),
       name: data['name'] ?? '',
-      startDate: parseTimestamp(data['startDate']),
-      endDate: parseTimestamp(data['endDate']),
+      startDate: _parseDate(data['start_date']),
+      endDate: _parseDate(data['end_date']),
       location: data['location'] ?? '',
       selectedUserIds: userIds,
       selectedUsers: users,
-      createdAt: parseTimestamp(data['createdAt']),
-      createdBy: data['createdBy'] ?? '',
-      createdByName: data['createdByName'] ?? '',
+      createdAt: _parseDate(data['created_at']),
+      createdBy: data['created_by'] ?? '',
+      createdByName: data['created_by_name'] ?? '',
     );
   }
 }
 
-/// Item inside an Expo Order.
+/// Item inside an Expo Order (stored as JSONB array in `expo.orders.items`).
 class ExpoOrderItem {
   final String mtcCode;
   final String itemName;
@@ -105,7 +125,7 @@ class ExpoOrderItem {
   final double rate;
   final double gst; // percentage e.g. 18.0
   final double total; // (qty * rate) + ((qty * rate) * gst / 100)
-  final String? photoUrl; // Optional photo of the item
+  final String? photoUrl; // Photo of the item (not mandatory)
 
   const ExpoOrderItem({
     required this.mtcCode,
@@ -142,10 +162,10 @@ class ExpoOrderItem {
       mtcCode: map['mtcCode'] ?? '',
       itemName: map['itemName'] ?? '',
       description: map['description'] ?? '',
-      qty: (map['qty'] as num?)?.toInt() ?? 0,
-      rate: (map['rate'] as num?)?.toDouble() ?? 0.0,
-      gst: (map['gst'] as num?)?.toDouble() ?? 0.0,
-      total: (map['total'] as num?)?.toDouble() ?? 0.0,
+      qty: _toInt(map['qty']),
+      rate: _toDouble(map['rate']),
+      gst: _toDouble(map['gst']),
+      total: _toDouble(map['total']),
       photoUrl: map['photoUrl'],
     );
   }
@@ -169,13 +189,14 @@ class ExpoOrder {
   final List<ExpoOrderItem> items;
   final double subtotal;
   final double totalGst;
-  final double totalAmount;
+  final double roundOff; // Round-off applied to reach a whole-rupee total
+  final double totalAmount; // Final (rounded) amount payable
   final int totalQty;
   final double advanceAmount; // Advance paid (for booking / stall delivery)
   final double balanceAmount; // Remaining balance due
   final String status; // 'Pending Verification', 'Completed'
   final String paymentMode; // 'Cash', 'Bank Transfer', 'UPI'
-  final String? paymentProofUrl; // URL of receipt uploaded to Firebase Storage
+  final String? paymentProofUrl; // Public URL of receipt in Supabase Storage
   final DateTime? deliveryDate; // Delivery date for booking orders
   final DateTime? stallPickupDate; // Expected pickup date during exhibition for Stall Delivery
   final bool isConvertedToBooking; // True if stall delivery wasn't picked up and got converted to booking
@@ -203,6 +224,7 @@ class ExpoOrder {
     required this.items,
     required this.subtotal,
     required this.totalGst,
+    this.roundOff = 0.0,
     required this.totalAmount,
     required this.totalQty,
     this.advanceAmount = 0.0,
@@ -221,56 +243,51 @@ class ExpoOrder {
     this.completedAt,
   });
 
+  /// Row for the `expo.orders` table (id / created_at are generated by DB).
   Map<String, dynamic> toMap() {
     return {
-      'exhibitionId': exhibitionId,
-      'exhibitionName': exhibitionName,
-      'orderType': orderType,
-      'orderDate': Timestamp.fromDate(orderDate),
-      'shopName': shopName,
-      'customerName': customerName,
+      'exhibition_id': exhibitionId,
+      'exhibition_name': exhibitionName,
+      'order_type': orderType,
+      'order_date': _ts(orderDate),
+      'shop_name': shopName,
+      'customer_name': customerName,
       'place': place,
       'district': district,
       'state': state,
       'phone': phone,
-      'preferredBranch': preferredBranch,
-      'preferredSalesman': preferredSalesman,
+      'preferred_branch': preferredBranch,
+      'preferred_salesman': preferredSalesman,
       'items': items.map((e) => e.toMap()).toList(),
       'subtotal': subtotal,
-      'totalGst': totalGst,
-      'totalAmount': totalAmount,
-      'totalQty': totalQty,
-      'advanceAmount': advanceAmount,
-      'balanceAmount': balanceAmount,
+      'total_gst': totalGst,
+      'round_off': roundOff,
+      'total_amount': totalAmount,
+      'total_qty': totalQty,
+      'advance_amount': advanceAmount,
+      'balance_amount': balanceAmount,
       'status': status,
-      'paymentMode': paymentMode,
-      if (paymentProofUrl != null && paymentProofUrl!.isNotEmpty)
-        'paymentProofUrl': paymentProofUrl,
-      'deliveryDate':
-          deliveryDate != null ? Timestamp.fromDate(deliveryDate!) : null,
-      if (stallPickupDate != null)
-        'stallPickupDate': Timestamp.fromDate(stallPickupDate!),
-      'isConvertedToBooking': isConvertedToBooking,
-      if (stallPickupStatus != null && stallPickupStatus!.isNotEmpty)
-        'stallPickupStatus': stallPickupStatus,
-      'createdUserId': createdUserId,
-      'createdUserName': createdUserName,
-      'createdUserBranch': createdUserBranch,
-      'createdAt': Timestamp.fromDate(createdAt),
-      'completedAt':
-          completedAt != null ? Timestamp.fromDate(completedAt!) : null,
+      'payment_mode': paymentMode,
+      'payment_proof_url':
+          (paymentProofUrl != null && paymentProofUrl!.isNotEmpty)
+              ? paymentProofUrl
+              : null,
+      'delivery_date': deliveryDate != null ? _dateOnly(deliveryDate!) : null,
+      'stall_pickup_date':
+          stallPickupDate != null ? _dateOnly(stallPickupDate!) : null,
+      'is_converted_to_booking': isConvertedToBooking,
+      'stall_pickup_status':
+          (stallPickupStatus != null && stallPickupStatus!.isNotEmpty)
+              ? stallPickupStatus
+              : null,
+      'created_user_id': createdUserId,
+      'created_user_name': createdUserName,
+      'created_user_branch': createdUserBranch,
+      'completed_at': completedAt != null ? _ts(completedAt!) : null,
     };
   }
 
-  factory ExpoOrder.fromDoc(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-
-    DateTime parseTimestamp(dynamic field) {
-      if (field is Timestamp) return field.toDate();
-      if (field is String) return DateTime.tryParse(field) ?? DateTime.now();
-      return DateTime.now();
-    }
-
+  factory ExpoOrder.fromMap(Map<String, dynamic> data) {
     final rawItems = data['items'];
     final List<ExpoOrderItem> itemsList = rawItems is List
         ? rawItems
@@ -279,47 +296,45 @@ class ExpoOrder {
             .toList()
         : <ExpoOrderItem>[];
 
+    final totalAmount = _toDouble(data['total_amount']);
+    final advance = _toDouble(data['advance_amount']);
+
     return ExpoOrder(
-      id: doc.id,
-      exhibitionId: data['exhibitionId'] ?? '',
-      exhibitionName: data['exhibitionName'] ?? '',
-      orderType: data['orderType'] ?? 'Spot Delivery',
-      orderDate: parseTimestamp(data['orderDate']),
-      shopName: data['shopName'] ?? '',
-      customerName: data['customerName'] ?? '',
+      id: (data['id'] ?? '').toString(),
+      exhibitionId: (data['exhibition_id'] ?? '').toString(),
+      exhibitionName: data['exhibition_name'] ?? '',
+      orderType: data['order_type'] ?? 'Spot Delivery',
+      orderDate: _parseDate(data['order_date']),
+      shopName: data['shop_name'] ?? '',
+      customerName: data['customer_name'] ?? '',
       place: data['place'] ?? '',
       district: data['district'] ?? '',
       state: data['state'] ?? '',
       phone: data['phone'] ?? '',
-      preferredBranch: data['preferredBranch'] ?? '',
-      preferredSalesman: data['preferredSalesman'] ?? 'N/A',
+      preferredBranch: data['preferred_branch'] ?? '',
+      preferredSalesman: data['preferred_salesman'] ?? 'N/A',
       items: itemsList,
-      subtotal: (data['subtotal'] as num?)?.toDouble() ?? 0.0,
-      totalGst: (data['totalGst'] as num?)?.toDouble() ?? 0.0,
-      totalAmount: (data['totalAmount'] as num?)?.toDouble() ?? 0.0,
-      totalQty: (data['totalQty'] as num?)?.toInt() ?? 0,
-      advanceAmount: (data['advanceAmount'] as num?)?.toDouble() ?? 0.0,
-      balanceAmount: (data['balanceAmount'] as num?)?.toDouble() ??
-          (((data['totalAmount'] as num?)?.toDouble() ?? 0.0) -
-              ((data['advanceAmount'] as num?)?.toDouble() ?? 0.0)),
+      subtotal: _toDouble(data['subtotal']),
+      totalGst: _toDouble(data['total_gst']),
+      roundOff: _toDouble(data['round_off']),
+      totalAmount: totalAmount,
+      totalQty: _toInt(data['total_qty']),
+      advanceAmount: advance,
+      balanceAmount: data['balance_amount'] != null
+          ? _toDouble(data['balance_amount'])
+          : (totalAmount - advance),
       status: data['status'] ?? 'Pending',
-      paymentMode: data['paymentMode'] ?? 'Cash',
-      paymentProofUrl: data['paymentProofUrl'],
-      deliveryDate: data['deliveryDate'] != null
-          ? parseTimestamp(data['deliveryDate'])
-          : null,
-      stallPickupDate: data['stallPickupDate'] != null
-          ? parseTimestamp(data['stallPickupDate'])
-          : null,
-      isConvertedToBooking: data['isConvertedToBooking'] ?? false,
-      stallPickupStatus: data['stallPickupStatus'],
-      createdUserId: data['createdUserId'] ?? '',
-      createdUserName: data['createdUserName'] ?? '',
-      createdUserBranch: data['createdUserBranch'] ?? '',
-      createdAt: parseTimestamp(data['createdAt']),
-      completedAt: data['completedAt'] != null
-          ? parseTimestamp(data['completedAt'])
-          : null,
+      paymentMode: data['payment_mode'] ?? 'Cash',
+      paymentProofUrl: data['payment_proof_url'],
+      deliveryDate: _parseNullableDate(data['delivery_date']),
+      stallPickupDate: _parseNullableDate(data['stall_pickup_date']),
+      isConvertedToBooking: data['is_converted_to_booking'] ?? false,
+      stallPickupStatus: data['stall_pickup_status'],
+      createdUserId: data['created_user_id'] ?? '',
+      createdUserName: data['created_user_name'] ?? '',
+      createdUserBranch: data['created_user_branch'] ?? '',
+      createdAt: _parseDate(data['created_at']),
+      completedAt: _parseNullableDate(data['completed_at']),
     );
   }
 
@@ -340,6 +355,7 @@ class ExpoOrder {
     List<ExpoOrderItem>? items,
     double? subtotal,
     double? totalGst,
+    double? roundOff,
     double? totalAmount,
     int? totalQty,
     double? advanceAmount,
@@ -374,6 +390,7 @@ class ExpoOrder {
       items: items ?? this.items,
       subtotal: subtotal ?? this.subtotal,
       totalGst: totalGst ?? this.totalGst,
+      roundOff: roundOff ?? this.roundOff,
       totalAmount: totalAmount ?? this.totalAmount,
       totalQty: totalQty ?? this.totalQty,
       advanceAmount: advanceAmount ?? this.advanceAmount,
@@ -394,36 +411,48 @@ class ExpoOrder {
   }
 }
 
-/// Service handling all Expo Firestore operations and caching.
+/// Service handling all Expo operations on the Supabase `expo` schema
+/// (Postgres tables + Realtime + Storage).
+///
+/// Tables inside `expo` schema (see docs/expo_supabase_setup.md):
+///   expo.exhibitions, expo.orders, expo.customers, expo.items
 class ExpoService {
   ExpoService._();
   static final ExpoService instance = ExpoService._();
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static const String _exhibitionsTable = 'exhibitions';
+  static const String _ordersTable = 'orders';
+  static const String _customersTable = 'customers';
+  static const String _itemsTable = 'items';
 
-  CollectionReference<Map<String, dynamic>> get _exhibitionsRef =>
-      _firestore.collection('exhibitions');
+  SupabaseClient get _db => ExpoSupabaseConfig.client;
 
-  CollectionReference<Map<String, dynamic>> get _ordersRef =>
-      _firestore.collection('expo_orders');
+  PostgrestQueryBuilder _table(String tableName) =>
+      _db.schema(ExpoSupabaseConfig.schema).from(tableName);
 
   // --- Exhibitions Management ---
 
   Stream<List<Exhibition>> streamExhibitions() {
-    return _exhibitionsRef
-        .orderBy('startDate', descending: true)
-        .snapshots()
-        .map((snapshot) =>
-            snapshot.docs.map((doc) => Exhibition.fromDoc(doc)).toList());
+    return _db
+        .schema(ExpoSupabaseConfig.schema)
+        .from(_exhibitionsTable)
+        .stream(primaryKey: ['id'])
+        .order('start_date', ascending: false)
+        .map((rows) => rows.map(Exhibition.fromMap).toList());
   }
 
   Stream<List<Exhibition>> streamExhibitionsForUser(String userId) {
-    return _exhibitionsRef
-        .where('selectedUserIds', arrayContains: userId)
-        .snapshots()
-        .map((snapshot) {
-      final list =
-          snapshot.docs.map((doc) => Exhibition.fromDoc(doc)).toList();
+    // Realtime streams support a single eq-filter only, so array membership
+    // is filtered client-side (exhibition count is tiny).
+    return _db
+        .schema(ExpoSupabaseConfig.schema)
+        .from(_exhibitionsTable)
+        .stream(primaryKey: ['id'])
+        .map((rows) {
+      final list = rows
+          .map(Exhibition.fromMap)
+          .where((e) => e.selectedUserIds.contains(userId))
+          .toList();
       list.sort((a, b) => b.startDate.compareTo(a.startDate));
       return list;
     });
@@ -446,38 +475,28 @@ class ExpoService {
         .where((id) => id.isNotEmpty)
         .toList();
 
-    final docData = {
+    final row = <String, dynamic>{
       'name': name.trim(),
-      'startDate': Timestamp.fromDate(startDate),
-      'endDate': Timestamp.fromDate(endDate),
+      'start_date': _ts(startDate),
+      'end_date': _ts(endDate),
       'location': location.trim(),
-      'selectedUserIds': userIds,
-      'selectedUsers': selectedUsers,
-      'updatedAt': FieldValue.serverTimestamp(),
+      'selected_user_ids': userIds,
+      'selected_users': selectedUsers,
     };
 
     if (id == null || id.isEmpty) {
-      docData['createdAt'] = FieldValue.serverTimestamp();
-      docData['createdBy'] = user?.uid ?? '';
-      docData['createdByName'] = cache.username ?? user?.displayName ?? 'Admin';
-      await _exhibitionsRef.add(docData);
+      row['created_by'] = user?.uid ?? '';
+      row['created_by_name'] =
+          cache.username ?? user?.displayName ?? 'Admin';
+      await _table(_exhibitionsTable).insert(row);
     } else {
-      await _exhibitionsRef.doc(id).update(docData);
+      await _table(_exhibitionsTable).update(row).eq('id', id);
     }
   }
 
   Future<void> deleteExhibition(String exhibitionId) async {
-    // Delete exhibition doc
-    await _exhibitionsRef.doc(exhibitionId).delete();
-
-    // Clean up corresponding orders in batch
-    final ordersQuery =
-        await _ordersRef.where('exhibitionId', isEqualTo: exhibitionId).get();
-    final batch = _firestore.batch();
-    for (final doc in ordersQuery.docs) {
-      batch.delete(doc.reference);
-    }
-    await batch.commit();
+    // Orders are removed automatically via ON DELETE CASCADE.
+    await _table(_exhibitionsTable).delete().eq('id', exhibitionId);
   }
 
   // --- Orders Management ---
@@ -487,124 +506,88 @@ class ExpoService {
     String? status,
     String? userId,
   }) {
-    Query<Map<String, dynamic>> query =
-        _ordersRef.where('exhibitionId', isEqualTo: exhibitionId);
+    final filterStatus =
+        status != null && status.isNotEmpty && status != 'All';
+    final filterUser = userId != null && userId.isNotEmpty;
 
-    if (status != null && status.isNotEmpty && status != 'All') {
-      query = query.where('status', isEqualTo: status);
-    }
-
-    if (userId != null && userId.isNotEmpty) {
-      query = query.where('createdUserId', isEqualTo: userId);
-    }
-
-    return query.snapshots().map((snapshot) {
-      final orders =
-          snapshot.docs.map((doc) => ExpoOrder.fromDoc(doc)).toList();
+    return _db
+        .schema(ExpoSupabaseConfig.schema)
+        .from(_ordersTable)
+        .stream(primaryKey: ['id'])
+        .eq('exhibition_id', exhibitionId)
+        .map((rows) {
+      final orders = rows
+          .map(ExpoOrder.fromMap)
+          .where((o) => !filterStatus || o.status == status)
+          .where((o) => !filterUser || o.createdUserId == userId)
+          .toList();
       orders.sort((a, b) => b.orderDate.compareTo(a.orderDate));
       return orders;
     });
   }
 
+  /// Inserts the order. The DB trigger `expo_orders_upsert_customer`
+  /// automatically upserts the customer into `expo.customers`.
   Future<void> createOrder(ExpoOrder order) async {
-    await _ordersRef.add(order.toMap());
-    await saveCustomerToExpoCustomers(order);
+    await _table(_ordersTable).insert(order.toMap());
   }
 
-  /// Stores customer details in expo_customers/{exhibitionName}/{phoneNumber}
-  /// with all customer details (no item details) for auto-fill suggestions.
-  Future<void> saveCustomerToExpoCustomers(ExpoOrder order) async {
-    final cleanPhone = order.phone.trim();
-    final exhibitionName = order.exhibitionName.trim();
-    if (cleanPhone.isEmpty || exhibitionName.isEmpty) return;
-
-    try {
-      final customerData = {
-        'shopName': order.shopName.trim(),
-        'customerName': order.customerName.trim(),
-        'place': order.place.trim(),
-        'district': order.district.trim(),
-        'state': order.state.trim(),
-        'phone': cleanPhone,
-        'preferredBranch': order.preferredBranch.trim(),
-        'preferredSalesman': order.preferredSalesman.trim(),
-        'exhibitionId': order.exhibitionId,
-        'exhibitionName': exhibitionName,
-        'lastUpdated': FieldValue.serverTimestamp(),
-      };
-
-      await _firestore
-          .collection('expo_customers')
-          .doc(exhibitionName)
-          .collection('customers')
-          .doc(cleanPhone)
-          .set(customerData, SetOptions(merge: true));
-    } catch (e) {
-      debugPrint('Error saving customer to expo_customers: $e');
-    }
-  }
-
-  /// Searches customers in expo_customers/{exhibitionName} by shopName
-  Future<List<Map<String, dynamic>>> searchExpoCustomers({
+  /// Searches customers of an exhibition by phone number (prefix match).
+  /// Returns maps with camelCase keys used by the order form.
+  Future<List<Map<String, dynamic>>> searchExpoCustomersByPhone({
     required String exhibitionName,
-    required String query,
+    required String phoneQuery,
+    int limit = 8,
   }) async {
-    final cleanQuery = query.trim().toLowerCase();
+    final cleanQuery = phoneQuery.replaceAll(RegExp(r'\D'), '');
     final cleanExhibition = exhibitionName.trim();
-    if (cleanQuery.isEmpty || cleanExhibition.isEmpty) return [];
+    if (cleanQuery.length < 3 || cleanExhibition.isEmpty) return [];
 
     try {
-      final snapshot = await _firestore
-          .collection('expo_customers')
-          .doc(cleanExhibition)
-          .collection('customers')
-          .get();
+      final rows = await _table(_customersTable)
+          .select()
+          .eq('exhibition_name', cleanExhibition)
+          .like('phone', '$cleanQuery%')
+          .order('last_updated', ascending: false)
+          .limit(limit);
 
-      final matches = <Map<String, dynamic>>[];
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-        final shopName = (data['shopName'] ?? '').toString().toLowerCase();
-        final customerName =
-            (data['customerName'] ?? '').toString().toLowerCase();
-        final phone = (data['phone'] ?? '').toString();
-
-        if (shopName.contains(cleanQuery) ||
-            customerName.contains(cleanQuery) ||
-            phone.contains(cleanQuery)) {
-          matches.add(data);
-        }
-      }
-      return matches;
+      return rows
+          .map<Map<String, dynamic>>((r) => {
+                'phone': r['phone'] ?? '',
+                'shopName': r['shop_name'] ?? '',
+                'customerName': r['customer_name'] ?? '',
+                'place': r['place'] ?? '',
+                'district': r['district'] ?? '',
+                'state': r['state'] ?? '',
+                'preferredBranch': r['preferred_branch'] ?? '',
+                'preferredSalesman': r['preferred_salesman'] ?? '',
+              })
+          .toList();
     } catch (e) {
-      debugPrint('Error searching expo_customers: $e');
+      debugPrint('Error searching expo customers: $e');
       return [];
     }
   }
 
   Future<void> updateOrderStatus(String orderId, String newStatus) async {
-    final updateData = <String, dynamic>{
+    await _table(_ordersTable).update({
       'status': newStatus,
-    };
-    if (newStatus == 'Completed') {
-      updateData['completedAt'] = FieldValue.serverTimestamp();
-    } else {
-      updateData['completedAt'] = null;
-    }
-    await _ordersRef.doc(orderId).update(updateData);
+      'completed_at':
+          newStatus == 'Completed' ? _ts(DateTime.now()) : null,
+    }).eq('id', orderId);
   }
 
   /// Marks a stall delivery order as picked up by the customer at the stall (Spot Delivery).
   Future<void> markStallDeliveryPickedUp(String orderId) async {
-    await _ordersRef.doc(orderId).update({
+    await _table(_ordersTable).update({
       'status': 'Completed',
-      'stallPickupStatus': 'Picked Up',
-      'completedAt': FieldValue.serverTimestamp(),
-    });
+      'stall_pickup_status': 'Picked Up',
+      'completed_at': _ts(DateTime.now()),
+    }).eq('id', orderId);
   }
 
-
   Future<void> deleteOrder(String orderId) async {
-    await _ordersRef.doc(orderId).delete();
+    await _table(_ordersTable).delete().eq('id', orderId);
   }
 
   // --- Helpers for User Selection & Salesmen Filtering ---
@@ -651,66 +634,47 @@ class ExpoService {
     return ['N/A', ...branchSalesmen];
   }
 
-  /// Uploads a file (photo or proof) to Firebase Storage using storageCandidates.
+  /// Uploads a file (photo or proof) to the Supabase Storage bucket and
+  /// returns its public URL.
   Future<String> uploadFile(File file, String folder) async {
     final fileName =
         '${DateTime.now().millisecondsSinceEpoch}_${file.path.split(Platform.pathSeparator).last}';
-    Reference? ref;
-    Object? lastError;
+    final path = '$folder/$fileName';
+    final bucket = _db.storage.from(ExpoSupabaseConfig.storageBucket);
 
-    for (final storage in FirebaseStorageHelper.storageCandidates()) {
-      final candidateRef = storage.ref().child('expo').child(folder).child(fileName);
-      try {
-        await candidateRef.putFile(
-          file,
-          SettableMetadata(contentType: 'image/jpeg'),
-        );
-        ref = candidateRef;
-        break;
-      } catch (e) {
-        lastError = e;
-        if (!FirebaseStorageHelper.isBucketNotFoundError(e)) {
-          rethrow;
-        }
-      }
-    }
-
-    if (ref == null) {
-      throw lastError ?? Exception('Failed to upload image to Firebase Storage');
-    }
-
-    return await ref.getDownloadURL();
+    await bucket.upload(
+      path,
+      file,
+      fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: false),
+    );
+    return bucket.getPublicUrl(path);
   }
 
-  /// Fetches Item Name and GST by MTC code from API (or Firestore fallback).
-  /// Note: The user mentioned credentials will be provided later, so this
-  /// method is prepared with an API stub/hook ready to connect.
+  /// Fetches Item Name, GST, Rate & Description by MTC code from the
+  /// `expo.items` catalog table.
   Future<Map<String, dynamic>?> fetchItemDetailsByMtcCode(String mtcCode) async {
     final cleanCode = mtcCode.trim();
     if (cleanCode.isEmpty) return null;
 
     try {
-      // 1. Check if item exists in Firestore catalog/items if available
-      final query = await _firestore
-          .collection('items')
-          .where('mtcCode', isEqualTo: cleanCode)
-          .limit(1)
-          .get();
+      final row = await _table(_itemsTable)
+          .select()
+          .eq('mtc_code', cleanCode)
+          .maybeSingle();
 
-      if (query.docs.isNotEmpty) {
-        final data = query.docs.first.data();
+      if (row != null) {
         return {
-          'itemName': data['itemName'] ?? data['name'] ?? '',
-          'gst': (data['gst'] as num?)?.toDouble() ?? 18.0,
-          'rate': (data['rate'] as num?)?.toDouble(),
-          'description': data['description'] ?? '',
+          'itemName': row['item_name'] ?? '',
+          'gst': (row['gst'] as num?)?.toDouble() ?? 18.0,
+          'rate': (row['rate'] as num?)?.toDouble(),
+          'description': row['description'] ?? '',
         };
       }
-    } catch (_) {
-      // Ignore and proceed to API stub
+    } catch (e) {
+      debugPrint('Error fetching expo.items: $e');
     }
 
-    // API integration hook: Credentials to be plugged in.
+    // API integration hook: external item API can be plugged in here.
     return null;
   }
 }

@@ -355,6 +355,17 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                         style: const TextStyle(color: Colors.orange)),
                   ],
                 ),
+                if (order.roundOff != 0) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Round Off:'),
+                      Text(
+                          '${order.roundOff >= 0 ? '+' : '-'} ₹${order.roundOff.abs().toStringAsFixed(2)}'),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 6),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
