@@ -157,14 +157,24 @@ class ExpoPdfService {
                           pw.SizedBox(height: 4),
                         ],
 
-                        // Sales Rep Field
+                        // Sales Rep Field (order creator)
                         _buildTemplateField(
                           'Sales Rep.',
-                          order.orderType == 'Spot Delivery'
-                              ? '-'
-                              : (order.preferredSalesman != 'N/A' && order.preferredSalesman.isNotEmpty
-                                  ? order.preferredSalesman
-                                  : '-'),
+                          order.createdUserName.isNotEmpty
+                              ? order.createdUserName
+                              : '-',
+                          colorLimeGreen,
+                        ),
+                        pw.SizedBox(height: 4),
+
+                        // Preferred Salesman Field
+                        _buildTemplateField(
+                          'Pref. Salesman',
+                          (!isSpotDelivery &&
+                                  order.preferredSalesman != 'N/A' &&
+                                  order.preferredSalesman.isNotEmpty)
+                              ? order.preferredSalesman
+                              : '-',
                           colorLimeGreen,
                         ),
                       ],
@@ -241,18 +251,19 @@ class ExpoPdfService {
               ),
               pw.SizedBox(height: 8),
 
-              // 4. Dynamic Items Table matching template column structure:
-              // S.No. | Code | Item Description | Qty | Rate | GST | Total
+              // 4. Dynamic Items Table:
+              // S.No. | Code | Item Description | Qty | Rate | GST | GST AMT | Total
               pw.Table(
                 border: pw.TableBorder.all(color: colorBorderGrey, width: 0.8),
                 columnWidths: const {
-                  0: pw.FlexColumnWidth(0.8), // S.No.
-                  1: pw.FlexColumnWidth(1.4), // Code
-                  2: pw.FlexColumnWidth(3.6), // Item Description
-                  3: pw.FlexColumnWidth(1.0), // Qty
-                  4: pw.FlexColumnWidth(1.4), // Rate
+                  0: pw.FlexColumnWidth(0.7), // S.No.
+                  1: pw.FlexColumnWidth(1.3), // Code
+                  2: pw.FlexColumnWidth(3.2), // Item Description
+                  3: pw.FlexColumnWidth(0.9), // Qty
+                  4: pw.FlexColumnWidth(1.3), // Rate
                   5: pw.FlexColumnWidth(1.2), // GST
-                  6: pw.FlexColumnWidth(1.6), // Total
+                  6: pw.FlexColumnWidth(1.4), // GST AMT
+                  7: pw.FlexColumnWidth(1.5), // Total
                 },
                 children: [
                   // Table Header: Deep Blue background with white text
@@ -265,6 +276,7 @@ class ExpoPdfService {
                       _buildHeaderCell('Qty', align: pw.TextAlign.center),
                       _buildHeaderCell('Rate', align: pw.TextAlign.right),
                       _buildHeaderCell('GST', align: pw.TextAlign.center),
+                      _buildHeaderCell('GST AMT', align: pw.TextAlign.right),
                       _buildHeaderCell('Total', align: pw.TextAlign.right),
                     ],
                   ),
@@ -311,19 +323,19 @@ class ExpoPdfService {
                           '${it.gst == it.gst.roundToDouble() ? it.gst.toStringAsFixed(0) : it.gst.toStringAsFixed(2)}%\n(${it.gstType == 1 ? 'Incl.' : 'Excl.'})',
                           align: pw.TextAlign.center,
                         ),
+                        _buildDataCell(
+                          ExpoOrderItem.calculateGstAmount(
+                            it.qty,
+                            it.rate,
+                            it.gst,
+                            gstType: it.gstType,
+                          ).toStringAsFixed(2),
+                          align: pw.TextAlign.right,
+                        ),
                         _buildDataCell(it.total.toStringAsFixed(2), align: pw.TextAlign.right),
                       ],
                     );
                   }),
-                  // Optional minimum fill rows to give the clean invoice structure if items are few
-                  if (order.items.length < 5)
-                    ...List.generate(5 - order.items.length, (_) {
-                      return pw.TableRow(
-                        children: List.generate(7, (i) {
-                          return pw.Container(height: 18);
-                        }),
-                      );
-                    }),
                 ],
               ),
               pw.SizedBox(height: 8),
@@ -338,46 +350,12 @@ class ExpoPdfService {
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        // Notes area
+                        // Notes area (only user-entered notes, blank if none)
                         pw.Text(
-                          () {
-                            final mode =
-                                ExpoOrder.normalizePaymentMode(order.paymentMode);
-                            final splitNote = ExpoOrder.modeIsSplit(mode)
-                                ? ' (Cash: ${currencyFormat.format(order.effectiveCashAmount)}, ${ExpoOrder.onlineLabelForMode(mode)}: ${currencyFormat.format(order.effectiveOnlineAmount)})'
-                                : '';
-                            final advNote = !isSpotDelivery &&
-                                    order.advanceAmount > 0
-                                ? ' • Advance Paid: ${currencyFormat.format(order.advanceAmount)}'
-                                : '';
-                            final pickupMode = order.pickupPaymentMode != null
-                                ? ExpoOrder.normalizePaymentMode(
-                                    order.pickupPaymentMode!)
-                                : null;
-                            final pickupSplit = (pickupMode != null &&
-                                    ExpoOrder.modeIsSplit(pickupMode))
-                                ? ' (Cash: ${currencyFormat.format(order.effectivePickupCashAmount)}, ${ExpoOrder.onlineLabelForMode(pickupMode)}: ${currencyFormat.format(order.effectivePickupOnlineAmount)})'
-                                : '';
-                            final pickupNote = (pickupMode != null &&
-                                    order.pickupAmount > 0)
-                                ? ' • Pickup Paid: ${currencyFormat.format(order.pickupAmount)} ($pickupMode$pickupSplit)'
-                                : '';
-                            final balNote = !isSpotDelivery &&
-                                    order.balanceAmount > 0
-                                ? ' • Balance Due: ${currencyFormat.format(order.balanceAmount)}'
-                                : '';
-                            final delivNote = !isSpotDelivery &&
-                                    order.deliveryDate != null
-                                ? ' • Expected Delivery: $deliveryDateFormatted'
-                                : '';
-                            return 'Notes: Payment Mode - $mode$splitNote$advNote$pickupNote$balNote$delivNote';
-                          }(),
+                          order.notes.trim().isNotEmpty
+                              ? 'Notes: ${order.notes.trim()}'
+                              : 'Notes:',
                           style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey800),
-                        ),
-                        pw.SizedBox(height: 4),
-                        pw.Text(
-                          'Booked by: ${order.createdUserName}${order.createdUserBranch.isNotEmpty ? " (${order.createdUserBranch})" : ""}',
-                          style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
                         ),
                         pw.SizedBox(height: 16),
 
@@ -422,14 +400,6 @@ class ExpoPdfService {
                       },
                       children: [
                         _buildTotalRow('Total Amount', currencyFormat.format(order.totalAmount)),
-                        _buildTotalRow(
-                          'Amt. Received',
-                          currencyFormat.format(order.totalPaidAmount),
-                        ),
-                        _buildTotalRow(
-                          'Total Paid',
-                          currencyFormat.format(order.totalPaidAmount),
-                        ),
                         _buildTotalRow(
                           'Advance',
                           currencyFormat.format(isSpotDelivery ? 0.0 : order.advanceAmount),

@@ -20,12 +20,14 @@ class ExpoOrderFormPage extends StatefulWidget {
   final Exhibition exhibition;
   final String initialOrderType;
   final ExpoOrderDraft? initialDraft;
+  final ExpoOrder? existingOrder;
 
   const ExpoOrderFormPage({
     super.key,
     required this.exhibition,
     this.initialOrderType = 'Spot Delivery',
     this.initialDraft,
+    this.existingOrder,
   });
 
   @override
@@ -114,7 +116,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       List.generate(_steps.length, (_) => GlobalKey<FormState>());
 
   // Auto-fetched date (read-only)
-  final DateTime _orderDate = DateTime.now();
+  DateTime _orderDate = DateTime.now();
 
   // Order Type selected from dialog or preset
   late String _selectedOrderType;
@@ -137,6 +139,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
   final TextEditingController _advanceController = TextEditingController();
   final TextEditingController _cashSplitController = TextEditingController();
   final TextEditingController _onlineSplitController = TextEditingController();
+  final TextEditingController _notesController = TextEditingController();
 
   final FocusNode _phoneFocusNode = FocusNode();
   final FocusNode _stateFocusNode = FocusNode();
@@ -158,6 +161,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
   // Item Details
   final List<_ItemRowData> _items = [];
   bool _isSaving = false;
+  bool _hasConfirmedItemsSummary = false;
   late String _draftId;
 
   @override
@@ -167,7 +171,49 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         'draft_${DateTime.now().millisecondsSinceEpoch}';
     _selectedOrderType = widget.initialDraft?.orderType ?? widget.initialOrderType;
 
-    if (widget.initialDraft != null) {
+    if (widget.existingOrder != null) {
+      final o = widget.existingOrder!;
+      _selectedOrderType = o.orderType;
+      _orderDate = o.orderDate;
+      _phoneController.text = o.phone;
+      _shopNameController.text = o.shopName;
+      _customerNameController.text = o.customerName;
+      _placeController.text = o.place;
+      _districtController.text = o.district;
+      _stateController.text = o.state;
+      _selectedPreferredBranch =
+          o.preferredBranch != 'N/A' ? o.preferredBranch : null;
+      _selectedSalesman = o.preferredSalesman;
+      _deliveryDate = o.deliveryDate;
+      _stallPickupDate = o.stallPickupDate;
+      _selectedPaymentMode = ExpoOrder.normalizePaymentMode(o.paymentMode);
+      _existingPaymentProofUrl = o.paymentProofUrl;
+      _advanceController.text = _formatEditableMoney(o.advanceAmount);
+      _cashSplitController.text = _formatEditableMoney(o.cashAmount);
+      _onlineSplitController.text = _formatEditableMoney(o.onlineAmount);
+      _notesController.text = o.notes;
+
+      if (o.items.isNotEmpty) {
+        for (final it in o.items) {
+          final row = _ItemRowData();
+          row.mtcCodeController.text = it.mtcCode;
+          row.itemNameController.text = it.itemName;
+          row.descriptionController.text = it.description;
+          row.qtyController.text = it.qty > 0 ? it.qty.toString() : '';
+          row.rateController.text =
+              it.rate > 0 ? _ItemRowData.formatGstNum(it.rate) : '';
+          row.gstController.text = _ItemRowData.formatGstNum(it.gst);
+          row.gstType = it.gstType;
+          row.baseGst = it.gst;
+          row.existingPhotoUrl = it.photoUrl;
+          row.isSaved = true;
+          row.recalculateTotal();
+          _items.add(row);
+        }
+      } else {
+        _items.add(_ItemRowData()..recalculateTotal());
+      }
+    } else if (widget.initialDraft != null) {
       final d = widget.initialDraft!;
       _phoneController.text = d.phone;
       _shopNameController.text = d.shopName;
@@ -186,6 +232,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       _cashSplitController.text = d.cashSplitText == '0' ? '' : d.cashSplitText;
       _onlineSplitController.text =
           d.onlineSplitText == '0' ? '' : d.onlineSplitText;
+      _notesController.text = d.notes;
       _selectedPaymentMode = ExpoOrder.normalizePaymentMode(d.paymentMode);
       if (d.paymentProofPath != null && d.paymentProofPath!.isNotEmpty) {
         final f = File(d.paymentProofPath!);
@@ -242,6 +289,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     _advanceController.dispose();
     _cashSplitController.dispose();
     _onlineSplitController.dispose();
+    _notesController.dispose();
     _phoneFocusNode.dispose();
     _stateFocusNode.dispose();
     _districtFocusNode.dispose();
@@ -378,11 +426,35 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       final branches = await cache.getBranches();
 
       if (mounted) {
+        final preservedBranch = _selectedPreferredBranch;
+        final preservedSalesman = _selectedSalesman;
         setState(() {
           _allBranches = branches;
-          // As explicitly requested: Do not auto select any branch in preferred branch
-          _selectedPreferredBranch = null;
+          if (preservedBranch != null &&
+              preservedBranch.isNotEmpty &&
+              preservedBranch != 'N/A') {
+            if (!_allBranches.contains(preservedBranch)) {
+              _allBranches = [preservedBranch, ..._allBranches];
+            }
+            _selectedPreferredBranch = preservedBranch;
+          } else {
+            // As explicitly requested: Do not auto select any branch in preferred branch
+            _selectedPreferredBranch = null;
+          }
         });
+        if (preservedBranch != null &&
+            preservedBranch.isNotEmpty &&
+            preservedBranch != 'N/A') {
+          final salesmen = await ExpoService.instance
+              .getSalesmenNamesForBranch(preservedBranch);
+          if (mounted) {
+            setState(() {
+              _salesmenForBranch = salesmen;
+              _selectedSalesman =
+                  salesmen.contains(preservedSalesman) ? preservedSalesman : 'N/A';
+            });
+          }
+        }
       }
     } catch (e) {
       debugPrint('Error loading branches: $e');
@@ -655,9 +727,6 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     return bal < 0 ? 0.0 : _round2(bal);
   }
 
-  double get _effectivePaidNow =>
-      _selectedOrderType == 'Spot Delivery' ? _netTotal : _advanceAmount;
-
   double get _cashSplitAmount =>
       _round2(double.tryParse(_cashSplitController.text.trim()) ?? 0.0);
 
@@ -776,9 +845,14 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     return true;
   }
 
-  void _goNext() {
+  Future<void> _goNext() async {
     FocusScope.of(context).unfocus();
     if (!_validateStep(_currentStep)) return;
+    if (_currentStep == 1 && !_hasConfirmedItemsSummary) {
+      final confirmed = await _showItemsSummaryConfirmDialog();
+      if (confirmed != true || !mounted) return;
+      _hasConfirmedItemsSummary = true;
+    }
     if (_currentStep < _steps.length - 1) {
       setState(() {
         _currentStep++;
@@ -788,6 +862,99 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         }
       });
     }
+  }
+
+  Future<bool?> _showItemsSummaryConfirmDialog() {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm Order Summary'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _shopNameController.text.trim().isNotEmpty
+                    ? _shopNameController.text.trim()
+                    : _customerNameController.text.trim(),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              Text(
+                '$_selectedOrderType • $_totalQty items',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              const Divider(height: 16),
+              ..._items.map((it) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${it.itemNameController.text.trim()} × ${it.qty}',
+                            style: const TextStyle(fontSize: 12.5),
+                          ),
+                        ),
+                        Text(
+                          '₹${it.total.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                              fontSize: 12.5, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  )),
+              const Divider(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Subtotal:'),
+                  Text('₹${_subtotal.toStringAsFixed(2)}'),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('GST Total:'),
+                  Text('₹${_totalGst.toStringAsFixed(2)}'),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Net Total:',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text(
+                    '₹${_netTotal.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: primaryGreen,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Review'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryGreen,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Confirm & Continue'),
+          ),
+        ],
+      ),
+    );
   }
 
   bool get _hasDraftContent {
@@ -802,6 +969,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     if (_advanceController.text.trim().isNotEmpty && _advanceController.text.trim() != '0') return true;
     if (_cashSplitController.text.trim().isNotEmpty && _cashSplitController.text.trim() != '0') return true;
     if (_onlineSplitController.text.trim().isNotEmpty && _onlineSplitController.text.trim() != '0') return true;
+    if (_notesController.text.trim().isNotEmpty) return true;
     if (_paymentProofFile != null) return true;
     if (_items.any((it) =>
         it.itemNameController.text.trim().isNotEmpty ||
@@ -837,6 +1005,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       onlineSplitText: _onlineSplitController.text.trim(),
       paymentMode: _selectedPaymentMode,
       paymentProofPath: _paymentProofFile?.path,
+      notes: _notesController.text.trim(),
       currentStep: _currentStep,
       items: _items.map((it) {
         return {
@@ -989,6 +1158,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         cashAmount: savedCashAmount,
         onlineAmount: savedOnlineAmount,
         paymentProofUrl: paymentProofUrl,
+        notes: _notesController.text.trim(),
         deliveryDate: _selectedOrderType == 'Booking' ? _deliveryDate : null,
         stallPickupDate:
             _selectedOrderType == 'Stall Delivery' ? _stallPickupDate : null,
@@ -1001,11 +1171,20 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         createdAt: DateTime.now(),
       );
 
-      await ExpoService.instance.createOrder(newOrder);
-      await ExpoDraftService.instance.deleteDraft(_draftId);
+      if (widget.existingOrder != null) {
+        await ExpoService.instance.updateOrder(widget.existingOrder!.id, newOrder);
+      } else {
+        await ExpoService.instance.createOrder(newOrder);
+        await ExpoDraftService.instance.deleteDraft(_draftId);
+      }
 
       if (mounted) {
-        _showSnack('Order submitted successfully!', color: primaryGreen);
+        _showSnack(
+          widget.existingOrder != null
+              ? 'Order updated successfully!'
+              : 'Order submitted successfully!',
+          color: primaryGreen,
+        );
         Navigator.of(context).pop();
       }
     } catch (e) {
@@ -2257,6 +2436,30 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
             child: _buildAdvanceSection(isDark),
           ),
         ],
+        const SizedBox(height: 16),
+        _buildCard(
+          isDark: isDark,
+          title: 'Notes',
+          icon: Icons.note_alt_outlined,
+          child: TextFormField(
+            controller: _notesController,
+            maxLines: 3,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
+              hintText: 'Enter order notes...',
+              filled: true,
+              fillColor: isDark
+                  ? const Color(0xFF132847)
+                  : const Color(0xFFF1F5F9),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
+          ),
+        ),
         const SizedBox(height: 8),
       ],
     );

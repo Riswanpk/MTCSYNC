@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../Navigation/user_cache_service.dart';
+import '../Accounts/expo_pdf_service.dart';
 import '../expo_service.dart';
 import '../stall_pickup_dialog.dart';
 import 'expo_order_form.dart';
@@ -576,34 +577,171 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                   style: TextStyle(color: Colors.white)),
             ),
           ],
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              final newStatus =
-                  order.status == 'Pending' ? 'Completed' : 'Pending';
-              await ExpoService.instance
-                  .updateOrderStatus(order.id, newStatus);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Order marked as $newStatus'),
-                    backgroundColor: primaryGreen,
+          if (order.status != 'Completed' && _selectedExhibition != null)
+            OutlinedButton.icon(
+              onPressed: () {
+                final ex = _selectedExhibition!;
+                Navigator.of(ctx).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ExpoOrderFormPage(
+                      exhibition: ex,
+                      initialOrderType: order.orderType,
+                      existingOrder: order,
+                    ),
                   ),
                 );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor:
-                  order.status == 'Pending' ? primaryGreen : Colors.orange,
+              },
+              icon: const Icon(Icons.edit_rounded, size: 16, color: primaryBlue),
+              label: const Text('Edit', style: TextStyle(color: primaryBlue)),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: primaryBlue),
+              ),
             ),
-            child: Text(
-              order.status == 'Pending'
-                  ? 'Mark Completed'
-                  : 'Move to Pending',
-              style: const TextStyle(color: Colors.white),
+          OutlinedButton.icon(
+            onPressed: () async {
+              await ExpoPdfService.instance.exportOrderPdf(order);
+            },
+            icon: const Icon(Icons.picture_as_pdf_rounded,
+                size: 16, color: Colors.deepPurple),
+            label: const Text('PDF',
+                style: TextStyle(color: Colors.deepPurple)),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Colors.deepPurple),
+            ),
+          ),
+          OutlinedButton.icon(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _showTransferOrderDialog(order);
+            },
+            icon: const Icon(Icons.swap_horiz_rounded,
+                size: 16, color: Colors.teal),
+            label: const Text('Transfer', style: TextStyle(color: Colors.teal)),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Colors.teal),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _showTransferOrderDialog(ExpoOrder order) async {
+    final allUsers = await UserCacheService.instance.getAllUsers();
+    final selectedExIds = _selectedExhibition?.selectedUserIds ?? const <String>[];
+    const allowedRoles = {
+      'sales',
+      'manager',
+      'asst_manager',
+      'asst manager',
+      'assistant manager',
+      'expo_sales',
+      'expo sales',
+    };
+    final candidates = allUsers.where((u) {
+      final uid = (u['uid'] ?? u['id'] ?? '').toString();
+      if (uid.isEmpty || uid == order.createdUserId) return false;
+      if (selectedExIds.isNotEmpty) {
+        return selectedExIds.contains(uid);
+      }
+      final role = (u['role'] ?? '').toString().trim().toLowerCase();
+      return allowedRoles.contains(role);
+    }).toList()
+      ..sort((a, b) => (a['username'] ?? '')
+          .toString()
+          .toLowerCase()
+          .compareTo((b['username'] ?? '').toString().toLowerCase()));
+
+    if (!mounted) return;
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No other salesmen available to transfer.')),
+      );
+      return;
+    }
+
+    String query = '';
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final filtered = query.trim().isEmpty
+              ? candidates
+              : candidates.where((u) {
+                  final name = (u['username'] ?? '').toString().toLowerCase();
+                  final branch = (u['branch'] ?? '').toString().toLowerCase();
+                  final q = query.trim().toLowerCase();
+                  return name.contains(q) || branch.contains(q);
+                }).toList();
+
+          return AlertDialog(
+            title: const Text('Transfer Order to Salesman'),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 340,
+              child: Column(
+                children: [
+                  TextField(
+                    decoration: const InputDecoration(
+                      hintText: 'Search salesman or branch...',
+                      prefixIcon: Icon(Icons.search_rounded),
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (v) => setDialogState(() => query = v),
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        final u = filtered[i];
+                        final uid = (u['uid'] ?? u['id'] ?? '').toString();
+                        final name = (u['username'] ?? 'Sales User').toString();
+                        final branch = (u['branch'] ?? '').toString();
+                        return ListTile(
+                          dense: true,
+                          title: Text(name,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600)),
+                          subtitle: branch.isNotEmpty ? Text(branch) : null,
+                          trailing: const Icon(Icons.arrow_forward_ios_rounded,
+                              size: 14),
+                          onTap: () async {
+                            final messenger = ScaffoldMessenger.of(context);
+                            Navigator.of(ctx).pop();
+                            await ExpoService.instance.transferOrderToSalesman(
+                              orderId: order.id,
+                              newUserId: uid,
+                              newUserName: name,
+                              newUserBranch: branch,
+                            );
+                            if (mounted) {
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text('Order transferred to $name'),
+                                  backgroundColor: primaryGreen,
+                                ),
+                              );
+                            }
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -994,15 +1132,25 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                       }
 
                       final allOrders = ordersSnapshot.data ?? [];
-                      final pendingOrders = allOrders
+                      final currentUserId =
+                          FirebaseAuth.instance.currentUser?.uid ?? '';
+                      final visibleOrders = widget.isAdminView
+                          ? allOrders
+                          : allOrders
+                              .where((o) =>
+                                  o.createdUserId == currentUserId ||
+                                  o.orderType == 'Stall Delivery')
+                              .toList();
+                      final pendingOrders = visibleOrders
                           .where((o) =>
-                              o.status == 'Pending' ||
-                              o.status == 'Pending Verification')
+                              (o.status == 'Pending' ||
+                                  o.status == 'Pending Verification') &&
+                              o.orderType != 'Stall Delivery')
                           .toList();
-                      final completedOrders = allOrders
+                      final completedOrders = visibleOrders
                           .where((o) => o.status == 'Completed')
                           .toList();
-                      final stallOrders = allOrders
+                      final stallOrders = visibleOrders
                           .where((o) => o.orderType == 'Stall Delivery')
                           .toList();
 

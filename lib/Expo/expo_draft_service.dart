@@ -23,6 +23,7 @@ class ExpoOrderDraft {
   final String onlineSplitText;
   final String paymentMode;
   final String? paymentProofPath;
+  final String notes;
   final int currentStep;
   final List<Map<String, dynamic>> items;
   final DateTime updatedAt;
@@ -47,6 +48,7 @@ class ExpoOrderDraft {
     this.onlineSplitText = '',
     this.paymentMode = 'Cash',
     this.paymentProofPath,
+    this.notes = '',
     this.currentStep = 0,
     required this.items,
     required this.updatedAt,
@@ -73,6 +75,7 @@ class ExpoOrderDraft {
       'onlineSplitText': onlineSplitText,
       'paymentMode': paymentMode,
       'paymentProofPath': paymentProofPath,
+      'notes': notes,
       'currentStep': currentStep,
       'items': items,
       'updatedAt': updatedAt.toIso8601String(),
@@ -104,6 +107,7 @@ class ExpoOrderDraft {
       onlineSplitText: map['onlineSplitText'] ?? '',
       paymentMode: map['paymentMode'] ?? 'Cash',
       paymentProofPath: map['paymentProofPath'],
+      notes: map['notes'] ?? '',
       currentStep: (map['currentStep'] as num?)?.toInt() ?? 0,
       items: (map['items'] as List?)
               ?.whereType<Map>()

@@ -259,6 +259,7 @@ class ExpoOrder {
   final double pickupOnlineAmount; // UPI / Bank collected at Stall Pickup
   final String? pickupPaymentProofUrl; // Receipt URL uploaded at Stall Pickup
   final DateTime? pickedUpAt; // Timestamp when stall delivery was picked up
+  final String notes; // Order notes
   final DateTime? deliveryDate; // Delivery date for booking orders
   final DateTime? stallPickupDate; // Expected pickup date during exhibition for Stall Delivery
   final bool isConvertedToBooking; // True if stall delivery wasn't picked up and got converted to booking
@@ -306,6 +307,7 @@ class ExpoOrder {
     this.pickupOnlineAmount = 0.0,
     this.pickupPaymentProofUrl,
     this.pickedUpAt,
+    this.notes = '',
     this.deliveryDate,
     this.stallPickupDate,
     this.isConvertedToBooking = false,
@@ -363,6 +365,7 @@ class ExpoOrder {
               ? pickupPaymentProofUrl
               : null,
       'picked_up_at': pickedUpAt != null ? _ts(pickedUpAt!) : null,
+      'notes': notes.trim().isNotEmpty ? notes.trim() : null,
       'delivery_date': deliveryDate != null ? _dateOnly(deliveryDate!) : null,
       'stall_pickup_date':
           stallPickupDate != null ? _dateOnly(stallPickupDate!) : null,
@@ -429,6 +432,7 @@ class ExpoOrder {
       pickupOnlineAmount: _toDouble(data['pickup_online_amount']),
       pickupPaymentProofUrl: data['pickup_payment_proof_url'],
       pickedUpAt: _parseNullableDate(data['picked_up_at']),
+      notes: (data['notes'] ?? '').toString(),
       deliveryDate: _parseNullableDate(data['delivery_date']),
       stallPickupDate: _parseNullableDate(data['stall_pickup_date']),
       isConvertedToBooking: data['is_converted_to_booking'] ?? false,
@@ -478,6 +482,7 @@ class ExpoOrder {
     double? pickupOnlineAmount,
     String? pickupPaymentProofUrl,
     DateTime? pickedUpAt,
+    String? notes,
     DateTime? deliveryDate,
     DateTime? stallPickupDate,
     bool? isConvertedToBooking,
@@ -526,6 +531,7 @@ class ExpoOrder {
       pickupPaymentProofUrl:
           pickupPaymentProofUrl ?? this.pickupPaymentProofUrl,
       pickedUpAt: pickedUpAt ?? this.pickedUpAt,
+      notes: notes ?? this.notes,
       deliveryDate: deliveryDate ?? this.deliveryDate,
       stallPickupDate: stallPickupDate ?? this.stallPickupDate,
       isConvertedToBooking: isConvertedToBooking ?? this.isConvertedToBooking,
@@ -858,6 +864,25 @@ class ExpoService {
     } catch (e) {
       debugPrint('Error releasing order claim: $e');
     }
+  }
+
+  /// Updates an existing unverified order in `expo.orders`.
+  Future<void> updateOrder(String orderId, ExpoOrder order) async {
+    await _table(_ordersTable).update(order.toMap()).eq('id', orderId);
+  }
+
+  /// Transfers an order to another salesman.
+  Future<void> transferOrderToSalesman({
+    required String orderId,
+    required String newUserId,
+    required String newUserName,
+    required String newUserBranch,
+  }) async {
+    await _table(_ordersTable).update({
+      'created_user_id': newUserId,
+      'created_user_name': newUserName,
+      'created_user_branch': newUserBranch,
+    }).eq('id', orderId);
   }
 
   /// Fetches a single order by ID, or null if not found.
