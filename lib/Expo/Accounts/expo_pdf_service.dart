@@ -248,10 +248,10 @@ class ExpoPdfService {
                 columnWidths: const {
                   0: pw.FlexColumnWidth(0.8), // S.No.
                   1: pw.FlexColumnWidth(1.4), // Code
-                  2: pw.FlexColumnWidth(3.8), // Item Description
+                  2: pw.FlexColumnWidth(3.6), // Item Description
                   3: pw.FlexColumnWidth(1.0), // Qty
                   4: pw.FlexColumnWidth(1.4), // Rate
-                  5: pw.FlexColumnWidth(1.0), // GST
+                  5: pw.FlexColumnWidth(1.2), // GST
                   6: pw.FlexColumnWidth(1.6), // Total
                 },
                 children: [
@@ -307,7 +307,10 @@ class ExpoPdfService {
                         ),
                         _buildDataCell('${it.qty}', align: pw.TextAlign.center),
                         _buildDataCell(it.rate.toStringAsFixed(2), align: pw.TextAlign.right),
-                        _buildDataCell('${it.gst.toStringAsFixed(0)}%', align: pw.TextAlign.center),
+                        _buildDataCell(
+                          '${it.gst == it.gst.roundToDouble() ? it.gst.toStringAsFixed(0) : it.gst.toStringAsFixed(2)}%\n(${it.gstType == 1 ? 'Incl.' : 'Excl.'})',
+                          align: pw.TextAlign.center,
+                        ),
                         _buildDataCell(it.total.toStringAsFixed(2), align: pw.TextAlign.right),
                       ],
                     );
@@ -337,7 +340,38 @@ class ExpoPdfService {
                       children: [
                         // Notes area
                         pw.Text(
-                          'Notes: Payment Mode - ${order.paymentMode}${!isSpotDelivery && order.advanceAmount > 0 ? " • Advance Paid: ${currencyFormat.format(order.advanceAmount)}" : ""}${!isSpotDelivery && order.balanceAmount > 0 ? " • Balance Due: ${currencyFormat.format(order.balanceAmount)}" : ""}${!isSpotDelivery && order.deliveryDate != null ? " • Expected Delivery: $deliveryDateFormatted" : ""}',
+                          () {
+                            final mode =
+                                ExpoOrder.normalizePaymentMode(order.paymentMode);
+                            final splitNote = ExpoOrder.modeIsSplit(mode)
+                                ? ' (Cash: ${currencyFormat.format(order.effectiveCashAmount)}, ${ExpoOrder.onlineLabelForMode(mode)}: ${currencyFormat.format(order.effectiveOnlineAmount)})'
+                                : '';
+                            final advNote = !isSpotDelivery &&
+                                    order.advanceAmount > 0
+                                ? ' • Advance Paid: ${currencyFormat.format(order.advanceAmount)}'
+                                : '';
+                            final pickupMode = order.pickupPaymentMode != null
+                                ? ExpoOrder.normalizePaymentMode(
+                                    order.pickupPaymentMode!)
+                                : null;
+                            final pickupSplit = (pickupMode != null &&
+                                    ExpoOrder.modeIsSplit(pickupMode))
+                                ? ' (Cash: ${currencyFormat.format(order.effectivePickupCashAmount)}, ${ExpoOrder.onlineLabelForMode(pickupMode)}: ${currencyFormat.format(order.effectivePickupOnlineAmount)})'
+                                : '';
+                            final pickupNote = (pickupMode != null &&
+                                    order.pickupAmount > 0)
+                                ? ' • Pickup Paid: ${currencyFormat.format(order.pickupAmount)} ($pickupMode$pickupSplit)'
+                                : '';
+                            final balNote = !isSpotDelivery &&
+                                    order.balanceAmount > 0
+                                ? ' • Balance Due: ${currencyFormat.format(order.balanceAmount)}'
+                                : '';
+                            final delivNote = !isSpotDelivery &&
+                                    order.deliveryDate != null
+                                ? ' • Expected Delivery: $deliveryDateFormatted'
+                                : '';
+                            return 'Notes: Payment Mode - $mode$splitNote$advNote$pickupNote$balNote$delivNote';
+                          }(),
                           style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey800),
                         ),
                         pw.SizedBox(height: 4),
@@ -390,16 +424,21 @@ class ExpoPdfService {
                         _buildTotalRow('Total Amount', currencyFormat.format(order.totalAmount)),
                         _buildTotalRow(
                           'Amt. Received',
-                          currencyFormat.format(isSpotDelivery ? order.totalAmount : order.advanceAmount),
+                          currencyFormat.format(order.totalPaidAmount),
                         ),
                         _buildTotalRow(
                           'Total Paid',
-                          currencyFormat.format(isSpotDelivery ? order.totalAmount : order.advanceAmount),
+                          currencyFormat.format(order.totalPaidAmount),
                         ),
                         _buildTotalRow(
                           'Advance',
                           currencyFormat.format(isSpotDelivery ? 0.0 : order.advanceAmount),
                         ),
+                        if (!isSpotDelivery && order.pickupAmount > 0)
+                          _buildTotalRow(
+                            'Pickup Paid',
+                            currencyFormat.format(order.pickupAmount),
+                          ),
                         _buildTotalRow(
                           'Balance Amount',
                           currencyFormat.format(isSpotDelivery ? 0.0 : order.balanceAmount),

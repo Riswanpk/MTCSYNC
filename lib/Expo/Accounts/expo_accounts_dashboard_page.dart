@@ -64,11 +64,9 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
         localA.day == localB.day;
   }
 
-  /// Effective advance/upfront collected for an order:
-  /// Spot Delivery = full totalAmount, Stall / Booking = advanceAmount.
-  double _effectiveAdvance(ExpoOrder o) {
-    return o.orderType == 'Spot Delivery' ? o.totalAmount : o.advanceAmount;
-  }
+  /// Effective collected total for an order:
+  /// Spot Delivery = full totalAmount, Stall / Booking = advanceAmount + pickupAmount.
+  double _effectiveAdvance(ExpoOrder o) => o.totalPaidAmount;
 
   void _showReportTypeSelector(BuildContext context, bool isDark) {
     showModalBottomSheet<void>(
@@ -632,6 +630,9 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
 
   /// Main dashboard body once an exhibition is selected
   Widget _buildDashboardBody(Exhibition exhibition, bool isDark) {
+    if (exhibition.isEnded) {
+      ExpoService.instance.autoConvertExpiredStallDeliveries(exhibition);
+    }
     return StreamBuilder<List<ExpoOrder>>(
       stream: ExpoService.instance.streamOrders(exhibitionId: exhibition.id),
       builder: (context, snapshot) {
@@ -1157,15 +1158,13 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
   // ---------------------------------------------------------------------------
   Widget _buildPaymentModeReport(List<ExpoOrder> orders, bool isDark) {
     final Map<String, _AggRow> map = {
-      'Cash': _AggRow(title: 'Cash'),
-      'UPI': _AggRow(title: 'UPI'),
-      'Bank Transfer': _AggRow(title: 'Bank Transfer'),
+      for (final mode in ExpoOrder.paymentModes) mode: _AggRow(title: mode),
     };
     double grandAdvance = 0.0;
     double grandTotal = 0.0;
 
     for (final o in orders) {
-      final mode = o.paymentMode.trim().isNotEmpty ? o.paymentMode.trim() : 'Cash';
+      final mode = ExpoOrder.normalizePaymentMode(o.paymentMode);
       final row = map.putIfAbsent(mode, () => _AggRow(title: mode));
       final adv = _effectiveAdvance(o);
       row.bills++;
@@ -1196,9 +1195,15 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
         if (item.title == 'UPI') {
           modeIcon = Icons.qr_code_2_rounded;
           modeColor = primaryBlue;
-        } else if (item.title == 'Bank Transfer') {
+        } else if (item.title == 'UPI + Cash') {
+          modeIcon = Icons.qr_code_scanner_rounded;
+          modeColor = const Color(0xFF0288D1);
+        } else if (item.title == 'Bank') {
           modeIcon = Icons.account_balance_rounded;
           modeColor = const Color(0xFF00796B);
+        } else if (item.title == 'Bank + Cash') {
+          modeIcon = Icons.account_balance_wallet_rounded;
+          modeColor = const Color(0xFF2E7D32);
         }
 
         return Container(
@@ -1340,8 +1345,8 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
       row.bills++;
       row.totalAmount += o.totalAmount;
       row.advanceCollected += adv;
-      if (o.paymentMode == 'Cash' && o.status != 'Completed') {
-        row.pendingAdvance += adv; // Unverified cash in hand with rep
+      if (o.hasCashComponent && o.status != 'Completed') {
+        row.pendingAdvance += o.totalCashCollected; // Unverified cash in hand with rep
       }
       grandTotal += o.totalAmount;
     }

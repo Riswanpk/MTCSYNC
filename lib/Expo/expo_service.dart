@@ -124,7 +124,8 @@ class ExpoOrderItem {
   final int qty;
   final double rate;
   final double gst; // percentage e.g. 18.0
-  final double total; // (qty * rate) + ((qty * rate) * gst / 100)
+  final int gstType; // 0 = EXCLUDE, 1 = INCLUDE
+  final double total;
   final String? photoUrl; // Photo of the item (not mandatory)
 
   const ExpoOrderItem({
@@ -134,12 +135,62 @@ class ExpoOrderItem {
     required this.qty,
     required this.rate,
     required this.gst,
+    this.gstType = 0,
     required this.total,
     this.photoUrl,
   });
 
-  static double calculateTotal(int qty, double rate, double gst) {
-    final base = qty * rate;
+  /// Returns the effective GST rate considering the single-unit rate threshold.
+  static double effectiveGstRate({
+    required double rate,
+    required double baseGst,
+    double gstThreshold = 0.0,
+    double gstAboveThreshold = 0.0,
+  }) {
+    if (gstThreshold > 0 && gstAboveThreshold > 0 && rate > gstThreshold) {
+      return gstAboveThreshold;
+    }
+    return baseGst;
+  }
+
+  /// Taxable base amount before GST.
+  /// When gstType == 1 (INCLUDE), extracts base from the GST-inclusive total.
+  static double calculateSubtotal(
+    int qty,
+    double rate,
+    double gst, {
+    int gstType = 0,
+  }) {
+    final gross = (qty * rate).toDouble();
+    if (gstType == 1) {
+      return gst > 0 ? gross / (1.0 + (gst / 100.0)) : gross;
+    }
+    return gross;
+  }
+
+  /// GST component amount for the line item.
+  static double calculateGstAmount(
+    int qty,
+    double rate,
+    double gst, {
+    int gstType = 0,
+  }) {
+    final gross = (qty * rate).toDouble();
+    if (gstType == 1) {
+      return gross - calculateSubtotal(qty, rate, gst, gstType: 1);
+    }
+    return gross * (gst / 100.0);
+  }
+
+  /// Final line item total (rate * qty when INCLUDE; + GST when EXCLUDE).
+  static double calculateTotal(
+    int qty,
+    double rate,
+    double gst, {
+    int gstType = 0,
+  }) {
+    final base = (qty * rate).toDouble();
+    if (gstType == 1) return base;
     final gstAmount = base * (gst / 100.0);
     return base + gstAmount;
   }
@@ -152,6 +203,7 @@ class ExpoOrderItem {
       'qty': qty,
       'rate': rate,
       'gst': gst,
+      'gstType': gstType,
       'total': total,
       if (photoUrl != null && photoUrl!.isNotEmpty) 'photoUrl': photoUrl,
     };
@@ -165,6 +217,7 @@ class ExpoOrderItem {
       qty: _toInt(map['qty']),
       rate: _toDouble(map['rate']),
       gst: _toDouble(map['gst']),
+      gstType: _toInt(map['gstType']),
       total: _toDouble(map['total']),
       photoUrl: map['photoUrl'],
     );
@@ -196,8 +249,16 @@ class ExpoOrder {
   final double advanceAmount; // Advance paid (for booking / stall delivery)
   final double balanceAmount; // Remaining balance due
   final String status; // 'Pending Verification', 'Completed'
-  final String paymentMode; // 'Cash', 'Bank Transfer', 'UPI'
+  final String paymentMode; // 'Cash', 'UPI', 'UPI + Cash', 'Bank', 'Bank + Cash'
+  final double cashAmount; // Cash portion of initial payment
+  final double onlineAmount; // UPI / Bank portion of initial payment
   final String? paymentProofUrl; // Public URL of receipt in Supabase Storage
+  final String? pickupPaymentMode; // Mode used for remaining balance paid at Stall Pickup
+  final double pickupAmount; // Total collected at Stall Pickup
+  final double pickupCashAmount; // Cash collected at Stall Pickup
+  final double pickupOnlineAmount; // UPI / Bank collected at Stall Pickup
+  final String? pickupPaymentProofUrl; // Receipt URL uploaded at Stall Pickup
+  final DateTime? pickedUpAt; // Timestamp when stall delivery was picked up
   final DateTime? deliveryDate; // Delivery date for booking orders
   final DateTime? stallPickupDate; // Expected pickup date during exhibition for Stall Delivery
   final bool isConvertedToBooking; // True if stall delivery wasn't picked up and got converted to booking
@@ -236,7 +297,15 @@ class ExpoOrder {
     this.balanceAmount = 0.0,
     required this.status,
     this.paymentMode = 'Cash',
+    this.cashAmount = 0.0,
+    this.onlineAmount = 0.0,
     this.paymentProofUrl,
+    this.pickupPaymentMode,
+    this.pickupAmount = 0.0,
+    this.pickupCashAmount = 0.0,
+    this.pickupOnlineAmount = 0.0,
+    this.pickupPaymentProofUrl,
+    this.pickedUpAt,
     this.deliveryDate,
     this.stallPickupDate,
     this.isConvertedToBooking = false,
@@ -275,11 +344,25 @@ class ExpoOrder {
       'advance_amount': advanceAmount,
       'balance_amount': balanceAmount,
       'status': status,
-      'payment_mode': paymentMode,
+      'payment_mode': normalizePaymentMode(paymentMode),
+      'cash_amount': cashAmount,
+      'online_amount': onlineAmount,
       'payment_proof_url':
           (paymentProofUrl != null && paymentProofUrl!.isNotEmpty)
               ? paymentProofUrl
               : null,
+      'pickup_payment_mode':
+          (pickupPaymentMode != null && pickupPaymentMode!.isNotEmpty)
+              ? normalizePaymentMode(pickupPaymentMode)
+              : null,
+      'pickup_amount': pickupAmount,
+      'pickup_cash_amount': pickupCashAmount,
+      'pickup_online_amount': pickupOnlineAmount,
+      'pickup_payment_proof_url':
+          (pickupPaymentProofUrl != null && pickupPaymentProofUrl!.isNotEmpty)
+              ? pickupPaymentProofUrl
+              : null,
+      'picked_up_at': pickedUpAt != null ? _ts(pickedUpAt!) : null,
       'delivery_date': deliveryDate != null ? _dateOnly(deliveryDate!) : null,
       'stall_pickup_date':
           stallPickupDate != null ? _dateOnly(stallPickupDate!) : null,
@@ -333,8 +416,19 @@ class ExpoOrder {
           ? _toDouble(data['balance_amount'])
           : (totalAmount - advance),
       status: data['status'] ?? 'Pending',
-      paymentMode: data['payment_mode'] ?? 'Cash',
+      paymentMode: normalizePaymentMode(data['payment_mode']?.toString()),
+      cashAmount: _toDouble(data['cash_amount']),
+      onlineAmount: _toDouble(data['online_amount']),
       paymentProofUrl: data['payment_proof_url'],
+      pickupPaymentMode: data['pickup_payment_mode'] != null &&
+              data['pickup_payment_mode'].toString().trim().isNotEmpty
+          ? normalizePaymentMode(data['pickup_payment_mode'].toString())
+          : null,
+      pickupAmount: _toDouble(data['pickup_amount']),
+      pickupCashAmount: _toDouble(data['pickup_cash_amount']),
+      pickupOnlineAmount: _toDouble(data['pickup_online_amount']),
+      pickupPaymentProofUrl: data['pickup_payment_proof_url'],
+      pickedUpAt: _parseNullableDate(data['picked_up_at']),
       deliveryDate: _parseNullableDate(data['delivery_date']),
       stallPickupDate: _parseNullableDate(data['stall_pickup_date']),
       isConvertedToBooking: data['is_converted_to_booking'] ?? false,
@@ -375,7 +469,15 @@ class ExpoOrder {
     double? balanceAmount,
     String? status,
     String? paymentMode,
+    double? cashAmount,
+    double? onlineAmount,
     String? paymentProofUrl,
+    String? pickupPaymentMode,
+    double? pickupAmount,
+    double? pickupCashAmount,
+    double? pickupOnlineAmount,
+    String? pickupPaymentProofUrl,
+    DateTime? pickedUpAt,
     DateTime? deliveryDate,
     DateTime? stallPickupDate,
     bool? isConvertedToBooking,
@@ -414,7 +516,16 @@ class ExpoOrder {
       balanceAmount: balanceAmount ?? this.balanceAmount,
       status: status ?? this.status,
       paymentMode: paymentMode ?? this.paymentMode,
+      cashAmount: cashAmount ?? this.cashAmount,
+      onlineAmount: onlineAmount ?? this.onlineAmount,
       paymentProofUrl: paymentProofUrl ?? this.paymentProofUrl,
+      pickupPaymentMode: pickupPaymentMode ?? this.pickupPaymentMode,
+      pickupAmount: pickupAmount ?? this.pickupAmount,
+      pickupCashAmount: pickupCashAmount ?? this.pickupCashAmount,
+      pickupOnlineAmount: pickupOnlineAmount ?? this.pickupOnlineAmount,
+      pickupPaymentProofUrl:
+          pickupPaymentProofUrl ?? this.pickupPaymentProofUrl,
+      pickedUpAt: pickedUpAt ?? this.pickedUpAt,
       deliveryDate: deliveryDate ?? this.deliveryDate,
       stallPickupDate: stallPickupDate ?? this.stallPickupDate,
       isConvertedToBooking: isConvertedToBooking ?? this.isConvertedToBooking,
@@ -429,6 +540,94 @@ class ExpoOrder {
       completedAt: completedAt ?? this.completedAt,
     );
   }
+
+  static const List<String> paymentModes = [
+    'Cash',
+    'UPI',
+    'UPI + Cash',
+    'Bank',
+    'Bank + Cash',
+  ];
+
+  static String normalizePaymentMode(String? mode) {
+    final trimmed = (mode ?? '').trim();
+    if (trimmed.isEmpty) return 'Cash';
+    if (trimmed == 'Bank Transfer') return 'Bank';
+    return trimmed;
+  }
+
+  static bool modeRequiresReceipt(String mode) {
+    final m = normalizePaymentMode(mode);
+    return m == 'UPI' || m == 'UPI + Cash' || m == 'Bank' || m == 'Bank + Cash';
+  }
+
+  static bool modeIsSplit(String mode) {
+    final m = normalizePaymentMode(mode);
+    return m == 'UPI + Cash' || m == 'Bank + Cash';
+  }
+
+  static bool modeHasCash(String mode) {
+    final m = normalizePaymentMode(mode);
+    return m == 'Cash' || m == 'UPI + Cash' || m == 'Bank + Cash';
+  }
+
+  static bool modeUsesUpiBucket(String mode) {
+    final m = normalizePaymentMode(mode);
+    return m == 'UPI' || m == 'UPI + Cash';
+  }
+
+  static String onlineLabelForMode(String mode) {
+    final m = normalizePaymentMode(mode);
+    if (m == 'UPI' || m == 'UPI + Cash') return 'UPI';
+    if (m == 'Bank' || m == 'Bank + Cash') return 'Bank';
+    return 'Online';
+  }
+
+  String get normalizedPaymentMode => normalizePaymentMode(paymentMode);
+
+  double get initialPaidAmount =>
+      orderType == 'Spot Delivery' ? totalAmount : advanceAmount;
+
+  double get effectiveCashAmount {
+    final m = normalizedPaymentMode;
+    if (!modeHasCash(m)) return 0.0;
+    if (modeIsSplit(m)) return cashAmount;
+    return cashAmount > 0 ? cashAmount : initialPaidAmount;
+  }
+
+  double get effectiveOnlineAmount {
+    final m = normalizedPaymentMode;
+    if (m == 'Cash') return 0.0;
+    if (modeIsSplit(m)) return onlineAmount;
+    return onlineAmount > 0 ? onlineAmount : initialPaidAmount;
+  }
+
+  double get effectivePickupCashAmount {
+    if (pickupPaymentMode == null || pickupAmount <= 0) return 0.0;
+    final m = normalizePaymentMode(pickupPaymentMode);
+    if (!modeHasCash(m)) return 0.0;
+    if (modeIsSplit(m)) return pickupCashAmount;
+    return pickupCashAmount > 0 ? pickupCashAmount : pickupAmount;
+  }
+
+  double get effectivePickupOnlineAmount {
+    if (pickupPaymentMode == null || pickupAmount <= 0) return 0.0;
+    final m = normalizePaymentMode(pickupPaymentMode);
+    if (m == 'Cash') return 0.0;
+    if (modeIsSplit(m)) return pickupOnlineAmount;
+    return pickupOnlineAmount > 0 ? pickupOnlineAmount : pickupAmount;
+  }
+
+  double get totalPaidAmount => initialPaidAmount + pickupAmount;
+
+  double get totalCashCollected =>
+      effectiveCashAmount + effectivePickupCashAmount;
+
+  bool get hasCashComponent =>
+      modeHasCash(paymentMode) ||
+      (pickupPaymentMode != null &&
+          pickupAmount > 0 &&
+          modeHasCash(pickupPaymentMode!));
 }
 
 /// Service handling all Expo operations on the Supabase `expo` schema
@@ -444,6 +643,8 @@ class ExpoService {
   static const String _ordersTable = 'orders';
   static const String _customersTable = 'customers';
   static const String _itemsTable = 'items';
+
+  final Set<String> _autoConvertedExhibitionIds = {};
 
   SupabaseClient get _db => ExpoSupabaseConfig.client;
 
@@ -622,7 +823,7 @@ class ExpoService {
     int timeoutMinutes = 5,
   }) async {
     try {
-      final res = await _db.rpc(
+      final res = await _db.schema(ExpoSupabaseConfig.schema).rpc(
         'claim_order_for_verification',
         params: {
           'p_order_id': orderId,
@@ -647,7 +848,7 @@ class ExpoService {
     required String userId,
   }) async {
     try {
-      await _db.rpc(
+      await _db.schema(ExpoSupabaseConfig.schema).rpc(
         'release_order_claim',
         params: {
           'p_order_id': orderId,
@@ -659,13 +860,101 @@ class ExpoService {
     }
   }
 
-  /// Marks a stall delivery order as picked up by the customer at the stall (Spot Delivery).
-  Future<void> markStallDeliveryPickedUp(String orderId) async {
-    await _table(_ordersTable).update({
-      'status': 'Completed',
+  /// Fetches a single order by ID, or null if not found.
+  Future<ExpoOrder?> getOrderById(String orderId) async {
+    try {
+      final row =
+          await _table(_ordersTable).select().eq('id', orderId).maybeSingle();
+      return row != null ? ExpoOrder.fromMap(row) : null;
+    } catch (e) {
+      debugPrint('Error fetching order $orderId: $e');
+      return null;
+    }
+  }
+
+  /// Marks a stall delivery order as picked up by the customer at the stall,
+  /// optionally recording remaining balance payment (and split/receipt details).
+  Future<void> markStallDeliveryPickedUp(
+    String orderId, {
+    required double currentBalance,
+    String? pickupPaymentMode,
+    double pickupAmount = 0.0,
+    double pickupCashAmount = 0.0,
+    double pickupOnlineAmount = 0.0,
+    String? pickupPaymentProofUrl,
+    bool completeImmediately = true,
+  }) async {
+    final now = _ts(DateTime.now());
+    final remaining = currentBalance - pickupAmount;
+    final newBalance = remaining < 0.01 ? 0.0 : remaining;
+
+    final Map<String, dynamic> payload = {
       'stall_pickup_status': 'Picked Up',
-      'completed_at': _ts(DateTime.now()),
+      'picked_up_at': now,
+      'balance_amount': newBalance,
+    };
+
+    if (pickupAmount > 0 && pickupPaymentMode != null) {
+      payload['pickup_payment_mode'] =
+          ExpoOrder.normalizePaymentMode(pickupPaymentMode);
+      payload['pickup_amount'] = pickupAmount;
+      payload['pickup_cash_amount'] = pickupCashAmount;
+      payload['pickup_online_amount'] = pickupOnlineAmount;
+      if (pickupPaymentProofUrl != null && pickupPaymentProofUrl.isNotEmpty) {
+        payload['pickup_payment_proof_url'] = pickupPaymentProofUrl;
+      }
+    }
+
+    if (completeImmediately) {
+      payload['status'] = 'Completed';
+      payload['completed_at'] = now;
+      payload['claimed_by_id'] = null;
+      payload['claimed_by_name'] = null;
+      payload['claimed_at'] = null;
+    } else {
+      payload['status'] = 'Pending Verification';
+      payload['completed_at'] = null;
+      payload['claimed_by_id'] = null;
+      payload['claimed_by_name'] = null;
+      payload['claimed_at'] = null;
+    }
+
+    await _table(_ordersTable).update(payload).eq('id', orderId);
+  }
+
+  /// Manually converts an unpicked Stall Delivery order into a Booking order.
+  Future<void> convertStallDeliveryToBooking(String orderId) async {
+    await _table(_ordersTable).update({
+      'order_type': 'Booking',
+      'is_converted_to_booking': true,
+      'stall_pickup_status': 'Converted to Booking',
     }).eq('id', orderId);
+  }
+
+  /// Automatically converts all unpicked Stall Delivery orders of an ended
+  /// exhibition into Booking orders (once per ended exhibition per session).
+  Future<int> autoConvertExpiredStallDeliveries(Exhibition exhibition) async {
+    if (!exhibition.isEnded) return 0;
+    if (_autoConvertedExhibitionIds.contains(exhibition.id)) return 0;
+
+    _autoConvertedExhibitionIds.add(exhibition.id);
+    try {
+      final rows = await _table(_ordersTable)
+          .update({
+            'order_type': 'Booking',
+            'is_converted_to_booking': true,
+            'stall_pickup_status': 'Converted to Booking',
+          })
+          .eq('exhibition_id', exhibition.id)
+          .eq('order_type', 'Stall Delivery')
+          .or('stall_pickup_status.is.null,stall_pickup_status.neq.Picked Up')
+          .select('id');
+      return (rows as List).length;
+    } catch (e) {
+      _autoConvertedExhibitionIds.remove(exhibition.id);
+      debugPrint('Error auto-converting expired stall deliveries: $e');
+      return 0;
+    }
   }
 
   Future<void> deleteOrder(String orderId) async {
@@ -732,24 +1021,39 @@ class ExpoService {
     return bucket.getPublicUrl(fileName);
   }
 
-  /// Fetches Item Name, GST, Rate & Description by MTC code from the
-  /// `expo.items` catalog table.
+  /// Fetches Item Name, GST, Rate, GST Type & Threshold rules by MTC code from
+  /// the `expo.items` catalog table.
   Future<Map<String, dynamic>?> fetchItemDetailsByMtcCode(String mtcCode) async {
-    final cleanCode = mtcCode.trim();
+    final cleanCode = mtcCode.trim().toUpperCase();
     if (cleanCode.isEmpty) return null;
 
     try {
-      final row = await _table(_itemsTable)
-          .select()
+      Map<String, dynamic>? row = await _table(_itemsTable)
+          .select(
+              'mtc_code, item_name, gst, rate, gst_type, gst_above_threshold, gst_threshold')
           .eq('mtc_code', cleanCode)
           .maybeSingle();
 
+      if (row == null &&
+          !cleanCode.startsWith('MTC') &&
+          RegExp(r'^\d+$').hasMatch(cleanCode)) {
+        row = await _table(_itemsTable)
+            .select(
+                'mtc_code, item_name, gst, rate, gst_type, gst_above_threshold, gst_threshold')
+            .eq('mtc_code', 'MTC$cleanCode')
+            .maybeSingle();
+      }
+
       if (row != null) {
         return {
+          'mtcCode': row['mtc_code'] ?? cleanCode,
           'itemName': row['item_name'] ?? '',
           'gst': (row['gst'] as num?)?.toDouble() ?? 18.0,
           'rate': (row['rate'] as num?)?.toDouble(),
-          'description': row['description'] ?? '',
+          'gstType': (row['gst_type'] as num?)?.toInt() ?? 0,
+          'gstAboveThreshold':
+              (row['gst_above_threshold'] as num?)?.toDouble() ?? 0.0,
+          'gstThreshold': (row['gst_threshold'] as num?)?.toDouble() ?? 0.0,
         };
       }
     } catch (e) {

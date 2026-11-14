@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../Navigation/user_cache_service.dart';
 import '../expo_service.dart';
+import '../stall_pickup_dialog.dart';
 import 'expo_order_form.dart';
 import '../expo_draft_service.dart';
 
@@ -187,9 +188,15 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                 ),
                 _buildDialogInfoRow(
                   'Payment Mode',
-                  order.paymentMode,
+                  ExpoOrder.normalizePaymentMode(order.paymentMode),
                   isDark,
                 ),
+                if (ExpoOrder.modeIsSplit(order.paymentMode))
+                  _buildDialogInfoRow(
+                    'Payment Split',
+                    'Cash: ₹${order.effectiveCashAmount.toStringAsFixed(2)} | ${ExpoOrder.onlineLabelForMode(order.paymentMode)}: ₹${order.effectiveOnlineAmount.toStringAsFixed(2)}',
+                    isDark,
+                  ),
                 if (order.paymentProofUrl != null &&
                     order.paymentProofUrl!.isNotEmpty) ...[
                   const SizedBox(height: 6),
@@ -227,6 +234,63 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                           const Spacer(),
                           const Icon(Icons.open_in_new_rounded,
                               color: primaryBlue, size: 16),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+                if (order.pickupPaymentMode != null &&
+                    order.pickupPaymentMode!.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _buildDialogInfoRow(
+                    'Pickup Payment',
+                    '₹${order.pickupAmount.toStringAsFixed(2)} (${ExpoOrder.normalizePaymentMode(order.pickupPaymentMode)})',
+                    isDark,
+                  ),
+                  if (ExpoOrder.modeIsSplit(order.pickupPaymentMode!))
+                    _buildDialogInfoRow(
+                      'Pickup Split',
+                      'Cash: ₹${order.effectivePickupCashAmount.toStringAsFixed(2)} | ${ExpoOrder.onlineLabelForMode(order.pickupPaymentMode!)}: ₹${order.effectivePickupOnlineAmount.toStringAsFixed(2)}',
+                      isDark,
+                    ),
+                ],
+                if (order.pickupPaymentProofUrl != null &&
+                    order.pickupPaymentProofUrl!.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  InkWell(
+                    onTap: () {
+                      _showImagePreviewDialog(
+                        context,
+                        order.pickupPaymentProofUrl!,
+                        '${order.pickupPaymentMode ?? 'Pickup'} Receipt',
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: primaryGreen.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: primaryGreen.withValues(alpha: 0.4)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.receipt_long_rounded,
+                              color: primaryGreen, size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            'View Pickup Payment Receipt',
+                            style: TextStyle(
+                              color: primaryGreen,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                          Spacer(),
+                          Icon(Icons.open_in_new_rounded,
+                              color: primaryGreen, size: 16),
                         ],
                       ),
                     ),
@@ -296,7 +360,14 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                           ),
                         const SizedBox(height: 4),
                         Text(
-                          'Qty: ${it.qty}  ×  Rate: ₹${it.rate.toStringAsFixed(2)}  (+${it.gst}% GST)',
+                          () {
+                            final gstStr = it.gst == it.gst.roundToDouble()
+                                ? it.gst.toInt().toString()
+                                : it.gst.toStringAsFixed(2);
+                            return it.gstType == 1
+                                ? 'Qty: ${it.qty}  ×  Rate: ₹${it.rate.toStringAsFixed(2)}  ($gstStr% GST Incl.)'
+                                : 'Qty: ${it.qty}  ×  Rate: ₹${it.rate.toStringAsFixed(2)}  (+$gstStr% GST Excl.)';
+                          }(),
                           style: TextStyle(
                             fontSize: 11,
                             color: isDark ? Colors.white70 : Colors.black87,
@@ -432,16 +503,67 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
           ),
           if (order.orderType == 'Stall Delivery' &&
               order.stallPickupStatus != 'Picked Up' &&
-              !order.isConvertedToBooking)
+              !order.isConvertedToBooking) ...[
+            OutlinedButton(
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                Navigator.of(ctx).pop();
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (dCtx) => AlertDialog(
+                    title: const Text('Convert to Booking?'),
+                    content: const Text(
+                      'This unpicked Stall Delivery will be converted to a Booking order with its existing advance & balance.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(dCtx).pop(false),
+                        child: const Text('Cancel'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () => Navigator.of(dCtx).pop(true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryBlue,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Convert'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true) {
+                  await ExpoService.instance
+                      .convertStallDeliveryToBooking(order.id);
+                  if (mounted) {
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content:
+                            Text('Stall Delivery converted to Booking order.'),
+                        backgroundColor: primaryBlue,
+                      ),
+                    );
+                  }
+                }
+              },
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: primaryBlue),
+              ),
+              child: const Text('Convert to Booking',
+                  style: TextStyle(color: primaryBlue)),
+            ),
             ElevatedButton(
               onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
                 Navigator.of(ctx).pop();
-                await ExpoService.instance.markStallDeliveryPickedUp(order.id);
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                final saved = await showStallPickupPaymentDialog(
+                  context,
+                  order: order,
+                  isAccountsUser: false,
+                );
+                if (saved && mounted) {
+                  messenger.showSnackBar(
                     const SnackBar(
-                      content: Text(
-                          'Order marked as Picked Up at Stall (Spot Delivery)!'),
+                      content: Text('Order marked as Picked Up at Stall!'),
                       backgroundColor: primaryGreen,
                     ),
                   );
@@ -453,6 +575,7 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
               child: const Text('Picked Up at Stall',
                   style: TextStyle(color: Colors.white)),
             ),
+          ],
           ElevatedButton(
             onPressed: () async {
               Navigator.of(ctx).pop();
@@ -486,129 +609,139 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
   }
 
   Widget _buildDraftsList(Exhibition exhibition, bool isDark) {
-    return FutureBuilder<List<ExpoOrderDraft>>(
-      future: ExpoDraftService.instance.getDrafts(exhibitionId: exhibition.id),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    return StreamBuilder<void>(
+      stream: ExpoDraftService.instance.onDraftsChanged,
+      builder: (context, _) {
+        return FutureBuilder<List<ExpoOrderDraft>>(
+          future:
+              ExpoDraftService.instance.getDrafts(exhibitionId: exhibition.id),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-        final drafts = snapshot.data ?? [];
-        if (drafts.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.edit_note_rounded,
-                  size: 64,
-                  color: isDark ? Colors.white24 : Colors.black26,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'No Drafts Found',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white70 : Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'In-progress orders you leave will be saved here.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.white54 : Colors.black54,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
-          itemCount: drafts.length,
-          itemBuilder: (context, index) {
-            final draft = drafts[index];
-            final title = draft.shopName.isNotEmpty
-                ? draft.shopName
-                : (draft.customerName.isNotEmpty
-                    ? draft.customerName
-                    : (draft.phone.isNotEmpty ? draft.phone : 'Untitled Draft'));
-
-            return Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-                side: BorderSide(
-                  color: isDark
-                      ? Colors.white12
-                      : Colors.black.withValues(alpha: 0.08),
-                ),
-              ),
-              color: isDark ? const Color(0xFF0F243E) : Colors.white,
-              child: ListTile(
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                leading: CircleAvatar(
-                  backgroundColor: const Color(0xFFFF6F00).withValues(alpha: 0.15),
-                  child: const Icon(Icons.edit_document,
-                      color: Color(0xFFFF6F00), size: 22),
-                ),
-                title: Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                ),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            final drafts = snapshot.data ?? [];
+            if (drafts.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    Icon(
+                      Icons.edit_note_rounded,
+                      size: 64,
+                      color: isDark ? Colors.white24 : Colors.black26,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'No Drafts Found',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white70 : Colors.black87,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Text(
-                      '${draft.orderType} • ${draft.items.length} items • Phone: ${draft.phone.isNotEmpty ? draft.phone : "Not added"}',
+                      'In-progress orders you leave will be saved here.',
                       style: TextStyle(
                         fontSize: 12,
-                        color: isDark ? Colors.white60 : Colors.black54,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Last edited: ${DateFormat('dd MMM yyyy, hh:mm a').format(draft.updatedAt)}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isDark ? Colors.white38 : Colors.black38,
+                        color: isDark ? Colors.white54 : Colors.black54,
                       ),
                     ),
                   ],
                 ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline_rounded,
-                          color: Colors.redAccent),
-                      tooltip: 'Delete Draft',
-                      onPressed: () async {
-                        await ExpoDraftService.instance.deleteDraft(draft.id);
-                        if (context.mounted) setState(() {});
-                      },
+              );
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
+              itemCount: drafts.length,
+              itemBuilder: (context, index) {
+                final draft = drafts[index];
+                final title = draft.shopName.isNotEmpty
+                    ? draft.shopName
+                    : (draft.customerName.isNotEmpty
+                        ? draft.customerName
+                        : (draft.phone.isNotEmpty
+                            ? draft.phone
+                            : 'Untitled Draft'));
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    side: BorderSide(
+                      color: isDark
+                          ? Colors.white12
+                          : Colors.black.withValues(alpha: 0.08),
                     ),
-                    const Icon(Icons.chevron_right_rounded, color: primaryBlue),
-                  ],
-                ),
-                onTap: () async {
-                  await Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ExpoOrderFormPage(
-                        exhibition: exhibition,
-                        initialOrderType: draft.orderType,
-                        initialDraft: draft,
-                      ),
+                  ),
+                  color: isDark ? const Color(0xFF0F243E) : Colors.white,
+                  child: ListTile(
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    leading: CircleAvatar(
+                      backgroundColor:
+                          const Color(0xFFFF6F00).withValues(alpha: 0.15),
+                      child: const Icon(Icons.edit_document,
+                          color: Color(0xFFFF6F00), size: 22),
                     ),
-                  );
-                  if (context.mounted) setState(() {});
-                },
-              ),
+                    title: Text(
+                      title,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 4),
+                        Text(
+                          '${draft.orderType} • ${draft.items.length} items • Phone: ${draft.phone.isNotEmpty ? draft.phone : "Not added"}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? Colors.white60 : Colors.black54,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Last edited: ${DateFormat('dd MMM yyyy, hh:mm a').format(draft.updatedAt)}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? Colors.white38 : Colors.black38,
+                          ),
+                        ),
+                      ],
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline_rounded,
+                              color: Colors.redAccent),
+                          tooltip: 'Delete Draft',
+                          onPressed: () async {
+                            await ExpoDraftService.instance.deleteDraft(draft.id);
+                          },
+                        ),
+                        const Icon(Icons.chevron_right_rounded,
+                            color: primaryBlue),
+                      ],
+                    ),
+                    onTap: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ExpoOrderFormPage(
+                            exhibition: exhibition,
+                            initialOrderType: draft.orderType,
+                            initialDraft: draft,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
             );
           },
         );
@@ -737,6 +870,9 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
         }
 
         final currentEx = _selectedExhibition!;
+        if (currentEx.isEnded) {
+          ExpoService.instance.autoConvertExpiredStallDeliveries(currentEx);
+        }
 
         return DefaultTabController(
           length: 4,

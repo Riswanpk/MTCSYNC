@@ -66,7 +66,7 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
   }
 
   void _toggleCashOrderSelection(ExpoOrder order) {
-    if (order.paymentMode != 'Cash') return;
+    if (!order.hasCashComponent) return;
     if (order.status == 'Completed') return;
 
     setState(() {
@@ -110,7 +110,7 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
 
     final double totalCashToCollect = selectedList.fold(
       0.0,
-      (sum, o) => sum + (o.orderType == 'Spot Delivery' ? o.totalAmount : o.advanceAmount),
+      (sum, o) => sum + o.totalCashCollected,
     );
 
     final confirm = await showDialog<bool>(
@@ -273,6 +273,9 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
         }
 
         final currentEx = _selectedExhibition!;
+        if (currentEx.isEnded) {
+          ExpoService.instance.autoConvertExpiredStallDeliveries(currentEx);
+        }
 
         return Scaffold(
           backgroundColor:
@@ -407,8 +410,7 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
                   .toList();
               final double batchTotalCash = selectedOrdersList.fold(
                 0.0,
-                (sum, o) =>
-                    sum + (o.orderType == 'Spot Delivery' ? o.totalAmount : o.advanceAmount),
+                (sum, o) => sum + o.totalCashCollected,
               );
 
               return Column(
@@ -837,7 +839,7 @@ class _ExpoOrdersTabKeepAliveState extends State<_ExpoOrdersTabKeepAlive>
       itemBuilder: (context, index) {
         final order = widget.orders[index];
         final typeColor = _getOrderTypeColor(order.orderType);
-        final bool isCash = order.paymentMode == 'Cash';
+        final bool isCash = order.hasCashComponent;
         final bool isSelected = widget.selectedCashOrderIds.contains(order.id);
 
         final bool isClaimedByOther = order.claimedById != null &&
@@ -845,8 +847,7 @@ class _ExpoOrdersTabKeepAliveState extends State<_ExpoOrdersTabKeepAlive>
             order.claimedAt != null &&
             now.difference(order.claimedAt!).inMinutes < 5;
 
-        final double cashAmount =
-            order.orderType == 'Spot Delivery' ? order.totalAmount : order.advanceAmount;
+        final double cashAmount = order.totalCashCollected;
 
         return Card(
           key: ValueKey(order.id),
@@ -1099,26 +1100,35 @@ class _ExpoOrdersTabKeepAliveState extends State<_ExpoOrdersTabKeepAlive>
                   const SizedBox(height: 10),
 
                   // Payment mode & Cash amount to collect tag
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Icon(
-                        isCash
-                            ? Icons.payments_rounded
-                            : Icons.account_balance_rounded,
-                        size: 16,
-                        color: isCash ? primaryGreen : primaryBlue,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isCash
+                                ? Icons.payments_rounded
+                                : Icons.account_balance_rounded,
+                            size: 16,
+                            color: isCash ? primaryGreen : primaryBlue,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Payment: ${ExpoOrder.normalizePaymentMode(order.paymentMode)}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: widget.isDark
+                                  ? Colors.white70
+                                  : Colors.black87,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Payment: ${order.paymentMode}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: widget.isDark ? Colors.white70 : Colors.black87,
-                        ),
-                      ),
-                      if (isCash) ...[
-                        const SizedBox(width: 8),
+                      if (isCash && cashAmount > 0)
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
@@ -1127,7 +1137,7 @@ class _ExpoOrdersTabKeepAliveState extends State<_ExpoOrdersTabKeepAlive>
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
-                            'Cash to collect: ₹${cashAmount.toStringAsFixed(2)}',
+                            'Cash: ₹${cashAmount.toStringAsFixed(2)}',
                             style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
@@ -1135,9 +1145,10 @@ class _ExpoOrdersTabKeepAliveState extends State<_ExpoOrdersTabKeepAlive>
                             ),
                           ),
                         ),
-                      ] else if (order.paymentProofUrl != null &&
-                          order.paymentProofUrl!.isNotEmpty) ...[
-                        const SizedBox(width: 8),
+                      if ((order.paymentProofUrl != null &&
+                              order.paymentProofUrl!.isNotEmpty) ||
+                          (order.pickupPaymentProofUrl != null &&
+                              order.pickupPaymentProofUrl!.isNotEmpty))
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
@@ -1162,7 +1173,6 @@ class _ExpoOrdersTabKeepAliveState extends State<_ExpoOrdersTabKeepAlive>
                             ],
                           ),
                         ),
-                      ],
                     ],
                   ),
 

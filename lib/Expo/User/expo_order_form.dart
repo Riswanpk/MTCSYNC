@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../Navigation/user_cache_service.dart';
 import '../expo_draft_service.dart';
 import '../expo_service.dart';
+import '../expo_states_districts_service.dart';
 import '../expo_supabase_config.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
@@ -44,14 +46,42 @@ class _ItemRowData {
 
   /// Saved items are shown as a compact summary tile (tap edit to reopen).
   bool isSaved = false;
+  int gstType = 0; // 0 = EXCLUDE, 1 = INCLUDE
+  double baseGst = 0.0;
+  double gstAboveThreshold = 0.0;
+  double gstThreshold = 0.0;
   double total = 0.0;
 
   int get qty => int.tryParse(qtyController.text.trim()) ?? 0;
   double get rate => double.tryParse(rateController.text.trim()) ?? 0.0;
   double get gst => double.tryParse(gstController.text.trim()) ?? 0.0;
 
+  double get subtotalAmount =>
+      ExpoOrderItem.calculateSubtotal(qty, rate, gst, gstType: gstType);
+
+  double get gstAmount =>
+      ExpoOrderItem.calculateGstAmount(qty, rate, gst, gstType: gstType);
+
+  static String formatGstNum(double v) =>
+      v == v.roundToDouble() ? v.toInt().toString() : v.toString();
+
+  void applyThresholdGst() {
+    if (gstThreshold > 0 && gstAboveThreshold > 0) {
+      final effective = ExpoOrderItem.effectiveGstRate(
+        rate: rate,
+        baseGst: baseGst,
+        gstThreshold: gstThreshold,
+        gstAboveThreshold: gstAboveThreshold,
+      );
+      final formatted = formatGstNum(effective);
+      if (gstController.text.trim() != formatted) {
+        gstController.text = formatted;
+      }
+    }
+  }
+
   void recalculateTotal() {
-    total = ExpoOrderItem.calculateTotal(qty, rate, gst);
+    total = ExpoOrderItem.calculateTotal(qty, rate, gst, gstType: gstType);
   }
 
   void dispose() {
@@ -95,8 +125,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
   final TextEditingController _customerNameController = TextEditingController();
   final TextEditingController _placeController = TextEditingController();
   final TextEditingController _districtController = TextEditingController();
-  final TextEditingController _stateController =
-      TextEditingController(text: 'Kerala');
+  final TextEditingController _stateController = TextEditingController();
 
   // Booking Delivery Date
   DateTime? _deliveryDate;
@@ -105,10 +134,14 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
   DateTime? _stallPickupDate;
 
   // Advance & Balance (for booking / stall delivery)
-  final TextEditingController _advanceController =
-      TextEditingController(text: '0');
+  final TextEditingController _advanceController = TextEditingController();
+  final TextEditingController _cashSplitController = TextEditingController();
+  final TextEditingController _onlineSplitController = TextEditingController();
 
   final FocusNode _phoneFocusNode = FocusNode();
+  final FocusNode _stateFocusNode = FocusNode();
+  final FocusNode _districtFocusNode = FocusNode();
+  final FocusNode _placeFocusNode = FocusNode();
 
   // Preferred Branch & Preferred Salesman (Do not auto-select branch)
   List<String> _allBranches = [];
@@ -117,7 +150,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
   String _selectedSalesman = 'N/A';
   bool _isLoadingBranches = true;
 
-  // Payment Selection: Cash, Bank Transfer, UPI
+  // Payment Selection: Cash, UPI, UPI + Cash, Bank, Bank + Cash
   String _selectedPaymentMode = 'Cash';
   File? _paymentProofFile;
   String? _existingPaymentProofUrl;
@@ -141,13 +174,19 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       _customerNameController.text = d.customerName;
       _placeController.text = d.place;
       _districtController.text = d.district;
-      _stateController.text = d.state.isNotEmpty ? d.state : 'Kerala';
+      _stateController.text = d.state;
       _selectedPreferredBranch = d.preferredBranch;
       _selectedSalesman = d.preferredSalesman;
-      _deliveryDate = d.deliveryDate;
+      _deliveryDate = d.deliveryDate ??
+          (_selectedOrderType == 'Booking'
+              ? DateTime.now().add(const Duration(days: 30))
+              : null);
       _stallPickupDate = d.stallPickupDate;
-      _advanceController.text = d.advanceText;
-      _selectedPaymentMode = d.paymentMode;
+      _advanceController.text = d.advanceText == '0' ? '' : d.advanceText;
+      _cashSplitController.text = d.cashSplitText == '0' ? '' : d.cashSplitText;
+      _onlineSplitController.text =
+          d.onlineSplitText == '0' ? '' : d.onlineSplitText;
+      _selectedPaymentMode = ExpoOrder.normalizePaymentMode(d.paymentMode);
       if (d.paymentProofPath != null && d.paymentProofPath!.isNotEmpty) {
         final f = File(d.paymentProofPath!);
         if (f.existsSync()) _paymentProofFile = f;
@@ -163,6 +202,12 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
           row.qtyController.text = (itemMap['qty'] ?? '').toString();
           row.rateController.text = (itemMap['rate'] ?? '').toString();
           row.gstController.text = (itemMap['gst'] ?? '').toString();
+          row.gstType = (itemMap['gstType'] as num?)?.toInt() ?? 0;
+          row.baseGst = (itemMap['baseGst'] as num?)?.toDouble() ?? row.gst;
+          row.gstAboveThreshold =
+              (itemMap['gstAboveThreshold'] as num?)?.toDouble() ?? 0.0;
+          row.gstThreshold =
+              (itemMap['gstThreshold'] as num?)?.toDouble() ?? 0.0;
           row.isSaved = itemMap['isSaved'] == true;
           final pPath = itemMap['photoPath']?.toString();
           if (pPath != null && pPath.isNotEmpty) {
@@ -176,9 +221,13 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         _items.add(_ItemRowData()..recalculateTotal());
       }
     } else {
+      if (_selectedOrderType == 'Booking') {
+        _deliveryDate = DateTime.now().add(const Duration(days: 30));
+      }
       _items.add(_ItemRowData()..recalculateTotal());
     }
 
+    ExpoStatesDistrictsService.instance.init();
     _loadBranches();
   }
 
@@ -191,7 +240,12 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     _districtController.dispose();
     _stateController.dispose();
     _advanceController.dispose();
+    _cashSplitController.dispose();
+    _onlineSplitController.dispose();
     _phoneFocusNode.dispose();
+    _stateFocusNode.dispose();
+    _districtFocusNode.dispose();
+    _placeFocusNode.dispose();
     for (final item in _items) {
       item.dispose();
     }
@@ -233,6 +287,22 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         }
       }
     }
+  }
+
+  void _clearCustomerDetails() {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _phoneController.clear();
+      _shopNameController.clear();
+      _customerNameController.clear();
+      _stateController.clear();
+      _districtController.clear();
+      _placeController.clear();
+      _selectedPreferredBranch = null;
+      _selectedSalesman = 'N/A';
+      _salesmenForBranch = ['N/A'];
+    });
+    _showSnack('Customer details cleared', color: Colors.blueGrey);
   }
 
   // --- Items ---
@@ -348,21 +418,35 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
           await ExpoService.instance.fetchItemDetailsByMtcCode(code);
       if (details != null && mounted) {
         setState(() {
+          if (details['mtcCode'] != null &&
+              details['mtcCode'].toString().isNotEmpty) {
+            item.mtcCodeController.text = details['mtcCode']
+                .toString()
+                .replaceFirst(RegExp(r'^MTC', caseSensitive: false), '')
+                .trim();
+          }
           if (details['itemName'] != null &&
               details['itemName'].toString().isNotEmpty) {
             item.itemNameController.text = details['itemName'].toString();
           }
-          if (details['gst'] != null) {
-            item.gstController.text = details['gst'].toString();
+          if (details['rate'] != null && (details['rate'] as num) > 0) {
+            item.rateController.text =
+                _ItemRowData.formatGstNum((details['rate'] as num).toDouble());
           }
-          if (details['rate'] != null && details['rate'] > 0) {
-            item.rateController.text = details['rate'].toString();
-          }
-          if (details['description'] != null &&
-              details['description'].toString().isNotEmpty) {
-            item.descriptionController.text =
-                details['description'].toString();
-          }
+          item.gstType = (details['gstType'] as num?)?.toInt() ?? 0;
+          item.baseGst = (details['gst'] as num?)?.toDouble() ?? 18.0;
+          item.gstAboveThreshold =
+              (details['gstAboveThreshold'] as num?)?.toDouble() ?? 0.0;
+          item.gstThreshold =
+              (details['gstThreshold'] as num?)?.toDouble() ?? 0.0;
+
+          final effectiveGst = ExpoOrderItem.effectiveGstRate(
+            rate: item.rate,
+            baseGst: item.baseGst,
+            gstThreshold: item.gstThreshold,
+            gstAboveThreshold: item.gstAboveThreshold,
+          );
+          item.gstController.text = _ItemRowData.formatGstNum(effectiveGst);
           item.recalculateTotal();
         });
       }
@@ -532,7 +616,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
   double get _subtotal {
     double sum = 0.0;
     for (final it in _items) {
-      sum += (it.qty * it.rate);
+      sum += it.subtotalAmount;
     }
     return sum;
   }
@@ -540,7 +624,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
   double get _totalGst {
     double sum = 0.0;
     for (final it in _items) {
-      sum += (it.qty * it.rate) * (it.gst / 100.0);
+      sum += it.gstAmount;
     }
     return sum;
   }
@@ -548,13 +632,18 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
   /// Total before round-off (2 decimals).
   double get _grandTotal => _round2(_subtotal + _totalGst);
 
-  /// Final payable amount rounded to the nearest rupee.
-  double get _netTotal => _grandTotal.roundToDouble();
+  /// Final payable amount (Round Off removed per requirement).
+  double get _netTotal => _grandTotal;
 
-  /// Round-off adjustment (+/-) applied to reach [_netTotal].
-  double get _roundOff => _round2(_netTotal - _grandTotal);
+  /// Round-off kept at 0.0 (feature removed from order entry).
+  double get _roundOff => 0.0;
 
   double get _advanceAmount {
+    if (ExpoOrder.modeIsSplit(_selectedPaymentMode)) {
+      if (_selectedOrderType == 'Spot Delivery') return _netTotal;
+      final splitTotal = _round2(_cashSplitAmount + _onlineSplitAmount);
+      return splitTotal.clamp(0.0, _netTotal);
+    }
     if (_selectedOrderType == 'Spot Delivery') return _netTotal;
     final val = double.tryParse(_advanceController.text.trim()) ?? 0.0;
     return val.clamp(0.0, _netTotal);
@@ -563,7 +652,53 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
   double get _balanceAmount {
     if (_selectedOrderType == 'Spot Delivery') return 0.0;
     final bal = _netTotal - _advanceAmount;
-    return bal < 0 ? 0.0 : bal;
+    return bal < 0 ? 0.0 : _round2(bal);
+  }
+
+  double get _effectivePaidNow =>
+      _selectedOrderType == 'Spot Delivery' ? _netTotal : _advanceAmount;
+
+  double get _cashSplitAmount =>
+      _round2(double.tryParse(_cashSplitController.text.trim()) ?? 0.0);
+
+  double get _onlineSplitAmount =>
+      _round2(double.tryParse(_onlineSplitController.text.trim()) ?? 0.0);
+
+  String _formatEditableMoney(double v) {
+    final r = _round2(v);
+    if (r <= 0) return '';
+    return (r - r.roundToDouble()).abs() < 0.005
+        ? r.round().toString()
+        : r.toStringAsFixed(2);
+  }
+
+  void _syncReadOnlySplitTotal() {
+    final totalSplit = _round2(_cashSplitAmount + _onlineSplitAmount);
+    _advanceController.text = _formatEditableMoney(totalSplit);
+  }
+
+  void _selectPaymentMode(String mode) {
+    setState(() {
+      _selectedPaymentMode = mode;
+      if (!ExpoOrder.modeRequiresReceipt(mode)) {
+        _paymentProofFile = null;
+      }
+      if (ExpoOrder.modeIsSplit(mode)) {
+        _syncReadOnlySplitTotal();
+      }
+    });
+  }
+
+  void _onTotalAdvanceChanged(String raw) {
+    setState(() {});
+  }
+
+  void _onCashSplitChanged(String raw) {
+    setState(() => _syncReadOnlySplitTotal());
+  }
+
+  void _onOnlineSplitChanged(String raw) {
+    setState(() => _syncReadOnlySplitTotal());
   }
 
   int get _totalQty {
@@ -581,6 +716,22 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     switch (step) {
       case 0:
         if (form != null && !form.validate()) return false;
+
+        // Strictly enforce State validation against database/cached list
+        final stateInput = _stateController.text.trim();
+        final districtInput = _districtController.text.trim();
+
+        if (!ExpoStatesDistrictsService.instance.isValidState(stateInput)) {
+          _showSnack('Please select a valid State from the suggestions list');
+          return false;
+        }
+
+        // Strictly enforce District validation against state's allowed districts
+        if (!ExpoStatesDistrictsService.instance.isValidDistrict(stateInput, districtInput)) {
+          _showSnack('Please select a valid District belonging to $stateInput from the suggestions list');
+          return false;
+        }
+
         if (_selectedOrderType != 'Spot Delivery' &&
             (_selectedPreferredBranch == null ||
                 _selectedPreferredBranch!.isEmpty)) {
@@ -596,10 +747,26 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         return _saveOpenItems(showSuccess: false);
       case 2:
         if (form != null && !form.validate()) return false;
-        if (_selectedOrderType != 'Spot Delivery') {
+        if (ExpoOrder.modeIsSplit(_selectedPaymentMode)) {
+          final totalSplit = _round2(_cashSplitAmount + _onlineSplitAmount);
+          final label = ExpoOrder.onlineLabelForMode(_selectedPaymentMode);
+          if (_selectedOrderType == 'Spot Delivery') {
+            if ((totalSplit - _netTotal).abs() > 0.05) {
+              _showSnack(
+                'Total Advance (Cash + $label) must equal Net Total (₹${_netTotal.toStringAsFixed(2)}) for Spot Delivery',
+              );
+              return false;
+            }
+          } else if (totalSplit > _netTotal + 0.01) {
+            _showSnack(
+              'Total Advance (Cash + $label) cannot exceed Net Total',
+            );
+            return false;
+          }
+        } else if (_selectedOrderType != 'Spot Delivery') {
           final advanceEntered =
               double.tryParse(_advanceController.text.trim()) ?? 0.0;
-          if (advanceEntered > _netTotal) {
+          if (advanceEntered > _netTotal + 0.01) {
             _showSnack('Advance amount cannot exceed Net Total');
             return false;
           }
@@ -613,7 +780,13 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     FocusScope.of(context).unfocus();
     if (!_validateStep(_currentStep)) return;
     if (_currentStep < _steps.length - 1) {
-      setState(() => _currentStep++);
+      setState(() {
+        _currentStep++;
+        if (_currentStep == 2 &&
+            ExpoOrder.modeIsSplit(_selectedPaymentMode)) {
+          _syncReadOnlySplitTotal();
+        }
+      });
     }
   }
 
@@ -622,9 +795,20 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     if (_shopNameController.text.trim().isNotEmpty) return true;
     if (_customerNameController.text.trim().isNotEmpty) return true;
     if (_placeController.text.trim().isNotEmpty) return true;
+    if (_districtController.text.trim().isNotEmpty) return true;
+    if (_stateController.text.trim().isNotEmpty) return true;
+    if (_selectedPreferredBranch != null && _selectedPreferredBranch!.isNotEmpty) return true;
+    if (_selectedSalesman.isNotEmpty && _selectedSalesman != 'N/A') return true;
+    if (_advanceController.text.trim().isNotEmpty && _advanceController.text.trim() != '0') return true;
+    if (_cashSplitController.text.trim().isNotEmpty && _cashSplitController.text.trim() != '0') return true;
+    if (_onlineSplitController.text.trim().isNotEmpty && _onlineSplitController.text.trim() != '0') return true;
+    if (_paymentProofFile != null) return true;
     if (_items.any((it) =>
         it.itemNameController.text.trim().isNotEmpty ||
-        it.mtcCodeController.text.trim().isNotEmpty)) {
+        it.mtcCodeController.text.trim().isNotEmpty ||
+        it.qtyController.text.trim().isNotEmpty ||
+        it.rateController.text.trim().isNotEmpty ||
+        it.photoFile != null)) {
       return true;
     }
     return false;
@@ -649,6 +833,8 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       deliveryDate: _deliveryDate,
       stallPickupDate: _stallPickupDate,
       advanceText: _advanceController.text.trim(),
+      cashSplitText: _cashSplitController.text.trim(),
+      onlineSplitText: _onlineSplitController.text.trim(),
       paymentMode: _selectedPaymentMode,
       paymentProofPath: _paymentProofFile?.path,
       currentStep: _currentStep,
@@ -660,6 +846,10 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
           'qty': it.qtyController.text.trim(),
           'rate': it.rateController.text.trim(),
           'gst': it.gstController.text.trim(),
+          'gstType': it.gstType,
+          'baseGst': it.baseGst,
+          'gstAboveThreshold': it.gstAboveThreshold,
+          'gstThreshold': it.gstThreshold,
           'isSaved': it.isSaved,
           'photoPath': it.photoFile?.path,
         };
@@ -699,14 +889,16 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       await cache.ensureLoaded();
 
       // 1. Upload payment proof concurrently if provided to dedicated bucket
-      final Future<String?> paymentProofFuture = (_paymentProofFile != null)
-          ? ExpoService.instance.uploadFile(
-              _paymentProofFile!,
-              bucketName: _selectedPaymentMode == 'UPI'
-                  ? ExpoSupabaseConfig.bucketUpiProofs
-                  : ExpoSupabaseConfig.bucketBankProofs,
-            )
-          : Future.value(_existingPaymentProofUrl);
+      final Future<String?> paymentProofFuture =
+          (_paymentProofFile != null &&
+                  ExpoOrder.modeRequiresReceipt(_selectedPaymentMode))
+              ? ExpoService.instance.uploadFile(
+                  _paymentProofFile!,
+                  bucketName: ExpoOrder.modeUsesUpiBucket(_selectedPaymentMode)
+                      ? ExpoSupabaseConfig.bucketUpiProofs
+                      : ExpoSupabaseConfig.bucketBankProofs,
+                )
+              : Future.value(_existingPaymentProofUrl);
 
       // 2. Upload item photos concurrently if provided to item bucket
       final List<Future<String?>> itemPhotoFutures = _items.map((it) {
@@ -740,13 +932,34 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
             qty: it.qty,
             rate: it.rate,
             gst: it.gst,
-            total: ExpoOrderItem.calculateTotal(it.qty, it.rate, it.gst),
+            gstType: it.gstType,
+            total: ExpoOrderItem.calculateTotal(
+              it.qty,
+              it.rate,
+              it.gst,
+              gstType: it.gstType,
+            ),
             photoUrl: itemPhotoUrls[i],
           ),
         );
       }
 
       final isSpot = _selectedOrderType == 'Spot Delivery';
+      final double paidNow = isSpot ? _netTotal : _advanceAmount;
+      final String normalizedMode =
+          ExpoOrder.normalizePaymentMode(_selectedPaymentMode);
+      final double savedCashAmount;
+      final double savedOnlineAmount;
+      if (normalizedMode == 'Cash') {
+        savedCashAmount = _round2(paidNow);
+        savedOnlineAmount = 0.0;
+      } else if (ExpoOrder.modeIsSplit(normalizedMode)) {
+        savedCashAmount = _cashSplitAmount;
+        savedOnlineAmount = _onlineSplitAmount;
+      } else {
+        savedCashAmount = 0.0;
+        savedOnlineAmount = _round2(paidNow);
+      }
 
       final newOrder = ExpoOrder(
         id: '',
@@ -769,10 +982,12 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         roundOff: _roundOff,
         totalAmount: _netTotal,
         totalQty: _totalQty,
-        advanceAmount: isSpot ? _netTotal : _advanceAmount,
+        advanceAmount: paidNow,
         balanceAmount: isSpot ? 0.0 : _balanceAmount,
         status: 'Pending Verification',
-        paymentMode: _selectedPaymentMode,
+        paymentMode: normalizedMode,
+        cashAmount: savedCashAmount,
+        onlineAmount: savedOnlineAmount,
         paymentProofUrl: paymentProofUrl,
         deliveryDate: _selectedOrderType == 'Booking' ? _deliveryDate : null,
         stallPickupDate:
@@ -1056,6 +1271,23 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
           isDark: isDark,
           title: 'Customer Details',
           icon: Icons.person_pin_rounded,
+          trailing: TextButton.icon(
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.redAccent,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: _clearCustomerDetails,
+            icon: const Icon(Icons.clear_all_rounded, size: 16),
+            label: const Text(
+              'Clear All',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12.5,
+              ),
+            ),
+          ),
           child: Column(
             children: [
               // Phone (first field, searches existing expo customers)
@@ -1094,12 +1326,22 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
               ),
               const SizedBox(height: 12),
 
-              // Place & District
+              // State
+              _buildStateAutocomplete(isDark),
+              const SizedBox(height: 12),
+
+              // District & Place (Interchanged: District on left, Place on right)
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Expanded(
+                    child: _buildDistrictAutocomplete(isDark),
+                  ),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: TextFormField(
                       controller: _placeController,
+                      focusNode: _placeFocusNode,
                       textCapitalization: TextCapitalization.words,
                       decoration: _inputDecoration(
                         label: 'Place',
@@ -1109,33 +1351,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _districtController,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: _inputDecoration(
-                        label: 'District',
-                        hint: 'Enter district',
-                        icon: Icons.location_city_rounded,
-                        isDark: isDark,
-                      ),
-                    ),
-                  ),
                 ],
-              ),
-              const SizedBox(height: 12),
-
-              // State
-              TextFormField(
-                controller: _stateController,
-                textCapitalization: TextCapitalization.words,
-                decoration: _inputDecoration(
-                  label: 'State',
-                  hint: 'Enter state',
-                  icon: Icons.map_rounded,
-                  isDark: isDark,
-                ),
               ),
               if (_selectedOrderType != 'Spot Delivery') ...[
                 const SizedBox(height: 12),
@@ -1323,6 +1539,91 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     );
   }
 
+  Widget _buildStateAutocomplete(bool isDark) {
+    return _CachedAutocompleteField(
+      controller: _stateController,
+      focusNode: _stateFocusNode,
+      label: 'State',
+      hint: 'Type state name...',
+      icon: Icons.map_rounded,
+      isDark: isDark,
+      optionsBuilder: (query) {
+        if (query.trim().isEmpty) return const <String>[];
+        return ExpoStatesDistrictsService.instance.filterStates(query);
+      },
+      onSelected: (selectedState) {
+        final normalized =
+            ExpoStatesDistrictsService.instance.normalizeState(selectedState);
+        _stateController.text = normalized;
+        // If current district is invalid for newly selected state, clear it
+        if (!ExpoStatesDistrictsService.instance
+            .isValidDistrict(normalized, _districtController.text)) {
+          _districtController.clear();
+        }
+        setState(() {});
+
+        // Automatically move to District field and open keyboard
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            FocusScope.of(context).requestFocus(_districtFocusNode);
+          }
+        });
+      },
+      validator: (val) {
+        if (val == null || val.trim().isEmpty) {
+          return 'Enter state';
+        }
+        if (!ExpoStatesDistrictsService.instance.isValidState(val)) {
+          return 'Select a valid state from suggestions';
+        }
+        return null;
+      },
+    );
+  }
+
+  Widget _buildDistrictAutocomplete(bool isDark) {
+    return _CachedAutocompleteField(
+      controller: _districtController,
+      focusNode: _districtFocusNode,
+      label: 'District',
+      hint: 'Type district name...',
+      icon: Icons.location_city_rounded,
+      isDark: isDark,
+      optionsBuilder: (query) {
+        if (query.trim().isEmpty) return const <String>[];
+        final stateName = _stateController.text.trim();
+        return ExpoStatesDistrictsService.instance.filterDistricts(
+          stateName: stateName,
+          query: query,
+        );
+      },
+      onSelected: (selectedDistrict) {
+        final stateName = _stateController.text.trim();
+        final normalized = ExpoStatesDistrictsService.instance
+            .normalizeDistrict(stateName, selectedDistrict);
+        _districtController.text = normalized;
+        setState(() {});
+
+        // Automatically move to Place field and open keyboard
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            FocusScope.of(context).requestFocus(_placeFocusNode);
+          }
+        });
+      },
+      validator: (val) {
+        if (val == null || val.trim().isEmpty) {
+          return 'Enter district';
+        }
+        final stateName = _stateController.text.trim();
+        if (!ExpoStatesDistrictsService.instance.isValidDistrict(stateName, val)) {
+          return 'Select valid district from suggestions';
+        }
+        return null;
+      },
+    );
+  }
+
   /// Read-only order date + order-type specific dates (delivery / pickup).
   Widget _buildOrderMetaSection(bool isDark) {
     final formattedDate = DateFormat('dd MMM yyyy, hh:mm a').format(_orderDate);
@@ -1402,7 +1703,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
               final picked = await showDatePicker(
                 context: context,
                 initialDate:
-                    _deliveryDate ?? DateTime.now().add(const Duration(days: 3)),
+                    _deliveryDate ?? DateTime.now().add(const Duration(days: 30)),
                 firstDate: DateTime.now(),
                 lastDate: DateTime.now().add(const Duration(days: 365)),
               );
@@ -1732,7 +2033,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                   ),
                 const SizedBox(height: 2),
                 Text(
-                  '${item.qty} × ₹${_fmtNum(item.rate)}  •  GST ${_fmtNum(item.gst)}%',
+                  '${item.qty} × ₹${_fmtNum(item.rate)}  •  GST ${_fmtNum(item.gst)}% (${item.gstType == 1 ? 'Incl.' : 'Excl.'})',
                   style: TextStyle(
                     fontSize: 12,
                     color: isDark ? Colors.white70 : Colors.black87,
@@ -1818,20 +2119,6 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 6),
-              _summaryRow('Gross Total', '₹${_grandTotal.toStringAsFixed(2)}',
-                  style: mutedStyle),
-              const SizedBox(height: 6),
-              _summaryRow(
-                'Round Off',
-                '${_roundOff >= 0 ? '+' : '-'} ₹${_roundOff.abs().toStringAsFixed(2)}',
-                style: mutedStyle,
-                valueStyle: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white70 : Colors.black87,
-                ),
-              ),
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 8),
                 child: Divider(height: 1),
@@ -1856,12 +2143,36 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                   ),
                 ],
               ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Balance',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
+                  ),
+                  Text(
+                    '₹${_balanceAmount.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: _balanceAmount > 0
+                          ? const Color(0xFFE65100)
+                          : primaryGreen,
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
         const SizedBox(height: 16),
 
-        // 2. Payment Mode (shown after the round off summary)
+        // 2. Payment Mode
         _buildCard(
           isDark: isDark,
           title: 'Payment Mode',
@@ -1874,6 +2185,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                   Expanded(
                     child: _buildPaymentOptionChip(
                       mode: 'Cash',
+                      label: '1. Cash',
                       icon: Icons.money_rounded,
                       isDark: isDark,
                     ),
@@ -1881,7 +2193,30 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: _buildPaymentOptionChip(
-                      mode: 'Bank Transfer',
+                      mode: 'UPI',
+                      label: '2. UPI',
+                      icon: Icons.qr_code_2_rounded,
+                      isDark: isDark,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildPaymentOptionChip(
+                      mode: 'UPI + Cash',
+                      label: '3. UPI + Cash',
+                      icon: Icons.qr_code_scanner_rounded,
+                      isDark: isDark,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildPaymentOptionChip(
+                      mode: 'Bank',
+                      label: '4. Bank',
                       icon: Icons.account_balance_rounded,
                       isDark: isDark,
                     ),
@@ -1889,17 +2224,17 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: _buildPaymentOptionChip(
-                      mode: 'UPI',
-                      icon: Icons.qr_code_2_rounded,
+                      mode: 'Bank + Cash',
+                      label: '5. Bank + Cash',
+                      icon: Icons.account_balance_wallet_rounded,
                       isDark: isDark,
                     ),
                   ),
                 ],
               ),
 
-              // If Bank or UPI selected: show option to upload picture from gallery or take photo now
-              if (_selectedPaymentMode == 'Bank Transfer' ||
-                  _selectedPaymentMode == 'UPI') ...[
+              // Upload receipt for UPI, UPI + Cash, Bank, Bank + Cash
+              if (ExpoOrder.modeRequiresReceipt(_selectedPaymentMode)) ...[
                 const SizedBox(height: 14),
                 _buildPaymentProofSection(isDark),
               ],
@@ -1907,12 +2242,17 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
           ),
         ),
 
-        // 3. Advance & Balance (Booking / Stall Delivery)
-        if (_selectedOrderType != 'Spot Delivery') ...[
+        // 3. Advance / Split Payment & Balance
+        if (_selectedOrderType != 'Spot Delivery' ||
+            ExpoOrder.modeIsSplit(_selectedPaymentMode)) ...[
           const SizedBox(height: 16),
           _buildCard(
             isDark: isDark,
-            title: 'Advance & Balance',
+            title: ExpoOrder.modeIsSplit(_selectedPaymentMode)
+                ? (_selectedOrderType == 'Spot Delivery'
+                    ? 'Split Payment Breakdown'
+                    : 'Total Advance & Split Payment')
+                : 'Advance & Balance',
             icon: Icons.account_balance_wallet_rounded,
             child: _buildAdvanceSection(isDark),
           ),
@@ -2025,103 +2365,179 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
   }
 
   Widget _buildAdvanceSection(bool isDark) {
+    final bool isSpot = _selectedOrderType == 'Spot Delivery';
+    final bool isSplit = ExpoOrder.modeIsSplit(_selectedPaymentMode);
+    final String onlineLabel =
+        ExpoOrder.onlineLabelForMode(_selectedPaymentMode);
+    final InputDecoration fieldDeco = InputDecoration(
+      hintText: '0.00',
+      isDense: true,
+      filled: true,
+      fillColor: isDark ? const Color(0xFF132847) : const Color(0xFFF1F5F9),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide.none,
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    );
+    final List<TextInputFormatter> numFormatters = [
+      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+    ];
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              flex: 5,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Advance Amount (₹)',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white70 : Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  TextFormField(
-                    controller: _advanceController,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                          RegExp(r'^\d*\.?\d{0,2}')),
-                    ],
-                    onChanged: (_) {
-                      setState(() {});
-                    },
-                    decoration: InputDecoration(
-                      hintText: '0.00',
-                      prefixIcon: const Icon(Icons.payments_outlined, size: 20),
-                      isDense: true,
-                      filled: true,
-                      fillColor: isDark
-                          ? const Color(0xFF132847)
-                          : const Color(0xFFF1F5F9),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 12),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              flex: 5,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    'Balance Amount',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white70 : Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Container(
-                    width: double.infinity,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-                    decoration: BoxDecoration(
-                      color: _balanceAmount > 0
-                          ? const Color(0xFFE65100)
-                              .withValues(alpha: isDark ? 0.2 : 0.1)
-                          : primaryGreen.withValues(alpha: isDark ? 0.2 : 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: _balanceAmount > 0
-                            ? const Color(0xFFE65100).withValues(alpha: 0.4)
-                            : primaryGreen.withValues(alpha: 0.4),
-                      ),
-                    ),
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      '₹${_balanceAmount.toStringAsFixed(2)}',
+        if (!isSpot || isSplit) ...[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                flex: 5,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isSplit ? 'Total Advance (₹)' : 'Advance Amount (₹)',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 13,
                         fontWeight: FontWeight.bold,
-                        color: _balanceAmount > 0
-                            ? const Color(0xFFE65100)
-                            : primaryGreen,
+                        color: isDark ? Colors.white70 : Colors.black87,
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 6),
+                    TextFormField(
+                      controller: _advanceController,
+                      readOnly: isSplit,
+                      keyboardType: isSplit
+                          ? TextInputType.none
+                          : const TextInputType.numberWithOptions(
+                              decimal: true),
+                      inputFormatters: isSplit ? null : numFormatters,
+                      onChanged: isSplit ? null : _onTotalAdvanceChanged,
+                      decoration: fieldDeco.copyWith(
+                        prefixIcon:
+                            const Icon(Icons.payments_outlined, size: 20),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
+              const SizedBox(width: 14),
+              Expanded(
+                flex: 5,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      isSpot ? 'Net Total' : 'Balance Amount',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white70 : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 11),
+                      decoration: BoxDecoration(
+                        color: (!isSpot && _balanceAmount > 0)
+                            ? const Color(0xFFE65100)
+                                .withValues(alpha: isDark ? 0.2 : 0.1)
+                            : primaryGreen.withValues(alpha: isDark ? 0.2 : 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: (!isSpot && _balanceAmount > 0)
+                              ? const Color(0xFFE65100).withValues(alpha: 0.4)
+                              : primaryGreen.withValues(alpha: 0.4),
+                        ),
+                      ),
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        isSpot
+                            ? '₹${_netTotal.toStringAsFixed(2)}'
+                            : '₹${_balanceAmount.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: (!isSpot && _balanceAmount > 0)
+                              ? const Color(0xFFE65100)
+                              : primaryGreen,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+        if (isSplit) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Cash (₹)',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white70 : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    TextFormField(
+                      controller: _cashSplitController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: numFormatters,
+                      onChanged: _onCashSplitChanged,
+                      decoration: fieldDeco.copyWith(
+                        prefixIcon: const Icon(Icons.money_rounded, size: 19),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$onlineLabel (₹)',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white70 : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    TextFormField(
+                      controller: _onlineSplitController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: numFormatters,
+                      onChanged: _onOnlineSplitChanged,
+                      decoration: fieldDeco.copyWith(
+                        prefixIcon: Icon(
+                          onlineLabel == 'UPI'
+                              ? Icons.qr_code_2_rounded
+                              : Icons.account_balance_rounded,
+                          size: 19,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: 10),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -2138,9 +2554,11 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  _advanceAmount > 0
-                      ? 'Advance of ₹${_advanceAmount.toStringAsFixed(2)} paid via $_selectedPaymentMode. Balance due: ₹${_balanceAmount.toStringAsFixed(2)}.'
-                      : 'No advance paid. Full balance due on delivery.',
+                  isSplit
+                      ? 'Split: Cash ₹${_cashSplitAmount.toStringAsFixed(2)} + $onlineLabel ₹${_onlineSplitAmount.toStringAsFixed(2)} = ₹${_round2(_cashSplitAmount + _onlineSplitAmount).toStringAsFixed(2)}.${isSpot ? ' Net Total: ₹${_netTotal.toStringAsFixed(2)}.' : ' Balance due: ₹${_balanceAmount.toStringAsFixed(2)}.'}'
+                      : (_advanceAmount > 0
+                          ? 'Advance of ₹${_advanceAmount.toStringAsFixed(2)} paid via $_selectedPaymentMode. Balance due: ₹${_balanceAmount.toStringAsFixed(2)}.'
+                          : 'No advance paid. Full balance due on delivery.'),
                   style: TextStyle(
                     fontSize: 11.5,
                     color: isDark ? Colors.white60 : Colors.black54,
@@ -2156,16 +2574,17 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
 
   Widget _buildPaymentOptionChip({
     required String mode,
+    required String label,
     required IconData icon,
     required bool isDark,
   }) {
     final isSelected = _selectedPaymentMode == mode;
 
     return InkWell(
-      onTap: () => setState(() => _selectedPaymentMode = mode),
+      onTap: () => _selectPaymentMode(mode),
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
         decoration: BoxDecoration(
           color: isSelected
               ? primaryBlue
@@ -2182,12 +2601,12 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
           children: [
             Icon(
               icon,
-              size: 22,
+              size: 20,
               color: isSelected ? Colors.white : primaryBlue,
             ),
             const SizedBox(height: 4),
             Text(
-              mode,
+              label,
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -2247,6 +2666,41 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
               ),
               Row(
                 children: [
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        item.mtcCodeController.clear();
+                        item.itemNameController.clear();
+                        item.descriptionController.clear();
+                        item.qtyController.clear();
+                        item.rateController.clear();
+                        item.gstController.clear();
+                        item.gstType = 0;
+                        item.baseGst = 0.0;
+                        item.gstAboveThreshold = 0.0;
+                        item.gstThreshold = 0.0;
+                        item.photoFile = null;
+                        item.existingPhotoUrl = null;
+                        item.recalculateTotal();
+                      });
+                    },
+                    icon: const Icon(Icons.clear_all_rounded,
+                        size: 16, color: Colors.orange),
+                    label: const Text(
+                      'Clear',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      minimumSize: const Size(44, 30),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
                   // Button to take photo for each item (not mandatory)
                   TextButton.icon(
                     onPressed: () => _pickImageForItem(item),
@@ -2409,6 +2863,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                       const TextInputType.numberWithOptions(decimal: true),
                   onChanged: (_) {
                     setState(() {
+                      item.applyThresholdGst();
                       item.recalculateTotal();
                     });
                   },
@@ -2428,6 +2883,9 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                       const TextInputType.numberWithOptions(decimal: true),
                   onChanged: (_) {
                     setState(() {
+                      if (item.gstThreshold <= 0) {
+                        item.baseGst = item.gst;
+                      }
                       item.recalculateTotal();
                     });
                   },
@@ -2439,6 +2897,89 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                   ),
                 ),
               ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // GST Type badge (EXCL / INCL) & Threshold Rule info
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    item.gstType = item.gstType == 0 ? 1 : 0;
+                    item.recalculateTotal();
+                  });
+                },
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: (item.gstType == 1 ? primaryBlue : primaryGreen)
+                        .withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: (item.gstType == 1 ? primaryBlue : primaryGreen)
+                          .withValues(alpha: 0.45),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        item.gstType == 1
+                            ? Icons.check_box_rounded
+                            : Icons.add_box_outlined,
+                        size: 13,
+                        color: item.gstType == 1 ? primaryBlue : primaryGreen,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        item.gstType == 1
+                            ? 'INCL (GST Included in Rate)'
+                            : 'EXCL (GST Extra)',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: item.gstType == 1 ? primaryBlue : primaryGreen,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (item.gstThreshold > 0 && item.gstAboveThreshold > 0)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: (item.rate > item.gstThreshold
+                            ? const Color(0xFFE65100)
+                            : primaryBlue)
+                        .withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: (item.rate > item.gstThreshold
+                              ? const Color(0xFFE65100)
+                              : primaryBlue)
+                          .withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: Text(
+                    'Rate > ₹${_fmtNum(item.gstThreshold)} → ${_fmtNum(item.gstAboveThreshold)}% GST',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: item.rate > item.gstThreshold
+                          ? const Color(0xFFE65100)
+                          : (isDark ? Colors.white70 : primaryBlue),
+                    ),
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 10),
@@ -2453,9 +2994,11 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Item Total (incl. GST):',
-                  style: TextStyle(
+                Text(
+                  item.gstType == 1
+                      ? 'Item Total (GST Incl.):'
+                      : 'Item Total (incl. GST):',
+                  style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -2552,3 +3095,218 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     );
   }
 }
+
+/// Dedicated fast autocomplete field for locally cached States & Districts.
+/// Instant zero-lag lookup, shows suggestions after the 1st character.
+/// Enforces strict selection from predefined suggestions (custom text disallowed).
+class _CachedAutocompleteField extends StatefulWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final String label;
+  final String hint;
+  final IconData icon;
+  final bool isDark;
+  final List<String> Function(String query) optionsBuilder;
+  final ValueChanged<String> onSelected;
+  final FormFieldValidator<String>? validator;
+
+  const _CachedAutocompleteField({
+    required this.controller,
+    required this.focusNode,
+    required this.label,
+    required this.hint,
+    required this.icon,
+    required this.isDark,
+    required this.optionsBuilder,
+    required this.onSelected,
+    this.validator,
+  });
+
+  @override
+  State<_CachedAutocompleteField> createState() =>
+      _CachedAutocompleteFieldState();
+}
+
+class _CachedAutocompleteFieldState extends State<_CachedAutocompleteField> {
+  List<String> _currentOptions = [];
+  final LayerLink _layerLink = LayerLink();
+  OverlayEntry? _overlayEntry;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onTextChanged);
+    widget.focusNode.addListener(_onFocusChanged);
+  }
+
+  @override
+  void dispose() {
+    _removeOverlay();
+    widget.controller.removeListener(_onTextChanged);
+    widget.focusNode.removeListener(_onFocusChanged);
+    super.dispose();
+  }
+
+  void _onFocusChanged() {
+    if (!widget.focusNode.hasFocus) {
+      _removeOverlay();
+    } else if (widget.controller.text.trim().isNotEmpty) {
+      _search(widget.controller.text.trim());
+    }
+  }
+
+  void _onTextChanged() {
+    if (!widget.focusNode.hasFocus) return;
+
+    final query = widget.controller.text.trim();
+    // Rule: Only after the first letter (query.length >= 1) show suggestions
+    if (query.isEmpty) {
+      _removeOverlay();
+      return;
+    }
+
+    _search(query);
+  }
+
+  void _search(String query) {
+    if (!mounted) return;
+    final results = widget.optionsBuilder(query);
+    _currentOptions = results;
+    if (results.isNotEmpty && widget.focusNode.hasFocus) {
+      _showOverlay();
+    } else {
+      _removeOverlay();
+    }
+  }
+
+  void _showOverlay() {
+    _removeOverlay();
+    if (!mounted || _currentOptions.isEmpty) return;
+
+    final overlay = Overlay.of(context);
+    final renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+    final size = renderBox.size;
+
+    _overlayEntry = OverlayEntry(
+      builder: (ctx) {
+        final isDark = widget.isDark;
+        return Positioned(
+          width: size.width,
+          child: CompositedTransformFollower(
+            link: _layerLink,
+            showWhenUnlinked: false,
+            offset: Offset(0, size.height + 6),
+            child: Material(
+              elevation: 6,
+              borderRadius: BorderRadius.circular(12),
+              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 220),
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  shrinkWrap: true,
+                  itemCount: _currentOptions.length,
+                  separatorBuilder: (_, __) => Divider(
+                    height: 1,
+                    color: isDark ? Colors.white12 : Colors.grey.shade200,
+                  ),
+                  itemBuilder: (context, index) {
+                    final item = _currentOptions[index];
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () {
+                        widget.onSelected(item);
+                        _removeOverlay();
+                        widget.focusNode.unfocus();
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              widget.icon,
+                              size: 16,
+                              color: primaryBlue,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                item,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13.5,
+                                  color: isDark
+                                      ? Colors.white
+                                      : const Color(0xFF0F172A),
+                                ),
+                              ),
+                            ),
+                            const Icon(
+                              Icons.arrow_outward_rounded,
+                              size: 14,
+                              color: primaryGreen,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    overlay.insert(_overlayEntry!);
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: TextFormField(
+        controller: widget.controller,
+        focusNode: widget.focusNode,
+        textCapitalization: TextCapitalization.words,
+        validator: widget.validator,
+        decoration: InputDecoration(
+          labelText: widget.label,
+          hintText: widget.hint,
+          prefixIcon: Icon(widget.icon, color: primaryBlue, size: 20),
+          suffixIcon: widget.controller.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear_rounded, size: 18),
+                  onPressed: () {
+                    widget.controller.clear();
+                    _removeOverlay();
+                    setState(() {});
+                  },
+                )
+              : null,
+          filled: true,
+          fillColor: widget.isDark
+              ? Colors.white.withValues(alpha: 0.05)
+              : const Color(0xFFF1F5F9),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      ),
+    );
+  }
+}
+

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -18,6 +19,8 @@ class ExpoOrderDraft {
   final DateTime? deliveryDate;
   final DateTime? stallPickupDate;
   final String advanceText;
+  final String cashSplitText;
+  final String onlineSplitText;
   final String paymentMode;
   final String? paymentProofPath;
   final int currentStep;
@@ -39,7 +42,9 @@ class ExpoOrderDraft {
     this.preferredSalesman = 'N/A',
     this.deliveryDate,
     this.stallPickupDate,
-    this.advanceText = '0',
+    this.advanceText = '',
+    this.cashSplitText = '',
+    this.onlineSplitText = '',
     this.paymentMode = 'Cash',
     this.paymentProofPath,
     this.currentStep = 0,
@@ -64,6 +69,8 @@ class ExpoOrderDraft {
       'deliveryDate': deliveryDate?.toIso8601String(),
       'stallPickupDate': stallPickupDate?.toIso8601String(),
       'advanceText': advanceText,
+      'cashSplitText': cashSplitText,
+      'onlineSplitText': onlineSplitText,
       'paymentMode': paymentMode,
       'paymentProofPath': paymentProofPath,
       'currentStep': currentStep,
@@ -92,7 +99,9 @@ class ExpoOrderDraft {
       stallPickupDate: map['stallPickupDate'] != null
           ? DateTime.tryParse(map['stallPickupDate'])
           : null,
-      advanceText: map['advanceText'] ?? '0',
+      advanceText: map['advanceText'] ?? '',
+      cashSplitText: map['cashSplitText'] ?? '',
+      onlineSplitText: map['onlineSplitText'] ?? '',
       paymentMode: map['paymentMode'] ?? 'Cash',
       paymentProofPath: map['paymentProofPath'],
       currentStep: (map['currentStep'] as num?)?.toInt() ?? 0,
@@ -112,6 +121,12 @@ class ExpoDraftService {
   static final ExpoDraftService instance = ExpoDraftService._();
 
   static const String _draftsKeyPrefix = 'expo_order_drafts_v1';
+
+  final StreamController<void> _draftsUpdateController =
+      StreamController<void>.broadcast();
+
+  /// Reactive stream triggered whenever drafts are added, updated, or deleted.
+  Stream<void> get onDraftsChanged => _draftsUpdateController.stream;
 
   Future<List<ExpoOrderDraft>> getDrafts({String? exhibitionId}) async {
     final prefs = await SharedPreferences.getInstance();
@@ -149,6 +164,7 @@ class ExpoDraftService {
 
     final raw = jsonEncode(drafts.map((d) => d.toMap()).toList());
     await prefs.setString(_draftsKeyPrefix, raw);
+    _draftsUpdateController.add(null);
   }
 
   Future<void> deleteDraft(String draftId) async {
@@ -157,6 +173,7 @@ class ExpoDraftService {
     drafts.removeWhere((d) => d.id == draftId);
     final raw = jsonEncode(drafts.map((d) => d.toMap()).toList());
     await prefs.setString(_draftsKeyPrefix, raw);
+    _draftsUpdateController.add(null);
   }
 }
 

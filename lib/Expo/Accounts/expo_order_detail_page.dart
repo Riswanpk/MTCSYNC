@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../expo_service.dart';
+import '../stall_pickup_dialog.dart';
 import 'expo_pdf_service.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
@@ -122,12 +123,42 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
   }
 
   Future<void> _markStallPickup() async {
+    final saved = await showStallPickupPaymentDialog(
+      context,
+      order: _currentOrder,
+      isAccountsUser: true,
+    );
+    if (!saved) return;
+
+    final updated = await ExpoService.instance.getOrderById(_currentOrder.id);
+    if (mounted) {
+      setState(() {
+        if (updated != null) {
+          _currentOrder = updated;
+        } else {
+          _currentOrder = _currentOrder.copyWith(
+            status: 'Completed',
+            stallPickupStatus: 'Picked Up',
+            completedAt: DateTime.now(),
+          );
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Order marked as picked up at stall!'),
+          backgroundColor: primaryGreen,
+        ),
+      );
+    }
+  }
+
+  Future<void> _convertToBooking() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Confirm Stall Pickup'),
+        title: const Text('Convert to Booking?'),
         content: Text(
-          'Confirm that customer "${_currentOrder.shopName}" has picked up their items at the stall? This completes the order as a spot delivery.',
+          'Convert unpicked Stall Delivery for "${_currentOrder.shopName}" to a Booking order? Existing advance & balance will be preserved.',
         ),
         actions: [
           TextButton(
@@ -136,32 +167,31 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: primaryGreen,
+              backgroundColor: primaryBlue,
               foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Confirm Pickup'),
+            child: const Text('Convert'),
           ),
         ],
       ),
     );
-
     if (confirm != true) return;
 
     try {
-      await ExpoService.instance.markStallDeliveryPickedUp(_currentOrder.id);
-      setState(() {
-        _currentOrder = _currentOrder.copyWith(
-          status: 'Completed',
-          stallPickupStatus: 'Picked Up',
-          completedAt: DateTime.now(),
-        );
-      });
+      await ExpoService.instance.convertStallDeliveryToBooking(_currentOrder.id);
       if (mounted) {
+        setState(() {
+          _currentOrder = _currentOrder.copyWith(
+            orderType: 'Booking',
+            isConvertedToBooking: true,
+            stallPickupStatus: 'Converted to Booking',
+          );
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Order marked as picked up at stall (Spot Delivery)!'),
-            backgroundColor: primaryGreen,
+            content: Text('Stall Delivery converted to Booking!'),
+            backgroundColor: primaryBlue,
           ),
         );
       }
@@ -486,7 +516,23 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                       _buildDetailRow('Stall Status', order.stallPickupStatus!, isDark),
                     _buildDetailRow('Created By',
                         '${order.createdUserName} (${order.createdUserBranch})', isDark),
-                    _buildDetailRow('Payment Mode', order.paymentMode, isDark),
+                    _buildDetailRow(
+                        'Payment Mode',
+                        ExpoOrder.normalizePaymentMode(order.paymentMode),
+                        isDark),
+                    if (ExpoOrder.modeIsSplit(order.paymentMode))
+                      _buildDetailRow(
+                        'Payment Split',
+                        'Cash: ₹${order.effectiveCashAmount.toStringAsFixed(2)} | ${ExpoOrder.onlineLabelForMode(order.paymentMode)}: ₹${order.effectiveOnlineAmount.toStringAsFixed(2)}',
+                        isDark,
+                      ),
+                    if (order.pickupPaymentMode != null &&
+                        order.pickupPaymentMode!.isNotEmpty)
+                      _buildDetailRow(
+                        'Pickup Payment',
+                        '₹${order.pickupAmount.toStringAsFixed(2)} (${ExpoOrder.normalizePaymentMode(order.pickupPaymentMode)})',
+                        isDark,
+                      ),
                   ],
                 ),
               ),
@@ -511,15 +557,19 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                     Row(
                       children: [
                         Icon(
-                          order.paymentMode == 'Cash'
+                          !ExpoOrder.modeRequiresReceipt(order.paymentMode)
                               ? Icons.payments_rounded
-                              : Icons.account_balance_rounded,
-                          color: order.paymentMode == 'Cash' ? primaryGreen : primaryBlue,
+                              : (ExpoOrder.modeUsesUpiBucket(order.paymentMode)
+                                  ? Icons.qr_code_2_rounded
+                                  : Icons.account_balance_rounded),
+                          color: !ExpoOrder.modeRequiresReceipt(order.paymentMode)
+                              ? primaryGreen
+                              : primaryBlue,
                           size: 20,
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'Payment Proof (${order.paymentMode})',
+                          'Payment Proof (${ExpoOrder.normalizePaymentMode(order.paymentMode)})',
                           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                         ),
                       ],
@@ -528,8 +578,43 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                     const Divider(height: 1),
                     const SizedBox(height: 12),
 
-                    // If Cash: No payment image displayed
-                    if (order.paymentMode == 'Cash')
+                    if (ExpoOrder.modeIsSplit(order.paymentMode)) ...[
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: primaryBlue.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: primaryBlue.withValues(alpha: 0.25)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Cash: ₹${order.effectiveCashAmount.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.bold,
+                                color: primaryGreen,
+                              ),
+                            ),
+                            Text(
+                              '${ExpoOrder.onlineLabelForMode(order.paymentMode)}: ₹${order.effectiveOnlineAmount.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.bold,
+                                color: primaryBlue,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    // If Cash only: No payment image displayed
+                    if (!ExpoOrder.modeRequiresReceipt(order.paymentMode))
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -555,7 +640,7 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                           ],
                         ),
                       )
-                    // If Bank Transfer or UPI: Show receipt preview
+                    // If UPI / UPI + Cash / Bank / Bank + Cash: Show receipt preview
                     else if (order.paymentProofUrl != null &&
                         order.paymentProofUrl!.isNotEmpty)
                       InkWell(
@@ -644,6 +729,67 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                           ],
                         ),
                       ),
+
+                    if (order.pickupPaymentMode != null &&
+                        order.pickupPaymentMode!.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      const Divider(height: 1),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Stall Pickup Balance Payment (${ExpoOrder.normalizePaymentMode(order.pickupPaymentMode)})',
+                        style: const TextStyle(
+                            fontSize: 13.5, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        ExpoOrder.modeIsSplit(order.pickupPaymentMode!)
+                            ? 'Paid ₹${order.pickupAmount.toStringAsFixed(2)} — Cash: ₹${order.effectivePickupCashAmount.toStringAsFixed(2)}, ${ExpoOrder.onlineLabelForMode(order.pickupPaymentMode!)}: ₹${order.effectivePickupOnlineAmount.toStringAsFixed(2)}'
+                            : 'Paid ₹${order.pickupAmount.toStringAsFixed(2)} via ${ExpoOrder.normalizePaymentMode(order.pickupPaymentMode)}',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: isDark ? Colors.white70 : Colors.black87,
+                        ),
+                      ),
+                      if (order.pickupPaymentProofUrl != null &&
+                          order.pickupPaymentProofUrl!.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        InkWell(
+                          onTap: () => _showImagePreviewDialog(
+                            order.pickupPaymentProofUrl!,
+                            'Pickup Receipt - ${order.shopName}',
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: primaryGreen.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                  color: primaryGreen.withValues(alpha: 0.3)),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.receipt_long_rounded,
+                                    color: primaryGreen, size: 22),
+                                SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    'View Pickup Payment Receipt',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: primaryGreen,
+                                    ),
+                                  ),
+                                ),
+                                Icon(Icons.open_in_new_rounded,
+                                    color: primaryGreen, size: 18),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ],
                 ),
               ),
@@ -754,7 +900,7 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                                   ),
                                 ),
                                 Text(
-                                  'GST: ${it.gst.toStringAsFixed(0)}%',
+                                  'GST: ${it.gst == it.gst.roundToDouble() ? it.gst.toInt() : it.gst.toStringAsFixed(2)}% (${it.gstType == 1 ? 'Incl.' : 'Excl.'})',
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: isDark ? Colors.white60 : Colors.black54,
@@ -863,6 +1009,21 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                                 ),
                               ],
                             ),
+                            if (order.pickupAmount > 0) ...[
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Pickup Paid:',
+                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                  Text(
+                                    '₹${order.pickupAmount.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                        fontSize: 13, fontWeight: FontWeight.bold, color: primaryGreen),
+                                  ),
+                                ],
+                              ),
+                            ],
                             const SizedBox(height: 6),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -967,8 +1128,19 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                 ),
               ],
               if (order.orderType == 'Stall Delivery' &&
-                  order.stallPickupStatus != 'Picked Up') ...[
-                const SizedBox(width: 10),
+                  order.stallPickupStatus != 'Picked Up' &&
+                  !order.isConvertedToBooking) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: 'Convert to Booking',
+                  style: IconButton.styleFrom(
+                    backgroundColor: primaryBlue.withValues(alpha: 0.14),
+                    foregroundColor: primaryBlue,
+                  ),
+                  onPressed: _convertToBooking,
+                  icon: const Icon(Icons.event_repeat_rounded),
+                ),
+                const SizedBox(width: 6),
                 IconButton(
                   tooltip: 'Mark Picked Up at Stall',
                   style: IconButton.styleFrom(
