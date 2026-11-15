@@ -15,7 +15,6 @@ import '../Marketing/viewer_marketing.dart';
 import '../Customer Calling/customer_list_target.dart';
 import '../Customer Calling/customer_admin_viewer.dart';
 import '../Customer Calling/customer_calling_duplicates.dart';
-import '../Navigation/loading_page.dart';
 import 'home_widgets.dart';
 import '../Sync Head/sync_head_leads_page.dart';
 import '../Sync Head/sync_head_todos_page.dart';
@@ -373,17 +372,13 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     if (role == 'supersale_admin' || role == 'sync_head') {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const LoadingOverlayPage(
-            child: SupersalePage(),
-          ),
+          builder: (_) => const SupersalePage(),
         ),
       );
     } else {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const LoadingOverlayPage(
-            child: SupersaleUserMainPage(),
-          ),
+          builder: (_) => const SupersaleUserMainPage(),
         ),
       );
     }
@@ -392,9 +387,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   Future<void> _navigateToSupersaleDashboard(BuildContext context) async {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => const LoadingOverlayPage(
-          child: SupersaleAdminDashboardPage(),
-        ),
+        builder: (_) => const SupersaleAdminDashboardPage(),
       ),
     );
   }
@@ -402,9 +395,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   Future<void> _navigateToSupersaleReport(BuildContext context) async {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => const LoadingOverlayPage(
-          child: SupersaleAdminReportPage(),
-        ),
+        builder: (_) => const SupersaleAdminReportPage(),
       ),
     );
   }
@@ -414,25 +405,19 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     if (role == 'manager') {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const LoadingOverlayPage(
-            child: ManagerComplaintsPage(),
-          ),
+          builder: (_) => const ManagerComplaintsPage(),
         ),
       );
     } else if (role == 'admin' || role == 'dme_admin') {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const LoadingOverlayPage(
-            child: DmeAdminComplaintsPage(),
-          ),
+          builder: (_) => const DmeAdminComplaintsPage(),
         ),
       );
     } else {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const LoadingOverlayPage(
-            child: UserComplaintsListPage(),
-          ),
+          builder: (_) => const UserComplaintsListPage(),
         ),
       );
     }
@@ -443,25 +428,19 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     if (role == 'admin') {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const LoadingOverlayPage(
-            child: ExpoAdminPage(),
-          ),
+          builder: (_) => const ExpoAdminPage(),
         ),
       );
     } else if (role == 'expo_acc') {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const LoadingOverlayPage(
-            child: ExpoAccountsPage(),
-          ),
+          builder: (_) => const ExpoAccountsPage(),
         ),
       );
     } else {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const LoadingOverlayPage(
-            child: ExpoUserMainPage(),
-          ),
+          builder: (_) => const ExpoUserMainPage(),
         ),
       );
     }
@@ -555,9 +534,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => const LoadingOverlayPage(
-                  child: ExpoAccountsDashboardPage(),
-                ),
+                builder: (_) => const ExpoAccountsDashboardPage(),
               ),
             );
           },
@@ -602,9 +579,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   Future<void> _navigateToCoreTeamTasks(BuildContext context) async {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => const LoadingOverlayPage(
-          child: CoreTeamTaskPage(),
-        ),
+        builder: (_) => const CoreTeamTaskPage(),
       ),
     );
   }
@@ -737,9 +712,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => const LoadingOverlayPage(
-                  child: DmeAdminApprovalsPage(),
-                ),
+                builder: (_) => const DmeAdminApprovalsPage(),
               ),
             );
           },
@@ -755,9 +728,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => const LoadingOverlayPage(
-                  child: DmeCustomerMergePage(),
-                ),
+                builder: (_) => const DmeCustomerMergePage(),
               ),
             );
           },
@@ -820,9 +791,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
             ? () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => const LoadingOverlayPage(
-                      child: SupersalePage(),
-                    ),
+                    builder: (_) => const SupersalePage(),
                   ),
                 );
               }
@@ -840,9 +809,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const LoadingOverlayPage(
-                      child: CustomerManagerViewerPage(),
-                    ),
+                    builder: (_) => const CustomerManagerViewerPage(),
                   ),
                 );
               }
@@ -950,9 +917,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const LoadingOverlayPage(
-                        child: SyncHeadCustomerListDeletionApprovalPage(),
-                      ),
+                      builder: (_) => const SyncHeadCustomerListDeletionApprovalPage(),
                     ),
                   );
                 },
@@ -971,9 +936,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => const LoadingOverlayPage(
-                child: YupulseSyncPage(),
-              ),
+              builder: (_) => const YupulseSyncPage(),
             ),
           );
         },
@@ -981,9 +944,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => const LoadingOverlayPage(
-                child: YupulseMonthlyMarksReportPage(),
-              ),
+              builder: (_) => const YupulseMonthlyMarksReportPage(),
             ),
           );
         },
@@ -997,9 +958,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => const LoadingOverlayPage(
-                child: CustomerCallingDuplicatesPage(),
-              ),
+              builder: (_) => const CustomerCallingDuplicatesPage(),
             ),
           );
         },
@@ -1022,9 +981,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => const LoadingOverlayPage(
-                child: SmeLeadsPage(),
-              ),
+              builder: (_) => const SmeLeadsPage(),
             ),
           );
         },
@@ -1045,9 +1002,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const LoadingOverlayPage(
-                    child: SmeDashboard(),
-                  ),
+                  builder: (_) => const SmeDashboard(),
                 ),
               );
             },
@@ -1055,9 +1010,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const LoadingOverlayPage(
-                    child: SmeDeletionApprovalPage(),
-                  ),
+                  builder: (_) => const SmeDeletionApprovalPage(),
                 ),
               );
             },
@@ -1074,9 +1027,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => const LoadingOverlayPage(
-                child: SmeAdsPage(),
-              ),
+              builder: (_) => const SmeAdsPage(),
             ),
           );
         },
@@ -1103,9 +1054,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   Future<void> _navigateToSyncHeadLeads(BuildContext context) async {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => const LoadingOverlayPage(
-          child: SyncHeadLeadsPage(),
-        ),
+        builder: (_) => const SyncHeadLeadsPage(),
       ),
     );
   }
@@ -1113,9 +1062,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   Future<void> _navigateToSyncHeadTodos(BuildContext context) async {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => const LoadingOverlayPage(
-          child: SyncHeadTodosPage(),
-        ),
+        builder: (_) => const SyncHeadTodosPage(),
       ),
     );
   }
@@ -1123,9 +1070,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   Future<void> _navigateToTransferCallList(BuildContext context) async {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => const LoadingOverlayPage(
-          child: TransferCallListPage(),
-        ),
+        builder: (_) => const TransferCallListPage(),
       ),
     );
   }
@@ -1133,9 +1078,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   Future<void> _navigateToSyncHeadReportTodo(BuildContext context) async {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => const LoadingOverlayPage(
-          child: SyncHeadReportTodoPage(),
-        ),
+        builder: (_) => const SyncHeadReportTodoPage(),
       ),
     );
   }
@@ -1161,9 +1104,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     if (branch != null) {
       if (mounted) { Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => LoadingOverlayPage(
-            child: LeadsPage(branch: branch!),
-          ),
+          builder: (_) => LeadsPage(branch: branch!),
         ),
       ); }
     } else {
@@ -1194,9 +1135,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     if (branch != null) {
       if (mounted) { Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => LoadingOverlayPage(
-            child: OrdersPage(branch: branch!),
-          ),
+          builder: (_) => OrdersPage(branch: branch!),
         ),
       ); }
     } else {
@@ -1209,9 +1148,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   Future<void> _navigateToTodo(BuildContext context) async {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => const LoadingOverlayPage(
-          child: TodoPage(),
-        ),
+        builder: (_) => const TodoPage(),
       ),
     );
   }
@@ -1225,17 +1162,13 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     if (role == 'admin' || role == 'core_team') {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const LoadingOverlayPage(
-            child: CoreTeamTaskPage(),
-          ),
+          builder: (_) => const CoreTeamTaskPage(),
         ),
       );
     } else {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const LoadingOverlayPage(
-            child: UserTaskPage(),
-          ),
+          builder: (_) => const UserTaskPage(),
         ),
       );
     }
@@ -1265,9 +1198,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     if (role == 'admin' || role == 'Sync Head' || role == 'sync_head' || role == 'supersale_admin') {
       if (mounted) { Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const LoadingOverlayPage(
-            child: ViewerMarketingPage(),
-          ),
+          builder: (_) => const ViewerMarketingPage(),
         ),
       ); }
     } else if (branch != null && username != null) {
@@ -1280,12 +1211,10 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       if (mounted) { Navigator.of(context)
           .push(
         MaterialPageRoute(
-          builder: (_) => LoadingOverlayPage(
-            child: MarketingFormPage(
-              username: username ?? '',
-              userid: userid ?? '',
-              branch: branch ?? '',
-            ),
+          builder: (_) => MarketingFormPage(
+            username: username ?? '',
+            userid: userid ?? '',
+            branch: branch ?? '',
           ),
         ),
       )
@@ -1322,18 +1251,14 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => const LoadingOverlayPage(
-            child: CustomerAdminViewerPage(),
-          ),
+          builder: (_) => const CustomerAdminViewerPage(),
         ),
       );
     } else {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => const LoadingOverlayPage(
-            child: CustomerListTarget(),
-          ),
+          builder: (_) => const CustomerListTarget(),
         ),
       );
     }
@@ -1342,9 +1267,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   Future<void> _navigateToDashboard(BuildContext context) async {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => const LoadingOverlayPage(
-          child: DashboardPage(),
-        ),
+        builder: (_) => const DashboardPage(),
       ),
     );
   }
@@ -1352,9 +1275,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   Future<void> _navigateToSmeAssignedLeads(BuildContext context) async {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => const LoadingOverlayPage(
-          child: SmeAssignedLeadsPage(),
-        ),
+        builder: (_) => const SmeAssignedLeadsPage(),
       ),
     );
   }

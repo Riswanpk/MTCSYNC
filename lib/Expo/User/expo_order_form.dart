@@ -357,11 +357,21 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
 
   /// Returns an error message for the item, or null when valid.
   String? _validateItem(_ItemRowData it, int index) {
+    if (it.mtcCodeController.text.trim().isEmpty) {
+      return 'Please enter MTC code for Item #${index + 1}';
+    }
     if (it.itemNameController.text.trim().isEmpty) {
       return 'Please enter item name for Item #${index + 1}';
     }
     if (it.qty <= 0) {
       return 'Please enter a valid quantity (>0) for Item #${index + 1}';
+    }
+    if (it.rateController.text.trim().isEmpty || it.rate <= 0) {
+      return 'Please enter a valid rate (>0) for Item #${index + 1}';
+    }
+    final gstText = it.gstController.text.trim();
+    if (gstText.isEmpty || double.tryParse(gstText) == null || it.gst < 0) {
+      return 'Please enter GST % (enter 0 if none) for Item #${index + 1}';
     }
     return null;
   }
@@ -983,7 +993,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
   }
 
   Future<void> _saveAsDraft({bool showNotice = false}) async {
-    if (!_hasDraftContent) return;
+    if (widget.existingOrder != null || !_hasDraftContent) return;
 
     final draft = ExpoOrderDraft(
       id: _draftId,
@@ -1263,16 +1273,21 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                   padding: const EdgeInsets.all(16),
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
-                  child: Form(
-                    key: _formKeys[_currentStep],
-                    child: stepBody,
+                  child: Column(
+                    children: [
+                      Form(
+                        key: _formKeys[_currentStep],
+                        child: stepBody,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildBottomNav(isDark),
+                    ],
                   ),
                 ),
               ),
             ),
           ],
         ),
-        bottomNavigationBar: _buildBottomNav(isDark),
       ),
     );
   }
@@ -2051,56 +2066,47 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                     : _buildItemRowCard(
                         index: i, item: _items[i], isDark: isDark),
               const SizedBox(height: 6),
-              // Add Item + Save side by side
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _onAddItemPressed,
-                      icon: const Icon(Icons.add_circle_outline_rounded,
-                          color: primaryBlue),
-                      label: const Text(
-                        'Add Item',
-                        style: TextStyle(
-                          color: primaryBlue,
-                          fontWeight: FontWeight.bold,
-                        ),
+              // Centered + button (blue card with white +) above Save button
+              Center(
+                child: Material(
+                  color: primaryBlue,
+                  elevation: 2,
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                    onTap: _onAddItemPressed,
+                    borderRadius: BorderRadius.circular(12),
+                    child: const Padding(
+                      padding: EdgeInsets.all(14),
+                      child: Icon(
+                        Icons.add_rounded,
+                        color: Colors.white,
+                        size: 28,
                       ),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: primaryBlue, width: 1.2),
-                        shape: RoundedRectangleBorder(
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: () => _saveOpenItems(),
+                icon: const Icon(Icons.save_rounded,
+                    color: Colors.white, size: 20),
+                label: const Text(
+                  'Save',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryGreen,
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 12),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => _saveOpenItems(),
-                      icon: const Icon(Icons.save_rounded,
-                          color: Colors.white, size: 20),
-                      label: const Text(
-                        'Save',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryGreen,
-                        elevation: 1,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 12),
-                      ),
-                    ),
-                  ),
-                ],
               ),
             ],
           ),
@@ -2977,6 +2983,8 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                 flex: 2,
                 child: TextFormField(
                   controller: item.mtcCodeController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   textInputAction: TextInputAction.next,
                   onFieldSubmitted: (_) => _onMtcCodeSubmitted(item),
                   decoration: _inputDecoration(
@@ -3064,6 +3072,9 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                   controller: item.rateController,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                  ],
                   onChanged: (_) {
                     setState(() {
                       item.applyThresholdGst();
@@ -3084,6 +3095,9 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                   controller: item.gstController,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                  ],
                   onChanged: (_) {
                     setState(() {
                       if (item.gstThreshold <= 0) {

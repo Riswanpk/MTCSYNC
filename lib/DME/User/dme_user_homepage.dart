@@ -4,7 +4,6 @@ import 'Reminders/dme_reminders_page.dart';
 import '../Admin/Customer Directory/dme_admin_customers_page.dart';
 import '../Complaints/Dme/dme_complaints_list_page.dart';
 import '../../Homepage/home_widgets.dart';
-import '../../Navigation/loading_page.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -27,9 +26,7 @@ Widget buildDmeUserTiles(BuildContext context, {int? complaintCount}) {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => const LoadingOverlayPage(
-              child: DmeExcelUploaderPage(),
-            ),
+            builder: (_) => const DmeExcelUploaderPage(),
           ),
         );
       },
@@ -45,9 +42,7 @@ Widget buildDmeUserTiles(BuildContext context, {int? complaintCount}) {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => const LoadingOverlayPage(
-              child: DmeRemindersPage(),
-            ),
+            builder: (_) => const DmeRemindersPage(),
           ),
         );
       },
@@ -63,9 +58,7 @@ Widget buildDmeUserTiles(BuildContext context, {int? complaintCount}) {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => const LoadingOverlayPage(
-              child: DmeAdminCustomersPage(),
-            ),
+            builder: (_) => const DmeAdminCustomersPage(),
           ),
         );
       },
@@ -81,9 +74,7 @@ Widget buildDmeUserTiles(BuildContext context, {int? complaintCount}) {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => const LoadingOverlayPage(
-              child: DmeComplaintsListPage(),
-            ),
+            builder: (_) => const DmeComplaintsListPage(),
           ),
         );
       },

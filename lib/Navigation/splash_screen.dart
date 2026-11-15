@@ -15,7 +15,6 @@ import '../main.dart'; // For navigatorKey and initialNotificationAction
 
 
 import '../Marketing/marketing.dart'; // For MarketingFormPage
-import 'loading_page.dart'; // For LoadingOverlayPage
 import 'navigation_state.dart'; // For navigation state restoration
 
 
@@ -162,12 +161,10 @@ class _SplashScreenState extends State<SplashScreen> {
             if (mounted) {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => LoadingOverlayPage(
-                    child: MarketingFormPage(
-                      username: userData['username'] ?? '',
-                      userid: userData['userid'] ?? '',
-                      branch: userData['branch'] ?? '',
-                    ),
+                  builder: (_) => MarketingFormPage(
+                    username: userData['username'] ?? '',
+                    userid: userData['userid'] ?? '',
+                    branch: userData['branch'] ?? '',
                   ),
                 ),
               ).then((_) {

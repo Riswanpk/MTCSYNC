@@ -7,7 +7,6 @@ import 'Reminder/dme_admin_reminder_assign_page.dart';
 import 'Reminder/dme_admin_jbl_reminder_assign_page.dart';
 import '../Complaints/Admin/dme_admin_complaints_page.dart';
 import '../../Homepage/home_widgets.dart';
-import '../../Navigation/loading_page.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
 const Color primaryGreen = Color(0xFF8CC63F);
@@ -33,9 +32,7 @@ Widget buildDmeAdminTiles(BuildContext context) {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => const LoadingOverlayPage(
-              child: DmeAdminCustomersPage(),
-            ),
+            builder: (_) => const DmeAdminCustomersPage(),
           ),
         );
       },
@@ -51,9 +48,7 @@ Widget buildDmeAdminTiles(BuildContext context) {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => const LoadingOverlayPage(
-              child: DmeAdminDashboardPage(),
-            ),
+            builder: (_) => const DmeAdminDashboardPage(),
           ),
         );
       },
@@ -69,9 +64,7 @@ Widget buildDmeAdminTiles(BuildContext context) {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => const LoadingOverlayPage(
-              child: DmeAdminComplaintsPage(),
-            ),
+            builder: (_) => const DmeAdminComplaintsPage(),
           ),
         );
       },
@@ -87,9 +80,7 @@ Widget buildDmeAdminTiles(BuildContext context) {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => const LoadingOverlayPage(
-              child: DmeUserManagementPage(),
-            ),
+            builder: (_) => const DmeUserManagementPage(),
           ),
         );
       },
@@ -105,9 +96,7 @@ Widget buildDmeAdminTiles(BuildContext context) {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => const LoadingOverlayPage(
-              child: DmeAdminRemindersPage(),
-            ),
+            builder: (_) => const DmeAdminRemindersPage(),
           ),
         );
       },
@@ -125,9 +114,7 @@ Widget buildDmeAdminTiles(BuildContext context) {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => const LoadingOverlayPage(
-              child: DmeAdminReminderAssignPage(),
-            ),
+            builder: (_) => const DmeAdminReminderAssignPage(),
           ),
         );
       },
@@ -135,9 +122,7 @@ Widget buildDmeAdminTiles(BuildContext context) {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => const LoadingOverlayPage(
-              child: DmeAdminJblReminderAssignPage(),
-            ),
+            builder: (_) => const DmeAdminJblReminderAssignPage(),
           ),
         );
       },

@@ -7,6 +7,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 
+import '../../Navigation/user_cache_service.dart';
 import '../expo_service.dart';
 
 /// Helper service for generating dynamic PDF for Expo orders matching the
@@ -16,11 +17,16 @@ class ExpoPdfService {
   static final ExpoPdfService instance = ExpoPdfService._();
 
   // Primary brand palette matching reference template
-  static const PdfColor colorNavy = PdfColor.fromInt(0xFF0F3E7A); // Top header dark navy blue
-  static const PdfColor colorLimeGreen = PdfColor.fromInt(0xFF689F38); // Olive green label background
-  static const PdfColor colorNavyAccent = PdfColor.fromInt(0xFF0D47A1); // Blue badge / Table header
-  static const PdfColor colorBorderGrey = PdfColor.fromInt(0xFFB0BEC5); // Border grey
-  static const PdfColor colorRowAlt = PdfColor.fromInt(0xFFF8FAFC); // Table alternate row
+  static const PdfColor colorNavy =
+      PdfColor.fromInt(0xFF0F3E7A); // Top header dark navy blue
+  static const PdfColor colorLimeGreen =
+      PdfColor.fromInt(0xFF689F38); // Olive green label background
+  static const PdfColor colorNavyAccent =
+      PdfColor.fromInt(0xFF0D47A1); // Blue badge / Table header
+  static const PdfColor colorBorderGrey =
+      PdfColor.fromInt(0xFFB0BEC5); // Border grey
+  static const PdfColor colorRowAlt =
+      PdfColor.fromInt(0xFFF8FAFC); // Table alternate row
 
   /// Generates a dynamic PDF based on the custom template and order data,
   /// saves to temporary storage, and triggers the share/print sheet.
@@ -34,13 +40,48 @@ class ExpoPdfService {
           ? DateFormat('dd/MM/yyyy').format(order.deliveryDate!)
           : (order.stallPickupDate != null
               ? DateFormat('dd/MM/yyyy').format(order.stallPickupDate!)
-              : (order.orderType == 'Booking' ? 'To be confirmed' : 'Immediate'));
-      final currencyFormat = NumberFormat.currency(symbol: 'Rs. ', decimalDigits: 2);
+              : (order.orderType == 'Booking'
+                  ? 'To be confirmed'
+                  : 'Immediate'));
+      final currencyFormat =
+          NumberFormat.currency(symbol: 'Rs. ', decimalDigits: 2);
+
+      // Look up preferred salesman phone from UserCacheService
+      String preferredSalesmanDisplay = '-';
+      if (!isSpotDelivery &&
+          order.preferredSalesman != 'N/A' &&
+          order.preferredSalesman.isNotEmpty) {
+        preferredSalesmanDisplay = order.preferredSalesman;
+        try {
+          var users = await UserCacheService.instance.getAllUsers();
+          final target = order.preferredSalesman.trim().toLowerCase();
+          String findPhone(List<Map<String, dynamic>> list) {
+            for (final u in list) {
+              final uname =
+                  (u['username'] ?? '').toString().trim().toLowerCase();
+              if (uname == target) {
+                return (u['phone'] ?? '').toString().trim();
+              }
+            }
+            return '';
+          }
+
+          var phone = findPhone(users);
+          if (phone.isEmpty) {
+            users =
+                await UserCacheService.instance.getAllUsers(forceRefresh: true);
+            phone = findPhone(users);
+          }
+          if (phone.isNotEmpty) {
+            preferredSalesmanDisplay = '${order.preferredSalesman}($phone)';
+          }
+        } catch (_) {}
+      }
 
       // Try loading company logo if present
       pw.MemoryImage? logoImage;
       try {
-        final logoBytes = await rootBundle.load('assets/images/logo.png');
+        final logoBytes = await rootBundle.load('assets/images/bill_logo.png');
         logoImage = pw.MemoryImage(logoBytes.buffer.asUint8List());
       } catch (_) {}
 
@@ -85,19 +126,26 @@ class ExpoPdfService {
                     flex: 6,
                     child: pw.Column(
                       children: [
-                        _buildTemplateField('Shop Name', order.shopName, colorLimeGreen),
+                        _buildTemplateField(
+                            'Shop Name', order.shopName, colorLimeGreen),
                         pw.SizedBox(height: 4),
-                        _buildTemplateField('Customer Name', order.customerName, colorLimeGreen),
+                        _buildTemplateField('Customer Name', order.customerName,
+                            colorLimeGreen),
                         pw.SizedBox(height: 4),
-                        _buildTemplateField('Phone No.', order.phone, colorLimeGreen),
+                        _buildTemplateField(
+                            'Phone No.', order.phone, colorLimeGreen),
                         pw.SizedBox(height: 4),
-                        _buildTemplateField('Place', order.place, colorLimeGreen),
+                        _buildTemplateField(
+                            'Place', order.place, colorLimeGreen),
                         pw.SizedBox(height: 4),
-                        _buildTemplateField('District', order.district, colorLimeGreen),
+                        _buildTemplateField(
+                            'District', order.district, colorLimeGreen),
                         pw.SizedBox(height: 4),
-                        _buildTemplateField('State', order.state, colorLimeGreen),
+                        _buildTemplateField(
+                            'State', order.state, colorLimeGreen),
                         pw.SizedBox(height: 4),
-                        _buildTemplateField('Delivery Type', order.orderType, colorNavyAccent),
+                        _buildTemplateField(
+                            'Delivery Type', order.orderType, colorNavyAccent),
                       ],
                     ),
                   ),
@@ -112,24 +160,24 @@ class ExpoPdfService {
                         pw.Container(
                           height: 110,
                           width: double.infinity,
-                          padding: const pw.EdgeInsets.all(8),
-                          decoration: pw.BoxDecoration(
-                            border: pw.Border.all(color: colorBorderGrey, width: 1.2),
-                            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3)),
-                          ),
+                          padding: const pw.EdgeInsets.all(4),
                           alignment: pw.Alignment.center,
                           child: logoImage != null
                               ? pw.Column(
-                                  mainAxisAlignment: pw.MainAxisAlignment.center,
+                                  mainAxisAlignment:
+                                      pw.MainAxisAlignment.center,
                                   children: [
-                                    pw.Image(logoImage, height: 48, fit: pw.BoxFit.contain),
-                                    pw.SizedBox(height: 4),
+                                    pw.Expanded(
+                                      child: pw.Image(logoImage,
+                                          fit: pw.BoxFit.contain),
+                                    ),
+                                    pw.SizedBox(height: 3),
                                     pw.Text(
                                       order.exhibitionName,
                                       maxLines: 2,
                                       textAlign: pw.TextAlign.center,
                                       style: pw.TextStyle(
-                                        fontSize: 9,
+                                        fontSize: 8.5,
                                         fontWeight: pw.FontWeight.bold,
                                         color: colorNavy,
                                       ),
@@ -149,11 +197,13 @@ class ExpoPdfService {
                         pw.SizedBox(height: 8),
 
                         // Date Field
-                        _buildTemplateField('Date', dateFormatted, colorLimeGreen),
+                        _buildTemplateField(
+                            'Date', dateFormatted, colorLimeGreen),
                         pw.SizedBox(height: 4),
 
                         if (order.billNumber != null) ...[
-                          _buildTemplateField('Bill No.', '#${order.billNumber}', colorLimeGreen),
+                          _buildTemplateField('Bill No.',
+                              '#${order.billNumber}', colorLimeGreen),
                           pw.SizedBox(height: 4),
                         ],
 
@@ -170,11 +220,7 @@ class ExpoPdfService {
                         // Preferred Salesman Field
                         _buildTemplateField(
                           'Pref. Salesman',
-                          (!isSpotDelivery &&
-                                  order.preferredSalesman != 'N/A' &&
-                                  order.preferredSalesman.isNotEmpty)
-                              ? order.preferredSalesman
-                              : '-',
+                          preferredSalesmanDisplay,
                           colorLimeGreen,
                         ),
                       ],
@@ -186,10 +232,12 @@ class ExpoPdfService {
 
               // 3. Branch & Delivery Date Row
               pw.Container(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: pw.BoxDecoration(
                   border: pw.Border.all(color: colorBorderGrey, width: 1),
-                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3)),
+                  borderRadius:
+                      const pw.BorderRadius.all(pw.Radius.circular(3)),
                   color: PdfColor.fromInt(0xFFFAFAFA),
                 ),
                 child: pw.Row(
@@ -209,7 +257,8 @@ class ExpoPdfService {
                           pw.TextSpan(
                             text: isSpotDelivery
                                 ? '-'
-                                : (order.preferredBranch != 'N/A' && order.preferredBranch.isNotEmpty
+                                : (order.preferredBranch != 'N/A' &&
+                                        order.preferredBranch.isNotEmpty
                                     ? order.preferredBranch
                                     : '-'),
                             style: pw.TextStyle(
@@ -291,9 +340,11 @@ class ExpoPdfService {
                       ),
                       children: [
                         _buildDataCell('$idx', align: pw.TextAlign.center),
-                        _buildDataCell(it.mtcCode.isNotEmpty ? it.mtcCode : '-'),
+                        _buildDataCell(
+                            it.mtcCode.isNotEmpty ? it.mtcCode : '-'),
                         pw.Padding(
-                          padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+                          padding: const pw.EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 5),
                           child: pw.Column(
                             crossAxisAlignment: pw.CrossAxisAlignment.start,
                             children: [
@@ -318,7 +369,8 @@ class ExpoPdfService {
                           ),
                         ),
                         _buildDataCell('${it.qty}', align: pw.TextAlign.center),
-                        _buildDataCell(it.rate.toStringAsFixed(2), align: pw.TextAlign.right),
+                        _buildDataCell(it.rate.toStringAsFixed(2),
+                            align: pw.TextAlign.right),
                         _buildDataCell(
                           '${it.gst == it.gst.roundToDouble() ? it.gst.toStringAsFixed(0) : it.gst.toStringAsFixed(2)}%\n(${it.gstType == 1 ? 'Incl.' : 'Excl.'})',
                           align: pw.TextAlign.center,
@@ -332,7 +384,8 @@ class ExpoPdfService {
                           ).toStringAsFixed(2),
                           align: pw.TextAlign.right,
                         ),
-                        _buildDataCell(it.total.toStringAsFixed(2), align: pw.TextAlign.right),
+                        _buildDataCell(it.total.toStringAsFixed(2),
+                            align: pw.TextAlign.right),
                       ],
                     );
                   }),
@@ -355,7 +408,8 @@ class ExpoPdfService {
                           order.notes.trim().isNotEmpty
                               ? 'Notes: ${order.notes.trim()}'
                               : 'Notes:',
-                          style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey800),
+                          style: const pw.TextStyle(
+                              fontSize: 8.5, color: PdfColors.grey800),
                         ),
                         pw.SizedBox(height: 16),
 
@@ -364,8 +418,10 @@ class ExpoPdfService {
                           width: 140,
                           height: 44,
                           decoration: pw.BoxDecoration(
-                            border: pw.Border.all(color: colorBorderGrey, width: 1),
-                            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)),
+                            border:
+                                pw.Border.all(color: colorBorderGrey, width: 1),
+                            borderRadius: const pw.BorderRadius.all(
+                                pw.Radius.circular(2)),
                           ),
                           alignment: pw.Alignment.bottomCenter,
                           padding: const pw.EdgeInsets.only(bottom: 2),
@@ -393,16 +449,19 @@ class ExpoPdfService {
                   pw.Expanded(
                     flex: 5,
                     child: pw.Table(
-                      border: pw.TableBorder.all(color: colorBorderGrey, width: 0.8),
+                      border: pw.TableBorder.all(
+                          color: colorBorderGrey, width: 0.8),
                       columnWidths: const {
                         0: pw.FlexColumnWidth(1.2),
                         1: pw.FlexColumnWidth(1.0),
                       },
                       children: [
-                        _buildTotalRow('Total Amount', currencyFormat.format(order.totalAmount)),
+                        _buildTotalRow('Total Amount',
+                            currencyFormat.format(order.totalAmount)),
                         _buildTotalRow(
                           'Advance',
-                          currencyFormat.format(isSpotDelivery ? 0.0 : order.advanceAmount),
+                          currencyFormat.format(
+                              isSpotDelivery ? 0.0 : order.advanceAmount),
                         ),
                         if (!isSpotDelivery && order.pickupAmount > 0)
                           _buildTotalRow(
@@ -411,7 +470,8 @@ class ExpoPdfService {
                           ),
                         _buildTotalRow(
                           'Balance Amount',
-                          currencyFormat.format(isSpotDelivery ? 0.0 : order.balanceAmount),
+                          currencyFormat.format(
+                              isSpotDelivery ? 0.0 : order.balanceAmount),
                           isBold: true,
                         ),
                       ],
@@ -424,6 +484,8 @@ class ExpoPdfService {
           footer: (pw.Context context) {
             return pw.Column(
               children: [
+                if (context.pageNumber == context.pagesCount)
+                  _buildBranchesSection(),
                 pw.SizedBox(height: 12),
                 pw.Container(
                   height: 4,
@@ -439,11 +501,13 @@ class ExpoPdfService {
                   children: [
                     pw.Text(
                       'Page ${context.pageNumber} of ${context.pagesCount}',
-                      style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+                      style: const pw.TextStyle(
+                          fontSize: 8, color: PdfColors.grey600),
                     ),
                     pw.Text(
                       'Generated on: ${DateFormat("dd/MM/yyyy hh:mm a").format(DateTime.now())}',
-                      style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+                      style: const pw.TextStyle(
+                          fontSize: 8, color: PdfColors.grey600),
                     ),
                   ],
                 ),
@@ -456,8 +520,10 @@ class ExpoPdfService {
       final bytes = await pdf.save();
       final tempDir = await getTemporaryDirectory();
       final dateStr = DateFormat('dd-MM-yyyy').format(order.orderDate);
-      final sanitizedShop = order.shopName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '').trim();
-      final sanitizedType = order.orderType.replaceAll(RegExp(r'[\\/:*?"<>|]'), '').trim();
+      final sanitizedShop =
+          order.shopName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '').trim();
+      final sanitizedType =
+          order.orderType.replaceAll(RegExp(r'[\\/:*?"<>|]'), '').trim();
       final safeShop = sanitizedShop.isNotEmpty ? sanitizedShop : 'Shop';
       final safeType = sanitizedType.isNotEmpty ? sanitizedType : 'Order';
       final fileName = '$safeShop $safeType $dateStr.pdf';
@@ -475,7 +541,8 @@ class ExpoPdfService {
   }
 
   /// Builds a template field with colored label badge on left and boxed value container on right
-  static pw.Widget _buildTemplateField(String label, String value, PdfColor labelColor) {
+  static pw.Widget _buildTemplateField(
+      String label, String value, PdfColor labelColor) {
     return pw.Row(
       children: [
         // Label Box
@@ -509,13 +576,17 @@ class ExpoPdfService {
               color: PdfColors.white,
             ),
             alignment: pw.Alignment.centerLeft,
-            child: pw.Text(
-              value.isNotEmpty ? value : '-',
-              maxLines: 1,
-              style: pw.TextStyle(
-                fontSize: 8.5,
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColors.black,
+            child: pw.FittedBox(
+              fit: pw.BoxFit.scaleDown,
+              alignment: pw.Alignment.centerLeft,
+              child: pw.Text(
+                value.isNotEmpty ? value : '-',
+                maxLines: 1,
+                style: pw.TextStyle(
+                  fontSize: 8.5,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.black,
+                ),
               ),
             ),
           ),
@@ -524,7 +595,8 @@ class ExpoPdfService {
     );
   }
 
-  static pw.Widget _buildHeaderCell(String text, {pw.TextAlign align = pw.TextAlign.left}) {
+  static pw.Widget _buildHeaderCell(String text,
+      {pw.TextAlign align = pw.TextAlign.left}) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
       child: pw.Text(
@@ -539,7 +611,8 @@ class ExpoPdfService {
     );
   }
 
-  static pw.Widget _buildDataCell(String text, {pw.TextAlign align = pw.TextAlign.left}) {
+  static pw.Widget _buildDataCell(String text,
+      {pw.TextAlign align = pw.TextAlign.left}) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
       child: pw.Text(
@@ -550,7 +623,8 @@ class ExpoPdfService {
     );
   }
 
-  static pw.TableRow _buildTotalRow(String label, String value, {bool isBold = false}) {
+  static pw.TableRow _buildTotalRow(String label, String value,
+      {bool isBold = false}) {
     return pw.TableRow(
       decoration: pw.BoxDecoration(
         color: isBold ? PdfColor.fromInt(0xFFEEF2F6) : PdfColors.white,
@@ -578,6 +652,99 @@ class ExpoPdfService {
               color: isBold ? colorNavy : PdfColors.black,
             ),
           ),
+        ),
+      ],
+    );
+  }
+
+  /// Builds the branches contact grid (3 rows x 6 columns) kept together on one page.
+  static pw.Widget _buildBranchesSection() {
+    const branches = [
+      ('BENGALURU', '82175 36200'),
+      ('CHENNAI', '95390 50060'),
+      ('UDUPI', '94971 38955'),
+      ('COIMBATORE', '73737 03014'),
+      ('POOKKOTTUR', '92075 05555'),
+      ('TIRUR', '81118 85759'),
+      ('PERINTHALMANNA', '94471 21876'),
+      ('PALAKKAD', '94969 60619'),
+      ('KASARAGOD', '95260 18953'),
+      ('THRISSUR', '75590 15000'),
+      ('THALASSERY', '98471 16200'),
+      ('KOCHI', '98477 13016'),
+      ('VADAKARA', '98477 35016'),
+      ('KOTTAYAM', '95269 18999'),
+      ('WAYANAD', '75929 32222'),
+      ('KAYAMKULAM', '92493 79491'),
+      ('CALICUT', '94959 21876'),
+      ('TRIVANDRUM', '94950 00729'),
+    ];
+
+    const columnsPerRow = 6;
+    final rows = <pw.TableRow>[];
+    for (var i = 0; i < branches.length; i += columnsPerRow) {
+      final slice = branches.sublist(i, i + columnsPerRow);
+      rows.add(
+        pw.TableRow(
+          children: slice.map((branch) {
+            return pw.Padding(
+              padding:
+                  const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
+                children: [
+                  pw.Text(
+                    branch.$1,
+                    textAlign: pw.TextAlign.center,
+                    style: pw.TextStyle(
+                      fontSize: 6.5,
+                      fontWeight: pw.FontWeight.bold,
+                      color: colorNavy,
+                    ),
+                  ),
+                  pw.SizedBox(height: 1),
+                  pw.Text(
+                    branch.$2,
+                    textAlign: pw.TextAlign.center,
+                    style: const pw.TextStyle(
+                      fontSize: 6.5,
+                      color: PdfColors.black,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      );
+    }
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        pw.Container(
+          padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 6),
+          decoration: const pw.BoxDecoration(
+            color: colorNavy,
+            borderRadius: pw.BorderRadius.only(
+              topLeft: pw.Radius.circular(3),
+              topRight: pw.Radius.circular(3),
+            ),
+          ),
+          child: pw.Text(
+            'OUR BRANCHES',
+            textAlign: pw.TextAlign.center,
+            style: pw.TextStyle(
+              fontSize: 7.5,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.white,
+              letterSpacing: 0.8,
+            ),
+          ),
+        ),
+        pw.Table(
+          border: pw.TableBorder.all(color: colorBorderGrey, width: 0.6),
+          children: rows,
         ),
       ],
     );

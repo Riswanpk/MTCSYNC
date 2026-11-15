@@ -37,12 +37,14 @@ class _UserDetailPageState extends State<UserDetailPage> {
   String? _selectedBranch;
   late TextEditingController _usernameController;
   late TextEditingController _yuPulseIdController;
+  late TextEditingController _phoneController;
 
   @override
   void initState() {
     super.initState();
     _usernameController = TextEditingController();
     _yuPulseIdController = TextEditingController();
+    _phoneController = TextEditingController();
     _loadUserData();
   }
 
@@ -50,6 +52,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
   void dispose() {
     _usernameController.dispose();
     _yuPulseIdController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -71,6 +74,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
           _userData = userDoc.data();
           _usernameController.text = _userData?['username'] ?? '';
           _yuPulseIdController.text = _userData?['YuPulseID'] ?? _userData?['yupass_id'] ?? '';
+          _phoneController.text = (_userData?['phone'] ?? '').toString();
           _selectedRole = _userData?['role'] ?? 'sales';
           _selectedBranch = _userData?['branch'];
           _appVersion = versionDoc.data()?['appVersion'];
@@ -93,6 +97,17 @@ class _UserDetailPageState extends State<UserDetailPage> {
   Future<void> _saveChanges() async {
     if (_selectedRole == null) return;
 
+    final newPhone = _phoneController.text.trim();
+    if (newPhone.isNotEmpty && newPhone.length != 10) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text('Phone number must be 10 digits'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
     try {
       final newUsername = _usernameController.text.trim();
@@ -100,6 +115,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
       final updates = <String, dynamic>{
         'role': _selectedRole,
         'YuPulseID': newYuPulseId,
+        'phone': newPhone,
       };
       if (newUsername.isNotEmpty) {
         updates['username'] = newUsername;
@@ -148,10 +164,13 @@ class _UserDetailPageState extends State<UserDetailPage> {
     final newName = _usernameController.text.trim();
     final currentYuPulseId = (_userData!['YuPulseID'] ?? _userData!['yupass_id'] ?? '').toString().trim();
     final newYuPulseId = _yuPulseIdController.text.trim();
+    final currentPhone = (_userData!['phone'] ?? '').toString().trim();
+    final newPhone = _phoneController.text.trim();
     return _selectedRole != (_userData!['role'] ?? 'sales') ||
         _selectedBranch != _userData!['branch'] ||
         newName != currentName ||
-        newYuPulseId != currentYuPulseId;
+        newYuPulseId != currentYuPulseId ||
+        newPhone != currentPhone;
   }
 
   String _formatTimestamp(Timestamp? ts) {
@@ -401,6 +420,41 @@ class _UserDetailPageState extends State<UserDetailPage> {
                   borderSide: BorderSide.none,
                 ),
                 prefixIcon: const Icon(Icons.person_outline, size: 20),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              ),
+              style: TextStyle(
+                color: isDark ? Colors.white : Colors.black87,
+                fontSize: 14,
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 16),
+            // Phone Number field (10 digits)
+            Text(
+              'Phone Number',
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                color: isDark ? Colors.white60 : Colors.grey[700],
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+              maxLength: 10,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: InputDecoration(
+                hintText: '10-digit phone number',
+                counterText: '',
+                filled: true,
+                fillColor: isDark ? const Color(0xFF181A20) : Colors.grey[100],
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                prefixIcon: const Icon(Icons.phone_outlined, size: 20),
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
