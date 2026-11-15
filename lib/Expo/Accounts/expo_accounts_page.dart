@@ -37,6 +37,7 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
 
   // Multi-selection of Cash orders for batch cash collection & verification
   final Set<String> _selectedCashOrderIds = <String>{};
+  final ValueNotifier<int> _selectionNotifier = ValueNotifier<int>(0);
   String? _batchClaimedUserId; // UID of user whose cash orders are currently selected
   String? _batchClaimedUserName;
   bool _isBatchVerifying = false;
@@ -49,6 +50,7 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
 
   @override
   void dispose() {
+    _selectionNotifier.dispose();
     _tabController.dispose();
     super.dispose();
   }
@@ -58,47 +60,45 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
   }
 
   void _clearBatchSelection() {
-    setState(() {
-      _selectedCashOrderIds.clear();
-      _batchClaimedUserId = null;
-      _batchClaimedUserName = null;
-    });
+    _selectedCashOrderIds.clear();
+    _batchClaimedUserId = null;
+    _batchClaimedUserName = null;
+    _selectionNotifier.value++;
   }
 
   void _toggleCashOrderSelection(ExpoOrder order) {
     if (!order.hasCashComponent) return;
     if (order.status == 'Completed') return;
 
-    setState(() {
-      if (_selectedCashOrderIds.contains(order.id)) {
-        _selectedCashOrderIds.remove(order.id);
-        if (_selectedCashOrderIds.isEmpty) {
-          _batchClaimedUserId = null;
-          _batchClaimedUserName = null;
-        }
-      } else {
-        // Enforce: only orders of the SAME sales user can be batch collected together
-        if (_selectedCashOrderIds.isNotEmpty &&
-            _batchClaimedUserId != null &&
-            _batchClaimedUserId != order.createdUserId) {
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Only Cash orders of the same sales user ($_batchClaimedUserName) can be selected together.',
-              ),
-              backgroundColor: Colors.orange.shade800,
-            ),
-          );
-          return;
-        }
-        _batchClaimedUserId = order.createdUserId;
-        _batchClaimedUserName = order.createdUserName.isNotEmpty
-            ? order.createdUserName
-            : 'Sales User';
-        _selectedCashOrderIds.add(order.id);
+    if (_selectedCashOrderIds.contains(order.id)) {
+      _selectedCashOrderIds.remove(order.id);
+      if (_selectedCashOrderIds.isEmpty) {
+        _batchClaimedUserId = null;
+        _batchClaimedUserName = null;
       }
-    });
+    } else {
+      // Enforce: only orders of the SAME sales user can be batch collected together
+      if (_selectedCashOrderIds.isNotEmpty &&
+          _batchClaimedUserId != null &&
+          _batchClaimedUserId != order.createdUserId) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Only Cash orders of the same sales user ($_batchClaimedUserName) can be selected together.',
+            ),
+            backgroundColor: Colors.orange.shade800,
+          ),
+        );
+        return;
+      }
+      _batchClaimedUserId = order.createdUserId;
+      _batchClaimedUserName = order.createdUserName.isNotEmpty
+          ? order.createdUserName
+          : 'Sales User';
+      _selectedCashOrderIds.add(order.id);
+    }
+    _selectionNotifier.value++;
   }
 
   Future<void> _verifyBatchCashOrders(List<ExpoOrder> allOrders) async {
@@ -404,15 +404,6 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
                   .where((o) => o.status == 'Completed')
                   .toList();
 
-              // Calculate batch selection metrics for the bottom sheet
-              final selectedOrdersList = allOrders
-                  .where((o) => _selectedCashOrderIds.contains(o.id))
-                  .toList();
-              final double batchTotalCash = selectedOrdersList.fold(
-                0.0,
-                (sum, o) => sum + o.totalCashCollected,
-              );
-
               return Column(
                 children: [
                   // Exhibition Info & User Filter Bar
@@ -434,6 +425,7 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
                           tabTitle: 'Spot Delivery',
                           isPendingTab: true,
                           selectedCashOrderIds: _selectedCashOrderIds,
+                          selectionNotifier: _selectionNotifier,
                           onToggleSelect: _toggleCashOrderSelection,
                         ),
                         _ExpoOrdersTabKeepAlive(
@@ -442,6 +434,7 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
                           tabTitle: 'Stall Delivery',
                           isPendingTab: true,
                           selectedCashOrderIds: _selectedCashOrderIds,
+                          selectionNotifier: _selectionNotifier,
                           onToggleSelect: _toggleCashOrderSelection,
                         ),
                         _ExpoOrdersTabKeepAlive(
@@ -450,6 +443,7 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
                           tabTitle: 'Booking',
                           isPendingTab: true,
                           selectedCashOrderIds: _selectedCashOrderIds,
+                          selectionNotifier: _selectionNotifier,
                           onToggleSelect: _toggleCashOrderSelection,
                         ),
                         _ExpoOrdersTabKeepAlive(
@@ -458,6 +452,7 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
                           tabTitle: 'Completed',
                           isPendingTab: false,
                           selectedCashOrderIds: _selectedCashOrderIds,
+                          selectionNotifier: _selectionNotifier,
                           onToggleSelect: _toggleCashOrderSelection,
                         ),
                       ],
@@ -465,13 +460,23 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
                   ),
 
                   // Bottom Cash Batch Collection & Verification Bar
-                  if (_selectedCashOrderIds.isNotEmpty)
-                    _buildBatchVerificationBottomBar(
-                      selectedCount: _selectedCashOrderIds.length,
-                      totalCash: batchTotalCash,
-                      allOrders: allOrders,
-                      isDark: isDark,
-                    ),
+                  ValueListenableBuilder<int>(
+                    valueListenable: _selectionNotifier,
+                    builder: (context, _, __) {
+                      if (_selectedCashOrderIds.isEmpty) {
+                        return const SizedBox.shrink();
+                      }
+                      final double batchTotalCash = allOrders
+                          .where((o) => _selectedCashOrderIds.contains(o.id))
+                          .fold(0.0, (sum, o) => sum + o.totalCashCollected);
+                      return _buildBatchVerificationBottomBar(
+                        selectedCount: _selectedCashOrderIds.length,
+                        totalCash: batchTotalCash,
+                        allOrders: allOrders,
+                        isDark: isDark,
+                      );
+                    },
+                  ),
                 ],
               );
             },
@@ -751,6 +756,7 @@ class _ExpoOrdersTabKeepAlive extends StatefulWidget {
   final String tabTitle;
   final bool isPendingTab;
   final Set<String> selectedCashOrderIds;
+  final ValueNotifier<int> selectionNotifier;
   final ValueChanged<ExpoOrder> onToggleSelect;
 
   const _ExpoOrdersTabKeepAlive({
@@ -759,6 +765,7 @@ class _ExpoOrdersTabKeepAlive extends StatefulWidget {
     required this.tabTitle,
     required this.isPendingTab,
     required this.selectedCashOrderIds,
+    required this.selectionNotifier,
     required this.onToggleSelect,
   });
 
@@ -840,16 +847,17 @@ class _ExpoOrdersTabKeepAliveState extends State<_ExpoOrdersTabKeepAlive>
         final order = widget.orders[index];
         final typeColor = _getOrderTypeColor(order.orderType);
         final bool isCash = order.hasCashComponent;
-        final bool isSelected = widget.selectedCashOrderIds.contains(order.id);
-
         final bool isClaimedByOther = order.claimedById != null &&
             order.claimedById != currentUserId &&
             order.claimedAt != null &&
             now.difference(order.claimedAt!).inMinutes < 5;
-
         final double cashAmount = order.totalCashCollected;
 
-        return Card(
+        return ValueListenableBuilder<int>(
+          valueListenable: widget.selectionNotifier,
+          builder: (context, _, __) {
+            final bool isSelected = widget.selectedCashOrderIds.contains(order.id);
+            return Card(
           key: ValueKey(order.id),
           margin: const EdgeInsets.only(bottom: 12),
           elevation: isSelected ? 3 : 1.5,
@@ -951,15 +959,15 @@ class _ExpoOrdersTabKeepAliveState extends State<_ExpoOrdersTabKeepAlive>
                       if (widget.isPendingTab && isCash) ...[
                         InkWell(
                           onTap: () => widget.onToggleSelect(order),
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(8),
                           child: Padding(
-                            padding: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.fromLTRB(2, 6, 10, 6),
                             child: Icon(
                               isSelected
                                   ? Icons.check_box_rounded
                                   : Icons.check_box_outline_blank_rounded,
                               color: isSelected ? primaryGreen : Colors.grey,
-                              size: 24,
+                              size: 32,
                             ),
                           ),
                         ),
@@ -1180,29 +1188,17 @@ class _ExpoOrdersTabKeepAliveState extends State<_ExpoOrdersTabKeepAlive>
                   const Divider(height: 1),
                   const SizedBox(height: 10),
 
-                  // Bottom info: Item count, Grand total, and Tap indicator
+                  // Bottom info: Grand total and Tap indicator
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${order.items.length} items (${order.totalQty} pcs)',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: widget.isDark ? Colors.white54 : Colors.black54,
-                            ),
-                          ),
-                          Text(
-                            '₹${order.totalAmount.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: primaryGreen,
-                            ),
-                          ),
-                        ],
+                      Text(
+                        '₹${order.totalAmount.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: primaryGreen,
+                        ),
                       ),
                       Row(
                         mainAxisSize: MainAxisSize.min,
@@ -1229,6 +1225,8 @@ class _ExpoOrdersTabKeepAliveState extends State<_ExpoOrdersTabKeepAlive>
               ),
             ),
           ),
+        );
+          },
         );
       },
     );

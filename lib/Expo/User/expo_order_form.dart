@@ -768,15 +768,35 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     });
   }
 
+  void _setClampedControllerText(TextEditingController controller, double value) {
+    final text = _formatEditableMoney(value);
+    controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+
   void _onTotalAdvanceChanged(String raw) {
+    final entered = double.tryParse(raw.trim()) ?? 0.0;
+    if (entered > _netTotal) {
+      _setClampedControllerText(_advanceController, _netTotal);
+    }
     setState(() {});
   }
 
   void _onCashSplitChanged(String raw) {
+    if (_cashSplitAmount + _onlineSplitAmount > _netTotal) {
+      final maxCash = (_netTotal - _onlineSplitAmount).clamp(0.0, _netTotal);
+      _setClampedControllerText(_cashSplitController, maxCash);
+    }
     setState(() => _syncReadOnlySplitTotal());
   }
 
   void _onOnlineSplitChanged(String raw) {
+    if (_cashSplitAmount + _onlineSplitAmount > _netTotal) {
+      final maxOnline = (_netTotal - _cashSplitAmount).clamp(0.0, _netTotal);
+      _setClampedControllerText(_onlineSplitController, maxOnline);
+    }
     setState(() => _syncReadOnlySplitTotal());
   }
 
