@@ -867,6 +867,19 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                       ],
                     ),
                     onTap: () async {
+                      if (!exhibition.canAddOrders) {
+                        ScaffoldMessenger.of(context)
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Exhibition has ended. You cannot add new orders.',
+                              ),
+                              backgroundColor: Colors.orange,
+                            ),
+                          );
+                        return;
+                      }
                       await Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => ExpoOrderFormPage(
@@ -1008,9 +1021,7 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
         }
 
         final currentEx = _selectedExhibition!;
-        if (currentEx.isEnded) {
-          ExpoService.instance.autoConvertExpiredStallDeliveries(currentEx);
-        }
+        final bool canAddOrders = currentEx.canAddOrders;
 
         return DefaultTabController(
           length: 4,
@@ -1120,6 +1131,33 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                   ),
                 ),
 
+                if (!canAddOrders)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
+                    color: Colors.orange.withValues(alpha: isDark ? 0.2 : 0.12),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.lock_clock_rounded,
+                            size: 16, color: Color(0xFFE65100)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Exhibition duration has ended. Adding new orders is closed.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isDark
+                                  ? Colors.orangeAccent
+                                  : const Color(0xFFE65100),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
                 // Orders Tabs
                 Expanded(
                   child: StreamBuilder<List<ExpoOrder>>(
@@ -1182,28 +1220,31 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
             // Middle bottom + button to add order
             floatingActionButtonLocation:
                 FloatingActionButtonLocation.centerFloat,
-            floatingActionButton: FloatingActionButton.extended(
-              onPressed: () async {
-                final chosenType = await _showOrderTypeDialog(context);
-                if (chosenType != null && context.mounted) {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ExpoOrderFormPage(
-                        exhibition: currentEx,
-                        initialOrderType: chosenType,
-                      ),
+            floatingActionButton: canAddOrders
+                ? FloatingActionButton.extended(
+                    onPressed: () async {
+                      final chosenType = await _showOrderTypeDialog(context);
+                      if (chosenType != null && context.mounted) {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ExpoOrderFormPage(
+                              exhibition: currentEx,
+                              initialOrderType: chosenType,
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    backgroundColor: primaryBlue,
+                    foregroundColor: Colors.white,
+                    icon: const Icon(Icons.add_rounded, size: 24),
+                    label: const Text(
+                      'Add Order',
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                     ),
-                  );
-                }
-              },
-              backgroundColor: primaryBlue,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.add_rounded, size: 24),
-              label: const Text(
-                'Add Order',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-              ),
-            ),
+                  )
+                : null,
           ),
         );
       },

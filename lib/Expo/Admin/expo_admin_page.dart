@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../expo_service.dart';
 import 'expo_admin_form.dart';
+import 'expo_excel_export_service.dart';
 import '../User/expo_user_mainpage.dart';
 
 const Color primaryBlue = Color(0xFF005BAC);
@@ -15,8 +16,89 @@ class ExpoAdminPage extends StatefulWidget {
 }
 
 class _ExpoAdminPageState extends State<ExpoAdminPage> {
+  final Set<String> _endingExhibitionIds = {};
+  final Set<String> _exportingExhibitionIds = {};
+
   String _formatDate(DateTime dt) {
     return DateFormat('dd MMM yyyy, hh:mm a').format(dt.toLocal());
+  }
+
+  Future<void> _confirmEndExhibition(Exhibition ex) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('End Exhibition?'),
+        content: Text(
+          'Ending "${ex.name}" will convert all pending Stall Delivery orders into Booking orders and make branch orders visible to Managers and Salesmen.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFE65100),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('End Exhibition'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _endingExhibitionIds.add(ex.id));
+    try {
+      final convertedCount = await ExpoService.instance.endExhibition(ex);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              convertedCount > 0
+                  ? '"${ex.name}" ended. $convertedCount pending Stall Delivery order(s) converted to Booking.'
+                  : '"${ex.name}" ended successfully.',
+            ),
+            backgroundColor: primaryGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to end exhibition: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _endingExhibitionIds.remove(ex.id));
+      }
+    }
+  }
+
+  Future<void> _downloadExcel(Exhibition ex) async {
+    setState(() => _exportingExhibitionIds.add(ex.id));
+    try {
+      await ExpoExcelExportService.exportExhibitionOrdersExcel(context, ex);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to export Excel: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _exportingExhibitionIds.remove(ex.id));
+      }
+    }
   }
 
   Future<void> _confirmDeleteExhibition(Exhibition ex) async {
@@ -186,13 +268,21 @@ class _ExpoAdminPageState extends State<ExpoAdminPage> {
 
         String statusLabel = 'ACTIVE';
         Color statusColor = primaryGreen;
-        if (ex.isUpcoming) {
-          statusLabel = 'UPCOMING';
-          statusColor = Colors.orange;
-        } else if (ex.isEnded) {
+        if (ex.isEnded) {
           statusLabel = 'ENDED';
           statusColor = Colors.grey;
+        } else if (ex.isDateEnded) {
+          statusLabel = 'DATE ENDED';
+          statusColor = const Color(0xFFE65100);
+        } else if (ex.isUpcoming) {
+          statusLabel = 'UPCOMING';
+          statusColor = Colors.orange;
         }
+
+        final bool showEndButton = ex.isDateEnded && !ex.isEnded;
+        final bool showExcelButton = ex.isDateEnded || ex.isEnded;
+        final bool isEnding = _endingExhibitionIds.contains(ex.id);
+        final bool isExporting = _exportingExhibitionIds.contains(ex.id);
 
         return Card(
           margin: const EdgeInsets.only(bottom: 14),
@@ -355,6 +445,73 @@ class _ExpoAdminPageState extends State<ExpoAdminPage> {
                     ),
                   ],
                 ),
+                if (showEndButton || showExcelButton) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      if (showEndButton)
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed:
+                                isEnding ? null : () => _confirmEndExhibition(ex),
+                            icon: isEnding
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.event_busy_rounded, size: 18),
+                            label: Text(
+                              isEnding ? 'Ending...' : 'End Exhibition',
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFE65100),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                            ),
+                          ),
+                        ),
+                      if (showEndButton && showExcelButton)
+                        const SizedBox(width: 10),
+                      if (showExcelButton)
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed:
+                                isExporting ? null : () => _downloadExcel(ex),
+                            icon: isExporting
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.table_view_rounded, size: 18),
+                            label: Text(
+                              isExporting ? 'Exporting...' : 'Download Excel',
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryGreen,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

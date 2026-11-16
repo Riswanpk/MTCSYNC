@@ -42,6 +42,8 @@ class Exhibition {
   final String location;
   final List<String> selectedUserIds;
   final List<Map<String, dynamic>> selectedUsers;
+  final bool isManuallyEnded;
+  final DateTime? endedAt;
   final DateTime createdAt;
   final String createdBy;
   final String createdByName;
@@ -54,23 +56,29 @@ class Exhibition {
     required this.location,
     required this.selectedUserIds,
     required this.selectedUsers,
+    this.isManuallyEnded = false,
+    this.endedAt,
     required this.createdAt,
     required this.createdBy,
     required this.createdByName,
   });
 
+  bool get isDateEnded => DateTime.now().isAfter(endDate);
+
   bool get isActive {
     final now = DateTime.now();
-    return now.isAfter(startDate) && now.isBefore(endDate);
+    return now.isAfter(startDate) && !isDateEnded && !isManuallyEnded;
   }
 
   bool get isUpcoming {
     return DateTime.now().isBefore(startDate);
   }
 
-  bool get isEnded {
-    return DateTime.now().isAfter(endDate);
-  }
+  /// True only after the Admin manually clicks "End Exhibition".
+  bool get isEnded => isManuallyEnded;
+
+  /// Orders can only be added while the exhibition date hasn't expired and Admin hasn't ended it.
+  bool get canAddOrders => !isDateEnded && !isManuallyEnded;
 
   /// Row for the `expo.exhibitions` table.
   Map<String, dynamic> toMap() {
@@ -94,12 +102,26 @@ class Exhibition {
         : <String>[];
 
     final rawUsers = data['selected_users'];
-    final List<Map<String, dynamic>> users = rawUsers is List
-        ? rawUsers
-            .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList()
-        : <Map<String, dynamic>>[];
+    bool metaEnded = false;
+    DateTime? metaEndedAt;
+    final List<Map<String, dynamic>> users = <Map<String, dynamic>>[];
+    if (rawUsers is List) {
+      for (final item in rawUsers) {
+        if (item is Map) {
+          final m = Map<String, dynamic>.from(item);
+          if (m['__meta_ended__'] == true) {
+            metaEnded = true;
+            metaEndedAt = _parseNullableDate(m['ended_at']) ?? metaEndedAt;
+          } else {
+            users.add(m);
+          }
+        }
+      }
+    }
+
+    final bool manuallyEnded = (data['is_ended'] == true) || metaEnded;
+    final DateTime? endedAtVal =
+        _parseNullableDate(data['ended_at']) ?? metaEndedAt;
 
     return Exhibition(
       id: (data['id'] ?? '').toString(),
@@ -109,6 +131,8 @@ class Exhibition {
       location: data['location'] ?? '',
       selectedUserIds: userIds,
       selectedUsers: users,
+      isManuallyEnded: manuallyEnded,
+      endedAt: endedAtVal,
       createdAt: _parseDate(data['created_at']),
       createdBy: data['created_by'] ?? '',
       createdByName: data['created_by_name'] ?? '',
@@ -267,11 +291,17 @@ class ExpoOrder {
   final String? claimedById; // User UID currently reviewing/verifying
   final String? claimedByName; // Name of reviewer
   final DateTime? claimedAt; // Timestamp when claim was made
+  final String branchDeliveryStatus; // 'Pending', 'Delivered'
+  final DateTime? branchDeliveredAt; // Timestamp when branch marked order delivered
   final String createdUserId;
   final String createdUserName;
   final String createdUserBranch;
   final DateTime createdAt;
   final DateTime? completedAt;
+
+  bool get isBranchDelivered =>
+      branchDeliveryStatus == 'Delivered' ||
+      stallPickupStatus == 'Branch Delivered';
 
   const ExpoOrder({
     required this.id,
@@ -315,6 +345,8 @@ class ExpoOrder {
     this.claimedById,
     this.claimedByName,
     this.claimedAt,
+    this.branchDeliveryStatus = 'Pending',
+    this.branchDeliveredAt,
     required this.createdUserId,
     required this.createdUserName,
     required this.createdUserBranch,
@@ -392,6 +424,13 @@ class ExpoOrder {
 
     final totalAmount = _toDouble(data['total_amount']);
     final advance = _toDouble(data['advance_amount']);
+    final rawBranchStatus = data['branch_delivery_status']?.toString().trim();
+    final fallbackDelivered =
+        data['stall_pickup_status']?.toString().trim() == 'Branch Delivered';
+    final branchStatus =
+        (rawBranchStatus != null && rawBranchStatus.isNotEmpty)
+            ? rawBranchStatus
+            : (fallbackDelivered ? 'Delivered' : 'Pending');
 
     return ExpoOrder(
       id: (data['id'] ?? '').toString(),
@@ -440,6 +479,8 @@ class ExpoOrder {
       claimedById: data['claimed_by_id']?.toString(),
       claimedByName: data['claimed_by_name']?.toString(),
       claimedAt: _parseNullableDate(data['claimed_at']),
+      branchDeliveryStatus: branchStatus,
+      branchDeliveredAt: _parseNullableDate(data['branch_delivered_at']),
       createdUserId: data['created_user_id'] ?? '',
       createdUserName: data['created_user_name'] ?? '',
       createdUserBranch: data['created_user_branch'] ?? '',
@@ -490,6 +531,8 @@ class ExpoOrder {
     String? claimedById,
     String? claimedByName,
     DateTime? claimedAt,
+    String? branchDeliveryStatus,
+    DateTime? branchDeliveredAt,
     String? createdUserId,
     String? createdUserName,
     String? createdUserBranch,
@@ -539,6 +582,8 @@ class ExpoOrder {
       claimedById: claimedById ?? this.claimedById,
       claimedByName: claimedByName ?? this.claimedByName,
       claimedAt: claimedAt ?? this.claimedAt,
+      branchDeliveryStatus: branchDeliveryStatus ?? this.branchDeliveryStatus,
+      branchDeliveredAt: branchDeliveredAt ?? this.branchDeliveredAt,
       createdUserId: createdUserId ?? this.createdUserId,
       createdUserName: createdUserName ?? this.createdUserName,
       createdUserBranch: createdUserBranch ?? this.createdUserBranch,
@@ -697,10 +742,33 @@ class ExpoService {
     final cache = UserCacheService.instance;
     await cache.ensureLoaded();
 
-    final userIds = selectedUsers
-        .map((u) => u['uid']?.toString() ?? '')
-        .where((id) => id.isNotEmpty)
+    final usersToSave = selectedUsers
+        .where((u) => u['__meta_ended__'] != true)
+        .map((u) => Map<String, dynamic>.from(u))
         .toList();
+
+    final userIds = usersToSave
+        .map((u) => u['uid']?.toString() ?? '')
+        .where((uid) => uid.isNotEmpty)
+        .toList();
+
+    if (id != null && id.isNotEmpty) {
+      try {
+        final existing = await _table(_exhibitionsTable)
+            .select('selected_users')
+            .eq('id', id)
+            .maybeSingle();
+        final rawExisting = existing?['selected_users'];
+        if (rawExisting is List) {
+          for (final item in rawExisting) {
+            if (item is Map && item['__meta_ended__'] == true) {
+              usersToSave.add(Map<String, dynamic>.from(item));
+              break;
+            }
+          }
+        }
+      } catch (_) {}
+    }
 
     final row = <String, dynamic>{
       'name': name.trim(),
@@ -708,7 +776,7 @@ class ExpoService {
       'end_date': _ts(endDate),
       'location': location.trim(),
       'selected_user_ids': userIds,
-      'selected_users': selectedUsers,
+      'selected_users': usersToSave,
     };
 
     if (id == null || id.isEmpty) {
@@ -980,6 +1048,146 @@ class ExpoService {
       debugPrint('Error auto-converting expired stall deliveries: $e');
       return 0;
     }
+  }
+
+  Future<int> endExhibition(Exhibition exhibition) async {
+    final convertedRows = await _table(_ordersTable)
+        .update({
+          'order_type': 'Booking',
+          'is_converted_to_booking': true,
+          'stall_pickup_status': 'Converted to Booking',
+        })
+        .eq('exhibition_id', exhibition.id)
+        .eq('order_type', 'Stall Delivery')
+        .or('stall_pickup_status.is.null,stall_pickup_status.neq.Picked Up')
+        .select('id');
+
+    final nowIso = _ts(DateTime.now());
+    final cleanUsers = exhibition.selectedUsers
+        .where((u) => u['__meta_ended__'] != true)
+        .toList();
+    final updatedUsers = <Map<String, dynamic>>[
+      ...cleanUsers,
+      {'__meta_ended__': true, 'ended_at': nowIso},
+    ];
+
+    try {
+      await _table(_exhibitionsTable).update({
+        'is_ended': true,
+        'ended_at': nowIso,
+        'selected_users': updatedUsers,
+      }).eq('id', exhibition.id);
+    } catch (_) {
+      await _table(_exhibitionsTable).update({
+        'selected_users': updatedUsers,
+      }).eq('id', exhibition.id);
+    }
+
+    return (convertedRows as List).length;
+  }
+
+  Future<List<ExpoOrder>> fetchOrdersForExhibition(String exhibitionId) async {
+    final rows = await _table(_ordersTable)
+        .select()
+        .eq('exhibition_id', exhibitionId);
+    final orders = rows
+        .map<ExpoOrder>((r) => ExpoOrder.fromMap(Map<String, dynamic>.from(r)))
+        .toList();
+    orders.sort((a, b) {
+      if (a.billNumber != null && b.billNumber != null) {
+        return a.billNumber!.compareTo(b.billNumber!);
+      }
+      return a.orderDate.compareTo(b.orderDate);
+    });
+    return orders;
+  }
+
+  Stream<List<ExpoOrder>> streamAllOrders() {
+    return _db
+        .schema(ExpoSupabaseConfig.schema)
+        .from(_ordersTable)
+        .stream(primaryKey: ['id'])
+        .order('order_date', ascending: false)
+        .map((rows) => rows.map(ExpoOrder.fromMap).toList());
+  }
+
+  Future<void> assignOrdersToSalesman({
+    required List<String> orderIds,
+    required String salesmanName,
+  }) async {
+    if (orderIds.isEmpty) return;
+    await _table(_ordersTable).update({
+      'preferred_salesman': salesmanName,
+    }).filter('id', 'in', orderIds);
+  }
+
+  Future<void> updateBranchDeliveryStatus({
+    required ExpoOrder order,
+    required bool delivered,
+  }) async {
+    final nowIso = _ts(DateTime.now());
+    final statusStr = delivered ? 'Delivered' : 'Pending';
+    final String? fallbackStallStatus = delivered
+        ? 'Branch Delivered'
+        : (order.isConvertedToBooking ? 'Converted to Booking' : null);
+
+    try {
+      await _table(_ordersTable).update({
+        'branch_delivery_status': statusStr,
+        'branch_delivered_at': delivered ? nowIso : null,
+        'stall_pickup_status': fallbackStallStatus,
+      }).eq('id', order.id);
+    } catch (_) {
+      await _table(_ordersTable).update({
+        'stall_pickup_status': fallbackStallStatus,
+      }).eq('id', order.id);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getBranchAssignableUsers(
+      String branch) async {
+    final allUsers = await UserCacheService.instance.getAllUsers();
+    final targetBranch = branch.trim().toUpperCase();
+    const allowedRoles = {
+      'manager',
+      'asst_manager',
+      'asst manager',
+      'assistant manager',
+      'sales',
+    };
+
+    int roleRank(String role) {
+      if (role == 'manager') return 0;
+      if (role == 'asst_manager' ||
+          role == 'asst manager' ||
+          role == 'assistant manager') {
+        return 1;
+      }
+      return 2;
+    }
+
+    final filtered = allUsers.where((u) {
+      final uBranch = (u['branch'] ?? '').toString().trim().toUpperCase();
+      final uRole = (u['role'] ?? '').toString().trim().toLowerCase();
+      final uName = (u['username'] ?? '').toString().trim();
+      return uBranch == targetBranch &&
+          allowedRoles.contains(uRole) &&
+          uName.isNotEmpty;
+    }).toList();
+
+    filtered.sort((a, b) {
+      final rankA =
+          roleRank((a['role'] ?? '').toString().trim().toLowerCase());
+      final rankB =
+          roleRank((b['role'] ?? '').toString().trim().toLowerCase());
+      if (rankA != rankB) return rankA.compareTo(rankB);
+      return (a['username'] ?? '')
+          .toString()
+          .toLowerCase()
+          .compareTo((b['username'] ?? '').toString().toLowerCase());
+    });
+
+    return filtered;
   }
 
   Future<void> deleteOrder(String orderId) async {

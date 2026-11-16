@@ -630,9 +630,6 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
 
   /// Main dashboard body once an exhibition is selected
   Widget _buildDashboardBody(Exhibition exhibition, bool isDark) {
-    if (exhibition.isEnded) {
-      ExpoService.instance.autoConvertExpiredStallDeliveries(exhibition);
-    }
     return StreamBuilder<List<ExpoOrder>>(
       stream: ExpoService.instance.streamOrders(exhibitionId: exhibition.id),
       builder: (context, snapshot) {

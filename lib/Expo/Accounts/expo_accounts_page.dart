@@ -273,9 +273,6 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
         }
 
         final currentEx = _selectedExhibition!;
-        if (currentEx.isEnded) {
-          ExpoService.instance.autoConvertExpiredStallDeliveries(currentEx);
-        }
 
         return Scaffold(
           backgroundColor:

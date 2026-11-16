@@ -44,6 +44,8 @@ import '../Expo/Admin/expo_admin_page.dart';
 import '../Expo/User/expo_user_mainpage.dart';
 import '../Expo/Accounts/expo_accounts_page.dart';
 import '../Expo/Accounts/expo_accounts_dashboard_page.dart';
+import '../Expo/Manager/expo_manager_assign_page.dart';
+import '../Expo/Orders/expo_assigned_orders_page.dart';
 
 /// App brand colors
 const Color primaryBlue = Color(0xFF005BAC);
@@ -446,6 +448,22 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     }
   }
 
+  Future<void> _navigateToExpoManagerAssign(BuildContext context) async {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const ExpoManagerAssignPage(),
+      ),
+    );
+  }
+
+  Future<void> _navigateToExpoAssignedOrders(BuildContext context) async {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const ExpoAssignedOrdersPage(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final role = widget.role;
@@ -700,10 +718,29 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       if (role == 'manager' || role == 'asst_manager')
         NeumorphicButton(
           onTap: () => _navigateToExpo(context),
+          onLongPress: role == 'manager'
+              ? () => _navigateToExpoManagerAssign(context)
+              : null,
           text: 'Expo',
           color: primaryBlue,
           textColor: Colors.white,
           icon: Icons.storefront_rounded,
+        ),
+      if (role == 'sales' || role == 'admin')
+        NeumorphicButton(
+          onTap: () => _navigateToExpoAssignedOrders(context),
+          text: 'EXPO Orders',
+          color: primaryBlue,
+          textColor: Colors.white,
+          icon: Icons.local_shipping_rounded,
+        ),
+      if (role == 'manager' || role == 'asst_manager')
+        NeumorphicButton(
+          onTap: () => _navigateToExpoAssignedOrders(context),
+          text: 'EXPO Orders',
+          color: primaryGreen,
+          textColor: Colors.white,
+          icon: Icons.local_shipping_rounded,
         ),
       // Approvals button on 2nd page for dme_admin
       if (role == 'dme_admin')
