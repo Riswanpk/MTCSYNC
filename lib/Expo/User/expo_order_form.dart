@@ -1107,6 +1107,13 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
           '${order.createdUserName} submitted a ${order.orderType} order for ${order.shopName} (₹${order.totalAmount.toStringAsFixed(2)}).';
 
       for (final doc in snap.docs) {
+        final userData = doc.data();
+        final token = userData['fcm_token'] as String?;
+        if (token == null || token.trim().isEmpty) {
+          debugPrint('ExpoOrderForm: Skipping expo_acc ${doc.id} (no active FCM token registered)');
+          continue;
+        }
+
         try {
           await FirebaseFunctions.instanceFor(region: 'asia-south1')
               .httpsCallable('sendLeadAssignmentNotification')

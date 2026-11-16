@@ -193,6 +193,8 @@ Future<void> _setupFirebaseMessaging() async {
         channelKey = 'task_completion_channel';
       } else if (type == 'core_task_assignment' || type == 'core_task') {
         channelKey = 'task_assignment_channel';
+      } else if (type == 'expo_order_verification') {
+        channelKey = 'expo_order_verification_channel_v2';
       }
 
       AwesomeNotifications().createNotification(
@@ -431,7 +433,7 @@ Future<void> _initializeNotifications() async {
       playSound: true,
     ),
     NotificationChannel(
-      channelKey: 'expo_order_verification_channel',
+      channelKey: 'expo_order_verification_channel_v2',
       channelName: 'Expo Order Verification',
       channelDescription: 'Channel for Expo order verification requests',
       defaultColor: const Color(0xFF005BAC),

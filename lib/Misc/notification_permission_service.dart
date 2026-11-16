@@ -142,6 +142,7 @@ class NotificationPermissionService {
         'dme_requests_channel': 'resource://raw/you_have_a_request',
         'dme_requests_approved_channel': 'resource://raw/request_has_been_approved',
         'dme_requests_rejected_channel': 'resource://raw/request_has_been_rejected',
+        'expo_order_verification_channel_v2': 'resource://raw/order_verification_request',
       };
 
       final sound = soundSourceMap[channelKey] ?? 'resource://raw/leadsreminder';
