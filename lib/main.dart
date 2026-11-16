@@ -430,6 +430,18 @@ Future<void> _initializeNotifications() async {
       criticalAlerts: true,
       playSound: true,
     ),
+    NotificationChannel(
+      channelKey: 'expo_order_verification_channel',
+      channelName: 'Expo Order Verification',
+      channelDescription: 'Channel for Expo order verification requests',
+      defaultColor: const Color(0xFF005BAC),
+      ledColor: Colors.blue,
+      soundSource: 'resource://raw/order_verification_request',
+      importance: NotificationImportance.Max,
+      channelShowBadge: true,
+      criticalAlerts: true,
+      playSound: true,
+    ),
   ];
 
   for (final ch in channelsToRegister) {

@@ -186,6 +186,9 @@ exports.sendLeadAssignmentNotification = onCall(
     } else if (notifType === "todos_pending" || notifType === "pending_todos") {
       channelId = "todos_pending_channel";
       soundName = "you_have_todos_pending";
+    } else if (notifType === "expo_order_verification") {
+      channelId = "expo_order_verification_channel";
+      soundName = "order_verification_request";
     }
 
     const message = {

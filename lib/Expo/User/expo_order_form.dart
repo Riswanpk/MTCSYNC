@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -169,7 +171,8 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     super.initState();
     _draftId = widget.initialDraft?.id ??
         'draft_${DateTime.now().millisecondsSinceEpoch}';
-    _selectedOrderType = widget.initialDraft?.orderType ?? widget.initialOrderType;
+    _selectedOrderType =
+        widget.initialDraft?.orderType ?? widget.initialOrderType;
 
     if (widget.existingOrder != null) {
       final o = widget.existingOrder!;
@@ -322,7 +325,9 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
 
     if (_selectedOrderType != 'Spot Delivery') {
       final branch = (customer['preferredBranch'] ?? '').toString().trim();
-      if (branch.isNotEmpty && branch != 'N/A' && _allBranches.contains(branch)) {
+      if (branch.isNotEmpty &&
+          branch != 'N/A' &&
+          _allBranches.contains(branch)) {
         await _onBranchChanged(branch);
         final salesman =
             (customer['preferredSalesman'] ?? '').toString().trim();
@@ -460,8 +465,9 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
           if (mounted) {
             setState(() {
               _salesmenForBranch = salesmen;
-              _selectedSalesman =
-                  salesmen.contains(preservedSalesman) ? preservedSalesman : 'N/A';
+              _selectedSalesman = salesmen.contains(preservedSalesman)
+                  ? preservedSalesman
+                  : 'N/A';
             });
           }
         }
@@ -550,7 +556,8 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
           await FlutterImageCompress.compressAndGetFile(
         file.absolute.path,
         targetPath,
-        quality: 55, // Optimized balance of quality and small file size (< 100-150KB)
+        quality:
+            55, // Optimized balance of quality and small file size (< 100-150KB)
         minWidth: 800,
         minHeight: 800,
         format: CompressFormat.jpeg,
@@ -664,7 +671,8 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                     color: primaryBlue.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.camera_alt_rounded, color: primaryBlue),
+                  child:
+                      const Icon(Icons.camera_alt_rounded, color: primaryBlue),
                 ),
                 title: const Text('Take Photo Now',
                     style: TextStyle(fontWeight: FontWeight.w600)),
@@ -677,8 +685,8 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                     color: primaryGreen.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child:
-                      const Icon(Icons.photo_library_rounded, color: primaryGreen),
+                  child: const Icon(Icons.photo_library_rounded,
+                      color: primaryGreen),
                 ),
                 title: const Text('Choose from Gallery',
                     style: TextStyle(fontWeight: FontWeight.w600)),
@@ -768,7 +776,8 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     });
   }
 
-  void _setClampedControllerText(TextEditingController controller, double value) {
+  void _setClampedControllerText(
+      TextEditingController controller, double value) {
     final text = _formatEditableMoney(value);
     controller.value = TextEditingValue(
       text: text,
@@ -826,8 +835,10 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         }
 
         // Strictly enforce District validation against state's allowed districts
-        if (!ExpoStatesDistrictsService.instance.isValidDistrict(stateInput, districtInput)) {
-          _showSnack('Please select a valid District belonging to $stateInput from the suggestions list');
+        if (!ExpoStatesDistrictsService.instance
+            .isValidDistrict(stateInput, districtInput)) {
+          _showSnack(
+              'Please select a valid District belonging to $stateInput from the suggestions list');
           return false;
         }
 
@@ -886,8 +897,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     if (_currentStep < _steps.length - 1) {
       setState(() {
         _currentStep++;
-        if (_currentStep == 2 &&
-            ExpoOrder.modeIsSplit(_selectedPaymentMode)) {
+        if (_currentStep == 2 && ExpoOrder.modeIsSplit(_selectedPaymentMode)) {
           _syncReadOnlySplitTotal();
         }
       });
@@ -908,7 +918,8 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                 _shopNameController.text.trim().isNotEmpty
                     ? _shopNameController.text.trim()
                     : _customerNameController.text.trim(),
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
               ),
               Text(
                 '$_selectedOrderType • $_totalQty items',
@@ -994,11 +1005,15 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     if (_placeController.text.trim().isNotEmpty) return true;
     if (_districtController.text.trim().isNotEmpty) return true;
     if (_stateController.text.trim().isNotEmpty) return true;
-    if (_selectedPreferredBranch != null && _selectedPreferredBranch!.isNotEmpty) return true;
+    if (_selectedPreferredBranch != null &&
+        _selectedPreferredBranch!.isNotEmpty) return true;
     if (_selectedSalesman.isNotEmpty && _selectedSalesman != 'N/A') return true;
-    if (_advanceController.text.trim().isNotEmpty && _advanceController.text.trim() != '0') return true;
-    if (_cashSplitController.text.trim().isNotEmpty && _cashSplitController.text.trim() != '0') return true;
-    if (_onlineSplitController.text.trim().isNotEmpty && _onlineSplitController.text.trim() != '0') return true;
+    if (_advanceController.text.trim().isNotEmpty &&
+        _advanceController.text.trim() != '0') return true;
+    if (_cashSplitController.text.trim().isNotEmpty &&
+        _cashSplitController.text.trim() != '0') return true;
+    if (_onlineSplitController.text.trim().isNotEmpty &&
+        _onlineSplitController.text.trim() != '0') return true;
     if (_notesController.text.trim().isNotEmpty) return true;
     if (_paymentProofFile != null) return true;
     if (_items.any((it) =>
@@ -1076,6 +1091,40 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     if (mounted) Navigator.of(context).pop();
   }
 
+  Future<void> _notifyExpoAccountsUsers(ExpoOrder order) async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return;
+      await currentUser.getIdToken();
+
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .where('role', isEqualTo: 'expo_acc')
+          .get();
+
+      final title = 'New Order Verification Request';
+      final body =
+          '${order.createdUserName} submitted a ${order.orderType} order for ${order.shopName} (₹${order.totalAmount.toStringAsFixed(2)}).';
+
+      for (final doc in snap.docs) {
+        try {
+          await FirebaseFunctions.instanceFor(region: 'asia-south1')
+              .httpsCallable('sendLeadAssignmentNotification')
+              .call(<String, dynamic>{
+            'recipientUid': doc.id,
+            'title': title,
+            'body': body,
+            'notifType': 'expo_order_verification',
+          });
+        } catch (e) {
+          debugPrint('ExpoOrderForm: Error notifying expo_acc ${doc.id}: $e');
+        }
+      }
+    } catch (e) {
+      debugPrint('ExpoOrderForm: Error fetching expo_acc users: $e');
+    }
+  }
+
   Future<void> _submitOrder() async {
     FocusScope.of(context).unfocus();
     if (!_validateStep(2)) return;
@@ -1088,16 +1137,15 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       await cache.ensureLoaded();
 
       // 1. Upload payment proof concurrently if provided to dedicated bucket
-      final Future<String?> paymentProofFuture =
-          (_paymentProofFile != null &&
-                  ExpoOrder.modeRequiresReceipt(_selectedPaymentMode))
-              ? ExpoService.instance.uploadFile(
-                  _paymentProofFile!,
-                  bucketName: ExpoOrder.modeUsesUpiBucket(_selectedPaymentMode)
-                      ? ExpoSupabaseConfig.bucketUpiProofs
-                      : ExpoSupabaseConfig.bucketBankProofs,
-                )
-              : Future.value(_existingPaymentProofUrl);
+      final Future<String?> paymentProofFuture = (_paymentProofFile != null &&
+              ExpoOrder.modeRequiresReceipt(_selectedPaymentMode))
+          ? ExpoService.instance.uploadFile(
+              _paymentProofFile!,
+              bucketName: ExpoOrder.modeUsesUpiBucket(_selectedPaymentMode)
+                  ? ExpoSupabaseConfig.bucketUpiProofs
+                  : ExpoSupabaseConfig.bucketBankProofs,
+            )
+          : Future.value(_existingPaymentProofUrl);
 
       // 2. Upload item photos concurrently if provided to item bucket
       final List<Future<String?>> itemPhotoFutures = _items.map((it) {
@@ -1172,8 +1220,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         district: _districtController.text.trim(),
         state: _stateController.text.trim(),
         phone: _phoneController.text.trim(),
-        preferredBranch:
-            isSpot ? 'N/A' : (_selectedPreferredBranch ?? 'N/A'),
+        preferredBranch: isSpot ? 'N/A' : (_selectedPreferredBranch ?? 'N/A'),
         preferredSalesman: isSpot ? 'N/A' : _selectedSalesman,
         items: orderItems,
         subtotal: _round2(_subtotal),
@@ -1202,10 +1249,12 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       );
 
       if (widget.existingOrder != null) {
-        await ExpoService.instance.updateOrder(widget.existingOrder!.id, newOrder);
+        await ExpoService.instance
+            .updateOrder(widget.existingOrder!.id, newOrder);
       } else {
         await ExpoService.instance.createOrder(newOrder);
         await ExpoDraftService.instance.deleteDraft(_draftId);
+        unawaited(_notifyExpoAccountsUsers(newOrder));
       }
 
       if (mounted) {
@@ -1830,7 +1879,8 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
           return 'Enter district';
         }
         final stateName = _stateController.text.trim();
-        if (!ExpoStatesDistrictsService.instance.isValidDistrict(stateName, val)) {
+        if (!ExpoStatesDistrictsService.instance
+            .isValidDistrict(stateName, val)) {
           return 'Select valid district from suggestions';
         }
         return null;
@@ -1916,8 +1966,8 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
             onTap: () async {
               final picked = await showDatePicker(
                 context: context,
-                initialDate:
-                    _deliveryDate ?? DateTime.now().add(const Duration(days: 30)),
+                initialDate: _deliveryDate ??
+                    DateTime.now().add(const Duration(days: 30)),
                 firstDate: DateTime.now(),
                 lastDate: DateTime.now().add(const Duration(days: 365)),
               );
@@ -2008,9 +2058,8 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: isDark
-              ? const Color(0xFF0F243E)
-              : color.withValues(alpha: 0.08),
+          color:
+              isDark ? const Color(0xFF0F243E) : color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: color.withValues(alpha: 0.35)),
         ),
@@ -2122,11 +2171,11 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                   backgroundColor: primaryGreen,
                   elevation: 1,
                   shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 12),
-                      ),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
               ),
             ],
           ),
@@ -2227,8 +2276,10 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                 ),
                 if (code.isNotEmpty || desc.isNotEmpty)
                   Text(
-                    [if (code.isNotEmpty) 'MTC: $code', if (desc.isNotEmpty) desc]
-                        .join(' • '),
+                    [
+                      if (code.isNotEmpty) 'MTC: $code',
+                      if (desc.isNotEmpty) desc
+                    ].join(' • '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -2474,9 +2525,8 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
             decoration: InputDecoration(
               hintText: 'Enter order notes...',
               filled: true,
-              fillColor: isDark
-                  ? const Color(0xFF132847)
-                  : const Color(0xFFF1F5F9),
+              fillColor:
+                  isDark ? const Color(0xFF132847) : const Color(0xFFF1F5F9),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide.none,
@@ -2674,7 +2724,8 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                         color: (!isSpot && _balanceAmount > 0)
                             ? const Color(0xFFE65100)
                                 .withValues(alpha: isDark ? 0.2 : 0.1)
-                            : primaryGreen.withValues(alpha: isDark ? 0.2 : 0.1),
+                            : primaryGreen.withValues(
+                                alpha: isDark ? 0.2 : 0.1),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: (!isSpot && _balanceAmount > 0)
@@ -2878,8 +2929,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: primaryBlue.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
@@ -2938,18 +2988,16 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                           ? Icons.check_circle_rounded
                           : Icons.add_a_photo_outlined,
                       size: 16,
-                      color: item.photoFile != null
-                          ? primaryGreen
-                          : primaryBlue,
+                      color:
+                          item.photoFile != null ? primaryGreen : primaryBlue,
                     ),
                     label: Text(
                       item.photoFile != null ? 'Photo Added' : 'Add Photo',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
-                        color: item.photoFile != null
-                            ? primaryGreen
-                            : primaryBlue,
+                        color:
+                            item.photoFile != null ? primaryGreen : primaryBlue,
                       ),
                     ),
                     style: TextButton.styleFrom(
@@ -3546,4 +3594,3 @@ class _CachedAutocompleteFieldState extends State<_CachedAutocompleteField> {
     );
   }
 }
-
