@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
 import '../Login/auth_wrapper.dart';
 import '../Navigation/navigation_state.dart';
@@ -746,6 +747,16 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       if (role == 'admin' || role == 'sales')
         NeumorphicButton(
           onTap: () => _navigateToExpo(context),
+          onLongPress: role == 'admin'
+              ? () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ExpoAccountsDashboardPage(),
+                    ),
+                  );
+                }
+              : null,
           text: 'Expo',
           color: primaryBlue,
           textColor: Colors.white,
@@ -772,7 +783,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           textColor: Colors.white,
           icon: Icons.storefront_rounded,
         ),
-      if (role == 'sales' || role == 'admin')
+      if (role == 'sales')
         NeumorphicButton(
           onTap: () => _navigateToExpoAssignedOrders(context),
           text: 'EXPO Orders',

@@ -105,31 +105,35 @@ Widget buildDmeUserTiles(BuildContext context, {int? complaintCount}) {
     ),
   ];
 
-  return Column(
-    children: [
-      Row(
-        children: [
-          Expanded(child: buttons[0]),
-          const SizedBox(width: 16),
-          Expanded(child: buttons[1]),
-        ],
-      ),
-      const SizedBox(height: 16),
-      Row(
-        children: [
-          Expanded(child: buttons[2]),
-          const SizedBox(width: 16),
-          Expanded(child: buttons[3]),
-        ],
-      ),
-      const SizedBox(height: 16),
-      Row(
-        children: [
-          Expanded(child: buttons[4]),
-          const SizedBox(width: 16),
-          const Expanded(child: SizedBox()),
-        ],
-      ),
-    ],
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 24),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Expanded(child: buttons[0]),
+            const SizedBox(width: 14),
+            Expanded(child: buttons[1]),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(child: buttons[2]),
+            const SizedBox(width: 14),
+            Expanded(child: buttons[3]),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(child: buttons[4]),
+            const SizedBox(width: 14),
+            const Expanded(child: SizedBox()),
+          ],
+        ),
+      ],
+    ),
   );
 }
