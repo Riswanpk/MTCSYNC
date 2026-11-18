@@ -193,6 +193,8 @@ Future<void> _setupFirebaseMessaging() async {
         channelKey = 'task_completion_channel';
       } else if (type == 'core_task_assignment' || type == 'core_task') {
         channelKey = 'task_assignment_channel';
+      } else if (type == 'core_notice' || type == 'notice') {
+        channelKey = 'notice_channel';
       } else if (type == 'expo_order_verification') {
         channelKey = 'expo_order_verification_channel_v2';
       }
@@ -275,6 +277,18 @@ Future<void> _initializeNotifications() async {
       defaultColor: const Color(0xFF005BAC),
       ledColor: Colors.blue,
       soundSource: 'resource://raw/you_have_been_assigned_a_task',
+      importance: NotificationImportance.High,
+      channelShowBadge: true,
+      criticalAlerts: true,
+      playSound: true,
+    ),
+    NotificationChannel(
+      channelKey: 'notice_channel',
+      channelName: 'Notice Notifications',
+      channelDescription: 'Channel for read-only notices from Core Team',
+      defaultColor: const Color(0xFF005BAC),
+      ledColor: Colors.blue,
+      soundSource: 'resource://raw/notice',
       importance: NotificationImportance.High,
       channelShowBadge: true,
       criticalAlerts: true,
@@ -670,6 +684,12 @@ class NotificationController {
     // Handle overdue tasks notification
     if (payload?['page'] == 'todo') {
       _doPush((_) => const TodoPage());
+      return;
+    }
+
+    // Handle core notice notifications navigation (User Task View Page -> Notice tab)
+    if (notifType == 'core_notice' || notifType == 'notice' || channelKey == 'notice_channel') {
+      _doPush((_) => const UserTaskPage(initialTabIndex: 1));
       return;
     }
 

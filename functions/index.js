@@ -171,6 +171,9 @@ exports.sendLeadAssignmentNotification = onCall(
     } else if (notifType === "core_task_assignment") {
       channelId = "task_assignment_channel";
       soundName = "you_have_been_assigned_a_task";
+    } else if (notifType === "core_notice" || notifType === "notice") {
+      channelId = "notice_channel";
+      soundName = "notice";
     } else if (notifType === "complaint_resolved" || notifType === "dme_complaint_resolved") {
       channelId = "dme_complaints_resolved_channel";
       soundName = "complaint_resolved";

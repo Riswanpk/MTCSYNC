@@ -235,16 +235,17 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
       final role = userCache.role;
 
       if (role == 'sales' || role == 'manager' || role == 'asst_manager') {
-        // Fetch pending tasks assigned to current user
+        // Fetch pending tasks and notices assigned to current user
         final snapshot = await FirebaseFirestore.instance
             .collection('core_tasks')
             .where('assigned_to', isEqualTo: uid)
-            .where('status', isEqualTo: 'pending')
+            .where('status', whereIn: ['pending', 'notice'])
             .get();
 
         for (final doc in snapshot.docs) {
           final data = doc.data();
-          final title = data['title'] ?? 'Task Assigned';
+          final isNotice = data['status'] == 'notice' || data['is_notice'] == true;
+          final title = data['title'] ?? (isNotice ? 'Notice' : 'Task Assigned');
           final assignedBy = data['assigned_by_name'] ?? 'Core Team';
           final ts = (data['timestamp'] as Timestamp?)?.toDate();
 
@@ -252,7 +253,9 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
             type: _NotifType.coreTask,
             id: doc.id,
             title: title,
-            subtitle: 'Task assigned by $assignedBy',
+            subtitle: isNotice
+                ? 'Notice from $assignedBy'
+                : 'Task assigned by $assignedBy',
             time: ts,
           ));
         }
@@ -441,11 +444,14 @@ class _LeadsNotificationPageState extends State<LeadsNotificationPage> {
           MaterialPageRoute(builder: (_) => const CoreTeamTaskPage()),
         );
       } else {
-        // Navigate to UserTaskPage for assigned user
+        // Navigate to UserTaskPage for assigned user (Notice tab if notice)
+        final isNotice = item.subtitle.startsWith('Notice');
         if (!mounted) return;
         await Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const UserTaskPage()),
+          MaterialPageRoute(
+            builder: (_) => UserTaskPage(initialTabIndex: isNotice ? 1 : 0),
+          ),
         );
       }
 

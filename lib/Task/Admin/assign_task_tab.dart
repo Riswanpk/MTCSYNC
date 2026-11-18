@@ -29,6 +29,7 @@ class _AssignTaskTabState extends State<AssignTaskTab> {
   final TextEditingController _taskNameController = TextEditingController();
   final TextEditingController _taskController = TextEditingController();
   bool _isAssigning = false;
+  bool _isNotice = false;
 
   List<Map<String, dynamic>> _eligibleUsers = [];
   List<Map<String, dynamic>> _filteredUsers = [];
@@ -174,7 +175,8 @@ class _AssignTaskTabState extends State<AssignTaskTab> {
           'assigned_by': currentUser.uid,
           'assigned_by_name': assignerName,
           'assigned_by_email': assignerEmail,
-          'status': 'pending',
+          'status': _isNotice ? 'notice' : 'pending',
+          'is_notice': _isNotice,
           'timestamp': FieldValue.serverTimestamp(),
           'note': '',
           'completed_at': null,
@@ -189,9 +191,11 @@ class _AssignTaskTabState extends State<AssignTaskTab> {
                 .httpsCallable('sendLeadAssignmentNotification')
                 .call(<String, dynamic>{
               'recipientUid': recipientUid,
-              'title': 'New Task Assigned',
-              'body': 'Core Team assigned you a new task: "$taskName"',
-              'notifType': 'core_task_assignment',
+              'title': _isNotice ? 'New Notice' : 'New Task Assigned',
+              'body': _isNotice
+                  ? 'Core Team posted a new notice: "$taskName"'
+                  : 'Core Team assigned you a new task: "$taskName"',
+              'notifType': _isNotice ? 'core_notice' : 'core_task_assignment',
               'leadDocId': docRef.id,
             });
           } catch (error) {
@@ -203,9 +207,13 @@ class _AssignTaskTabState extends State<AssignTaskTab> {
       if (mounted) {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
-            content: Text(targetUsers.length > 1
-                ? 'Tasks assigned successfully to ${targetUsers.length} users!'
-                : 'Task assigned successfully!'),
+            content: Text(_isNotice
+                ? (targetUsers.length > 1
+                    ? 'Notice sent successfully to ${targetUsers.length} users!'
+                    : 'Notice sent successfully!')
+                : (targetUsers.length > 1
+                    ? 'Tasks assigned successfully to ${targetUsers.length} users!'
+                    : 'Task assigned successfully!')),
             backgroundColor: Colors.green,
           ),
         );
@@ -218,7 +226,9 @@ class _AssignTaskTabState extends State<AssignTaskTab> {
           _filteredUsers = _eligibleUsers;
         });
 
-        widget.onTaskAssigned();
+        if (!_isNotice) {
+          widget.onTaskAssigned();
+        }
       }
     } catch (e) {
       debugPrint('Error assigning task: $e');
@@ -244,13 +254,73 @@ class _AssignTaskTabState extends State<AssignTaskTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Assign a New Task',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : Colors.black87,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _isNotice ? 'Post a New Notice' : 'Assign a New Task',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF16253B) : const Color(0xFFE8EEF5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: () => setState(() => _isNotice = false),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: !_isNotice ? const Color(0xFF005BAC) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: Text(
+                          'Task',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: !_isNotice
+                                ? Colors.white
+                                : (isDark ? Colors.white70 : Colors.black54),
+                          ),
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => setState(() => _isNotice = true),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _isNotice ? const Color(0xFF2E7D32) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: Text(
+                          'Notice',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: _isNotice
+                                ? Colors.white
+                                : (isDark ? Colors.white70 : Colors.black54),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           Card(
@@ -397,8 +467,10 @@ class _AssignTaskTabState extends State<AssignTaskTab> {
                                     const SizedBox(width: 8),
                                     Text(
                                       isRoleActive
-                                          ? 'Assign Task to Selected Role(s)'
-                                          : 'Assign Task',
+                                          ? (_isNotice
+                                              ? 'Send Notice to Selected Role(s)'
+                                              : 'Assign Task to Selected Role(s)')
+                                          : (_isNotice ? 'Send Notice' : 'Assign Task'),
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 16,

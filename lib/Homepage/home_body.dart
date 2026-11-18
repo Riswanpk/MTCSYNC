@@ -352,6 +352,9 @@ class HomeButtonsContainer extends StatefulWidget {
 }
 
 class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
+  static const String _lastHomePageKey = 'home_last_page_index';
+  static int? _cachedLastPage;
+
   late PageController _pageController;
   int _currentPageIndex =
       1000; // Initialize to a large value for infinite sliding
@@ -359,7 +362,33 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   @override
   void initState() {
     super.initState();
+    _currentPageIndex = 1000 + (_cachedLastPage ?? 0);
     _pageController = PageController(initialPage: _currentPageIndex);
+    _loadLastPage();
+  }
+
+  Future<void> _loadLastPage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedPage = (prefs.getInt(_lastHomePageKey) ?? 0) % 2;
+    _cachedLastPage = savedPage;
+    if (!mounted) return;
+    if (savedPage != (_currentPageIndex % 2)) {
+      final targetIndex = 1000 + savedPage;
+      setState(() {
+        _currentPageIndex = targetIndex;
+      });
+      if (_pageController.hasClients) {
+        _pageController.jumpToPage(targetIndex);
+      }
+      widget.onPageChanged?.call(targetIndex);
+    }
+  }
+
+  Future<void> _saveLastPage(int pageNum) async {
+    final normalized = pageNum % 2;
+    _cachedLastPage = normalized;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_lastHomePageKey, normalized);
   }
 
   @override
@@ -502,6 +531,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           setState(() {
             _currentPageIndex = index;
           });
+          _saveLastPage(index % 2);
           if (widget.onPageChanged != null) {
             widget.onPageChanged!(index);
           }
@@ -943,7 +973,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
       if (role == 'admin' || role == 'manager' || role == 'asst_manager')
         NeumorphicButton(
           onTap: () => _navigateToUserTasks(context),
-          text: 'Tasks',
+          text: role == 'admin' ? 'Tasks/Notice' : 'Tasks',
           color: primaryGreen,
           textColor: Colors.white,
           icon: Icons.assignment_rounded,

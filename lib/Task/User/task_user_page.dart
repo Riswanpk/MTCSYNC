@@ -13,7 +13,9 @@ import '../../Navigation/user_cache_service.dart';
 import 'task_reminder_service.dart';
 
 class UserTaskPage extends StatefulWidget {
-  const UserTaskPage({super.key});
+  final int initialTabIndex;
+
+  const UserTaskPage({super.key, this.initialTabIndex = 0});
 
   @override
   State<UserTaskPage> createState() => _UserTaskPageState();
@@ -253,23 +255,48 @@ class _UserTaskPageState extends State<UserTaskPage> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A1628) : const Color(0xFFF6F7FB),
-      appBar: AppBar(
-        title: const Text('My Tasks'),
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF005BAC), Color(0xFF8CC63F)],
+    return DefaultTabController(
+      length: 2,
+      initialIndex: widget.initialTabIndex,
+      child: Scaffold(
+        backgroundColor: isDark ? const Color(0xFF0A1628) : const Color(0xFFF6F7FB),
+        appBar: AppBar(
+          title: const Text('My Tasks & Notices'),
+          flexibleSpace: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF005BAC), Color(0xFF8CC63F)],
+              ),
             ),
           ),
+          foregroundColor: Colors.white,
+          elevation: 4,
+          bottom: const TabBar(
+            indicatorColor: Colors.white,
+            indicatorWeight: 3,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white70,
+            labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            tabs: [
+              Tab(icon: Icon(Icons.assignment_rounded), text: 'Tasks'),
+              Tab(icon: Icon(Icons.campaign_rounded), text: 'Notice'),
+            ],
+          ),
         ),
-        foregroundColor: Colors.white,
-        elevation: 4,
+        body: TabBarView(
+          children: [
+            _buildTasksTab(uid, isDark),
+            _buildNoticesTab(uid, isDark),
+          ],
+        ),
       ),
-      body: StreamBuilder<QuerySnapshot>(
+    );
+  }
+
+  Widget _buildTasksTab(String uid, bool isDark) {
+    return StreamBuilder<QuerySnapshot>(
         stream: _firestore
             .collection('core_tasks')
             .where('assigned_to', isEqualTo: uid)
@@ -531,7 +558,184 @@ class _UserTaskPageState extends State<UserTaskPage> {
             },
           );
         },
-      ),
+      );
+  }
+
+  Widget _buildNoticesTab(String uid, bool isDark) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore
+          .collection('core_tasks')
+          .where('assigned_to', isEqualTo: uid)
+          .where('status', isEqualTo: 'notice')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        final docs = snapshot.data?.docs ?? [];
+        if (docs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.campaign_outlined,
+                  size: 64,
+                  color: isDark ? Colors.white24 : Colors.black26,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No notices for you!',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: isDark ? Colors.white60 : Colors.black54,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final sortedDocs = docs.toList()
+          ..sort((a, b) {
+            final tsA = a['timestamp'] as Timestamp?;
+            final tsB = b['timestamp'] as Timestamp?;
+            if (tsA == null) return 1;
+            if (tsB == null) return -1;
+            return tsB.compareTo(tsA);
+          });
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: sortedDocs.length,
+          itemBuilder: (context, index) {
+            final doc = sortedDocs[index];
+            final data = doc.data() as Map<String, dynamic>;
+            final title = data['title'] ?? 'Notice';
+            final description = data['description'] ?? '';
+            final assignedBy = data['assigned_by_name'] ?? 'Core Team';
+            final timestamp = data['timestamp'] as Timestamp?;
+            final formattedDate = timestamp != null
+                ? DateFormat('MMM d, y • h:mm a').format(timestamp.toDate())
+                : '';
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF132238) : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: const Color(0xFF005BAC).withValues(alpha: 0.2),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF005BAC).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.campaign_rounded,
+                            color: Color(0xFF005BAC),
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.white : const Color(0xFF1A2332),
+                                ),
+                              ),
+                              if (formattedDate.isNotEmpty)
+                                Text(
+                                  formattedDate,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDark ? Colors.white54 : Colors.black45,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2E7D32).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text(
+                            'Notice',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF2E7D32),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (description.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        description,
+                        style: TextStyle(
+                          fontSize: 14,
+                          height: 1.4,
+                          color: isDark ? Colors.white70 : Colors.black87,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.person_outline_rounded,
+                          size: 15,
+                          color: isDark ? Colors.white54 : Colors.black45,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'From: $assignedBy',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: isDark ? Colors.white54 : Colors.black54,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
