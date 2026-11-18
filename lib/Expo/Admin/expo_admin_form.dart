@@ -20,6 +20,7 @@ class _ExpoAdminFormPageState extends State<ExpoAdminFormPage> {
 
   late TextEditingController _nameController;
   late TextEditingController _locationController;
+  late TextEditingController _minCouponController;
 
   DateTime? _startDate;
   TimeOfDay? _startTime;
@@ -35,6 +36,9 @@ class _ExpoAdminFormPageState extends State<ExpoAdminFormPage> {
     final ex = widget.existingExhibition;
     _nameController = TextEditingController(text: ex?.name ?? '');
     _locationController = TextEditingController(text: ex?.location ?? '');
+    _minCouponController = TextEditingController(
+      text: ex != null ? ex.minCouponAmount.toStringAsFixed(0) : '10000',
+    );
 
     if (ex != null) {
       _startDate = ex.startDate;
@@ -55,6 +59,7 @@ class _ExpoAdminFormPageState extends State<ExpoAdminFormPage> {
   void dispose() {
     _nameController.dispose();
     _locationController.dispose();
+    _minCouponController.dispose();
     super.dispose();
   }
 
@@ -179,6 +184,8 @@ class _ExpoAdminFormPageState extends State<ExpoAdminFormPage> {
         endDate: end,
         location: _locationController.text.trim(),
         selectedUsers: _selectedUsers,
+        minCouponAmount:
+            double.tryParse(_minCouponController.text.trim()) ?? 10000.0,
       );
 
       if (mounted) {
@@ -371,6 +378,38 @@ class _ExpoAdminFormPageState extends State<ExpoAdminFormPage> {
                   decoration: InputDecoration(
                     hintText: 'e.g. Calicut Trade Centre, Mini Bypass Road',
                     prefixIcon: const Icon(Icons.pin_drop_rounded, color: primaryBlue),
+                    filled: true,
+                    fillColor: isDark
+                        ? Colors.white.withValues(alpha: 0.05)
+                        : const Color(0xFFF1F5F9),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+
+              // Minimum Coupon Amount
+              _buildSectionCard(
+                isDark: isDark,
+                title: 'Minimum Coupon Amount (₹)',
+                icon: Icons.confirmation_number_rounded,
+                child: TextFormField(
+                  controller: _minCouponController,
+                  keyboardType: TextInputType.number,
+                  validator: (val) {
+                    final parsed = double.tryParse((val ?? '').trim());
+                    if (parsed == null || parsed <= 0) {
+                      return 'Enter a valid amount greater than 0';
+                    }
+                    return null;
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'e.g. 10000 (1 coupon per multiple)',
+                    prefixIcon: const Icon(Icons.currency_rupee_rounded,
+                        color: primaryBlue),
                     filled: true,
                     fillColor: isDark
                         ? Colors.white.withValues(alpha: 0.05)

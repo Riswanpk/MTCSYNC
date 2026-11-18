@@ -44,6 +44,7 @@ class Exhibition {
   final List<Map<String, dynamic>> selectedUsers;
   final bool isManuallyEnded;
   final DateTime? endedAt;
+  final double minCouponAmount;
   final DateTime createdAt;
   final String createdBy;
   final String createdByName;
@@ -58,6 +59,7 @@ class Exhibition {
     required this.selectedUsers,
     this.isManuallyEnded = false,
     this.endedAt,
+    this.minCouponAmount = 10000.0,
     required this.createdAt,
     required this.createdBy,
     required this.createdByName,
@@ -89,6 +91,7 @@ class Exhibition {
       'location': location,
       'selected_user_ids': selectedUserIds,
       'selected_users': selectedUsers,
+      'min_coupon_amount': minCouponAmount,
       'created_at': _ts(createdAt),
       'created_by': createdBy,
       'created_by_name': createdByName,
@@ -122,6 +125,7 @@ class Exhibition {
     final bool manuallyEnded = (data['is_ended'] == true) || metaEnded;
     final DateTime? endedAtVal =
         _parseNullableDate(data['ended_at']) ?? metaEndedAt;
+    final parsedMinCoupon = _toDouble(data['min_coupon_amount']);
 
     return Exhibition(
       id: (data['id'] ?? '').toString(),
@@ -133,6 +137,7 @@ class Exhibition {
       selectedUsers: users,
       isManuallyEnded: manuallyEnded,
       endedAt: endedAtVal,
+      minCouponAmount: parsedMinCoupon > 0 ? parsedMinCoupon : 10000.0,
       createdAt: _parseDate(data['created_at']),
       createdBy: data['created_by'] ?? '',
       createdByName: data['created_by_name'] ?? '',
@@ -888,6 +893,7 @@ class ExpoService {
     required DateTime endDate,
     required String location,
     required List<Map<String, dynamic>> selectedUsers,
+    double minCouponAmount = 10000.0,
   }) async {
     final user = FirebaseAuth.instance.currentUser;
     final cache = UserCacheService.instance;
@@ -928,6 +934,7 @@ class ExpoService {
       'location': location.trim(),
       'selected_user_ids': userIds,
       'selected_users': usersToSave,
+      'min_coupon_amount': minCouponAmount > 0 ? minCouponAmount : 10000.0,
     };
 
     if (id == null || id.isEmpty) {

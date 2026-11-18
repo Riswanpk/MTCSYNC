@@ -52,6 +52,7 @@ class _ExpoCouponsPageState extends State<ExpoCouponsPage> {
   final TextEditingController _searchController = TextEditingController();
 
   String? _selectedExhibitionId;
+  double _selectedMinCouponAmount = 10000.0;
   String _selectedFilter = 'Eligible';
   String _searchQuery = '';
   bool _isLoading = false;
@@ -81,8 +82,9 @@ class _ExpoCouponsPageState extends State<ExpoCouponsPage> {
   }
 
   int _couponsForAmount(double amount) {
-    if (amount < 10000) return 0;
-    return amount ~/ 10000;
+    final minAmt = _selectedMinCouponAmount;
+    if (minAmt <= 0 || amount < minAmt) return 0;
+    return amount ~/ minAmt;
   }
 
   Future<void> _loadOrders(String exhibitionId) async {
@@ -455,6 +457,7 @@ class _ExpoCouponsPageState extends State<ExpoCouponsPage> {
                   if (!mounted || _selectedExhibitionId != null) return;
                   setState(() {
                     _selectedExhibitionId = exhibitions.first.id;
+                    _selectedMinCouponAmount = exhibitions.first.minCouponAmount;
                   });
                   _loadOrders(exhibitions.first.id);
                 });
@@ -464,6 +467,15 @@ class _ExpoCouponsPageState extends State<ExpoCouponsPage> {
                 (e) => e.id == _selectedExhibitionId,
                 orElse: () => exhibitions.first,
               );
+              if (_selectedExhibitionId == selectedEx.id &&
+                  _selectedMinCouponAmount != selectedEx.minCouponAmount) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) return;
+                  setState(() {
+                    _selectedMinCouponAmount = selectedEx.minCouponAmount;
+                  });
+                });
+              }
 
               return Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
@@ -596,6 +608,8 @@ class _ExpoCouponsPageState extends State<ExpoCouponsPage> {
                                         setState(() {
                                           _isDropdownOpen = false;
                                           _selectedExhibitionId = ex.id;
+                                          _selectedMinCouponAmount =
+                                              ex.minCouponAmount;
                                         });
                                         _loadOrders(ex.id);
                                       },
@@ -735,7 +749,7 @@ class _ExpoCouponsPageState extends State<ExpoCouponsPage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '${filtered.length} Customer${filtered.length == 1 ? '' : 's'} ($_selectedFilter)',
+                    '${filtered.length} Customer${filtered.length == 1 ? '' : 's'} ($_selectedFilter) • ₹${_selectedMinCouponAmount.toStringAsFixed(0)}/coupon',
                     style: TextStyle(
                       fontSize: 12,
                       color: isDark ? Colors.grey[400] : _primaryBlue,
