@@ -34,6 +34,18 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
   void initState() {
     super.initState();
     _currentOrder = widget.order;
+    if (_currentOrder.transferHistory.isEmpty) {
+      _loadTransferHistoryFallback();
+    }
+  }
+
+  Future<void> _loadTransferHistoryFallback() async {
+    final rows = await ExpoService.instance.fetchOrderTransfers(_currentOrder.id);
+    if (rows.isNotEmpty && mounted) {
+      setState(() {
+        _currentOrder = _currentOrder.copyWith(transferHistory: rows);
+      });
+    }
   }
 
   @override
@@ -291,6 +303,174 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
     );
   }
 
+  Widget _buildTransferHistoryCard(ExpoOrder order, bool isDark) {
+    return Card(
+      elevation: 1.5,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color: primaryBlue.withValues(alpha: isDark ? 0.35 : 0.2),
+        ),
+      ),
+      color: isDark ? const Color(0xFF0F243E) : Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: primaryBlue.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.swap_horiz_rounded,
+                    color: primaryBlue,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Salesmen Handling & Transfer History',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: primaryGreen.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${order.transferHistory.length} Transfer${order.transferHistory.length > 1 ? 's' : ''}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: primaryGreen,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: primaryBlue.withValues(alpha: isDark ? 0.16 : 0.06),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                order.handlersDisplayChain,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : primaryBlue,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...order.transferHistory.map((t) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.04)
+                      : const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white12
+                        : Colors.black.withValues(alpha: 0.06),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: primaryBlue,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            '#${t.stepNumber}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '${t.fromUserName}${t.fromUserBranch.isNotEmpty ? ' (${t.fromUserBranch})' : ''} → ${t.toUserName}${t.toUserBranch.isNotEmpty ? ' (${t.toUserBranch})' : ''}',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        Text(
+                          _formatDate(t.transferredAt),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? Colors.white54 : Colors.black54,
+                          ),
+                        ),
+                        Text(
+                          '• Items: ${t.itemsCount}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? Colors.white60 : Colors.black54,
+                          ),
+                        ),
+                        Text(
+                          '• Advance: ₹${t.advanceAmount.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: primaryGreen,
+                          ),
+                        ),
+                        Text(
+                          '• Total: ₹${t.totalAmount.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: primaryBlue,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildDetailRow(String label, String value, bool isDark) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -514,8 +694,25 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                       ),
                     if (order.stallPickupStatus != null && order.stallPickupStatus!.isNotEmpty)
                       _buildDetailRow('Stall Status', order.stallPickupStatus!, isDark),
-                    _buildDetailRow('Created By',
-                        '${order.createdUserName} (${order.createdUserBranch})', isDark),
+                    if (order.transferHistory.isNotEmpty) ...[
+                      _buildDetailRow(
+                        'Originally Created By',
+                        '${order.transferHistory.first.fromUserName} (${order.transferHistory.first.fromUserBranch})',
+                        isDark,
+                      ),
+                      _buildDetailRow(
+                        'Final Submitted By',
+                        '${order.createdUserName} (${order.createdUserBranch})',
+                        isDark,
+                      ),
+                      _buildDetailRow(
+                        'All Handlers',
+                        order.handlersDisplayChain,
+                        isDark,
+                      ),
+                    ] else
+                      _buildDetailRow('Created By',
+                          '${order.createdUserName} (${order.createdUserBranch})', isDark),
                     _buildDetailRow(
                         'Payment Mode',
                         ExpoOrder.normalizePaymentMode(order.paymentMode),
@@ -538,6 +735,11 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
               ),
             ),
             const SizedBox(height: 14),
+
+            if (order.transferHistory.isNotEmpty) ...[
+              _buildTransferHistoryCard(order, isDark),
+              const SizedBox(height: 14),
+            ],
 
             // Payment Verification Section
             Card(

@@ -9,6 +9,8 @@ import '../DME/temporary.dart';
 import '../Navigation/user_cache_service.dart';
 
 import 'dart:async';
+import 'dart:io';
+import 'package:device_info_plus/device_info_plus.dart';
 
 class SettingsPage extends StatefulWidget {
   final String userRole;
@@ -97,13 +99,30 @@ class _SettingsPageState extends State<SettingsPage>
   }
 
   Future<void> _checkPermissions() async {
+    int? androidSdkInt;
+    if (Platform.isAndroid) {
+      try {
+        final androidInfo = await DeviceInfoPlugin().androidInfo;
+        androidSdkInt = androidInfo.version.sdkInt;
+      } catch (e) {
+        debugPrint('Error getting Android SDK version: $e');
+      }
+    }
+
     final Map<Permission, PermissionStatus> updatedStatuses = {};
     for (final item in _appPermissions) {
       final perm = item['permission'] as Permission;
       try {
         if (perm == Permission.storage) {
-          final storageStatus = await Permission.storage.status;
-          updatedStatuses[perm] = storageStatus;
+          // READ_EXTERNAL_STORAGE has maxSdkVersion="32" in AndroidManifest.xml.
+          // On Android 13+ (SDK 33+), file picking uses Storage Access Framework
+          // and does not require Permission.storage.
+          if (androidSdkInt != null && androidSdkInt >= 33) {
+            updatedStatuses[perm] = PermissionStatus.granted;
+          } else {
+            final storageStatus = await Permission.storage.status;
+            updatedStatuses[perm] = storageStatus;
+          }
         } else {
           final status = await perm.status;
           updatedStatuses[perm] = status;

@@ -1006,14 +1006,22 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     if (_districtController.text.trim().isNotEmpty) return true;
     if (_stateController.text.trim().isNotEmpty) return true;
     if (_selectedPreferredBranch != null &&
-        _selectedPreferredBranch!.isNotEmpty) return true;
+        _selectedPreferredBranch!.isNotEmpty) {
+      return true;
+    }
     if (_selectedSalesman.isNotEmpty && _selectedSalesman != 'N/A') return true;
     if (_advanceController.text.trim().isNotEmpty &&
-        _advanceController.text.trim() != '0') return true;
+        _advanceController.text.trim() != '0') {
+      return true;
+    }
     if (_cashSplitController.text.trim().isNotEmpty &&
-        _cashSplitController.text.trim() != '0') return true;
+        _cashSplitController.text.trim() != '0') {
+      return true;
+    }
     if (_onlineSplitController.text.trim().isNotEmpty &&
-        _onlineSplitController.text.trim() != '0') return true;
+        _onlineSplitController.text.trim() != '0') {
+      return true;
+    }
     if (_notesController.text.trim().isNotEmpty) return true;
     if (_paymentProofFile != null) return true;
     if (_items.any((it) =>
@@ -1132,7 +1140,11 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     }
   }
 
-  Future<void> _submitOrder() async {
+  Future<void> _submitOrder({
+    String? transferToUserId,
+    String? transferToUserName,
+    String? transferToUserBranch,
+  }) async {
     FocusScope.of(context).unfocus();
     if (!_validateStep(2)) return;
 
@@ -1142,6 +1154,9 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       final user = FirebaseAuth.instance.currentUser;
       final cache = UserCacheService.instance;
       await cache.ensureLoaded();
+      final currentUid = user?.uid ?? '';
+      final currentName = cache.username ?? user?.displayName ?? 'Sales User';
+      final currentBranch = cache.branch ?? '';
 
       // 1. Upload payment proof concurrently if provided to dedicated bucket
       final Future<String?> paymentProofFuture = (_paymentProofFile != null &&
@@ -1215,6 +1230,28 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         savedOnlineAmount = _round2(paidNow);
       }
 
+      final isTransfer = transferToUserId != null && transferToUserId.isNotEmpty;
+      final existingHistory =
+          widget.existingOrder?.transferHistory ?? const <ExpoOrderTransfer>[];
+      ExpoOrderTransfer? newTransfer;
+      final List<ExpoOrderTransfer> updatedHistory = [...existingHistory];
+      if (isTransfer) {
+        newTransfer = ExpoOrderTransfer(
+          stepNumber: existingHistory.length + 1,
+          fromUserId: currentUid,
+          fromUserName: currentName,
+          fromUserBranch: currentBranch,
+          toUserId: transferToUserId,
+          toUserName: transferToUserName ?? 'Sales User',
+          toUserBranch: transferToUserBranch ?? '',
+          itemsCount: orderItems.length,
+          totalAmount: _netTotal,
+          advanceAmount: paidNow,
+          transferredAt: DateTime.now(),
+        );
+        updatedHistory.add(newTransfer);
+      }
+
       final newOrder = ExpoOrder(
         id: '',
         exhibitionId: widget.exhibition.id,
@@ -1237,7 +1274,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         totalQty: _totalQty,
         advanceAmount: paidNow,
         balanceAmount: isSpot ? 0.0 : _balanceAmount,
-        status: 'Pending Verification',
+        status: isTransfer ? 'Transferred' : 'Pending Verification',
         paymentMode: normalizedMode,
         cashAmount: savedCashAmount,
         onlineAmount: savedOnlineAmount,
@@ -1249,26 +1286,43 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         isConvertedToBooking: false,
         stallPickupStatus:
             _selectedOrderType == 'Stall Delivery' ? 'Pending Pickup' : null,
-        createdUserId: user?.uid ?? '',
-        createdUserName: cache.username ?? user?.displayName ?? 'Sales User',
-        createdUserBranch: cache.branch ?? '',
-        createdAt: DateTime.now(),
+        createdUserId: isTransfer ? transferToUserId : currentUid,
+        createdUserName:
+            isTransfer ? (transferToUserName ?? 'Sales User') : currentName,
+        createdUserBranch:
+            isTransfer ? (transferToUserBranch ?? '') : currentBranch,
+        createdAt: widget.existingOrder?.createdAt ?? DateTime.now(),
+        transferHistory: updatedHistory,
       );
 
       if (widget.existingOrder != null) {
         await ExpoService.instance
             .updateOrder(widget.existingOrder!.id, newOrder);
+        if (isTransfer && newTransfer != null) {
+          await ExpoService.instance.logOrderTransfer(
+            orderId: widget.existingOrder!.id,
+            exhibitionId: widget.exhibition.id,
+            transfer: newTransfer,
+          );
+        } else if (!isTransfer &&
+            widget.existingOrder!.status == 'Transferred') {
+          unawaited(_notifyExpoAccountsUsers(newOrder));
+        }
       } else {
         await ExpoService.instance.createOrder(newOrder);
         await ExpoDraftService.instance.deleteDraft(_draftId);
-        unawaited(_notifyExpoAccountsUsers(newOrder));
+        if (!isTransfer) {
+          unawaited(_notifyExpoAccountsUsers(newOrder));
+        }
       }
 
       if (mounted) {
         _showSnack(
-          widget.existingOrder != null
-              ? 'Order updated successfully!'
-              : 'Order submitted successfully!',
+          isTransfer
+              ? 'Order transferred to ${transferToUserName ?? 'salesman'} (not sent for verification yet)'
+              : (widget.existingOrder != null
+                  ? 'Order updated successfully!'
+                  : 'Order submitted successfully!'),
           color: primaryGreen,
         );
         Navigator.of(context).pop();
@@ -1279,6 +1333,307 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _showTransferOnSubmitDialog() async {
+    FocusScope.of(context).unfocus();
+    if (!_validateStep(2)) return;
+
+    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final allUsers = await UserCacheService.instance.getAllUsers();
+    final selectedExIds = widget.exhibition.selectedUserIds;
+    const allowedRoles = {
+      'sales',
+      'manager',
+      'asst_manager',
+      'asst manager',
+      'assistant manager',
+      'expo_sales',
+      'expo sales',
+    };
+    final candidates = allUsers.where((u) {
+      final uid = (u['uid'] ?? u['id'] ?? '').toString();
+      if (uid.isEmpty || uid == currentUid) return false;
+      if (selectedExIds.isNotEmpty) {
+        return selectedExIds.contains(uid);
+      }
+      final role = (u['role'] ?? '').toString().trim().toLowerCase();
+      return allowedRoles.contains(role);
+    }).toList()
+      ..sort((a, b) => (a['username'] ?? '')
+          .toString()
+          .toLowerCase()
+          .compareTo((b['username'] ?? '').toString().toLowerCase()));
+
+    if (!mounted) return;
+    if (candidates.isEmpty) {
+      _showSnack('No other salesmen available to transfer.');
+      return;
+    }
+
+    String query = '';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final searchController = TextEditingController();
+
+    final selected = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final filtered = query.trim().isEmpty
+              ? candidates
+              : candidates.where((u) {
+                  final name = (u['username'] ?? '').toString().toLowerCase();
+                  final branch = (u['branch'] ?? '').toString().toLowerCase();
+                  final q = query.trim().toLowerCase();
+                  return name.contains(q) || branch.contains(q);
+                }).toList();
+
+          return Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            clipBehavior: Clip.antiAlias,
+            backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+            child: SizedBox(
+              width: double.maxFinite,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(18, 16, 12, 16),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [primaryBlue, Color(0xFF0077C8)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.swap_horiz_rounded,
+                            color: Colors.white,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Transfer to Salesman',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                'Editable by receiver before verification',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.85),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded,
+                              color: Colors.white),
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          tooltip: 'Close',
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                    child: TextField(
+                      controller: searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Search salesman or branch...',
+                        prefixIcon: const Icon(Icons.search_rounded,
+                            color: primaryBlue, size: 20),
+                        suffixIcon: query.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear_rounded, size: 18),
+                                onPressed: () {
+                                  searchController.clear();
+                                  setDialogState(() => query = '');
+                                },
+                              )
+                            : null,
+                        isDense: true,
+                        filled: true,
+                        fillColor: isDark
+                            ? Colors.white.withValues(alpha: 0.06)
+                            : Colors.grey.shade100,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 11),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide:
+                              const BorderSide(color: primaryBlue, width: 1.4),
+                        ),
+                      ),
+                      onChanged: (v) => setDialogState(() => query = v),
+                    ),
+                  ),
+                  SizedBox(
+                    height: 300,
+                    child: filtered.isEmpty
+                        ? Center(
+                            child: Text(
+                              'No matching salesmen found',
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontSize: 13.5,
+                              ),
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(16, 2, 16, 12),
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (_, i) {
+                              final u = filtered[i];
+                              final uid = (u['uid'] ?? u['id'] ?? '').toString();
+                              final name =
+                                  (u['username'] ?? 'Sales User').toString();
+                              final branch = (u['branch'] ?? '').toString();
+                              final initial = name.trim().isNotEmpty
+                                  ? name.trim()[0].toUpperCase()
+                                  : 'S';
+
+                              return Material(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.04)
+                                    : Colors.grey.shade50,
+                                borderRadius: BorderRadius.circular(12),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: () {
+                                    Navigator.of(ctx).pop({
+                                      'uid': uid,
+                                      'name': name,
+                                      'branch': branch,
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isDark
+                                            ? Colors.white
+                                                .withValues(alpha: 0.08)
+                                            : Colors.grey.shade200,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 19,
+                                          backgroundColor: primaryBlue
+                                              .withValues(alpha: 0.12),
+                                          child: Text(
+                                            initial,
+                                            style: const TextStyle(
+                                              color: primaryBlue,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 15,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                name,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                              if (branch.isNotEmpty)
+                                                Text(
+                                                  branch,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.grey.shade600,
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: primaryGreen.withValues(
+                                                alpha: 0.14),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                          ),
+                                          child: const Icon(
+                                            Icons.arrow_forward_ios_rounded,
+                                            size: 13,
+                                            color: primaryBlue,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    searchController.dispose();
+
+    if (selected != null && mounted) {
+      await _submitOrder(
+        transferToUserId: selected['uid'],
+        transferToUserName: selected['name'],
+        transferToUserBranch: selected['branch'],
+      );
     }
   }
 
@@ -1346,7 +1701,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                 ),
                 child: SingleChildScrollView(
                   key: ValueKey<int>(_currentStep),
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   child: Column(
@@ -1474,13 +1829,42 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
               ),
               const SizedBox(width: 12),
             ],
+            if (isLast) ...[
+              Expanded(
+                flex: 1,
+                child: SizedBox(
+                  height: 50,
+                  child: OutlinedButton.icon(
+                    onPressed: _isSaving ? null : _showTransferOnSubmitDialog,
+                    icon: const Icon(Icons.swap_horiz_rounded,
+                        color: primaryBlue, size: 18),
+                    label: const Text(
+                      'Transfer',
+                      style: TextStyle(
+                        color: primaryBlue,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      side: const BorderSide(color: primaryBlue, width: 1.2),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
             Expanded(
               flex: 2,
               child: SizedBox(
                 height: 50,
                 child: ElevatedButton(
                   onPressed:
-                      _isSaving ? null : (isLast ? _submitOrder : _goNext),
+                      _isSaving ? null : (isLast ? () => _submitOrder() : _goNext),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isLast ? primaryGreen : primaryBlue,
                     shape: RoundedRectangleBorder(
@@ -1566,6 +1950,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
 
               // Shop Name
               TextFormField(
+                scrollPadding: const EdgeInsets.fromLTRB(20, 20, 20, 140),
                 controller: _shopNameController,
                 textCapitalization: TextCapitalization.words,
                 validator: (val) {
@@ -1585,6 +1970,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
 
               // Customer Name (NO "Optional" label as per AGENTS.md rule)
               TextFormField(
+                scrollPadding: const EdgeInsets.fromLTRB(20, 20, 20, 140),
                 controller: _customerNameController,
                 textCapitalization: TextCapitalization.words,
                 decoration: _inputDecoration(
@@ -1625,54 +2011,37 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
               ),
               if (_selectedOrderType != 'Spot Delivery') ...[
                 const SizedBox(height: 12),
-                // Preferred Branch (Dropdown - Not auto-selected)
-                DropdownButtonFormField<String>(
+                // Preferred Branch (Custom animated dropdown - Not auto-selected)
+                _CustomAnimatedDropdown(
                   key: ValueKey('branch_$_selectedPreferredBranch'),
-                  initialValue: _selectedPreferredBranch,
-                  isExpanded: true,
-                  items: _allBranches.map((b) {
-                    return DropdownMenuItem<String>(
-                      value: b,
-                      child: Text(b),
-                    );
-                  }).toList(),
+                  value: _selectedPreferredBranch,
+                  items: _allBranches,
                   onChanged: _onBranchChanged,
                   validator: (val) =>
                       (val == null || val.isEmpty) ? 'Select branch' : null,
-                  decoration: _inputDecoration(
-                    label: 'Preferred Branch',
-                    hint: _isLoadingBranches
-                        ? 'Loading branches...'
-                        : 'Select branch',
-                    icon: Icons.business_rounded,
-                    isDark: isDark,
-                  ),
+                  label: 'Preferred Branch',
+                  hint: _isLoadingBranches
+                      ? 'Loading branches...'
+                      : 'Select branch',
+                  icon: Icons.business_rounded,
+                  isDark: isDark,
+                  isLoading: _isLoadingBranches,
                 ),
                 const SizedBox(height: 12),
 
-                // Preferred Salesman (Dropdown based on branch with N/A)
-                DropdownButtonFormField<String>(
+                // Preferred Salesman (Custom animated dropdown based on branch with N/A)
+                _CustomAnimatedDropdown(
                   key: ValueKey(
                       'salesman_${_selectedPreferredBranch}_$_selectedSalesman'),
-                  initialValue: _selectedSalesman,
-                  isExpanded: true,
-                  items: _salesmenForBranch.map((s) {
-                    return DropdownMenuItem<String>(
-                      value: s,
-                      child: Text(s),
-                    );
-                  }).toList(),
+                  value: _selectedSalesman,
+                  items: _salesmenForBranch,
                   onChanged: (val) {
-                    if (val != null) {
-                      setState(() => _selectedSalesman = val);
-                    }
+                    setState(() => _selectedSalesman = val);
                   },
-                  decoration: _inputDecoration(
-                    label: 'Preferred Salesman',
-                    hint: 'Select salesman',
-                    icon: Icons.badge_rounded,
-                    isDark: isDark,
-                  ),
+                  label: 'Preferred Salesman',
+                  hint: 'Select salesman',
+                  icon: Icons.badge_rounded,
+                  isDark: isDark,
                 ),
               ],
             ],
@@ -2692,6 +3061,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                     ),
                     const SizedBox(height: 6),
                     TextFormField(
+                      scrollPadding: const EdgeInsets.fromLTRB(20, 20, 20, 140),
                       controller: _advanceController,
                       readOnly: isSplit,
                       keyboardType: isSplit
@@ -2778,6 +3148,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                     ),
                     const SizedBox(height: 6),
                     TextFormField(
+                      scrollPadding: const EdgeInsets.fromLTRB(20, 20, 20, 140),
                       controller: _cashSplitController,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
@@ -2805,6 +3176,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                     ),
                     const SizedBox(height: 6),
                     TextFormField(
+                      scrollPadding: const EdgeInsets.fromLTRB(20, 20, 20, 140),
                       controller: _onlineSplitController,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
@@ -3110,6 +3482,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
 
           // Description
           TextFormField(
+            scrollPadding: const EdgeInsets.fromLTRB(20, 20, 20, 140),
             controller: item.descriptionController,
             decoration: _inputDecoration(
               label: 'DESCRIPTION',
@@ -3483,18 +3856,32 @@ class _CachedAutocompleteFieldState extends State<_CachedAutocompleteField> {
     _overlayEntry = OverlayEntry(
       builder: (ctx) {
         final isDark = widget.isDark;
+        final mediaQuery = MediaQuery.of(ctx);
+        final fieldPos = renderBox.localToGlobal(Offset.zero);
+        final spaceBelow = mediaQuery.size.height -
+            mediaQuery.viewInsets.bottom -
+            (fieldPos.dy + size.height + 6);
+        final spaceAbove = fieldPos.dy - mediaQuery.padding.top - 6;
+        final showAbove = spaceBelow < 160 && spaceAbove > spaceBelow;
+        final maxDropdownHeight =
+            (showAbove ? spaceAbove : spaceBelow).clamp(80.0, 220.0);
+
         return Positioned(
           width: size.width,
           child: CompositedTransformFollower(
             link: _layerLink,
             showWhenUnlinked: false,
-            offset: Offset(0, size.height + 6),
+            targetAnchor:
+                showAbove ? Alignment.topLeft : Alignment.bottomLeft,
+            followerAnchor:
+                showAbove ? Alignment.bottomLeft : Alignment.topLeft,
+            offset: Offset(0, showAbove ? -6 : 6),
             child: Material(
               elevation: 6,
               borderRadius: BorderRadius.circular(12),
               color: isDark ? const Color(0xFF1E293B) : Colors.white,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 220),
+                constraints: BoxConstraints(maxHeight: maxDropdownHeight),
                 child: ListView.separated(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   shrinkWrap: true,
@@ -3598,6 +3985,209 @@ class _CachedAutocompleteFieldState extends State<_CachedAutocompleteField> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Custom styled and animated dropdown matching the app's green/blue theme.
+class _CustomAnimatedDropdown extends StatefulWidget {
+  final String? value;
+  final List<String> items;
+  final ValueChanged<String> onChanged;
+  final String? Function(String?)? validator;
+  final String label;
+  final String hint;
+  final IconData icon;
+  final bool isDark;
+  final bool isLoading;
+
+  const _CustomAnimatedDropdown({
+    super.key,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+    this.validator,
+    required this.label,
+    required this.hint,
+    required this.icon,
+    required this.isDark,
+    this.isLoading = false,
+  });
+
+  @override
+  State<_CustomAnimatedDropdown> createState() =>
+      _CustomAnimatedDropdownState();
+}
+
+class _CustomAnimatedDropdownState extends State<_CustomAnimatedDropdown> {
+  static const Color primaryBlue = Color(0xFF005BAC);
+  static const Color primaryGreen = Color(0xFF2E7D32);
+
+  bool _isOpen = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    final hasValue = widget.value != null && widget.value!.isNotEmpty;
+
+    return FormField<String>(
+      initialValue: widget.value,
+      validator: widget.validator,
+      builder: (fieldState) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: widget.isLoading || widget.items.isEmpty
+                  ? null
+                  : () => setState(() => _isOpen = !_isOpen),
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  labelText: widget.label,
+                  labelStyle: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? Colors.white60 : Colors.grey.shade600,
+                  ),
+                  prefixIcon: Icon(widget.icon, size: 18, color: primaryBlue),
+                  suffixIcon: AnimatedRotation(
+                    turns: _isOpen ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: primaryBlue,
+                    ),
+                  ),
+                  filled: true,
+                  fillColor: isDark
+                      ? const Color(0xFF1E293B)
+                      : const Color(0xFFF1F5F9),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: _isOpen
+                        ? BorderSide(
+                            color: primaryBlue.withValues(alpha: 0.45),
+                            width: 1.2,
+                          )
+                        : BorderSide.none,
+                  ),
+                  errorText: fieldState.errorText,
+                ),
+                child: Text(
+                  hasValue ? widget.value! : widget.hint,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: hasValue ? FontWeight.w500 : FontWeight.normal,
+                    color: hasValue
+                        ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                        : (isDark ? Colors.white38 : Colors.grey.shade500),
+                  ),
+                ),
+              ),
+            ),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              child: _isOpen
+                  ? Container(
+                      margin: const EdgeInsets.only(top: 6),
+                      decoration: BoxDecoration(
+                        color:
+                            isDark ? const Color(0xFF1E293B) : Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: primaryBlue.withValues(alpha: 0.25),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black
+                                .withValues(alpha: isDark ? 0.3 : 0.08),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 220),
+                        child: ListView.separated(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          shrinkWrap: true,
+                          itemCount: widget.items.length,
+                          separatorBuilder: (_, __) => Divider(
+                            height: 1,
+                            color: isDark
+                                ? Colors.white12
+                                : Colors.grey.shade200,
+                          ),
+                          itemBuilder: (context, index) {
+                            final item = widget.items[index];
+                            final isSelected = item == widget.value;
+                            return InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () {
+                                fieldState.didChange(item);
+                                widget.onChanged(item);
+                                setState(() => _isOpen = false);
+                              },
+                              child: Container(
+                                color: isSelected
+                                    ? primaryBlue.withValues(alpha: 0.08)
+                                    : null,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      widget.icon,
+                                      size: 16,
+                                      color: isSelected
+                                          ? primaryGreen
+                                          : primaryBlue,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        item,
+                                        style: TextStyle(
+                                          fontWeight: isSelected
+                                              ? FontWeight.w700
+                                              : FontWeight.w500,
+                                          fontSize: 13.5,
+                                          color: isDark
+                                              ? Colors.white
+                                              : const Color(0xFF0F172A),
+                                        ),
+                                      ),
+                                    ),
+                                    if (isSelected)
+                                      const Icon(
+                                        Icons.check_circle_rounded,
+                                        size: 16,
+                                        color: primaryGreen,
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        );
+      },
     );
   }
 }

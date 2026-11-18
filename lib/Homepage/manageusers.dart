@@ -31,6 +31,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
     'expo_user',
     'expo_acc',
     'accounts',
+    'expo_coupon',
   ];
   String? _currentUserId;
   String _searchQuery = '';
@@ -432,6 +433,8 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         return Icons.verified_user_rounded;
       case 'accounts':
         return Icons.account_balance_wallet_rounded;
+      case 'expo_coupon':
+        return Icons.confirmation_number_rounded;
       default:
         return Icons.person;
     }
@@ -463,6 +466,8 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         return const Color(0xFF7C3AED);
       case 'accounts':
         return const Color(0xFF00897B);
+      case 'expo_coupon':
+        return const Color(0xFF005BAC);
       default:
         return Colors.green;
     }
@@ -490,6 +495,8 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         return 'Expo Accounts';
       case 'accounts':
         return 'Accounts';
+      case 'expo_coupon':
+        return 'Expo Coupon';
       default:
         return role.isNotEmpty
             ? role[0].toUpperCase() + role.substring(1)

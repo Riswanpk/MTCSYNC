@@ -12,6 +12,9 @@ class AccountsExpoOrdersPage extends StatefulWidget {
 }
 
 class _AccountsExpoOrdersPageState extends State<AccountsExpoOrdersPage> {
+  static const Color _primaryBlue = Color(0xFF005BAC);
+  static const Color _primaryGreen = Color(0xFF00897B);
+
   final ExpoService _expoService = ExpoService.instance;
 
   /// In-memory cache keyed by `<exhibitionId>|<branch>` so orders aren't
@@ -21,6 +24,8 @@ class _AccountsExpoOrdersPageState extends State<AccountsExpoOrdersPage> {
   String? _selectedExhibitionId;
   String _selectedOrderType = 'All';
   bool _isLoadingOrders = false;
+  bool _isExhibitionDropdownOpen = false;
+  bool _isFilterExpanded = false;
   String? _error;
   List<ExpoOrder> _orders = [];
 
@@ -116,22 +121,59 @@ class _AccountsExpoOrdersPageState extends State<AccountsExpoOrdersPage> {
 
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: _primaryBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Expo Orders'),
+            const Text(
+              'Expo Orders',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
             if (_userBranch.isNotEmpty)
               Text(
                 'Branch: $_userBranch',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w400,
+                  color: Colors.white70,
+                ),
               ),
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Filter Order Type',
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.filter_list_rounded),
+                if (_selectedOrderType != 'All')
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF4ADE80),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            onPressed: () {
+              setState(() {
+                _isFilterExpanded = !_isFilterExpanded;
+              });
+            },
+          ),
           if (_selectedExhibitionId != null)
             IconButton(
               tooltip: 'Refresh orders',
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(Icons.refresh_rounded),
               onPressed: () => _loadOrdersForExhibition(
                 _selectedExhibitionId!,
                 forceRefresh: true,
@@ -141,16 +183,13 @@ class _AccountsExpoOrdersPageState extends State<AccountsExpoOrdersPage> {
       ),
       body: Column(
         children: [
-          // Exhibition selector
+          // Custom animated Exhibition selector
           StreamBuilder<List<Exhibition>>(
             stream: _expoService.streamExhibitions(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting &&
                   !snapshot.hasData) {
-                return const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: LinearProgressIndicator(),
-                );
+                return const LinearProgressIndicator(color: _primaryGreen);
               }
               final exhibitions = snapshot.data ?? [];
               if (exhibitions.isEmpty) {
@@ -160,7 +199,6 @@ class _AccountsExpoOrdersPageState extends State<AccountsExpoOrdersPage> {
                 );
               }
 
-              // Auto-select first exhibition if none selected
               if (_selectedExhibitionId == null) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (!mounted || _selectedExhibitionId != null) return;
@@ -171,88 +209,251 @@ class _AccountsExpoOrdersPageState extends State<AccountsExpoOrdersPage> {
                 });
               }
 
+              final selectedEx = exhibitions.firstWhere(
+                (e) => e.id == _selectedExhibitionId,
+                orElse: () => exhibitions.first,
+              );
+
               return Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: DropdownButtonFormField<String>(
-                  value: exhibitions.any((e) => e.id == _selectedExhibitionId)
-                      ? _selectedExhibitionId
-                      : null,
-                  decoration: InputDecoration(
-                    labelText: 'Select Exhibition',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
-                    ),
-                  ),
-                  items: exhibitions
-                      .map(
-                        (e) => DropdownMenuItem<String>(
-                          value: e.id,
-                          child: Text(
-                            e.name,
-                            overflow: TextOverflow.ellipsis,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+                child: Column(
+                  children: [
+                    InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: () {
+                        setState(() {
+                          _isExhibitionDropdownOpen = !_isExhibitionDropdownOpen;
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? const Color(0xFF1E293B)
+                              : _primaryBlue.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: _primaryBlue.withValues(alpha: 0.45),
+                            width: 1.2,
                           ),
                         ),
-                      )
-                      .toList(),
-                  onChanged: (val) {
-                    if (val == null || val == _selectedExhibitionId) return;
-                    setState(() {
-                      _selectedExhibitionId = val;
-                    });
-                    _loadOrdersForExhibition(val);
-                  },
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: _primaryBlue.withValues(alpha: 0.14),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.event_available_rounded,
+                                color: _primaryBlue,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Selected Exhibition',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark
+                                          ? Colors.grey[400]
+                                          : _primaryBlue,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    selectedEx.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            AnimatedRotation(
+                              turns: _isExhibitionDropdownOpen ? 0.5 : 0.0,
+                              duration: const Duration(milliseconds: 220),
+                              child: const Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                                color: _primaryBlue,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 240),
+                      curve: Curves.easeInOut,
+                      child: _isExhibitionDropdownOpen
+                          ? Container(
+                              margin: const EdgeInsets.only(top: 6),
+                              constraints: const BoxConstraints(maxHeight: 220),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? const Color(0xFF1E293B)
+                                    : Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: _primaryBlue.withValues(alpha: 0.25),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.08),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Material(
+                                type: MaterialType.transparency,
+                                child: ListView.separated(
+                                  shrinkWrap: true,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 4),
+                                  itemCount: exhibitions.length,
+                                  separatorBuilder: (_, __) =>
+                                      const Divider(height: 1),
+                                  itemBuilder: (context, idx) {
+                                    final ex = exhibitions[idx];
+                                    final isSelected =
+                                        ex.id == _selectedExhibitionId;
+                                    return ListTile(
+                                      dense: true,
+                                      title: Text(
+                                        ex.name,
+                                        style: TextStyle(
+                                          fontWeight: isSelected
+                                              ? FontWeight.w700
+                                              : FontWeight.w500,
+                                          color: isSelected ? _primaryBlue : null,
+                                        ),
+                                      ),
+                                      trailing: isSelected
+                                          ? const Icon(Icons.check_circle,
+                                              color: _primaryGreen, size: 18)
+                                          : null,
+                                      onTap: () {
+                                        setState(() {
+                                          _isExhibitionDropdownOpen = false;
+                                          _selectedExhibitionId = ex.id;
+                                        });
+                                        _loadOrdersForExhibition(ex.id);
+                                      },
+                                    );
+                                  },
+                                ),
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ],
                 ),
               );
             },
           ),
 
-          // Order type filter chips
-          SizedBox(
-            height: 44,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _orderTypes.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                final type = _orderTypes[index];
-                final selected = _selectedOrderType == type;
-                return ChoiceChip(
-                  label: Text(type),
-                  selected: selected,
-                  onSelected: (_) {
-                    setState(() => _selectedOrderType = type);
-                  },
-                );
-              },
-            ),
+          // Animated Order Type Filter Panel
+          AnimatedSize(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeInOut,
+            child: _isFilterExpanded
+                ? Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF1E293B)
+                          : _primaryGreen.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _primaryGreen.withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _orderTypes.map((type) {
+                        final selected = _selectedOrderType == type;
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() => _selectedOrderType = type);
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? _primaryGreen
+                                  : (isDark
+                                      ? Colors.grey[850]
+                                      : Colors.white),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: selected
+                                    ? _primaryGreen
+                                    : _primaryBlue.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Text(
+                              type,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: selected
+                                    ? Colors.white
+                                    : (isDark ? Colors.white70 : _primaryBlue),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  )
+                : const SizedBox.shrink(),
           ),
 
           // Summary bar
           if (_selectedExhibitionId != null && !_isLoadingOrders && _error == null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Showing ${filtered.length} orders',
+                    'Showing ${filtered.length} orders ($_selectedOrderType)',
                     style: TextStyle(
-                      fontSize: 13,
-                      color: isDark ? Colors.grey[400] : Colors.grey[700],
-                      fontWeight: FontWeight.w500,
+                      fontSize: 12,
+                      color: isDark ? Colors.grey[400] : _primaryBlue,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  Text(
-                    'Entry Done: $doneCount / ${filtered.length}',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Colors.green,
-                      fontWeight: FontWeight.w600,
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _primaryGreen.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'Entry Done: $doneCount / ${filtered.length}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: _primaryGreen,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ],
@@ -264,7 +465,9 @@ class _AccountsExpoOrdersPageState extends State<AccountsExpoOrdersPage> {
           // Orders list
           Expanded(
             child: _isLoadingOrders
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(
+                    child: CircularProgressIndicator(color: _primaryBlue),
+                  )
                 : _error != null
                     ? Center(
                         child: Padding(
@@ -278,6 +481,10 @@ class _AccountsExpoOrdersPageState extends State<AccountsExpoOrdersPage> {
                               ),
                               const SizedBox(height: 12),
                               ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _primaryBlue,
+                                  foregroundColor: Colors.white,
+                                ),
                                 onPressed: _selectedExhibitionId == null
                                     ? null
                                     : () => _loadOrdersForExhibition(
@@ -324,19 +531,19 @@ class _AccountsExpoOrdersPageState extends State<AccountsExpoOrdersPage> {
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       color: isDone
-          ? Colors.green.withValues(alpha: isDark ? 0.22 : 0.12)
+          ? _primaryGreen.withValues(alpha: isDark ? 0.22 : 0.12)
           : null,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         side: BorderSide(
           color: isDone
-              ? Colors.green
-              : (isDark ? Colors.grey[800]! : Colors.grey[300]!),
-          width: isDone ? 1.5 : 1,
+              ? _primaryGreen
+              : _primaryBlue.withValues(alpha: isDark ? 0.35 : 0.25),
+          width: isDone ? 1.6 : 1,
         ),
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         onTap: () {
           Navigator.of(context).push(
             MaterialPageRoute(
@@ -356,9 +563,10 @@ class _AccountsExpoOrdersPageState extends State<AccountsExpoOrdersPage> {
                 children: [
                   Text(
                     billLabel,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
+                      color: isDone ? _primaryGreen : _primaryBlue,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -366,7 +574,7 @@ class _AccountsExpoOrdersPageState extends State<AccountsExpoOrdersPage> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 0.12),
+                      color: _primaryBlue.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -374,7 +582,7 @@ class _AccountsExpoOrdersPageState extends State<AccountsExpoOrdersPage> {
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: Colors.blue,
+                        color: _primaryBlue,
                       ),
                     ),
                   ),
@@ -384,7 +592,7 @@ class _AccountsExpoOrdersPageState extends State<AccountsExpoOrdersPage> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: Colors.green,
+                        color: _primaryGreen,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Row(

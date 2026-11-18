@@ -183,10 +183,67 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                     isDark,
                   ),
                 _buildDialogInfoRow(
-                  'Booked By',
+                  order.transferHistory.isNotEmpty
+                      ? 'Current Owner'
+                      : 'Booked By',
                   '${order.createdUserName} (${order.createdUserBranch})',
                   isDark,
                 ),
+                if (order.transferHistory.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: primaryBlue.withValues(alpha: isDark ? 0.14 : 0.06),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: primaryBlue.withValues(alpha: 0.25),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.swap_horiz_rounded,
+                                size: 15, color: primaryBlue),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Handled By (${order.transferHistory.length} Transfer${order.transferHistory.length > 1 ? 's' : ''})',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: primaryBlue,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          order.handlersDisplayChain,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        ...order.transferHistory.map((t) => Padding(
+                              padding: const EdgeInsets.only(top: 3),
+                              child: Text(
+                                '#${t.stepNumber}: ${t.fromUserName} → ${t.toUserName} (${DateFormat('dd MMM, hh:mm a').format(t.transferredAt)})',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color:
+                                      isDark ? Colors.white70 : Colors.black54,
+                                ),
+                              ),
+                            )),
+                      ],
+                    ),
+                  ),
+                ],
                 _buildDialogInfoRow(
                   'Payment Mode',
                   ExpoOrder.normalizePaymentMode(order.paymentMode),
@@ -610,18 +667,42 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
               side: const BorderSide(color: Colors.deepPurple),
             ),
           ),
-          OutlinedButton.icon(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              _showTransferOrderDialog(order);
-            },
-            icon: const Icon(Icons.swap_horiz_rounded,
-                size: 16, color: Colors.teal),
-            label: const Text('Transfer', style: TextStyle(color: Colors.teal)),
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Colors.teal),
+          if (order.status != 'Completed')
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _showTransferOrderDialog(order);
+              },
+              icon: const Icon(Icons.swap_horiz_rounded,
+                  size: 16, color: Colors.teal),
+              label: const Text('Transfer', style: TextStyle(color: Colors.teal)),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Colors.teal),
+              ),
             ),
-          ),
+          if (order.status == 'Transferred')
+            ElevatedButton.icon(
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                Navigator.of(ctx).pop();
+                await ExpoService.instance
+                    .updateOrderStatus(order.id, 'Pending Verification');
+                if (mounted) {
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('Order sent to Accounts for verification!'),
+                      backgroundColor: primaryGreen,
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.send_rounded, size: 16),
+              label: const Text('Send for Verification'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryGreen,
+                foregroundColor: Colors.white,
+              ),
+            ),
         ],
       ),
     );
@@ -662,6 +743,9 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
     }
 
     String query = '';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final searchController = TextEditingController();
+
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -675,75 +759,302 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                   return name.contains(q) || branch.contains(q);
                 }).toList();
 
-          return AlertDialog(
-            title: const Text('Transfer Order to Salesman'),
-            content: SizedBox(
+          return Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            clipBehavior: Clip.antiAlias,
+            backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+            child: SizedBox(
               width: double.maxFinite,
-              height: 340,
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(
-                    decoration: const InputDecoration(
-                      hintText: 'Search salesman or branch...',
-                      prefixIcon: Icon(Icons.search_rounded),
-                      isDense: true,
-                      border: OutlineInputBorder(),
+                  // Header
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(18, 16, 12, 16),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [primaryBlue, Color(0xFF0077C8)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                     ),
-                    onChanged: (v) => setDialogState(() => query = v),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.swap_horiz_rounded,
+                            color: Colors.white,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Transfer Order',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              if (order.customerName.isNotEmpty)
+                                Text(
+                                  order.customerName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.85),
+                                    fontSize: 12.5,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded,
+                              color: Colors.white),
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          tooltip: 'Close',
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 10),
-                  Expanded(
-                    child: ListView.separated(
-                      itemCount: filtered.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (_, i) {
-                        final u = filtered[i];
-                        final uid = (u['uid'] ?? u['id'] ?? '').toString();
-                        final name = (u['username'] ?? 'Sales User').toString();
-                        final branch = (u['branch'] ?? '').toString();
-                        return ListTile(
-                          dense: true,
-                          title: Text(name,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w600)),
-                          subtitle: branch.isNotEmpty ? Text(branch) : null,
-                          trailing: const Icon(Icons.arrow_forward_ios_rounded,
-                              size: 14),
-                          onTap: () async {
-                            final messenger = ScaffoldMessenger.of(context);
-                            Navigator.of(ctx).pop();
-                            await ExpoService.instance.transferOrderToSalesman(
-                              orderId: order.id,
-                              newUserId: uid,
-                              newUserName: name,
-                              newUserBranch: branch,
-                            );
-                            if (mounted) {
-                              messenger.showSnackBar(
-                                SnackBar(
-                                  content: Text('Order transferred to $name'),
-                                  backgroundColor: primaryGreen,
+                  // Search Bar
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                    child: TextField(
+                      controller: searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Search salesman or branch...',
+                        prefixIcon: const Icon(Icons.search_rounded,
+                            color: primaryBlue, size: 20),
+                        suffixIcon: query.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear_rounded, size: 18),
+                                onPressed: () {
+                                  searchController.clear();
+                                  setDialogState(() => query = '');
+                                },
+                              )
+                            : null,
+                        isDense: true,
+                        filled: true,
+                        fillColor: isDark
+                            ? Colors.white.withValues(alpha: 0.06)
+                            : Colors.grey.shade100,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 11),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide:
+                              const BorderSide(color: primaryBlue, width: 1.4),
+                        ),
+                      ),
+                      onChanged: (v) => setDialogState(() => query = v),
+                    ),
+                  ),
+                  // Salesman List
+                  SizedBox(
+                    height: 300,
+                    child: filtered.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.person_search_rounded,
+                                  size: 40,
+                                  color: Colors.grey.shade400,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'No matching salesmen found',
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 13.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(16, 2, 16, 12),
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (_, i) {
+                              final u = filtered[i];
+                              final uid = (u['uid'] ?? u['id'] ?? '').toString();
+                              final name =
+                                  (u['username'] ?? 'Sales User').toString();
+                              final branch = (u['branch'] ?? '').toString();
+                              final initial = name.trim().isNotEmpty
+                                  ? name.trim()[0].toUpperCase()
+                                  : 'S';
+
+                              return Material(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.04)
+                                    : Colors.grey.shade50,
+                                borderRadius: BorderRadius.circular(12),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: () async {
+                                    final messenger =
+                                        ScaffoldMessenger.of(context);
+                                    Navigator.of(ctx).pop();
+                                    await ExpoService.instance
+                                        .transferOrderToSalesman(
+                                      order: order,
+                                      newUserId: uid,
+                                      newUserName: name,
+                                      newUserBranch: branch,
+                                    );
+                                    if (mounted) {
+                                      messenger.showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                              'Order transferred to $name (editable before verification)'),
+                                          backgroundColor: primaryGreen,
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isDark
+                                            ? Colors.white
+                                                .withValues(alpha: 0.08)
+                                            : Colors.grey.shade200,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 19,
+                                          backgroundColor: primaryBlue
+                                              .withValues(alpha: 0.12),
+                                          child: Text(
+                                            initial,
+                                            style: const TextStyle(
+                                              color: primaryBlue,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 15,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                name,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                              if (branch.isNotEmpty) ...[
+                                                const SizedBox(height: 2),
+                                                Row(
+                                                  children: [
+                                                    Icon(
+                                                      Icons
+                                                          .storefront_outlined,
+                                                      size: 13,
+                                                      color:
+                                                          Colors.grey.shade600,
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Expanded(
+                                                      child: Text(
+                                                        branch,
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          color: Colors
+                                                              .grey.shade600,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: primaryGreen.withValues(
+                                                alpha: 0.14),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                          ),
+                                          child: const Icon(
+                                            Icons.arrow_forward_ios_rounded,
+                                            size: 13,
+                                            color: primaryBlue,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                               );
-                            }
-                          },
-                        );
-                      },
+                            },
+                          ),
+                  ),
+                  // Footer
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: isDark
+                              ? Colors.grey.shade300
+                              : Colors.grey.shade700,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        child: const Text('Cancel'),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Cancel'),
-              ),
-            ],
           );
         },
       ),
     );
+    searchController.dispose();
   }
 
   Widget _buildDraftsList(Exhibition exhibition, bool isDark) {
@@ -1177,12 +1488,15 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                           : allOrders
                               .where((o) =>
                                   o.createdUserId == currentUserId ||
-                                  o.orderType == 'Stall Delivery')
+                                  o.orderType == 'Stall Delivery' ||
+                                  (o.status == 'Completed' &&
+                                      o.wasHandledByUser(currentUserId)))
                               .toList();
                       final pendingOrders = visibleOrders
                           .where((o) =>
                               (o.status == 'Pending' ||
-                                  o.status == 'Pending Verification') &&
+                                  o.status == 'Pending Verification' ||
+                                  o.status == 'Transferred') &&
                               o.orderType != 'Stall Delivery')
                           .toList();
                       final completedOrders = visibleOrders
@@ -1521,6 +1835,54 @@ class _ExpoUserMainPageState extends State<ExpoUserMainPage> {
                         fontSize: 13,
                         color: isDark ? Colors.white70 : Colors.black54,
                       ),
+                    ),
+                  ],
+                  if (order.status == 'Transferred' ||
+                      order.transferHistory.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        if (order.status == 'Transferred')
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.teal.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                  color: Colors.teal.withValues(alpha: 0.45)),
+                            ),
+                            child: const Text(
+                              'Transferred • Editable',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.teal,
+                              ),
+                            ),
+                          ),
+                        if (order.transferHistory.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: primaryBlue.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              order.status == 'Transferred'
+                                  ? 'From: ${order.transferHistory.last.fromUserName}'
+                                  : 'Handled: ${order.handlersDisplayChain}',
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
+                                color: primaryBlue,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ],
                   const SizedBox(height: 8),
