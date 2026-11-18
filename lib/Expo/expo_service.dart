@@ -844,6 +844,7 @@ class ExpoService {
   static const String _customersTable = 'customers';
   static const String _itemsTable = 'items';
   static const String _orderTransfersTable = 'order_transfers';
+  static const String _customerCouponsTable = 'customer_coupons';
 
   final Set<String> _autoConvertedExhibitionIds = {};
 
@@ -1370,6 +1371,47 @@ class ExpoService {
     await _table(_ordersTable).update({
       'coupon_taken': couponTaken,
     }).eq('id', orderId);
+  }
+
+  /// Normalizes a customer phone number for consistent grouping and lookup.
+  static String normalizeCustomerPhone(String phone) {
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    if (digits.length > 10) {
+      return digits.substring(digits.length - 10);
+    }
+    return digits;
+  }
+
+  /// Fetches cumulative coupons taken per customer key for an exhibition.
+  Future<Map<String, int>> fetchCustomerCouponsForExhibition(
+      String exhibitionId) async {
+    final rows = await _table(_customerCouponsTable)
+        .select('customer_phone, coupons_taken')
+        .eq('exhibition_id', exhibitionId);
+    final result = <String, int>{};
+    for (final row in rows) {
+      final phone = (row['customer_phone'] ?? '').toString();
+      if (phone.isEmpty) continue;
+      result[phone] = _toInt(row['coupons_taken']);
+    }
+    return result;
+  }
+
+  /// Upserts cumulative coupons taken for a customer in an exhibition.
+  Future<void> upsertCustomerCouponsTaken({
+    required String exhibitionId,
+    required String customerPhone,
+    required int couponsTaken,
+  }) async {
+    final safeCount = couponsTaken < 0 ? 0 : couponsTaken;
+    await _table(_customerCouponsTable).upsert(
+      {
+        'exhibition_id': exhibitionId,
+        'customer_phone': customerPhone,
+        'coupons_taken': safeCount,
+      },
+      onConflict: 'exhibition_id,customer_phone',
+    );
   }
 
   Stream<List<ExpoOrder>> streamAllOrders() {
