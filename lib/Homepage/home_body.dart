@@ -44,6 +44,7 @@ import '../Expo/Admin/expo_admin_page.dart';
 import '../Expo/User/expo_user_mainpage.dart';
 import '../Expo/Accounts/expo_accounts_page.dart';
 import '../Expo/Accounts/expo_accounts_dashboard_page.dart';
+import '../Expo/Accounts/BranchAccounts/accounts_expo_orders_page.dart';
 import '../Expo/Manager/expo_manager_assign_page.dart';
 import '../Expo/Orders/expo_assigned_orders_page.dart';
 
@@ -471,6 +472,9 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     if (role == 'expo_user' || role == 'expo_acc') {
       return _buildExpoRoleTiles(context, role ?? '');
     }
+    if (role?.toLowerCase() == 'accounts') {
+      return _buildAccountsRoleTiles(context);
+    }
     if (role == 'supersale_admin') {
       return _buildSupersaleAdminTiles(context);
     }
@@ -561,6 +565,25 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           textColor: Colors.white,
           icon: Icons.dashboard_rounded,
         ),
+    ];
+    return _buildButtonGrid(buttons);
+  }
+
+  Widget _buildAccountsRoleTiles(BuildContext context) {
+    final List<Widget> buttons = [
+      NeumorphicButton(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const AccountsExpoOrdersPage(),
+            ),
+          );
+        },
+        text: 'EXPO Orders',
+        color: primaryBlue,
+        textColor: Colors.white,
+        icon: Icons.receipt_long_rounded,
+      ),
     ];
     return _buildButtonGrid(buttons);
   }

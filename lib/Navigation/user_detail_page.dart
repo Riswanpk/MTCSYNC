@@ -21,7 +21,7 @@ class UserDetailPage extends StatefulWidget {
 class _UserDetailPageState extends State<UserDetailPage> {
   static const Color _primaryBlue = Color(0xFF005BAC);
 
-  final List<String> _roles = ['sales', 'manager', 'asst_manager', 'admin', 'sync_head', 'sme', 'dme_admin', 'dme_user', 'supersale_admin', 'core_team', 'expo_user', 'expo_acc'];
+  final List<String> _roles = ['sales', 'manager', 'asst_manager', 'admin', 'sync_head', 'sme', 'dme_admin', 'dme_user', 'supersale_admin', 'core_team', 'expo_user', 'expo_acc', 'accounts'];
   final List<String> _branches = [
     'BGR', 'CBE', 'CHN', 'CLT', 'EKM', 'EXPO', 'JBL', 'KKM', 'KSD',
     'KTM', 'PKD', 'PKT', 'PMN', 'TRR', 'TSR', 'TLY', 'TVM',
@@ -307,7 +307,9 @@ class _UserDetailPageState extends State<UserDetailPage> {
                                           ? 'Expo User'
                                           : role == 'expo_acc'
                                               ? 'Expo Accounts'
-                                              : role[0].toUpperCase() + role.substring(1),
+                                              : role == 'accounts'
+                                                  ? 'Accounts'
+                                                  : role[0].toUpperCase() + role.substring(1),
               isDark,
               valueColor: role == 'admin'
                   ? Colors.deepPurple
@@ -323,7 +325,9 @@ class _UserDetailPageState extends State<UserDetailPage> {
                                       ? const Color(0xFF7C3AED)
                                       : role == 'expo_user'
                                           ? const Color(0xFF005BAC)
-                                          : Colors.green,
+                                          : role == 'accounts'
+                                              ? const Color(0xFF00897B)
+                                              : Colors.green,
             ),
             const Divider(height: 20),
             _infoRow(Icons.business, 'Branch', branch, isDark),
@@ -567,7 +571,9 @@ class _UserDetailPageState extends State<UserDetailPage> {
                                                         ? 'Expo User'
                                                         : r == 'expo_acc'
                                                             ? 'Expo Accounts'
-                                                            : r[0].toUpperCase() + r.substring(1)),
+                                                            : r == 'accounts'
+                                                                ? 'Accounts'
+                                                                : r[0].toUpperCase() + r.substring(1)),
                           ],
                         ),
                       ))
