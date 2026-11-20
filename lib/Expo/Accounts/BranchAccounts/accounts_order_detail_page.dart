@@ -228,15 +228,6 @@ class _AccountsOrderDetailPageState extends State<AccountsOrderDetailPage> {
               _buildRow('Preferred Salesman', _order.preferredSalesman),
               _buildRow('Created By',
                   '${_order.createdUserName} (${_order.createdUserBranch})'),
-              if (_order.transferHistory.isNotEmpty) ...[
-                _buildRow('Handled By (Chain)', _order.handlersDisplayChain),
-                ..._order.transferHistory.map(
-                  (t) => _buildRow(
-                    'Transfer #${t.stepNumber}',
-                    '${t.fromUserName} → ${t.toUserName} (${_formatDate(t.transferredAt)})',
-                  ),
-                ),
-              ],
             ],
           ),
           const SizedBox(height: 12),

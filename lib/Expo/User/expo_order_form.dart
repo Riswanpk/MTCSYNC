@@ -1050,7 +1050,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
       district: _districtController.text.trim(),
       state: _stateController.text.trim(),
       preferredBranch: _selectedPreferredBranch,
-      preferredSalesman: _selectedSalesman,
+      preferredSalesman: 'N/A',
       deliveryDate: _deliveryDate,
       stallPickupDate: _stallPickupDate,
       advanceText: _advanceController.text.trim(),
@@ -1140,11 +1140,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     }
   }
 
-  Future<void> _submitOrder({
-    String? transferToUserId,
-    String? transferToUserName,
-    String? transferToUserBranch,
-  }) async {
+  Future<void> _submitOrder() async {
     FocusScope.of(context).unfocus();
     if (!_validateStep(2)) return;
 
@@ -1230,28 +1226,6 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         savedOnlineAmount = _round2(paidNow);
       }
 
-      final isTransfer = transferToUserId != null && transferToUserId.isNotEmpty;
-      final existingHistory =
-          widget.existingOrder?.transferHistory ?? const <ExpoOrderTransfer>[];
-      ExpoOrderTransfer? newTransfer;
-      final List<ExpoOrderTransfer> updatedHistory = [...existingHistory];
-      if (isTransfer) {
-        newTransfer = ExpoOrderTransfer(
-          stepNumber: existingHistory.length + 1,
-          fromUserId: currentUid,
-          fromUserName: currentName,
-          fromUserBranch: currentBranch,
-          toUserId: transferToUserId,
-          toUserName: transferToUserName ?? 'Sales User',
-          toUserBranch: transferToUserBranch ?? '',
-          itemsCount: orderItems.length,
-          totalAmount: _netTotal,
-          advanceAmount: paidNow,
-          transferredAt: DateTime.now(),
-        );
-        updatedHistory.add(newTransfer);
-      }
-
       final newOrder = ExpoOrder(
         id: '',
         exhibitionId: widget.exhibition.id,
@@ -1265,7 +1239,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         state: _stateController.text.trim(),
         phone: _phoneController.text.trim(),
         preferredBranch: isSpot ? 'N/A' : (_selectedPreferredBranch ?? 'N/A'),
-        preferredSalesman: isSpot ? 'N/A' : _selectedSalesman,
+        preferredSalesman: 'N/A',
         items: orderItems,
         subtotal: _round2(_subtotal),
         totalGst: _round2(_totalGst),
@@ -1274,7 +1248,7 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         totalQty: _totalQty,
         advanceAmount: paidNow,
         balanceAmount: isSpot ? 0.0 : _balanceAmount,
-        status: isTransfer ? 'Transferred' : 'Pending Verification',
+        status: 'Pending Verification',
         paymentMode: normalizedMode,
         cashAmount: savedCashAmount,
         onlineAmount: savedOnlineAmount,
@@ -1286,43 +1260,26 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         isConvertedToBooking: false,
         stallPickupStatus:
             _selectedOrderType == 'Stall Delivery' ? 'Pending Pickup' : null,
-        createdUserId: isTransfer ? transferToUserId : currentUid,
-        createdUserName:
-            isTransfer ? (transferToUserName ?? 'Sales User') : currentName,
-        createdUserBranch:
-            isTransfer ? (transferToUserBranch ?? '') : currentBranch,
+        createdUserId: currentUid,
+        createdUserName: currentName,
+        createdUserBranch: currentBranch,
         createdAt: widget.existingOrder?.createdAt ?? DateTime.now(),
-        transferHistory: updatedHistory,
       );
 
       if (widget.existingOrder != null) {
         await ExpoService.instance
             .updateOrder(widget.existingOrder!.id, newOrder);
-        if (isTransfer && newTransfer != null) {
-          await ExpoService.instance.logOrderTransfer(
-            orderId: widget.existingOrder!.id,
-            exhibitionId: widget.exhibition.id,
-            transfer: newTransfer,
-          );
-        } else if (!isTransfer &&
-            widget.existingOrder!.status == 'Transferred') {
-          unawaited(_notifyExpoAccountsUsers(newOrder));
-        }
       } else {
         await ExpoService.instance.createOrder(newOrder);
         await ExpoDraftService.instance.deleteDraft(_draftId);
-        if (!isTransfer) {
-          unawaited(_notifyExpoAccountsUsers(newOrder));
-        }
+        unawaited(_notifyExpoAccountsUsers(newOrder));
       }
 
       if (mounted) {
         _showSnack(
-          isTransfer
-              ? 'Order transferred to ${transferToUserName ?? 'salesman'} (not sent for verification yet)'
-              : (widget.existingOrder != null
-                  ? 'Order updated successfully!'
-                  : 'Order submitted successfully!'),
+          widget.existingOrder != null
+              ? 'Order updated successfully!'
+              : 'Order submitted successfully!',
           color: primaryGreen,
         );
         Navigator.of(context).pop();
@@ -1336,306 +1293,6 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     }
   }
 
-  Future<void> _showTransferOnSubmitDialog() async {
-    FocusScope.of(context).unfocus();
-    if (!_validateStep(2)) return;
-
-    final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
-    final allUsers = await UserCacheService.instance.getAllUsers();
-    final selectedExIds = widget.exhibition.selectedUserIds;
-    const allowedRoles = {
-      'sales',
-      'manager',
-      'asst_manager',
-      'asst manager',
-      'assistant manager',
-      'expo_sales',
-      'expo sales',
-    };
-    final candidates = allUsers.where((u) {
-      final uid = (u['uid'] ?? u['id'] ?? '').toString();
-      if (uid.isEmpty || uid == currentUid) return false;
-      if (selectedExIds.isNotEmpty) {
-        return selectedExIds.contains(uid);
-      }
-      final role = (u['role'] ?? '').toString().trim().toLowerCase();
-      return allowedRoles.contains(role);
-    }).toList()
-      ..sort((a, b) => (a['username'] ?? '')
-          .toString()
-          .toLowerCase()
-          .compareTo((b['username'] ?? '').toString().toLowerCase()));
-
-    if (!mounted) return;
-    if (candidates.isEmpty) {
-      _showSnack('No other salesmen available to transfer.');
-      return;
-    }
-
-    String query = '';
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final searchController = TextEditingController();
-
-    final selected = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          final filtered = query.trim().isEmpty
-              ? candidates
-              : candidates.where((u) {
-                  final name = (u['username'] ?? '').toString().toLowerCase();
-                  final branch = (u['branch'] ?? '').toString().toLowerCase();
-                  final q = query.trim().toLowerCase();
-                  return name.contains(q) || branch.contains(q);
-                }).toList();
-
-          return Dialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            clipBehavior: Clip.antiAlias,
-            backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-            child: SizedBox(
-              width: double.maxFinite,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(18, 16, 12, 16),
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [primaryBlue, Color(0xFF0077C8)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(
-                            Icons.swap_horiz_rounded,
-                            color: Colors.white,
-                            size: 22,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Transfer to Salesman',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              Text(
-                                'Editable by receiver before verification',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.85),
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close_rounded,
-                              color: Colors.white),
-                          onPressed: () => Navigator.of(ctx).pop(),
-                          tooltip: 'Close',
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-                    child: TextField(
-                      controller: searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Search salesman or branch...',
-                        prefixIcon: const Icon(Icons.search_rounded,
-                            color: primaryBlue, size: 20),
-                        suffixIcon: query.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear_rounded, size: 18),
-                                onPressed: () {
-                                  searchController.clear();
-                                  setDialogState(() => query = '');
-                                },
-                              )
-                            : null,
-                        isDense: true,
-                        filled: true,
-                        fillColor: isDark
-                            ? Colors.white.withValues(alpha: 0.06)
-                            : Colors.grey.shade100,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 11),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide:
-                              const BorderSide(color: primaryBlue, width: 1.4),
-                        ),
-                      ),
-                      onChanged: (v) => setDialogState(() => query = v),
-                    ),
-                  ),
-                  SizedBox(
-                    height: 300,
-                    child: filtered.isEmpty
-                        ? Center(
-                            child: Text(
-                              'No matching salesmen found',
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 13.5,
-                              ),
-                            ),
-                          )
-                        : ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(16, 2, 16, 12),
-                            itemCount: filtered.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 8),
-                            itemBuilder: (_, i) {
-                              final u = filtered[i];
-                              final uid = (u['uid'] ?? u['id'] ?? '').toString();
-                              final name =
-                                  (u['username'] ?? 'Sales User').toString();
-                              final branch = (u['branch'] ?? '').toString();
-                              final initial = name.trim().isNotEmpty
-                                  ? name.trim()[0].toUpperCase()
-                                  : 'S';
-
-                              return Material(
-                                color: isDark
-                                    ? Colors.white.withValues(alpha: 0.04)
-                                    : Colors.grey.shade50,
-                                borderRadius: BorderRadius.circular(12),
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(12),
-                                  onTap: () {
-                                    Navigator.of(ctx).pop({
-                                      'uid': uid,
-                                      'name': name,
-                                      'branch': branch,
-                                    });
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 10),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: isDark
-                                            ? Colors.white
-                                                .withValues(alpha: 0.08)
-                                            : Colors.grey.shade200,
-                                      ),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        CircleAvatar(
-                                          radius: 19,
-                                          backgroundColor: primaryBlue
-                                              .withValues(alpha: 0.12),
-                                          child: Text(
-                                            initial,
-                                            style: const TextStyle(
-                                              color: primaryBlue,
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 15,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                name,
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.w600,
-                                                  fontSize: 14,
-                                                ),
-                                              ),
-                                              if (branch.isNotEmpty)
-                                                Text(
-                                                  branch,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    color: Colors.grey.shade600,
-                                                  ),
-                                                ),
-                                            ],
-                                          ),
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.all(6),
-                                          decoration: BoxDecoration(
-                                            color: primaryGreen.withValues(
-                                                alpha: 0.14),
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                          ),
-                                          child: const Icon(
-                                            Icons.arrow_forward_ios_rounded,
-                                            size: 13,
-                                            color: primaryBlue,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: TextButton(
-                        onPressed: () => Navigator.of(ctx).pop(),
-                        child: const Text('Cancel'),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-    searchController.dispose();
-
-    if (selected != null && mounted) {
-      await _submitOrder(
-        transferToUserId: selected['uid'],
-        transferToUserName: selected['name'],
-        transferToUserBranch: selected['branch'],
-      );
-    }
-  }
 
   // ---------------------------------------------------------------------------
   // BUILD
@@ -1829,35 +1486,6 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
               ),
               const SizedBox(width: 12),
             ],
-            if (isLast) ...[
-              Expanded(
-                flex: 1,
-                child: SizedBox(
-                  height: 50,
-                  child: OutlinedButton.icon(
-                    onPressed: _isSaving ? null : _showTransferOnSubmitDialog,
-                    icon: const Icon(Icons.swap_horiz_rounded,
-                        color: primaryBlue, size: 18),
-                    label: const Text(
-                      'Transfer',
-                      style: TextStyle(
-                        color: primaryBlue,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      side: const BorderSide(color: primaryBlue, width: 1.2),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-            ],
             Expanded(
               flex: 2,
               child: SizedBox(
@@ -2026,22 +1654,6 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                   icon: Icons.business_rounded,
                   isDark: isDark,
                   isLoading: _isLoadingBranches,
-                ),
-                const SizedBox(height: 12),
-
-                // Preferred Salesman (Custom animated dropdown based on branch with N/A)
-                _CustomAnimatedDropdown(
-                  key: ValueKey(
-                      'salesman_${_selectedPreferredBranch}_$_selectedSalesman'),
-                  value: _selectedSalesman,
-                  items: _salesmenForBranch,
-                  onChanged: (val) {
-                    setState(() => _selectedSalesman = val);
-                  },
-                  label: 'Preferred Salesman',
-                  hint: 'Select salesman',
-                  icon: Icons.badge_rounded,
-                  isDark: isDark,
                 ),
               ],
             ],

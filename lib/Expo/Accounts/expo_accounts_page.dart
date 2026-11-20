@@ -363,7 +363,7 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
 
               final allOrders = ordersSnapshot.data ?? [];
 
-              // Extract distinct users who handled orders (creators & transfer participants)
+              // Extract distinct users who handled orders
               final Map<String, String> distinctUsers = {};
               for (final o in allOrders) {
                 if (o.createdUserId.isNotEmpty) {
@@ -372,44 +372,30 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
                       : 'User';
                   distinctUsers[o.createdUserId] = name;
                 }
-                for (final t in o.transferHistory) {
-                  if (t.fromUserId.isNotEmpty) {
-                    distinctUsers[t.fromUserId] = t.fromUserName.isNotEmpty
-                        ? t.fromUserName
-                        : 'User';
-                  }
-                  if (t.toUserId.isNotEmpty) {
-                    distinctUsers[t.toUserId] =
-                        t.toUserName.isNotEmpty ? t.toUserName : 'User';
-                  }
-                }
               }
 
-              // Apply user filter if active (matches any salesman who handled the order)
+              // Apply user filter if active
               final filteredOrders = _selectedFilterUserId == null
                   ? allOrders
                   : allOrders
                       .where((o) => o.wasHandledByUser(_selectedFilterUserId!))
                       .toList();
 
-              // Categorize into tabs (exclude unsubmitted 'Transferred' orders from verification queues)
+              // Categorize into tabs
               final spotOrders = filteredOrders
                   .where((o) =>
                       o.orderType == 'Spot Delivery' &&
-                      o.status != 'Completed' &&
-                      o.status != 'Transferred')
+                      o.status != 'Completed')
                   .toList();
               final stallOrders = filteredOrders
                   .where((o) =>
                       o.orderType == 'Stall Delivery' &&
-                      o.status != 'Completed' &&
-                      o.status != 'Transferred')
+                      o.status != 'Completed')
                   .toList();
               final bookingOrders = filteredOrders
                   .where((o) =>
                       o.orderType == 'Booking' &&
-                      o.status != 'Completed' &&
-                      o.status != 'Transferred')
+                      o.status != 'Completed')
                   .toList();
               final completedOrders = filteredOrders
                   .where((o) => o.status == 'Completed')
@@ -1093,54 +1079,25 @@ class _ExpoOrdersTabKeepAliveState extends State<_ExpoOrdersTabKeepAlive>
                   Row(
                     children: [
                       Icon(
-                        order.transferHistory.isNotEmpty
-                            ? Icons.swap_horiz_rounded
-                            : Icons.person_outline_rounded,
+                        Icons.person_outline_rounded,
                         size: 14,
-                        color: order.transferHistory.isNotEmpty
-                            ? primaryBlue
-                            : (widget.isDark ? Colors.white54 : Colors.black45),
+                        color: widget.isDark ? Colors.white54 : Colors.black45,
                       ),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          order.transferHistory.isNotEmpty
-                              ? 'Handled by: ${order.handlersDisplayChain}'
-                              : 'By: ${order.createdUserName} (${order.preferredBranch})',
+                          'By: ${order.createdUserName} (${order.preferredBranch})',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 11,
-                            fontWeight: order.transferHistory.isNotEmpty
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                            color: order.transferHistory.isNotEmpty
-                                ? primaryBlue
-                                : (widget.isDark
-                                    ? Colors.white54
-                                    : Colors.black54),
+                            fontWeight: FontWeight.normal,
+                            color: widget.isDark
+                                ? Colors.white54
+                                : Colors.black54,
                           ),
                         ),
                       ),
-                      if (order.transferHistory.isNotEmpty) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: primaryBlue.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            '${order.transferHistory.length} Transfer${order.transferHistory.length > 1 ? 's' : ''}',
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: primaryBlue,
-                            ),
-                          ),
-                        ),
-                      ],
                       const SizedBox(width: 8),
                       Text(
                         DateFormat('dd MMM yyyy').format(order.orderDate),

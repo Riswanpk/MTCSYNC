@@ -165,3 +165,8 @@ flutter:
     - family: PTSans
       fonts:
         - asset: assets/fonts/PTSans-Regular.ttf
+    - family: Candara
+      fonts:
+        - asset: assets/fonts/Candara.ttf
+        - asset: assets/fonts/Candarab.ttf
+          weight: 700

@@ -85,7 +85,19 @@ class ExpoPdfService {
         logoImage = pw.MemoryImage(logoBytes.buffer.asUint8List());
       } catch (_) {}
 
-      pdf.addPage(
+      // Load Candara fonts if present
+      pw.ThemeData? pdfTheme;
+      try {
+        final regularData = await rootBundle.load('assets/fonts/Candara.ttf');
+        final boldData = await rootBundle.load('assets/fonts/Candarab.ttf');
+        pdfTheme = pw.ThemeData.withFont(
+          base: pw.Font.ttf(regularData),
+          bold: pw.Font.ttf(boldData),
+        );
+      } catch (_) {}
+
+      final themedPdf = pw.Document(theme: pdfTheme);
+      themedPdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.symmetric(horizontal: 24, vertical: 24),
@@ -111,7 +123,17 @@ class ExpoPdfService {
                     ),
                   ),
                 ),
-                pw.SizedBox(height: 12),
+                pw.SizedBox(height: 6),
+                pw.Text(
+                  'ORDER BOOKING FORM',
+                  style: pw.TextStyle(
+                    color: colorNavy,
+                    fontSize: 12,
+                    fontWeight: pw.FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                pw.SizedBox(height: 10),
               ],
             );
           },
@@ -145,7 +167,31 @@ class ExpoPdfService {
                             'State', order.state, colorLimeGreen),
                         pw.SizedBox(height: 4),
                         _buildTemplateField(
-                            'Delivery Type', order.orderType, colorNavyAccent),
+                          'Sales Rep.',
+                          order.createdUserName.isNotEmpty
+                              ? order.createdUserName
+                              : '-',
+                          colorLimeGreen,
+                        ),
+                        pw.SizedBox(height: 4),
+                        _buildTemplateField(
+                          'Delivery Type',
+                          isSpotDelivery
+                              ? order.orderType
+                              : '${order.orderType} ($deliveryDateFormatted)',
+                          colorNavyAccent,
+                        ),
+                        pw.SizedBox(height: 6),
+                        pw.Align(
+                          alignment: pw.Alignment.centerLeft,
+                          child: pw.Text(
+                            order.notes.trim().isNotEmpty
+                                ? 'Notes: ${order.notes.trim()}'
+                                : 'Notes:',
+                            style: const pw.TextStyle(
+                                fontSize: 8.5, color: PdfColors.grey800),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -207,12 +253,15 @@ class ExpoPdfService {
                           pw.SizedBox(height: 4),
                         ],
 
-                        // Sales Rep Field (order creator)
+                        // Branch Field
                         _buildTemplateField(
-                          'Sales Rep.',
-                          order.createdUserName.isNotEmpty
-                              ? order.createdUserName
-                              : '-',
+                          'Branch',
+                          isSpotDelivery
+                              ? '-'
+                              : (order.preferredBranch != 'N/A' &&
+                                      order.preferredBranch.isNotEmpty
+                                  ? order.preferredBranch
+                                  : '-'),
                           colorLimeGreen,
                         ),
                         pw.SizedBox(height: 4),
@@ -230,89 +279,18 @@ class ExpoPdfService {
               ),
               pw.SizedBox(height: 8),
 
-              // 3. Branch & Delivery Date Row
-              pw.Container(
-                padding:
-                    const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: colorBorderGrey, width: 1),
-                  borderRadius:
-                      const pw.BorderRadius.all(pw.Radius.circular(3)),
-                  color: PdfColor.fromInt(0xFFFAFAFA),
-                ),
-                child: pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.RichText(
-                      text: pw.TextSpan(
-                        children: [
-                          pw.TextSpan(
-                            text: 'Branch: ',
-                            style: pw.TextStyle(
-                              fontSize: 10,
-                              fontWeight: pw.FontWeight.bold,
-                              color: colorNavy,
-                            ),
-                          ),
-                          pw.TextSpan(
-                            text: isSpotDelivery
-                                ? '-'
-                                : (order.preferredBranch != 'N/A' &&
-                                        order.preferredBranch.isNotEmpty
-                                    ? order.preferredBranch
-                                    : '-'),
-                            style: pw.TextStyle(
-                              fontSize: 10,
-                              fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.black,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (!isSpotDelivery)
-                      pw.RichText(
-                        text: pw.TextSpan(
-                          children: [
-                            pw.TextSpan(
-                              text: isStallDelivery
-                                  ? 'Pickup Date: '
-                                  : 'Delivery Date: ',
-                              style: pw.TextStyle(
-                                fontSize: 10,
-                                fontWeight: pw.FontWeight.bold,
-                                color: colorNavy,
-                              ),
-                            ),
-                            pw.TextSpan(
-                              text: deliveryDateFormatted,
-                              style: pw.TextStyle(
-                                fontSize: 10,
-                                fontWeight: pw.FontWeight.bold,
-                                color: PdfColors.black,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              pw.SizedBox(height: 8),
-
-              // 4. Dynamic Items Table:
-              // S.No. | Code | Item Description | Qty | Rate | GST | GST AMT | Total
+              // 3. Dynamic Items Table:
+              // S.No. | Code | Item Description | Qty | Rate | GST | Total
               pw.Table(
                 border: pw.TableBorder.all(color: colorBorderGrey, width: 0.8),
                 columnWidths: const {
                   0: pw.FlexColumnWidth(0.7), // S.No.
                   1: pw.FlexColumnWidth(1.3), // Code
-                  2: pw.FlexColumnWidth(3.2), // Item Description
+                  2: pw.FlexColumnWidth(3.5), // Item Description
                   3: pw.FlexColumnWidth(0.9), // Qty
                   4: pw.FlexColumnWidth(1.3), // Rate
                   5: pw.FlexColumnWidth(1.2), // GST
-                  6: pw.FlexColumnWidth(1.4), // GST AMT
-                  7: pw.FlexColumnWidth(1.5), // Total
+                  6: pw.FlexColumnWidth(1.5), // Total
                 },
                 children: [
                   // Table Header: Deep Blue background with white text
@@ -325,7 +303,6 @@ class ExpoPdfService {
                       _buildHeaderCell('Qty', align: pw.TextAlign.center),
                       _buildHeaderCell('Rate', align: pw.TextAlign.right),
                       _buildHeaderCell('GST', align: pw.TextAlign.center),
-                      _buildHeaderCell('GST AMT', align: pw.TextAlign.right),
                       _buildHeaderCell('Total', align: pw.TextAlign.right),
                     ],
                   ),
@@ -372,20 +349,14 @@ class ExpoPdfService {
                         _buildDataCell(it.rate.toStringAsFixed(2),
                             align: pw.TextAlign.right),
                         _buildDataCell(
-                          '${it.gst == it.gst.roundToDouble() ? it.gst.toStringAsFixed(0) : it.gst.toStringAsFixed(2)}%\n(${it.gstType == 1 ? 'Incl.' : 'Excl.'})',
+                          '${it.gst == it.gst.roundToDouble() ? it.gst.toStringAsFixed(0) : it.gst.toStringAsFixed(2)}%',
                           align: pw.TextAlign.center,
                         ),
                         _buildDataCell(
-                          ExpoOrderItem.calculateGstAmount(
-                            it.qty,
-                            it.rate,
-                            it.gst,
-                            gstType: it.gstType,
-                          ).toStringAsFixed(2),
+                          (it.gstType != 1 ? it.qty * it.rate : it.total)
+                              .toStringAsFixed(2),
                           align: pw.TextAlign.right,
                         ),
-                        _buildDataCell(it.total.toStringAsFixed(2),
-                            align: pw.TextAlign.right),
                       ],
                     );
                   }),
@@ -403,16 +374,6 @@ class ExpoPdfService {
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        // Notes area (only user-entered notes, blank if none)
-                        pw.Text(
-                          order.notes.trim().isNotEmpty
-                              ? 'Notes: ${order.notes.trim()}'
-                              : 'Notes:',
-                          style: const pw.TextStyle(
-                              fontSize: 8.5, color: PdfColors.grey800),
-                        ),
-                        pw.SizedBox(height: 16),
-
                         // Customer Signature Box
                         pw.Container(
                           width: 140,
@@ -459,7 +420,45 @@ class ExpoPdfService {
                         _buildTotalRow('Total Amount',
                             currencyFormat.format(order.totalAmount)),
                         _buildTotalRow(
-                          'Advance',
+                          'Total GST',
+                          currencyFormat.format(
+                            order.items
+                                .where((it) => it.gstType != 1)
+                                .fold<double>(
+                                  0.0,
+                                  (sum, it) =>
+                                      sum +
+                                      ExpoOrderItem.calculateGstAmount(
+                                        it.qty,
+                                        it.rate,
+                                        it.gst,
+                                        gstType: it.gstType,
+                                      ),
+                                ),
+                          ),
+                        ),
+                        _buildTotalRow(
+                          'Grand Total',
+                          currencyFormat.format(
+                            order.totalAmount +
+                                order.items
+                                    .where((it) => it.gstType != 1)
+                                    .fold<double>(
+                                      0.0,
+                                      (sum, it) =>
+                                          sum +
+                                          ExpoOrderItem.calculateGstAmount(
+                                            it.qty,
+                                            it.rate,
+                                            it.gst,
+                                            gstType: it.gstType,
+                                          ),
+                                    ),
+                          ),
+                          isBold: true,
+                        ),
+                        _buildTotalRow(
+                          'Advance${(!isSpotDelivery && order.paymentMode.isNotEmpty) ? ' (${order.paymentMode})' : ''}',
                           currencyFormat.format(
                               isSpotDelivery ? 0.0 : order.advanceAmount),
                         ),
@@ -471,7 +470,27 @@ class ExpoPdfService {
                         _buildTotalRow(
                           'Balance Amount',
                           currencyFormat.format(
-                              isSpotDelivery ? 0.0 : order.balanceAmount),
+                            isSpotDelivery
+                                ? 0.0
+                                : (order.totalAmount +
+                                        order.items
+                                            .where((it) => it.gstType != 1)
+                                            .fold<double>(
+                                              0.0,
+                                              (sum, it) =>
+                                                  sum +
+                                                  ExpoOrderItem
+                                                      .calculateGstAmount(
+                                                    it.qty,
+                                                    it.rate,
+                                                    it.gst,
+                                                    gstType: it.gstType,
+                                                  ),
+                                            ) -
+                                        order.advanceAmount -
+                                        order.pickupAmount)
+                                    .clamp(0.0, double.infinity),
+                          ),
                           isBold: true,
                         ),
                       ],
@@ -484,8 +503,16 @@ class ExpoPdfService {
           footer: (pw.Context context) {
             return pw.Column(
               children: [
-                if (context.pageNumber == context.pagesCount)
+                if (context.pageNumber == context.pagesCount) ...[
+                  pw.Text(
+                    'Note: This is an approximate estimate. Final pricing and applicable taxes are subject to actuals on the final tax invoice. This document is issued for reference purposes only and does not constitute a tax invoice. The official original bill will be generated and issued exclusively by the respective branch.',
+                    textAlign: pw.TextAlign.center,
+                    style: const pw.TextStyle(
+                        fontSize: 7, color: PdfColors.grey600),
+                  ),
+                  pw.SizedBox(height: 6),
                   _buildBranchesSection(),
+                ],
                 pw.SizedBox(height: 12),
                 pw.Container(
                   height: 4,
@@ -517,7 +544,7 @@ class ExpoPdfService {
         ),
       );
 
-      final bytes = await pdf.save();
+      final bytes = await themedPdf.save();
       final tempDir = await getTemporaryDirectory();
       final dateStr = DateFormat('dd-MM-yyyy').format(order.orderDate);
       final sanitizedShop =
