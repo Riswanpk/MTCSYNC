@@ -489,22 +489,21 @@ class ExpoPdfService {
                   ),
                 ],
               ),
+              pw.SizedBox(height: 16),
+              pw.Text(
+                'Note: This is an approximate estimate. Final pricing and applicable taxes are subject to actuals on the final tax invoice. This document is issued for reference purposes only and does not constitute a tax invoice. The official original bill will be generated and issued exclusively by the respective branch. Order will be cancelled if not taken delivery within 90 days.',
+                textAlign: pw.TextAlign.center,
+                style:
+                    const pw.TextStyle(fontSize: 7, color: PdfColors.grey600),
+              ),
+              pw.SizedBox(height: 8),
+              _buildBranchesSection(),
             ];
           },
           footer: (pw.Context context) {
             return pw.Column(
               children: [
-                if (context.pageNumber == context.pagesCount) ...[
-                  pw.Text(
-                    'Note: This is an approximate estimate. Final pricing and applicable taxes are subject to actuals on the final tax invoice. This document is issued for reference purposes only and does not constitute a tax invoice. The official original bill will be generated and issued exclusively by the respective branch. Order will be cancelled if not taken delivery within 90 days.',
-                    textAlign: pw.TextAlign.center,
-                    style: const pw.TextStyle(
-                        fontSize: 7, color: PdfColors.grey600),
-                  ),
-                  pw.SizedBox(height: 6),
-                  _buildBranchesSection(),
-                ],
-                pw.SizedBox(height: 12),
+                pw.SizedBox(height: 6),
                 pw.Container(
                   height: 4,
                   width: double.infinity,
@@ -675,94 +674,115 @@ class ExpoPdfService {
     );
   }
 
-  /// Builds the branches contact grid (3 rows x 6 columns) kept together on one page.
+  /// Builds the branches contact section matching the official branch card.
   static pw.Widget _buildBranchesSection() {
-    const branches = [
-      ('BENGALURU', '82175 36200'),
-      ('CHENNAI', '95390 50060'),
-      ('UDUPI', '94971 38955'),
-      ('COIMBATORE', '73737 03014'),
-      ('POOKKOTTUR', '92075 05555'),
-      ('TIRUR', '81118 85759'),
-      ('PERINTHALMANNA', '94471 21876'),
-      ('PALAKKAD', '94969 60619'),
-      ('KASARAGOD', '95260 18953'),
-      ('THRISSUR', '75590 15000'),
-      ('THALASSERY', '98471 16200'),
-      ('KOCHI', '98477 13016'),
-      ('VADAKARA', '98477 35016'),
-      ('KOTTAYAM', '95269 18999'),
-      ('WAYANAD', '75929 32222'),
-      ('KAYAMKULAM', '92493 79491'),
-      ('CALICUT', '94959 21876'),
-      ('TRIVANDRUM', '94950 00729'),
+    const topBranches = [
+      'DUBAI : +971 55 447 1448',
+      'HYDERABAD : +91 99956 22203',
     ];
 
-    const columnsPerRow = 6;
-    final rows = <pw.TableRow>[];
-    for (var i = 0; i < branches.length; i += columnsPerRow) {
-      final slice = branches.sublist(i, i + columnsPerRow);
-      rows.add(
-        pw.TableRow(
-          children: slice.map((branch) {
-            return pw.Padding(
-              padding:
-                  const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.center,
-                children: [
-                  pw.Text(
-                    branch.$1,
-                    textAlign: pw.TextAlign.center,
-                    style: pw.TextStyle(
-                      fontSize: 6.5,
-                      fontWeight: pw.FontWeight.bold,
-                      color: colorNavy,
-                    ),
-                  ),
-                  pw.SizedBox(height: 1),
-                  pw.Text(
-                    branch.$2,
-                    textAlign: pw.TextAlign.center,
-                    style: const pw.TextStyle(
-                      fontSize: 6.5,
-                      color: PdfColors.black,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
+    const branches = [
+      'BENGALURU : +91 82175 36200',
+      'CHENNAI : +91 95390 50060',
+      'UDUPI : +91 88910 17775',
+      'COIMBATORE : +91 73737 03015',
+      'TRIVANDRUM : +91 90481 73174',
+      'KAYAMKULAM : +91 81578 68882',
+      'KOTTAYAM : +91 90725 78355',
+      'KOCHI : +91 97786 89257',
+      'THRISSUR : +91 75580 15000',
+      'PALAKKAD : +91 90725 81095',
+      'PERINTHALMANNA : 81118 85757',
+      'TIRUR : +91 81118 85760',
+      'POOKKOTTUR : +91 92076 26666',
+      'WAYANAD : +91 75929 34444',
+      'CALICUT : +91 94959 21876',
+      'VADAKARA : +91 90725 78352',
+      'THALASSERI : +91 99958 50060',
+      'KASARAGOD : +91 75940 33107',
+    ];
+
+    pw.Widget buildPill(String text) {
+      return pw.Container(
+        padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: const pw.BoxDecoration(
+          color: colorNavyAccent,
+          borderRadius: pw.BorderRadius.all(pw.Radius.circular(6)),
+        ),
+        alignment: pw.Alignment.center,
+        child: pw.FittedBox(
+          fit: pw.BoxFit.scaleDown,
+          child: pw.Text(
+            text,
+            textAlign: pw.TextAlign.center,
+            style: pw.TextStyle(
+              fontSize: 7,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.white,
+            ),
+          ),
+        ),
+      );
+    }
+
+    final gridRows = <pw.Widget>[];
+    for (var i = 0; i < branches.length; i += 3) {
+      final slice = branches.sublist(i, i + 3);
+      gridRows.add(
+        pw.Padding(
+          padding: const pw.EdgeInsets.only(bottom: 4),
+          child: pw.Row(
+            children: [
+              pw.Expanded(child: buildPill(slice[0])),
+              pw.SizedBox(width: 5),
+              pw.Expanded(child: buildPill(slice[1])),
+              pw.SizedBox(width: 5),
+              pw.Expanded(child: buildPill(slice[2])),
+            ],
+          ),
         ),
       );
     }
 
     return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      crossAxisAlignment: pw.CrossAxisAlignment.center,
       children: [
         pw.Container(
-          padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 6),
+          padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 28),
           decoration: const pw.BoxDecoration(
-            color: colorNavy,
-            borderRadius: pw.BorderRadius.only(
-              topLeft: pw.Radius.circular(3),
-              topRight: pw.Radius.circular(3),
-            ),
+            color: colorNavyAccent,
+            borderRadius: pw.BorderRadius.all(pw.Radius.circular(8)),
           ),
           child: pw.Text(
             'OUR BRANCHES',
             textAlign: pw.TextAlign.center,
             style: pw.TextStyle(
-              fontSize: 7.5,
+              fontSize: 9.5,
               fontWeight: pw.FontWeight.bold,
               color: PdfColors.white,
-              letterSpacing: 0.8,
+              letterSpacing: 1.0,
             ),
           ),
         ),
-        pw.Table(
-          border: pw.TableBorder.all(color: colorBorderGrey, width: 0.6),
-          children: rows,
+        pw.SizedBox(height: 5),
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.center,
+          children: [
+            buildPill(topBranches[0]),
+            pw.SizedBox(width: 6),
+            buildPill(topBranches[1]),
+          ],
+        ),
+        pw.SizedBox(height: 5),
+        ...gridRows,
+        pw.SizedBox(height: 2),
+        pw.Text(
+          'www.mtckerala.com',
+          style: pw.TextStyle(
+            fontSize: 8,
+            fontWeight: pw.FontWeight.bold,
+            color: colorLimeGreen,
+          ),
         ),
       ],
     );
