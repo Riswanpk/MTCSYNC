@@ -85,16 +85,10 @@ class ExpoPdfService {
         logoImage = pw.MemoryImage(logoBytes.buffer.asUint8List());
       } catch (_) {}
 
-      // Load Candara fonts if present
-      pw.ThemeData? pdfTheme;
-      try {
-        final regularData = await rootBundle.load('assets/fonts/Candara.ttf');
-        final boldData = await rootBundle.load('assets/fonts/Candarab.ttf');
-        pdfTheme = pw.ThemeData.withFont(
-          base: pw.Font.ttf(regularData),
-          bold: pw.Font.ttf(boldData),
-        );
-      } catch (_) {}
+      final pdfTheme = pw.ThemeData.withFont(
+        base: pw.Font.times(),
+        bold: pw.Font.timesBold(),
+      );
 
       final themedPdf = pw.Document(theme: pdfTheme);
       themedPdf.addPage(
@@ -102,6 +96,21 @@ class ExpoPdfService {
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.symmetric(horizontal: 24, vertical: 24),
           header: (pw.Context context) {
+            if (context.pageNumber > 1) {
+              return pw.Column(
+                children: [
+                  pw.Container(
+                    height: 4,
+                    width: double.infinity,
+                    decoration: const pw.BoxDecoration(
+                      color: colorLimeGreen,
+                      borderRadius: pw.BorderRadius.all(pw.Radius.circular(2)),
+                    ),
+                  ),
+                  pw.SizedBox(height: 10),
+                ],
+              );
+            }
             return pw.Column(
               children: [
                 // 1. Top Header Banner: MALABAR TRADING COMPANY
@@ -388,7 +397,7 @@ class ExpoPdfService {
                           padding: const pw.EdgeInsets.only(bottom: 2),
                           child: pw.Text(
                             '',
-                            style: const pw.TextStyle(fontSize: 8),
+                            style: const pw.TextStyle(fontSize: 9.5),
                           ),
                         ),
                         pw.SizedBox(height: 3),
@@ -417,8 +426,25 @@ class ExpoPdfService {
                         1: pw.FlexColumnWidth(1.0),
                       },
                       children: [
-                        _buildTotalRow('Total Amount',
-                            currencyFormat.format(order.totalAmount)),
+                        _buildTotalRow(
+                          'Total Amount',
+                          currencyFormat.format(
+                            order.totalAmount -
+                                order.items
+                                    .where((it) => it.gstType != 1)
+                                    .fold<double>(
+                                      0.0,
+                                      (sum, it) =>
+                                          sum +
+                                          ExpoOrderItem.calculateGstAmount(
+                                            it.qty,
+                                            it.rate,
+                                            it.gst,
+                                            gstType: it.gstType,
+                                          ),
+                                    ),
+                          ),
+                        ),
                         _buildTotalRow(
                           'Total GST',
                           currencyFormat.format(
@@ -439,22 +465,7 @@ class ExpoPdfService {
                         ),
                         _buildTotalRow(
                           'Grand Total',
-                          currencyFormat.format(
-                            order.totalAmount +
-                                order.items
-                                    .where((it) => it.gstType != 1)
-                                    .fold<double>(
-                                      0.0,
-                                      (sum, it) =>
-                                          sum +
-                                          ExpoOrderItem.calculateGstAmount(
-                                            it.qty,
-                                            it.rate,
-                                            it.gst,
-                                            gstType: it.gstType,
-                                          ),
-                                    ),
-                          ),
+                          currencyFormat.format(order.totalAmount),
                           isBold: true,
                         ),
                         _buildTotalRow(
@@ -470,27 +481,7 @@ class ExpoPdfService {
                         _buildTotalRow(
                           'Balance Amount',
                           currencyFormat.format(
-                            isSpotDelivery
-                                ? 0.0
-                                : (order.totalAmount +
-                                        order.items
-                                            .where((it) => it.gstType != 1)
-                                            .fold<double>(
-                                              0.0,
-                                              (sum, it) =>
-                                                  sum +
-                                                  ExpoOrderItem
-                                                      .calculateGstAmount(
-                                                    it.qty,
-                                                    it.rate,
-                                                    it.gst,
-                                                    gstType: it.gstType,
-                                                  ),
-                                            ) -
-                                        order.advanceAmount -
-                                        order.pickupAmount)
-                                    .clamp(0.0, double.infinity),
-                          ),
+                              isSpotDelivery ? 0.0 : order.balanceAmount),
                           isBold: true,
                         ),
                       ],
@@ -505,7 +496,7 @@ class ExpoPdfService {
               children: [
                 if (context.pageNumber == context.pagesCount) ...[
                   pw.Text(
-                    'Note: This is an approximate estimate. Final pricing and applicable taxes are subject to actuals on the final tax invoice. This document is issued for reference purposes only and does not constitute a tax invoice. The official original bill will be generated and issued exclusively by the respective branch.',
+                    'Note: This is an approximate estimate. Final pricing and applicable taxes are subject to actuals on the final tax invoice. This document is issued for reference purposes only and does not constitute a tax invoice. The official original bill will be generated and issued exclusively by the respective branch. Order will be cancelled if not taken delivery within 90 days.',
                     textAlign: pw.TextAlign.center,
                     style: const pw.TextStyle(
                         fontSize: 7, color: PdfColors.grey600),
@@ -610,7 +601,7 @@ class ExpoPdfService {
                 value.isNotEmpty ? value : '-',
                 maxLines: 1,
                 style: pw.TextStyle(
-                  fontSize: 8.5,
+                  fontSize: 10,
                   fontWeight: pw.FontWeight.bold,
                   color: PdfColors.black,
                 ),
@@ -631,7 +622,7 @@ class ExpoPdfService {
         textAlign: align,
         style: pw.TextStyle(
           color: PdfColors.white,
-          fontSize: 8.5,
+          fontSize: 10,
           fontWeight: pw.FontWeight.bold,
         ),
       ),
@@ -645,7 +636,7 @@ class ExpoPdfService {
       child: pw.Text(
         text,
         textAlign: align,
-        style: const pw.TextStyle(fontSize: 8),
+        style: const pw.TextStyle(fontSize: 9.5),
       ),
     );
   }

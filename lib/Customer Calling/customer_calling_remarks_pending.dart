@@ -45,7 +45,7 @@ class _CustomerCallingRemarksPendingPageState
   @override
   void initState() {
     super.initState();
-    _fetchPendingRemarks();
+    _fetchPendingRemarks(fromServer: true);
   }
 
   Future<void> _fetchPendingRemarks({bool fromServer = false}) async {
@@ -216,7 +216,7 @@ class _CustomerCallingRemarksPendingPageState
               IconButton(
                 icon: const Icon(Icons.refresh),
                 tooltip: 'Refresh Pending List',
-                onPressed: _fetchPendingRemarks,
+                onPressed: () => _fetchPendingRemarks(fromServer: true),
               ),
             ],
           ),
@@ -361,8 +361,9 @@ class _CustomerCallingRemarksPendingPageState
                                                 _pendingCustomers.removeWhere(
                                                     (c) => CustomerListTargetService.isSameCustomer(c, customer));
                                               });
+                                            } else {
+                                              _fetchPendingRemarks(fromServer: true);
                                             }
-                                            _fetchPendingRemarks(fromServer: true);
                                           }
                                         });
                                       },

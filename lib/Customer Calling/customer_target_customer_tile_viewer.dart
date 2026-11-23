@@ -138,7 +138,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
     }
   }
 
-  void _onCallDetectedFromLog() {
+  Future<void> _onCallDetectedFromLog() async {
     if (mounted) {
       setState(() {
         called = true;
@@ -160,7 +160,7 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
     );
 
     if (widget.onStatusChanged != null) {
-      widget.onStatusChanged!(remarksController.text.trim());
+      await widget.onStatusChanged!(remarksController.text.trim());
     }
 
     if (mounted) {
@@ -463,9 +463,9 @@ class _SalesCustomerTileViewerState extends State<SalesCustomerTileViewer>
                 remarksEntered: remarksEntered,
                 remarksSaved: _remarksSaved,
                 primaryColor: primaryColor,
-                onLeadAdded: () {
+                onLeadAdded: () async {
                   if (widget.onStatusChanged != null) {
-                    widget.onStatusChanged!(remarksController.text.trim());
+                    await widget.onStatusChanged!(remarksController.text.trim());
                   }
                 },
               ),

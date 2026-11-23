@@ -1144,6 +1144,14 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
     FocusScope.of(context).unfocus();
     if (!_validateStep(2)) return;
 
+    if (ExpoOrder.modeRequiresReceipt(_selectedPaymentMode) &&
+        _paymentProofFile == null &&
+        (_existingPaymentProofUrl == null ||
+            _existingPaymentProofUrl!.trim().isEmpty)) {
+      _showSnack('Please upload the receipt photo before submitting.');
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     try {
