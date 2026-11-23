@@ -1247,7 +1247,8 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
         state: _stateController.text.trim(),
         phone: _phoneController.text.trim(),
         preferredBranch: isSpot ? 'N/A' : (_selectedPreferredBranch ?? 'N/A'),
-        preferredSalesman: 'N/A',
+        preferredSalesman:
+            _selectedOrderType == 'Booking' ? _selectedSalesman : 'N/A',
         items: orderItems,
         subtotal: _round2(_subtotal),
         totalGst: _round2(_totalGst),
@@ -1663,6 +1664,25 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                   isDark: isDark,
                   isLoading: _isLoadingBranches,
                 ),
+                if (_selectedOrderType == 'Booking') ...[
+                  const SizedBox(height: 12),
+                  _CustomAnimatedDropdown(
+                    key: ValueKey('salesman_$_selectedSalesman'),
+                    value: _salesmenForBranch.contains(_selectedSalesman)
+                        ? _selectedSalesman
+                        : null,
+                    items: _salesmenForBranch,
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() => _selectedSalesman = val);
+                      }
+                    },
+                    label: 'Preferred Salesman',
+                    hint: 'Select salesman',
+                    icon: Icons.person_search_rounded,
+                    isDark: isDark,
+                  ),
+                ],
               ],
             ],
           ),
