@@ -992,6 +992,7 @@ class ExpoService {
     double pickupCashAmount = 0.0,
     double pickupOnlineAmount = 0.0,
     String? pickupPaymentProofUrl,
+    String? deliveryPhotoUrl,
     bool completeImmediately = true,
   }) async {
     final now = _ts(DateTime.now());
@@ -1003,6 +1004,10 @@ class ExpoService {
       'picked_up_at': now,
       'balance_amount': newBalance,
     };
+
+    if (deliveryPhotoUrl != null && deliveryPhotoUrl.isNotEmpty) {
+      payload['delivery_photo_url'] = deliveryPhotoUrl;
+    }
 
     if (pickupAmount > 0 && pickupPaymentMode != null) {
       payload['pickup_payment_mode'] =

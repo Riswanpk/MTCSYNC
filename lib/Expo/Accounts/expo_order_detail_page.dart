@@ -29,6 +29,7 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
   late ExpoOrder _currentOrder;
   bool _isVerifying = false;
   bool _isExportingPdf = false;
+  bool _itemsExpanded = false;
 
   @override
   void initState() {
@@ -811,27 +812,51 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Items Breakdown',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          '${order.items.length} items (${order.totalQty} pcs)',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isDark ? Colors.white60 : Colors.black54,
+                    InkWell(
+                      onTap: () => setState(() => _itemsExpanded = !_itemsExpanded),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Items Breakdown',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                           ),
-                        ),
-                      ],
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '${order.items.length} items (${order.totalQty} pcs)',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isDark ? Colors.white60 : Colors.black54,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              AnimatedRotation(
+                                turns: _itemsExpanded ? 0.5 : 0.0,
+                                duration: const Duration(milliseconds: 200),
+                                child: Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  size: 22,
+                                  color: isDark ? Colors.white70 : Colors.black54,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 10),
-                    const Divider(height: 1),
-                    const SizedBox(height: 12),
-
-                    ...order.items.map((it) {
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeInOut,
+                      child: _itemsExpanded
+                          ? Column(
+                              children: [
+                                const SizedBox(height: 10),
+                                const Divider(height: 1),
+                                const SizedBox(height: 12),
+                                ...order.items.map((it) {
                       return Container(
                         margin: const EdgeInsets.only(bottom: 10),
                         padding: const EdgeInsets.all(12),
@@ -936,6 +961,10 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                         ),
                       );
                     }),
+                              ],
+                            )
+                          : const SizedBox.shrink(),
+                    ),
 
                     const SizedBox(height: 8),
                     // Summary totals box

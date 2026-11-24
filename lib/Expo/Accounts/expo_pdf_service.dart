@@ -496,13 +496,12 @@ class ExpoPdfService {
                 style:
                     const pw.TextStyle(fontSize: 7, color: PdfColors.grey600),
               ),
-              pw.SizedBox(height: 8),
-              _buildBranchesSection(),
             ];
           },
           footer: (pw.Context context) {
             return pw.Column(
               children: [
+                _buildBranchesSection(),
                 pw.SizedBox(height: 6),
                 pw.Container(
                   height: 4,

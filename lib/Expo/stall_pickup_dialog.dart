@@ -51,6 +51,7 @@ class _StallPickupPaymentDialogState extends State<_StallPickupPaymentDialog> {
 
   String _selectedMode = 'Cash';
   File? _receiptFile;
+  File? _deliveryPhotoFile;
   bool _isSaving = false;
   String? _errorText;
 
@@ -140,7 +141,10 @@ class _StallPickupPaymentDialogState extends State<_StallPickupPaymentDialog> {
     return file;
   }
 
-  Future<void> _pickReceipt(ImageSource source) async {
+  Future<void> _pickImage(
+    ImageSource source, {
+    required void Function(File file) onPicked,
+  }) async {
     try {
       final picked = await _picker.pickImage(
         source: source,
@@ -151,15 +155,18 @@ class _StallPickupPaymentDialogState extends State<_StallPickupPaymentDialog> {
       if (picked != null && mounted) {
         final compressed = await _compressImage(File(picked.path));
         if (mounted) {
-          setState(() => _receiptFile = compressed);
+          setState(() => onPicked(compressed));
         }
       }
     } catch (e) {
-      debugPrint('Error picking pickup receipt: $e');
+      debugPrint('Error picking pickup image: $e');
     }
   }
 
-  Future<void> _showReceiptPickerSheet() async {
+  Future<void> _showImagePickerSheet({
+    required String title,
+    required void Function(File file) onPicked,
+  }) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
@@ -174,9 +181,10 @@ class _StallPickupPaymentDialogState extends State<_StallPickupPaymentDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Pickup Payment Receipt',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+              Text(
+                title,
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
               ),
               const SizedBox(height: 12),
               ListTile(
@@ -197,9 +205,19 @@ class _StallPickupPaymentDialogState extends State<_StallPickupPaymentDialog> {
       ),
     );
     if (source != null) {
-      await _pickReceipt(source);
+      await _pickImage(source, onPicked: onPicked);
     }
   }
+
+  Future<void> _showReceiptPickerSheet() => _showImagePickerSheet(
+        title: 'Pickup Payment Receipt',
+        onPicked: (file) => _receiptFile = file,
+      );
+
+  Future<void> _showDeliveryPhotoPickerSheet() => _showImagePickerSheet(
+        title: 'Stall Delivery Photo',
+        onPicked: (file) => _deliveryPhotoFile = file,
+      );
 
   Future<void> _submit() async {
     final double balance = _balanceDue;
@@ -243,6 +261,14 @@ class _StallPickupPaymentDialogState extends State<_StallPickupPaymentDialog> {
         );
       }
 
+      String? deliveryPhotoUrl;
+      if (_deliveryPhotoFile != null) {
+        deliveryPhotoUrl = await ExpoService.instance.uploadFile(
+          _deliveryPhotoFile!,
+          bucketName: ExpoSupabaseConfig.bucketItemPhotos,
+        );
+      }
+
       final bool completeImmediately = balance <= 0
           ? (widget.isAccountsUser || widget.order.status == 'Completed')
           : widget.isAccountsUser;
@@ -255,6 +281,7 @@ class _StallPickupPaymentDialogState extends State<_StallPickupPaymentDialog> {
         pickupCashAmount: pickupCash,
         pickupOnlineAmount: pickupOnline,
         pickupPaymentProofUrl: proofUrl,
+        deliveryPhotoUrl: deliveryPhotoUrl,
         completeImmediately: completeImmediately,
       );
 
@@ -469,6 +496,56 @@ class _StallPickupPaymentDialogState extends State<_StallPickupPaymentDialog> {
                     ),
                 ],
               ],
+              const SizedBox(height: 14),
+              const Text(
+                'Delivery Photo',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              const SizedBox(height: 8),
+              if (_deliveryPhotoFile != null) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.file(
+                    _deliveryPhotoFile!,
+                    height: 110,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton.icon(
+                      onPressed:
+                          _isSaving ? null : _showDeliveryPhotoPickerSheet,
+                      icon: const Icon(Icons.refresh_rounded, size: 16),
+                      label: const Text('Change'),
+                    ),
+                    TextButton.icon(
+                      onPressed: _isSaving
+                          ? null
+                          : () => setState(() => _deliveryPhotoFile = null),
+                      icon: const Icon(Icons.delete_outline_rounded,
+                          color: Colors.redAccent, size: 16),
+                      label: const Text('Remove',
+                          style: TextStyle(color: Colors.redAccent)),
+                    ),
+                  ],
+                ),
+              ] else
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _isSaving ? null : _showDeliveryPhotoPickerSheet,
+                    icon: const Icon(Icons.add_a_photo_rounded,
+                        color: _kPrimaryBlue),
+                    label: const Text(
+                      'Add Delivery Photo',
+                      style: TextStyle(color: _kPrimaryBlue),
+                    ),
+                  ),
+                ),
               if (_errorText != null) ...[
                 const SizedBox(height: 10),
                 Text(

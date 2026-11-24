@@ -45,7 +45,7 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 4, vsync: this, initialIndex: 2);
   }
 
   @override
@@ -324,33 +324,6 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
                   }).toList(),
                 ),
             ],
-            bottom: TabBar(
-              controller: _tabController,
-              isScrollable: true,
-              tabAlignment: TabAlignment.start,
-              indicatorColor: primaryGreen,
-              indicatorWeight: 3,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white70,
-              tabs: const [
-                Tab(
-                  icon: Icon(Icons.flash_on_rounded, size: 18),
-                  text: 'Spot',
-                ),
-                Tab(
-                  icon: Icon(Icons.storefront_rounded, size: 18),
-                  text: 'Stall',
-                ),
-                Tab(
-                  icon: Icon(Icons.local_shipping_rounded, size: 18),
-                  text: 'Booking',
-                ),
-                Tab(
-                  icon: Icon(Icons.check_circle_rounded, size: 18),
-                  text: 'Completed',
-                ),
-              ],
-            ),
           ),
           body: StreamBuilder<List<ExpoOrder>>(
             stream: ExpoService.instance
@@ -403,6 +376,36 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
 
               return Column(
                 children: [
+                  Container(
+                    color: isDark ? const Color(0xFF0A192F) : primaryBlue,
+                    child: TabBar(
+                      controller: _tabController,
+                      isScrollable: true,
+                      tabAlignment: TabAlignment.start,
+                      indicatorColor: primaryGreen,
+                      indicatorWeight: 3,
+                      labelColor: Colors.white,
+                      unselectedLabelColor: Colors.white70,
+                      tabs: [
+                        Tab(
+                          icon: const Icon(Icons.flash_on_rounded, size: 18),
+                          text: 'Spot (${spotOrders.length})',
+                        ),
+                        Tab(
+                          icon: const Icon(Icons.storefront_rounded, size: 18),
+                          text: 'Stall (${stallOrders.length})',
+                        ),
+                        Tab(
+                          icon: const Icon(Icons.local_shipping_rounded, size: 18),
+                          text: 'Booking (${bookingOrders.length})',
+                        ),
+                        Tab(
+                          icon: const Icon(Icons.check_circle_rounded, size: 18),
+                          text: 'Completed (${completedOrders.length})',
+                        ),
+                      ],
+                    ),
+                  ),
                   // Exhibition Info & User Filter Bar
                   _buildHeaderAndFilterBar(
                     currentEx: currentEx,
@@ -773,6 +776,8 @@ class _ExpoOrdersTabKeepAlive extends StatefulWidget {
 
 class _ExpoOrdersTabKeepAliveState extends State<_ExpoOrdersTabKeepAlive>
     with AutomaticKeepAliveClientMixin {
+  final Set<String> _expandedOrderIds = {};
+
   @override
   bool get wantKeepAlive => true;
 
@@ -1190,20 +1195,164 @@ class _ExpoOrdersTabKeepAliveState extends State<_ExpoOrdersTabKeepAlive>
                     ],
                   ),
 
-                  const SizedBox(height: 10),
+                  // Expandable Item Breakdown
+                  if (order.items.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    const Divider(height: 1),
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          if (_expandedOrderIds.contains(order.id)) {
+                            _expandedOrderIds.remove(order.id);
+                          } else {
+                            _expandedOrderIds.add(order.id);
+                          }
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Items (${order.items.length})',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: widget.isDark
+                                    ? Colors.white70
+                                    : Colors.black87,
+                              ),
+                            ),
+                            AnimatedRotation(
+                              turns: _expandedOrderIds.contains(order.id)
+                                  ? 0.5
+                                  : 0.0,
+                              duration: const Duration(milliseconds: 200),
+                              child: Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                                size: 20,
+                                color: widget.isDark
+                                    ? Colors.white70
+                                    : Colors.black54,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeInOut,
+                      child: _expandedOrderIds.contains(order.id)
+                          ? Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: widget.isDark
+                                    ? Colors.white.withValues(alpha: 0.04)
+                                    : const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Column(
+                                children: order.items.map((item) {
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 2),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            '${item.itemName} x${item.qty}',
+                                            style: TextStyle(
+                                              fontSize: 11.5,
+                                              color: widget.isDark
+                                                  ? Colors.white70
+                                                  : Colors.black87,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          '₹${item.total.toStringAsFixed(2)}',
+                                          style: TextStyle(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w600,
+                                            color: widget.isDark
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 10),
+                  ],
+
                   const Divider(height: 1),
                   const SizedBox(height: 10),
 
-                  // Bottom info: Grand total and Tap indicator
+                  // Bottom info: Advance total, Payment split & Tap indicator
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(
-                        '₹${order.totalAmount.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: primaryGreen,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Advance: ₹${order.advanceAmount.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: primaryGreen,
+                              ),
+                            ),
+                            if (order.cashAmount > 0 || order.onlineAmount > 0)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 3),
+                                child: Wrap(
+                                  spacing: 8,
+                                  runSpacing: 2,
+                                  children: [
+                                    if (order.cashAmount > 0)
+                                      Text(
+                                        'Cash: ₹${order.cashAmount.toStringAsFixed(2)}',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: widget.isDark
+                                              ? Colors.white70
+                                              : Colors.black54,
+                                        ),
+                                      ),
+                                    if (order.onlineAmount > 0)
+                                      Text(
+                                        '${ExpoOrder.onlineLabelForMode(order.paymentMode)}: ₹${order.onlineAmount.toStringAsFixed(2)}',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: widget.isDark
+                                              ? Colors.white70
+                                              : Colors.black54,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                       Row(
