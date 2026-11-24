@@ -63,6 +63,7 @@ dependencies:
   flutter_contacts: ^1.1.9+2
   pdf: ^3.11.3
   syncfusion_flutter_xlsio: ^29.2.11
+  syncfusion_flutter_pdf: ^29.2.11
   open_file: ^3.5.10
   file_picker: ^10.3.3
   showcaseview: ^5.0.1
