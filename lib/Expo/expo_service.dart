@@ -294,6 +294,8 @@ class ExpoOrder {
   final bool isConvertedToBooking; // True if stall delivery wasn't picked up and got converted to booking
   final String? stallPickupStatus; // 'Pending Pickup', 'Picked Up', 'Converted to Booking'
   final String? claimedById; // User UID currently reviewing/verifying
+  final String? verifiedById;
+  final String? verifiedByName;
   final String? claimedByName; // Name of reviewer
   final DateTime? claimedAt; // Timestamp when claim was made
   final String branchDeliveryStatus; // 'Pending', 'Delivered'
@@ -356,6 +358,8 @@ class ExpoOrder {
     this.isConvertedToBooking = false,
     this.stallPickupStatus,
     this.claimedById,
+    this.verifiedById,
+    this.verifiedByName,
     this.claimedByName,
     this.claimedAt,
     this.branchDeliveryStatus = 'Pending',
@@ -494,6 +498,8 @@ class ExpoOrder {
       isConvertedToBooking: data['is_converted_to_booking'] ?? false,
       stallPickupStatus: data['stall_pickup_status'],
       claimedById: data['claimed_by_id']?.toString(),
+      verifiedById: data['verified_by_id']?.toString(),
+      verifiedByName: data['verified_by_name']?.toString(),
       claimedByName: data['claimed_by_name']?.toString(),
       claimedAt: _parseNullableDate(data['claimed_at']),
       branchDeliveryStatus: branchStatus,
@@ -895,10 +901,15 @@ class ExpoService {
   }
 
   Future<void> updateOrderStatus(String orderId, String newStatus) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
     await _table(_ordersTable).update({
       'status': newStatus,
       'completed_at':
           newStatus == 'Completed' ? _ts(DateTime.now()) : null,
+      if (newStatus == 'Completed' && currentUser != null) ...{
+        'verified_by_id': currentUser.uid,
+        'verified_by_name': currentUser.displayName ?? currentUser.email ?? '',
+      },
       'claimed_by_id': null,
       'claimed_by_name': null,
       'claimed_at': null,
@@ -908,10 +919,15 @@ class ExpoService {
   /// Bulk updates multiple orders to a new status (e.g. verifying selected cash orders).
   Future<void> updateMultipleOrdersStatus(List<String> orderIds, String newStatus) async {
     if (orderIds.isEmpty) return;
+    final currentUser = FirebaseAuth.instance.currentUser;
     await _table(_ordersTable).update({
       'status': newStatus,
       'completed_at':
           newStatus == 'Completed' ? _ts(DateTime.now()) : null,
+      if (newStatus == 'Completed' && currentUser != null) ...{
+        'verified_by_id': currentUser.uid,
+        'verified_by_name': currentUser.displayName ?? currentUser.email ?? '',
+      },
       'claimed_by_id': null,
       'claimed_by_name': null,
       'claimed_at': null,

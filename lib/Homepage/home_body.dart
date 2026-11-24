@@ -45,6 +45,7 @@ import '../Expo/Admin/expo_admin_page.dart';
 import '../Expo/User/expo_user_mainpage.dart';
 import '../Expo/Accounts/expo_accounts_page.dart';
 import '../Expo/Accounts/expo_accounts_dashboard_page.dart';
+import '../Expo/Accounts/expo_todays_collection_page.dart';
 import '../Expo/Accounts/BranchAccounts/accounts_expo_orders_page.dart';
 import '../Expo/Coupons/expo_coupons_page.dart';
 import '../Expo/Manager/expo_manager_assign_page.dart';
@@ -465,7 +466,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           builder: (_) => const ExpoAdminPage(),
         ),
       );
-    } else if (role == 'expo_acc') {
+    } else if (role == 'expo_acc' || role == 'expo_acc_main') {
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => const ExpoAccountsPage(),
@@ -500,7 +501,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   Widget build(BuildContext context) {
     final role = widget.role;
 
-    if (role == 'expo_user' || role == 'expo_acc') {
+    if (role == 'expo_user' || role == 'expo_acc' || role == 'expo_acc_main') {
       return _buildExpoRoleTiles(context, role ?? '');
     }
     if (role?.toLowerCase() == 'accounts') {
@@ -577,7 +578,8 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
   }
 
   Widget _buildExpoRoleTiles(BuildContext context, String role) {
-    final isAcc = role == 'expo_acc';
+    final isAcc = role == 'expo_acc' || role == 'expo_acc_main';
+    final isAccMain = role == 'expo_acc_main';
     final List<Widget> buttons = [
       NeumorphicButton(
         onTap: () => _navigateToExpo(context),
@@ -586,7 +588,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
         textColor: Colors.white,
         icon: isAcc ? Icons.verified_user_rounded : Icons.storefront_rounded,
       ),
-      if (isAcc)
+      if (isAccMain)
         NeumorphicButton(
           onTap: () {
             Navigator.of(context).push(
@@ -599,6 +601,20 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
           color: primaryGreen,
           textColor: Colors.white,
           icon: Icons.dashboard_rounded,
+        ),
+      if (isAccMain)
+        NeumorphicButton(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const ExpoTodaysCollectionPage(),
+              ),
+            );
+          },
+          text: "Today's Collection",
+          color: primaryBlue,
+          textColor: Colors.white,
+          icon: Icons.account_balance_wallet_rounded,
         ),
     ];
     return _buildButtonGrid(buttons);

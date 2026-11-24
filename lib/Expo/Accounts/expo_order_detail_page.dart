@@ -1016,10 +1016,10 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                               ),
                               Text(
                                 '₹${order.totalAmount.toStringAsFixed(2)}',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 17,
                                   fontWeight: FontWeight.bold,
-                                  color: primaryGreen,
+                                  color: isDark ? Colors.white : Colors.black,
                                 ),
                               ),
                             ],
@@ -1038,6 +1038,34 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                                 ),
                               ],
                             ),
+                            if (order.cashAmount > 0 || order.onlineAmount > 0) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  if (order.cashAmount > 0)
+                                    Text(
+                                      'Cash: ₹${order.cashAmount.toStringAsFixed(2)}',
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: primaryGreen,
+                                      ),
+                                    ),
+                                  if (order.cashAmount > 0 && order.onlineAmount > 0)
+                                    const SizedBox(width: 10),
+                                  if (order.onlineAmount > 0)
+                                    Text(
+                                      '${ExpoOrder.onlineLabelForMode(order.paymentMode)}: ₹${order.onlineAmount.toStringAsFixed(2)}',
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: primaryGreen,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
                             if (order.pickupAmount > 0) ...[
                               const SizedBox(height: 6),
                               Row(
@@ -1047,8 +1075,10 @@ class _ExpoOrderDetailPageState extends State<ExpoOrderDetailPage> {
                                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                                   Text(
                                     '₹${order.pickupAmount.toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                        fontSize: 13, fontWeight: FontWeight.bold, color: primaryGreen),
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark ? Colors.white : Colors.black),
                                   ),
                                 ],
                               ),

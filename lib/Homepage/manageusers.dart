@@ -30,6 +30,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
     'core_team',
     'expo_user',
     'expo_acc',
+    'expo_acc_main',
     'accounts',
     'expo_coupon',
   ];
@@ -430,6 +431,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
       case 'expo_user':
         return Icons.storefront_rounded;
       case 'expo_acc':
+      case 'expo_acc_main':
         return Icons.verified_user_rounded;
       case 'accounts':
         return Icons.account_balance_wallet_rounded;
@@ -463,6 +465,7 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
       case 'expo_user':
         return const Color(0xFF005BAC);
       case 'expo_acc':
+      case 'expo_acc_main':
         return const Color(0xFF7C3AED);
       case 'accounts':
         return const Color(0xFF00897B);
@@ -493,6 +496,8 @@ class _ManageUsersPageState extends State<ManageUsersPage> {
         return 'Expo User';
       case 'expo_acc':
         return 'Expo Accounts';
+      case 'expo_acc_main':
+        return 'EXPO ACC MAIN';
       case 'accounts':
         return 'Accounts';
       case 'expo_coupon':

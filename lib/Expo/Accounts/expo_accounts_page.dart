@@ -546,54 +546,127 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: Container(
-                  height: 34,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF132847) : Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: _selectedFilterUserId != null
-                          ? primaryBlue
-                          : (isDark ? Colors.white24 : Colors.black12),
-                    ),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String?>(
-                      value: _selectedFilterUserId,
-                      isExpanded: true,
-                      icon: const Icon(Icons.arrow_drop_down, size: 20),
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                      dropdownColor:
-                          isDark ? const Color(0xFF132847) : Colors.white,
-                      items: [
-                        const DropdownMenuItem<String?>(
-                          value: null,
-                          child: Text('All Users'),
+                child: Autocomplete<MapEntry<String, String>>(
+                  displayStringForOption: (option) => option.value,
+                  optionsBuilder: (TextEditingValue textEditingValue) {
+                    final query = textEditingValue.text.trim().toLowerCase();
+                    final entries = distinctUsers.entries.toList()
+                      ..sort((a, b) => a.value
+                          .toLowerCase()
+                          .compareTo(b.value.toLowerCase()));
+                    if (query.isEmpty) return entries;
+                    return entries.where(
+                        (e) => e.value.toLowerCase().contains(query));
+                  },
+                  onSelected: (MapEntry<String, String> selection) {
+                    setState(() {
+                      _selectedFilterUserId = selection.key;
+                      _clearBatchSelection();
+                    });
+                  },
+                  fieldViewBuilder: (
+                    context,
+                    textController,
+                    focusNode,
+                    onFieldSubmitted,
+                  ) {
+                    if (_selectedFilterUserId == null &&
+                        textController.text.isNotEmpty &&
+                        !focusNode.hasFocus) {
+                      textController.clear();
+                    }
+                    return SizedBox(
+                      height: 36,
+                      child: TextField(
+                        controller: textController,
+                        focusNode: focusNode,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white : Colors.black87,
                         ),
-                        ...distinctUsers.entries.map((entry) {
-                          return DropdownMenuItem<String?>(
-                            value: entry.key,
-                            child: Text(
-                              entry.value,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                        decoration: InputDecoration(
+                          hintText: _selectedFilterUserId != null
+                              ? (distinctUsers[_selectedFilterUserId] ??
+                                  'Search user...')
+                              : 'Search user (All Users)...',
+                          hintStyle: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? Colors.white54 : Colors.black45,
+                          ),
+                          prefixIcon: const Icon(Icons.search_rounded,
+                              size: 16, color: primaryBlue),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 0),
+                          filled: true,
+                          fillColor: isDark
+                              ? const Color(0xFF132847)
+                              : Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                              color: isDark ? Colors.white24 : Colors.black12,
                             ),
-                          );
-                        }),
-                      ],
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedFilterUserId = val;
-                          _clearBatchSelection();
-                        });
-                      },
-                    ),
-                  ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                              color: _selectedFilterUserId != null
+                                  ? primaryBlue
+                                  : (isDark ? Colors.white24 : Colors.black12),
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(
+                                color: primaryBlue, width: 1.5),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                  optionsViewBuilder: (context, onSelected, options) {
+                    return Align(
+                      alignment: Alignment.topLeft,
+                      child: Material(
+                        elevation: 4,
+                        borderRadius: BorderRadius.circular(8),
+                        color: isDark ? const Color(0xFF132847) : Colors.white,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                              maxHeight: 220, maxWidth: 280),
+                          child: ListView.builder(
+                            padding: EdgeInsets.zero,
+                            shrinkWrap: true,
+                            itemCount: options.length,
+                            itemBuilder: (context, index) {
+                              final opt = options.elementAt(index);
+                              final isSelected =
+                                  opt.key == _selectedFilterUserId;
+                              return ListTile(
+                                dense: true,
+                                title: Text(
+                                  opt.value,
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                    color: isSelected
+                                        ? primaryBlue
+                                        : (isDark
+                                            ? Colors.white
+                                            : Colors.black87),
+                                  ),
+                                ),
+                                onTap: () => onSelected(opt),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
               if (_selectedFilterUserId != null) ...[

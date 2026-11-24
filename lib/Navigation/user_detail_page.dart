@@ -21,7 +21,7 @@ class UserDetailPage extends StatefulWidget {
 class _UserDetailPageState extends State<UserDetailPage> {
   static const Color _primaryBlue = Color(0xFF005BAC);
 
-  final List<String> _roles = ['sales', 'manager', 'asst_manager', 'admin', 'sync_head', 'sme', 'dme_admin', 'dme_user', 'supersale_admin', 'core_team', 'expo_user', 'expo_acc', 'accounts', 'expo_coupon'];
+  final List<String> _roles = ['sales', 'manager', 'asst_manager', 'admin', 'sync_head', 'sme', 'dme_admin', 'dme_user', 'supersale_admin', 'core_team', 'expo_user', 'expo_acc', 'expo_acc_main', 'accounts', 'expo_coupon'];
   final List<String> _branches = [
     'BGR', 'CBE', 'CHN', 'CLT', 'EKM', 'EXPO', 'JBL', 'KKM', 'KSD',
     'KTM', 'PKD', 'PKT', 'PMN', 'TRR', 'TSR', 'TLY', 'TVM',
