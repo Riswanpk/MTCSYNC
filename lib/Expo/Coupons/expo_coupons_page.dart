@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../expo_service.dart';
+import 'expo_coupon_manage_page.dart';
 
 class ExpoCouponsPage extends StatefulWidget {
   const ExpoCouponsPage({super.key});
@@ -61,6 +62,7 @@ class _ExpoCouponsPageState extends State<ExpoCouponsPage> {
   String? _error;
   List<ExpoOrder> _orders = [];
   Map<String, int> _couponsTakenByKey = {};
+  Map<String, List<Map<String, dynamic>>> _couponSerialsByKey = {};
 
   static const List<String> _filters = [
     'Eligible',
@@ -96,11 +98,14 @@ class _ExpoCouponsPageState extends State<ExpoCouponsPage> {
       final results = await Future.wait([
         _expoService.fetchOrdersForExhibition(exhibitionId),
         _expoService.fetchCustomerCouponsForExhibition(exhibitionId),
+        _expoService.fetchCustomerCouponSerialsForExhibition(exhibitionId),
       ]);
       if (!mounted) return;
       setState(() {
         _orders = results[0] as List<ExpoOrder>;
         _couponsTakenByKey = results[1] as Map<String, int>;
+        _couponSerialsByKey =
+            results[2] as Map<String, List<Map<String, dynamic>>>;
         _isLoading = false;
       });
     } catch (e) {
@@ -226,6 +231,412 @@ class _ExpoCouponsPageState extends State<ExpoCouponsPage> {
       result = result.where(_matchesSearch);
     }
     return result.toList();
+  }
+
+  Future<void> _openCouponManagePage(
+    _CustomerCouponGroup group,
+    CouponManageMode mode,
+  ) async {
+    final exId = _selectedExhibitionId;
+    if (exId == null) return;
+    final res = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (_) => ExpoCouponManagePage(
+          exhibitionId: exId,
+          customerKey: group.customerKey,
+          customerName: group.customerName,
+          shopName: group.shopName,
+          couponsTaken: group.couponsTaken,
+          totalEligibleCoupons: group.totalEligibleCoupons,
+          remainingCoupons: group.remainingCoupons,
+          existingSerials: List<Map<String, dynamic>>.from(
+              _couponSerialsByKey[group.customerKey] ?? []),
+          allExhibitionSerials: _couponSerialsByKey,
+          mode: mode,
+        ),
+      ),
+    );
+    if (res != null && mounted) {
+      setState(() {
+        _couponsTakenByKey[group.customerKey] = res['couponsTaken'] as int;
+        _couponSerialsByKey[group.customerKey] =
+            List<Map<String, dynamic>>.from(res['couponSerials'] as List);
+      });
+    }
+  }
+
+  bool _isIssuedToday(Map<String, dynamic> entry) {
+    final raw = (entry['issued_at'] ?? '').toString();
+    final dt = DateTime.tryParse(raw)?.toLocal();
+    if (dt == null) return false;
+    final now = DateTime.now();
+    return dt.year == now.year && dt.month == now.month && dt.day == now.day;
+  }
+
+  String? _validateSerial(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return 'Required';
+    final numVal = int.tryParse(trimmed);
+    if (numVal == null || numVal < 1 || numVal > 4000) {
+      return '0001 - 4000';
+    }
+    return null;
+  }
+
+  bool _isSerialAlreadyUsed(
+    String paddedSerial, {
+    String? excludeCustomerKey,
+    Set<int>? excludeIndicesForCustomer,
+  }) {
+    for (final entry in _couponSerialsByKey.entries) {
+      for (int i = 0; i < entry.value.length; i++) {
+        if (entry.key == excludeCustomerKey &&
+            excludeIndicesForCustomer != null &&
+            excludeIndicesForCustomer.contains(i)) {
+          continue;
+        }
+        final s = (entry.value[i]['serial'] ?? '').toString().trim();
+        if (s == paddedSerial) return true;
+      }
+    }
+    return false;
+  }
+
+  Future<void> _showIssueCouponsDialog(_CustomerCouponGroup group) async {
+    final exId = _selectedExhibitionId;
+    if (exId == null) return;
+    final count = group.remainingCoupons;
+    if (count <= 0) return;
+
+    final controllers = List.generate(count, (_) => TextEditingController());
+    final formKey = GlobalKey<FormState>();
+    String? errorMsg;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.confirmation_number_rounded, color: _primaryBlue),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Confirm & Enter Serials',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Issue $count coupon${count > 1 ? 's' : ''} to ${group.customerName.isNotEmpty ? group.customerName : group.shopName}?',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 13.5),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Enter $count serial number${count > 1 ? 's' : ''} (4-digit: 0001 to 4000):',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 10),
+                    ...List.generate(count, (i) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: TextFormField(
+                          controller: controllers[i],
+                          keyboardType: TextInputType.number,
+                          maxLength: 4,
+                          decoration: InputDecoration(
+                            labelText: 'Coupon ${i + 1} Serial (0001-4000)',
+                            counterText: '',
+                            isDense: true,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          validator: (v) => _validateSerial(v ?? ''),
+                        ),
+                      );
+                    }),
+                    if (errorMsg != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        errorMsg!,
+                        style: const TextStyle(
+                            color: Colors.redAccent,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (!formKey.currentState!.validate()) return;
+                final normalized = controllers
+                    .map((c) => int.parse(c.text.trim())
+                        .toString()
+                        .padLeft(4, '0'))
+                    .toList();
+                if (normalized.toSet().length != normalized.length) {
+                  setDlgState(
+                      () => errorMsg = 'Duplicate serial numbers are not allowed.');
+                  return;
+                }
+                for (final s in normalized) {
+                  if (_isSerialAlreadyUsed(s)) {
+                    setDlgState(() => errorMsg =
+                        'Serial $s is already assigned to another coupon.');
+                    return;
+                  }
+                }
+                Navigator.of(ctx).pop(true);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryBlue,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Confirm & Issue'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true) {
+      Future.delayed(const Duration(milliseconds: 350), () {
+        for (final c in controllers) {
+          c.dispose();
+        }
+      });
+      return;
+    }
+
+    final nowIso = DateTime.now().toIso8601String();
+    final existing = List<Map<String, dynamic>>.from(
+        _couponSerialsByKey[group.customerKey] ?? []);
+    for (final c in controllers) {
+      final padded = int.parse(c.text.trim()).toString().padLeft(4, '0');
+      existing.add({'serial': padded, 'issued_at': nowIso});
+    }
+    Future.delayed(const Duration(milliseconds: 350), () {
+      for (final c in controllers) {
+        c.dispose();
+      }
+    });
+
+    final newTotal = group.couponsTaken + count;
+    try {
+      await _expoService.upsertCustomerCouponsTaken(
+        exhibitionId: exId,
+        customerPhone: group.customerKey,
+        couponsTaken: newTotal,
+        couponSerials: existing,
+      );
+      if (!mounted) return;
+      setState(() {
+        _couponsTakenByKey[group.customerKey] = newTotal;
+        _couponSerialsByKey[group.customerKey] = existing;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Issued $count coupon(s) (Total taken: $newTotal / ${group.totalEligibleCoupons})'),
+          backgroundColor: _primaryGreen,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to issue coupons: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _showEditTodaySerialsDialog(_CustomerCouponGroup group) async {
+    final exId = _selectedExhibitionId;
+    if (exId == null) return;
+    final allSerials = List<Map<String, dynamic>>.from(
+        _couponSerialsByKey[group.customerKey] ?? []);
+    final todayIndices = <int>[];
+    for (int i = 0; i < allSerials.length; i++) {
+      if (_isIssuedToday(allSerials[i])) {
+        todayIndices.add(i);
+      }
+    }
+    if (todayIndices.isEmpty) return;
+
+    final controllers = todayIndices
+        .map((idx) => TextEditingController(
+            text: (allSerials[idx]['serial'] ?? '').toString()))
+        .toList();
+    final formKey = GlobalKey<FormState>();
+    String? errorMsg;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text(
+            "Edit Today's Serials",
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ...List.generate(todayIndices.length, (i) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: TextFormField(
+                          controller: controllers[i],
+                          keyboardType: TextInputType.number,
+                          maxLength: 4,
+                          decoration: InputDecoration(
+                            labelText: 'Coupon ${i + 1} Serial (0001-4000)',
+                            counterText: '',
+                            isDense: true,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          validator: (v) => _validateSerial(v ?? ''),
+                        ),
+                      );
+                    }),
+                    if (errorMsg != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        errorMsg!,
+                        style: const TextStyle(
+                            color: Colors.redAccent,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (!formKey.currentState!.validate()) return;
+                final normalized = controllers
+                    .map((c) => int.parse(c.text.trim())
+                        .toString()
+                        .padLeft(4, '0'))
+                    .toList();
+                if (normalized.toSet().length != normalized.length) {
+                  setDlgState(
+                      () => errorMsg = 'Duplicate serial numbers are not allowed.');
+                  return;
+                }
+                for (final s in normalized) {
+                  if (_isSerialAlreadyUsed(s)) {
+                    setDlgState(() => errorMsg =
+                        'Serial $s is already assigned to another coupon.');
+                    return;
+                  }
+                }
+                Navigator.of(ctx).pop(true);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryGreen,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Save Changes'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (saved != true) {
+      Future.delayed(const Duration(milliseconds: 350), () {
+        for (final c in controllers) {
+          c.dispose();
+        }
+      });
+      return;
+    }
+
+    for (int i = 0; i < todayIndices.length; i++) {
+      final idx = todayIndices[i];
+      allSerials[idx] = {
+        ...allSerials[idx],
+        'serial': int.parse(controllers[i].text.trim())
+            .toString()
+            .padLeft(4, '0'),
+      };
+    }
+    Future.delayed(const Duration(milliseconds: 350), () {
+      for (final c in controllers) {
+        c.dispose();
+      }
+    });
+
+    try {
+      await _expoService.upsertCustomerCouponsTaken(
+        exhibitionId: exId,
+        customerPhone: group.customerKey,
+        couponsTaken: group.couponsTaken,
+        couponSerials: allSerials,
+      );
+      if (!mounted) return;
+      setState(() {
+        _couponSerialsByKey[group.customerKey] = allSerials;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Updated today's coupon serials."),
+          backgroundColor: _primaryGreen,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update serials: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Future<void> _setCouponsTaken(
@@ -748,14 +1159,18 @@ class _ExpoCouponsPageState extends State<ExpoCouponsPage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    '${filtered.length} Customer${filtered.length == 1 ? '' : 's'} ($_selectedFilter) • ₹${_selectedMinCouponAmount.toStringAsFixed(0)}/coupon',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark ? Colors.grey[400] : _primaryBlue,
-                      fontWeight: FontWeight.w600,
+                  Expanded(
+                    child: Text(
+                      '${filtered.length} Customer${filtered.length == 1 ? '' : 's'} ($_selectedFilter) • ₹${_selectedMinCouponAmount.toStringAsFixed(0)}/coupon',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.grey[400] : _primaryBlue,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   Row(
                     children: [
                       if (totalPendingCoupons > 0)
@@ -1009,19 +1424,44 @@ class _ExpoCouponsPageState extends State<ExpoCouponsPage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  IconButton(
-                    tooltip: 'Adjust Coupons',
-                    onPressed: () => _showAdjustCouponsDialog(group),
-                    icon: const Icon(Icons.tune_rounded, size: 20),
-                    color: _primaryBlue,
-                  ),
+                  if (group.couponsTaken > 0 &&
+                      (_couponSerialsByKey[group.customerKey] ?? []).isNotEmpty)
+                    IconButton(
+                      tooltip: 'Remove Coupons',
+                      onPressed: () =>
+                          _openCouponManagePage(group, CouponManageMode.remove),
+                      icon: const Icon(Icons.remove_circle_outline_rounded,
+                          size: 20),
+                      color: Colors.redAccent,
+                    ),
                   const SizedBox(width: 4),
+                  if ((_couponSerialsByKey[group.customerKey] ?? [])
+                      .any(_isIssuedToday)) ...[
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          _openCouponManagePage(group, CouponManageMode.edit),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _primaryBlue,
+                        side: const BorderSide(color: _primaryBlue),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      icon: const Icon(Icons.edit_rounded, size: 15),
+                      label: const Text(
+                        'Edit',
+                        style: TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
                   if (hasPending)
                     ElevatedButton.icon(
-                      onPressed: () => _setCouponsTaken(
-                        group,
-                        group.totalEligibleCoupons,
-                      ),
+                      onPressed: () =>
+                          _openCouponManagePage(group, CouponManageMode.issue),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _primaryBlue,
                         foregroundColor: Colors.white,
@@ -1045,7 +1485,11 @@ class _ExpoCouponsPageState extends State<ExpoCouponsPage> {
                     )
                   else
                     ElevatedButton.icon(
-                      onPressed: () => _showAdjustCouponsDialog(group),
+                      onPressed: (_couponSerialsByKey[group.customerKey] ?? [])
+                              .isNotEmpty
+                          ? () => _openCouponManagePage(
+                              group, CouponManageMode.remove)
+                          : null,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _primaryGreen,
                         foregroundColor: Colors.white,

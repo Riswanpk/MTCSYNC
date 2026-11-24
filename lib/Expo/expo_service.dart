@@ -1176,19 +1176,45 @@ class ExpoService {
     return result;
   }
 
+  /// Fetches coupon serial numbers per customer key for an exhibition.
+  Future<Map<String, List<Map<String, dynamic>>>>
+      fetchCustomerCouponSerialsForExhibition(String exhibitionId) async {
+    final rows = await _table(_customerCouponsTable)
+        .select('customer_phone, coupon_serials')
+        .eq('exhibition_id', exhibitionId);
+    final result = <String, List<Map<String, dynamic>>>{};
+    for (final row in rows) {
+      final phone = (row['customer_phone'] ?? '').toString();
+      if (phone.isEmpty) continue;
+      final raw = row['coupon_serials'];
+      if (raw is List) {
+        result[phone] = raw
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+    }
+    return result;
+  }
+
   /// Upserts cumulative coupons taken for a customer in an exhibition.
   Future<void> upsertCustomerCouponsTaken({
     required String exhibitionId,
     required String customerPhone,
     required int couponsTaken,
+    List<Map<String, dynamic>>? couponSerials,
   }) async {
     final safeCount = couponsTaken < 0 ? 0 : couponsTaken;
+    final payload = <String, dynamic>{
+      'exhibition_id': exhibitionId,
+      'customer_phone': customerPhone,
+      'coupons_taken': safeCount,
+    };
+    if (couponSerials != null) {
+      payload['coupon_serials'] = couponSerials;
+    }
     await _table(_customerCouponsTable).upsert(
-      {
-        'exhibition_id': exhibitionId,
-        'customer_phone': customerPhone,
-        'coupons_taken': safeCount,
-      },
+      payload,
       onConflict: 'exhibition_id,customer_phone',
     );
   }

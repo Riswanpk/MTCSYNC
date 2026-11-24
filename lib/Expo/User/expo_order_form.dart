@@ -1652,7 +1652,9 @@ class _ExpoOrderFormPageState extends State<ExpoOrderFormPage> {
                 _CustomAnimatedDropdown(
                   key: ValueKey('branch_$_selectedPreferredBranch'),
                   value: _selectedPreferredBranch,
-                  items: _allBranches,
+                  items: _allBranches
+                      .where((b) => b.toUpperCase() != 'EXPO')
+                      .toList(),
                   onChanged: _onBranchChanged,
                   validator: (val) =>
                       (val == null || val.isEmpty) ? 'Select branch' : null,
