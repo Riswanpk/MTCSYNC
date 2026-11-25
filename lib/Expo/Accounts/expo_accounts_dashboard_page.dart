@@ -9,7 +9,14 @@ const Color primaryGreen = Color(0xFF8CC63F);
 enum ExpoReportType {
   branchwise('Branchwise Amounts', Icons.account_tree_rounded),
   paymentMode('Payment Mode Breakdown', Icons.account_balance_wallet_rounded),
-  dailyTrend('Daily Trend', Icons.calendar_today_rounded);
+  salesRep('Sales Rep Performance', Icons.badge_rounded),
+  orderType('Order Type Summary', Icons.category_rounded),
+  topItems('Top Selling Items', Icons.inventory_2_rounded),
+  dailyTrend('Daily Trend', Icons.calendar_today_rounded),
+  districtState('District & State Reach', Icons.location_on_rounded),
+  preferredSalesman('Preferred Salesman', Icons.person_pin_rounded),
+  assignedDeliveryStatus('Assigned Delivery Status', Icons.local_shipping_rounded),
+  balanceCollection('Balance & Pending Dues', Icons.pending_actions_rounded);
 
   final String title;
   final IconData icon;
@@ -19,7 +26,8 @@ enum ExpoReportType {
 /// Modern, sleek, and high-performance Dashboard for Expo Accounts (`expo_acc`).
 /// Displays data only after the user explicitly selects an exhibition at the top.
 class ExpoAccountsDashboardPage extends StatefulWidget {
-  const ExpoAccountsDashboardPage({super.key});
+  final bool isAdmin;
+  const ExpoAccountsDashboardPage({super.key, this.isAdmin = false});
 
   @override
   State<ExpoAccountsDashboardPage> createState() =>
@@ -30,6 +38,14 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
   Exhibition? _selectedExhibition;
   ExpoReportType _selectedReportType = ExpoReportType.branchwise;
   int? _selectedDayIndex;
+
+  List<ExpoReportType> get _availableReports => widget.isAdmin
+      ? ExpoReportType.values
+      : const [
+          ExpoReportType.branchwise,
+          ExpoReportType.paymentMode,
+          ExpoReportType.dailyTrend,
+        ];
 
   // Filter toggle: whether to show All Orders or Verified/Completed Only
   bool _verifiedOnly = false;
@@ -132,7 +148,7 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
                     physics: const BouncingScrollPhysics(),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
-                      children: ExpoReportType.values.map((type) {
+                      children: _availableReports.map((type) {
                         final isSelected = _selectedReportType == type;
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 8),
@@ -323,6 +339,15 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
               _selectedExhibition = match.first;
             } else {
               _selectedExhibition = null;
+            }
+          } else if (exhibitions.isNotEmpty) {
+            final active = exhibitions.where((e) => e.isActive).toList();
+            if (active.isNotEmpty) {
+              _selectedExhibition = active.first;
+            } else {
+              final sorted = List<Exhibition>.from(exhibitions)
+                ..sort((a, b) => b.endDate.compareTo(a.endDate));
+              _selectedExhibition = sorted.first;
             }
           }
 
@@ -862,6 +887,34 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
   }) {
     return Column(
       children: [
+        if (widget.isAdmin) ...[
+          Row(
+            children: [
+              Expanded(
+                child: _KpiMetricCard(
+                  title: 'Total Amount',
+                  value: _formatMoney(totalAmount),
+                  subtitle: 'Overall Order Value',
+                  icon: Icons.currency_rupee_rounded,
+                  accentColor: primaryBlue,
+                  isDark: isDark,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _KpiMetricCard(
+                  title: 'Total Today',
+                  value: _formatMoney(totalToday),
+                  subtitle: "Today's Order Value",
+                  icon: Icons.today_rounded,
+                  accentColor: primaryGreen,
+                  isDark: isDark,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+        ],
         // Row 1: Total Advance (Blue) & Total Advance Today (Green)
         Row(
           children: [
@@ -1034,10 +1087,10 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        itemCount: ExpoReportType.values.length,
+        itemCount: _availableReports.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
-          final type = ExpoReportType.values[index];
+          final type = _availableReports[index];
           final selected = _selectedReportType == type;
           return Material(
             color: selected
@@ -1138,9 +1191,212 @@ class _ExpoAccountsDashboardPageState extends State<ExpoAccountsDashboardPage> {
         return _buildBranchwiseReport(orders, isDark);
       case ExpoReportType.paymentMode:
         return _buildPaymentModeReport(orders, isDark);
+      case ExpoReportType.salesRep:
+        return _buildSalesRepReport(orders, isDark);
+      case ExpoReportType.orderType:
+        return _buildOrderTypeReport(orders, isDark);
+      case ExpoReportType.topItems:
+        return _buildTopItemsReport(orders, isDark);
       case ExpoReportType.dailyTrend:
         return _buildDailyTrendReport(orders, isDark);
+      case ExpoReportType.districtState:
+        return _buildDistrictStateReport(orders, isDark);
+      case ExpoReportType.preferredSalesman:
+        return _buildPreferredSalesmanReport(orders, isDark);
+      case ExpoReportType.assignedDeliveryStatus:
+        return _buildAssignedDeliveryReport(orders, isDark);
+      case ExpoReportType.balanceCollection:
+        return _buildBalanceCollectionReport(orders, isDark);
     }
+  }
+
+  Widget _buildEmptyReportState(String msg, bool isDark) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Center(
+          child: Text(
+            msg,
+            style: TextStyle(color: isDark ? Colors.white54 : Colors.black54),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReportProgressTile({
+    required String title,
+    required String subtitle,
+    required String trailingTop,
+    required String trailingBottom,
+    required double progress,
+    required Color color,
+    required bool isDark,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withValues(alpha: 0.04) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.06),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13.5,
+                            color: isDark ? Colors.white : Colors.black87)),
+                    const SizedBox(height: 2),
+                    Text(subtitle,
+                        style: TextStyle(
+                            fontSize: 11.5,
+                            color: isDark ? Colors.white60 : Colors.black54)),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(trailingTop,
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13.5,
+                          color: color)),
+                  Text(trailingBottom,
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: isDark ? Colors.white54 : Colors.black45)),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              minHeight: 6,
+              backgroundColor: color.withValues(alpha: 0.15),
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreferredSalesmanReport(List<ExpoOrder> orders, bool isDark) {
+    final Map<String, ({double total, int bills})> map = {};
+    double grandTotal = 0.0;
+    for (final o in orders) {
+      final key = o.preferredSalesman.trim().isNotEmpty
+          ? o.preferredSalesman.trim()
+          : 'Unassigned';
+      final prev = map[key] ?? (total: 0.0, bills: 0);
+      map[key] = (total: prev.total + o.totalAmount, bills: prev.bills + 1);
+      grandTotal += o.totalAmount;
+    }
+    final entries = map.entries.toList()
+      ..sort((a, b) => b.value.total.compareTo(a.value.total));
+    if (entries.isEmpty) {
+      return _buildEmptyReportState('No preferred salesman data.', isDark);
+    }
+    return SliverToBoxAdapter(
+      child: Column(
+        children: entries.map((e) {
+          final share = grandTotal > 0 ? e.value.total / grandTotal : 0.0;
+          return _buildReportProgressTile(
+            title: e.key,
+            subtitle:
+                '${e.value.bills} ${e.value.bills == 1 ? 'Bill' : 'Bills'}',
+            trailingTop: _formatMoney(e.value.total),
+            trailingBottom: '${(share * 100).toStringAsFixed(1)}%',
+            progress: share,
+            color: primaryBlue,
+            isDark: isDark,
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildAssignedDeliveryReport(List<ExpoOrder> orders, bool isDark) {
+    final bookingOrders = orders
+        .where((o) => o.orderType == 'Booking' || o.preferredSalesman.isNotEmpty)
+        .toList();
+    if (bookingOrders.isEmpty) {
+      return _buildEmptyReportState('No assigned/booking orders.', isDark);
+    }
+    final Map<String, ({int delivered, int pending, double amount})> map = {};
+    for (final o in bookingOrders) {
+      final key = o.preferredSalesman.trim().isNotEmpty
+          ? o.preferredSalesman.trim()
+          : 'Unassigned';
+      final prev = map[key] ?? (delivered: 0, pending: 0, amount: 0.0);
+      final isDone = o.status == 'Completed';
+      map[key] = (
+        delivered: prev.delivered + (isDone ? 1 : 0),
+        pending: prev.pending + (isDone ? 0 : 1),
+        amount: prev.amount + o.totalAmount,
+      );
+    }
+    final entries = map.entries.toList()
+      ..sort((a, b) => b.value.amount.compareTo(a.value.amount));
+    return SliverToBoxAdapter(
+      child: Column(
+        children: entries.map((e) {
+          final total = e.value.delivered + e.value.pending;
+          final pct = total > 0 ? e.value.delivered / total : 0.0;
+          return _buildReportProgressTile(
+            title: e.key,
+            subtitle:
+                'Delivered: ${e.value.delivered} • Pending: ${e.value.pending}',
+            trailingTop: _formatMoney(e.value.amount),
+            trailingBottom: '${(pct * 100).toStringAsFixed(0)}% done',
+            progress: pct,
+            color: primaryGreen,
+            isDark: isDark,
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildBalanceCollectionReport(List<ExpoOrder> orders, bool isDark) {
+    final dueOrders = orders.where((o) => o.balanceAmount > 0.01).toList()
+      ..sort((a, b) => b.balanceAmount.compareTo(a.balanceAmount));
+    if (dueOrders.isEmpty) {
+      return _buildEmptyReportState('No pending balance dues.', isDark);
+    }
+    final totalDue = dueOrders.fold(0.0, (acc, o) => acc + o.balanceAmount);
+    return SliverToBoxAdapter(
+      child: Column(
+        children: dueOrders.take(25).map((o) {
+          final share = totalDue > 0 ? o.balanceAmount / totalDue : 0.0;
+          return _buildReportProgressTile(
+            title: o.shopName.isNotEmpty ? o.shopName : o.customerName,
+            subtitle: 'Bill #${o.billNumber ?? '-'} • ${o.preferredBranch}',
+            trailingTop: _formatMoney(o.balanceAmount),
+            trailingBottom: 'of ${_formatMoney(o.totalAmount)}',
+            progress: share,
+            color: Colors.orange,
+            isDark: isDark,
+          );
+        }).toList(),
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------

@@ -308,7 +308,15 @@ class _ExpoCouponManagePageState extends State<ExpoCouponManagePage> {
       backgroundColor: bgColor,
       appBar: AppBar(
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: _primaryBlue,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [_primaryBlue, Color(0xFF0077CC)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         foregroundColor: Colors.white,
         elevation: 0,
       ),
@@ -377,51 +385,95 @@ class _ExpoCouponManagePageState extends State<ExpoCouponManagePage> {
                           : '';
                       final selected = _selectedRemoveIndices.contains(index);
 
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        color: cardColor,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(
-                            color: selected
-                                ? Colors.redAccent
-                                : _primaryBlue.withValues(alpha: 0.15),
-                            width: selected ? 1.5 : 1,
-                          ),
-                        ),
-                        child: CheckboxListTile(
-                          value: selected,
-                          activeColor: Colors.redAccent,
-                          onChanged: _isSaving
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: _isSaving
                               ? null
-                              : (val) {
+                              : () {
                                   setState(() {
                                     _errorMsg = null;
-                                    if (val == true) {
-                                      _selectedRemoveIndices.add(index);
-                                    } else {
+                                    if (selected) {
                                       _selectedRemoveIndices.remove(index);
+                                    } else {
+                                      _selectedRemoveIndices.add(index);
                                     }
                                   });
                                 },
-                          title: Text(
-                            'Serial #$serial',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.white : Colors.black87,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? Colors.redAccent.withValues(alpha: 0.08)
+                                  : cardColor,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: selected
+                                    ? Colors.redAccent
+                                    : _primaryBlue.withValues(alpha: 0.2),
+                                width: selected ? 1.6 : 1,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 180),
+                                  width: 24,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: selected
+                                        ? Colors.redAccent
+                                        : Colors.transparent,
+                                    border: Border.all(
+                                      color: selected
+                                          ? Colors.redAccent
+                                          : _primaryBlue.withValues(alpha: 0.5),
+                                      width: 1.6,
+                                    ),
+                                  ),
+                                  child: selected
+                                      ? const Icon(Icons.check_rounded,
+                                          size: 16, color: Colors.white)
+                                      : null,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Serial #$serial',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14.5,
+                                          color: isDark
+                                              ? Colors.white
+                                              : Colors.black87,
+                                        ),
+                                      ),
+                                      if (dateLabel.isNotEmpty) ...[
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Issued: $dateLabel',
+                                          style: TextStyle(
+                                            fontSize: 11.5,
+                                            color: isDark
+                                                ? Colors.white60
+                                                : Colors.black54,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          subtitle: dateLabel.isNotEmpty
-                              ? Text(
-                                  'Issued: $dateLabel',
-                                  style: TextStyle(
-                                    fontSize: 11.5,
-                                    color: isDark
-                                        ? Colors.white60
-                                        : Colors.black54,
-                                  ),
-                                )
-                              : null,
                         ),
                       );
                     },
@@ -438,6 +490,10 @@ class _ExpoCouponManagePageState extends State<ExpoCouponManagePage> {
                             controller: _controllers[i],
                             keyboardType: TextInputType.number,
                             maxLength: widget.serialDigits,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
                             decoration: InputDecoration(
                               labelText:
                                   'Coupon ${i + 1} Serial (${widget.serialMin.toString().padLeft(widget.serialDigits, '0')} - ${widget.serialMax.toString().padLeft(widget.serialDigits, '0')})',
@@ -446,8 +502,26 @@ class _ExpoCouponManagePageState extends State<ExpoCouponManagePage> {
                               fillColor: cardColor,
                               prefixIcon: const Icon(Icons.tag_rounded,
                                   color: _primaryBlue),
-                              border: OutlineInputBorder(
+                              enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: _primaryBlue.withValues(alpha: 0.25),
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                    color: _primaryBlue, width: 1.6),
+                              ),
+                              errorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide:
+                                    const BorderSide(color: Colors.redAccent),
+                              ),
+                              focusedErrorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                    color: Colors.redAccent, width: 1.6),
                               ),
                             ),
                             validator: (v) => _validateSerial(v ?? ''),

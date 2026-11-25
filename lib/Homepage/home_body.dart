@@ -578,20 +578,6 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
     final isAcc = role == 'expo_acc';
     final isAccMain = role == 'expo_acc_main';
     final List<Widget> buttons = [
-      if (!isAcc)
-        NeumorphicButton(
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const ExpoUserMainPage(),
-              ),
-            );
-          },
-          text: 'Expo',
-          color: primaryBlue,
-          textColor: Colors.white,
-          icon: Icons.storefront_rounded,
-        ),
       if (isAcc || isAccMain)
         NeumorphicButton(
           onTap: () {
@@ -602,9 +588,23 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
             );
           },
           text: 'Verification',
-          color: isAcc ? primaryBlue : primaryGreen,
+          color: primaryBlue,
           textColor: Colors.white,
           icon: Icons.verified_user_rounded,
+        ),
+      if (!isAcc)
+        NeumorphicButton(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const ExpoUserMainPage(),
+              ),
+            );
+          },
+          text: isAccMain ? 'Order Form' : 'Expo',
+          color: isAccMain ? primaryGreen : primaryBlue,
+          textColor: Colors.white,
+          icon: Icons.storefront_rounded,
         ),
       if (isAccMain)
         NeumorphicButton(
@@ -808,7 +808,7 @@ class _HomeButtonsContainerState extends State<HomeButtonsContainer> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const ExpoAccountsDashboardPage(),
+                      builder: (_) => const ExpoAccountsDashboardPage(isAdmin: true),
                     ),
                   );
                 }

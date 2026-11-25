@@ -23,7 +23,6 @@ class _ExpoAdminFormPageState extends State<ExpoAdminFormPage> {
   late TextEditingController _minCouponController;
   late TextEditingController _serialMinController;
   late TextEditingController _serialMaxController;
-  late TextEditingController _serialDigitsController;
 
   DateTime? _startDate;
   TimeOfDay? _startTime;
@@ -48,9 +47,6 @@ class _ExpoAdminFormPageState extends State<ExpoAdminFormPage> {
     _serialMaxController = TextEditingController(
       text: ex != null ? ex.couponSerialMax.toString() : '4000',
     );
-    _serialDigitsController = TextEditingController(
-      text: ex != null ? ex.couponSerialDigits.toString() : '4',
-    );
 
     if (ex != null) {
       _startDate = ex.startDate;
@@ -74,7 +70,6 @@ class _ExpoAdminFormPageState extends State<ExpoAdminFormPage> {
     _minCouponController.dispose();
     _serialMinController.dispose();
     _serialMaxController.dispose();
-    _serialDigitsController.dispose();
     super.dispose();
   }
 
@@ -206,7 +201,9 @@ class _ExpoAdminFormPageState extends State<ExpoAdminFormPage> {
         couponSerialMax:
             int.tryParse(_serialMaxController.text.trim()) ?? 4000,
         couponSerialDigits:
-            int.tryParse(_serialDigitsController.text.trim()) ?? 4,
+            (int.tryParse(_serialMaxController.text.trim()) ?? 4000)
+                .toString()
+                .length,
       );
 
       if (mounted) {
@@ -447,7 +444,7 @@ class _ExpoAdminFormPageState extends State<ExpoAdminFormPage> {
               // Coupon Serial Numbers Config
               _buildSectionCard(
                 isDark: isDark,
-                title: 'Coupon Serial Range & Digits',
+                title: 'Coupon Serial Range',
                 icon: Icons.tag_rounded,
                 child: Row(
                   children: [
@@ -475,24 +472,6 @@ class _ExpoAdminFormPageState extends State<ExpoAdminFormPage> {
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
                           labelText: 'Max',
-                          filled: true,
-                          fillColor: isDark
-                              ? Colors.white.withValues(alpha: 0.05)
-                              : const Color(0xFFF1F5F9),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _serialDigitsController,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: 'Digits',
                           filled: true,
                           fillColor: isDark
                               ? Colors.white.withValues(alpha: 0.05)

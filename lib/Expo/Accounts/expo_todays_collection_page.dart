@@ -105,6 +105,19 @@ class _ExpoTodaysCollectionPageState extends State<ExpoTodaysCollectionPage> {
             foregroundColor: Colors.white,
             elevation: 0,
             actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh_rounded),
+                tooltip: 'Refresh',
+                onPressed: () async {
+                  await _loadAccUsers();
+                  if (mounted) {
+                    setState(() {
+                      _ordersStream = ExpoService.instance
+                          .streamOrders(exhibitionId: activeEx.id);
+                    });
+                  }
+                },
+              ),
               if (exhibitions.length > 1)
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.event_rounded),
@@ -142,7 +155,9 @@ class _ExpoTodaysCollectionPageState extends State<ExpoTodaysCollectionPage> {
                       o.claimedByName == _selectedAccUserName;
                 }
                 return true;
-              }).toList();
+              }).toList()
+                ..sort((a, b) => (b.completedAt ?? b.orderDate)
+                    .compareTo(a.completedAt ?? a.orderDate));
 
               final double totalAdvance = collectedOrders.fold(
                   0.0, (acc, o) => acc + o.advanceAmount);
@@ -542,7 +557,8 @@ class _ExpoTodaysCollectionPageState extends State<ExpoTodaysCollectionPage> {
                         ),
                       ),
                       Text(
-                        DateFormat('hh:mm a').format(order.orderDate),
+                        DateFormat('hh:mm a')
+                            .format((order.completedAt ?? order.orderDate).toLocal()),
                         style: TextStyle(
                           fontSize: 11,
                           color: isDark ? Colors.white54 : Colors.black45,
