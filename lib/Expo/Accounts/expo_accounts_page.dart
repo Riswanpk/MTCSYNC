@@ -323,6 +323,11 @@ class _ExpoAccountsPageState extends State<ExpoAccountsPage>
                     );
                   }).toList(),
                 ),
+              IconButton(
+                icon: const Icon(Icons.refresh_rounded),
+                tooltip: 'Refresh',
+                onPressed: () => setState(() {}),
+              ),
             ],
           ),
           body: StreamBuilder<List<ExpoOrder>>(
@@ -955,7 +960,44 @@ class _ExpoOrdersTabKeepAliveState extends State<_ExpoOrdersTabKeepAlive>
                   : primaryGreen.withValues(alpha: 0.08))
               : (widget.isDark ? const Color(0xFF0F243E) : Colors.white),
           child: InkWell(
-            onTap: () async {
+            onTap: (widget.isPendingTab && isCash)
+                ? () => widget.onToggleSelect(order)
+                : () async {
+                    final currentUserName =
+                        UserCacheService.instance.username ?? 'Accounts User';
+                    final uid = FirebaseAuth.instance.currentUser?.uid;
+                    if (widget.isPendingTab && uid != null && uid.isNotEmpty) {
+                      final claimRes = await ExpoService.instance
+                          .claimOrderForVerification(
+                        orderId: order.id,
+                        userId: uid,
+                        userName: currentUserName,
+                      );
+                      if (!context.mounted) return;
+                      if (claimRes['claimed'] != true) {
+                        final claimedBy =
+                            claimRes['claimedByName'] ?? 'Another user';
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                                'Order is currently being reviewed by $claimedBy.'),
+                            backgroundColor: Colors.orange.shade800,
+                          ),
+                        );
+                        return;
+                      }
+                    }
+                    if (!context.mounted) return;
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ExpoOrderDetailPage(
+                          order: order,
+                          currentUserId: uid,
+                        ),
+                      ),
+                    );
+                  },
+            onLongPress: () async {
               final currentUserName =
                   UserCacheService.instance.username ?? 'Accounts User';
 
